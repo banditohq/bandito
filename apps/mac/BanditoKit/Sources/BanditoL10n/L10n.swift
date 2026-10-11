@@ -2356,8 +2356,9 @@ public enum L10n {
         public static var error: String { L10n.tr("screen.error") }
         public static var fullscreen: String { L10n.tr("screen.fullscreen") }
         public static var hint: String { L10n.tr("screen.hint") }
+        public static var installing: String { L10n.tr("screen.installing") }
         public static func latency(ms: String) -> String { L10n.tr("screen.latency", ms) }
-        public static func missingComponent(component: String) -> String { L10n.tr("screen.missingComponent", component) }
+        public static func missingComponents(components: String) -> String { L10n.tr("screen.missingComponents", components) }
         public static var needsUpdate: String { L10n.tr("screen.needsUpdate") }
         public static var noAddress: String { L10n.tr("screen.noAddress") }
         public static var noFrame: String { L10n.tr("screen.noFrame") }
@@ -2371,6 +2372,7 @@ public enum L10n {
         public static var sharedSub: String { L10n.tr("screen.sharedSub") }
         public static var sleepHint: String { L10n.tr("screen.sleepHint") }
         public static var start: String { L10n.tr("screen.start") }
+        public static var startFailed: String { L10n.tr("screen.startFailed") }
         public static var starting: String { L10n.tr("screen.starting") }
         public static var title: String { L10n.tr("screen.title") }
         public static var transfer: String { L10n.tr("screen.transfer") }

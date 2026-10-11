@@ -51,6 +51,18 @@ extension LayoutAuditSnapshots {
     private static let hostFeatures = ["host", "update", "workspaces", "secrets", "backups", "schedules", "crew"]
 
     static let serverScreens: [AuditCase] = [
+        AuditCase(name: "screen-missing-components", width: modeArea) { _ in
+            AnyView(ScreenMissingComponents(components: ["x11vnc", "xdotool"], setup: SetupModel(), onInstall: {}))
+        },
+        // The shared failure view with "Подробнее" (collapsed): the row spans the whole 360 pt text column.
+        AuditCase(name: "error-view-details", width: 360) { _ in
+            AnyView(
+                UserFacingErrorView(
+                    message: UserFacingMessage(
+                        text: L10n.Screen.startFailed,
+                        technical: "cannot start the screen: Xvfb did not open :90 within 5 s", canRetry: true),
+                    onRetry: {}))
+        },
         AuditCase(name: "server-overview", width: modeArea, scrolls: true) { env in
             env.serverInfo(features: hostFeatures)
             return AnyView(ServerOverview(server: env.server, monitor: seededMonitor()))

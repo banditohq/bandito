@@ -106,8 +106,9 @@ pub struct ScreenStatus {
 pub enum ScreenError {
     /// Not Linux, so there is no Xvfb or x11vnc.
     Unsupported,
-    /// A program the screen needs is not installed on the server.
-    MissingComponent(&'static str),
+    /// Programs the screen needs that are not installed on the server, in the order of
+    /// `setup::SCREEN_REQUIRED`. A missing program found while starting gives just that one.
+    MissingComponent(Vec<&'static str>),
     StartFailed(String),
     /// The user holds the controls, so agent tools are refused.
     UserControls,
@@ -136,7 +137,11 @@ impl fmt::Display for ScreenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unsupported => write!(f, "the server screen needs Linux (Xvfb and x11vnc)"),
-            Self::MissingComponent(c) => write!(f, "missing component: {c} (install it on the server)"),
+            Self::MissingComponent(list) => write!(
+                f,
+                "missing components: {} (install them on the server)",
+                list.join(", ")
+            ),
             Self::StartFailed(why) => write!(f, "cannot start the screen: {why}"),
             Self::UserControls => write!(
                 f,
@@ -269,7 +274,7 @@ impl ScreenManager {
     pub async fn start(&self, workspace: &str, width: u32, height: u32) -> Result<ScreenStatus, ScreenError> {
         validate_workspace(workspace)?;
         let mut sessions = self.sessions.lock().await;
-        start_locked(&mut sessions, &self.state_dir, workspace, width, height).await?;
+        start_locked(&mut sessions, &self.state_dir, workspace, width, height, &server_path()).await?;
         sessions
             .get(workspace)
             .map(|s| s.status(now_ms()))
@@ -319,7 +324,15 @@ impl ScreenManager {
     pub async fn agent_action(&self, workspace: &str, action: AgentAction) -> Result<Value, ScreenError> {
         validate_workspace(workspace)?;
         let mut sessions = self.sessions.lock().await;
-        start_locked(&mut sessions, &self.state_dir, workspace, DEFAULT_WIDTH, DEFAULT_HEIGHT).await?;
+        start_locked(
+            &mut sessions,
+            &self.state_dir,
+            workspace,
+            DEFAULT_WIDTH,
+            DEFAULT_HEIGHT,
+            &server_path(),
+        )
+        .await?;
         let session = sessions.get_mut(workspace).ok_or(ScreenError::NotRunning)?;
         agent_gate(session.controller)?;
         session.last_agent_ms = now_ms();
@@ -768,6 +781,14 @@ fn start_failed(e: ScreenError) -> ScreenError {
     }
 }
 
+/// The `PATH` the daemon looks its programs up in (it starts with `<data dir>/tools/bin`).
+#[cfg(target_os = "linux")]
+fn server_path() -> std::ffi::OsString {
+    std::env::var_os("PATH").unwrap_or_default()
+}
+
+/// Starts the screen of `workspace` unless it runs. First checks that every required program is on
+/// `path`, so a server without them gets `MissingComponent` with the full list and nothing is started.
 #[cfg(target_os = "linux")]
 async fn start_locked(
     sessions: &mut HashMap<String, Session>,
@@ -775,9 +796,14 @@ async fn start_locked(
     workspace: &str,
     width: u32,
     height: u32,
+    path: &std::ffi::OsStr,
 ) -> Result<(), ScreenError> {
     if sessions.contains_key(workspace) {
         return Ok(());
+    }
+    let missing = crate::setup::missing_screen_components(path);
+    if !missing.is_empty() {
+        return Err(ScreenError::MissingComponent(missing));
     }
     if width < MIN_SIZE.0 || height < MIN_SIZE.1 || width > MAX_SIZE.0 || height > MAX_SIZE.1 {
         return Err(ScreenError::InvalidArgs(format!(
@@ -820,7 +846,7 @@ fn create_screen_dir(dir: &Path) -> Result<(), ScreenError> {
 }
 
 /// Writes `<dir>/Xauthority` with a new cookie for `:display`, mode 0600. A file left by a crashed
-/// screen is replaced. Missing `xauth` gives `MissingComponent("xauth")`.
+/// screen is replaced. Missing `xauth` gives `MissingComponent(["xauth"])`.
 #[cfg(target_os = "linux")]
 async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenError> {
     create_screen_dir(dir)?;
@@ -1043,7 +1069,7 @@ fn spawn_group(
 #[cfg(target_os = "linux")]
 fn spawn_error(e: &std::io::Error, component: &'static str) -> ScreenError {
     if e.kind() == std::io::ErrorKind::NotFound {
-        ScreenError::MissingComponent(component)
+        ScreenError::MissingComponent(vec![component])
     } else {
         ScreenError::StartFailed(format!("{component}: {e}"))
     }
@@ -1596,9 +1622,53 @@ mod tests {
     #[test]
     fn screen_error_reasons_are_stable() {
         assert_eq!(ScreenError::Unsupported.reason(), "unsupported");
-        assert_eq!(ScreenError::MissingComponent("xdotool").reason(), "missing_component");
+        assert_eq!(
+            ScreenError::MissingComponent(vec!["xdotool"]).reason(),
+            "missing_component"
+        );
         assert_eq!(ScreenError::StartFailed("x".into()).reason(), "start_failed");
         assert_eq!(ScreenError::UserControls.reason(), "user_controls");
+    }
+
+    /// A `PATH` folder whose stubs leave a `ran-<name>` file when they run, so a test can see
+    /// whether anything was started.
+    #[cfg(target_os = "linux")]
+    fn fake_tools(dir: &Path, names: &[&str]) {
+        use std::os::unix::fs::PermissionsExt;
+        for name in names {
+            let path = dir.join(name);
+            let script = format!("#!/bin/sh\ntouch \"$(dirname \"$0\")/ran-{name}\"\n");
+            std::fs::write(&path, script).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    /// Without x11vnc and xdotool the start stops before anything runs: the error names both, and no
+    /// folder, authority file or program was made.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn start_names_every_missing_component_and_runs_nothing() {
+        let tools = tempfile::tempdir().unwrap();
+        fake_tools(tools.path(), &["Xvfb", "xauth", "import", "openbox"]);
+        let state = tempfile::tempdir().unwrap();
+        let mut sessions = HashMap::new();
+        let err = start_locked(
+            &mut sessions,
+            state.path(),
+            DEFAULT_WORKSPACE,
+            DEFAULT_WIDTH,
+            DEFAULT_HEIGHT,
+            tools.path().as_os_str(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err, ScreenError::MissingComponent(vec!["x11vnc", "xdotool"]));
+        assert_eq!(err.reason(), "missing_component");
+        assert!(sessions.is_empty());
+        assert!(!state.path().join(DEFAULT_WORKSPACE).exists());
+        for name in ["Xvfb", "xauth", "import", "openbox"] {
+            assert!(!tools.path().join(format!("ran-{name}")).exists(), "{name} ran");
+        }
     }
 
     // Off Linux there is no screen: every call says so.

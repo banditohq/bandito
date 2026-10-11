@@ -1711,8 +1711,9 @@
 "screen.error" = "화면에 연결할 수 없어요";
 "screen.fullscreen" = "전체 화면";
 "screen.hint" = "화면을 클릭하거나 “제어 가져오기”를 누르세요. 손을 뗄 때까지 에이전트는 기다려요.";
+"screen.installing" = "화면에 필요한 프로그램을 설치하는 중…";
 "screen.latency" = "%1$@ms";
-"screen.missingComponent" = "서버에 %1$@이(가) 없어 화면을 시작할 수 없습니다. 설치한 뒤 다시 시도하세요.";
+"screen.missingComponents" = "화면에 필요한 프로그램이 서버에 없습니다: %1$@";
 "screen.needsUpdate" = "이 서버는 오래된 버전의 Bandito를 사용합니다. 화면을 시작하려면 서버를 업데이트하세요.";
 "screen.noAddress" = "서버가 화면에 연결하는 방법을 알려주지 않았습니다. 다시 시도하세요.";
 "screen.noFrame" = "화면이 응답하지 않습니다";
@@ -1726,6 +1727,7 @@
 "screen.sharedSub" = "작업 장소 화면";
 "screen.sleepHint" = "화면은 필요할 때 깨어나요. 30분 동안 나도 에이전트도 쓰지 않으면 절전 상태로 들어가 서버 메모리를 비워요.";
 "screen.start" = "화면 시작";
+"screen.startFailed" = "화면을 시작하지 못했습니다";
 "screen.starting" = "화면을 시작하는 중…";
 "screen.title" = "서버 화면";
 "screen.transfer" = "전송";

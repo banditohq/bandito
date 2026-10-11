@@ -40,6 +40,10 @@ final class ScreenModel {
     /// The last failure of a start or of a connection. It stays until a start is made or a picture arrives, so a poll
     /// does not wipe it. Shown by the start area with "Повторить" (see `phase`).
     private(set) var startError: UserFacingMessage?
+    /// Programs the server lacks, as the last start named them. Shown with "Установить" (see `installMissing`).
+    private(set) var missingComponents: [String] = []
+    /// Installs the missing programs, with the same install as Server → Capabilities. Its progress shows in the area.
+    let setup: SetupModel
     /// A `screen.start` call is in flight.
     private(set) var isStarting = false
     /// The connection waited `ScreenStartRules.frameTimeout` for its first picture and got none.
@@ -62,6 +66,7 @@ final class ScreenModel {
 
     init(server: ServerModel) {
         self.server = server
+        self.setup = SetupModel()
     }
 
     var isSupported: Bool { server.supports("screen") }
@@ -76,7 +81,8 @@ final class ScreenModel {
         ScreenStartRules.phase(
             ScreenStartRules.Facts(
                 supported: isSupported, startInFlight: isStarting, running: status?.running == true,
-                hasFrame: framebuffer != nil, frameTimedOut: frameTimedOut, error: startError))
+                hasFrame: framebuffer != nil, frameTimedOut: frameTimedOut, error: startError,
+                missing: missingComponents, installing: setup.isRunning))
     }
 
     // MARK: Lifecycle
@@ -121,6 +127,7 @@ final class ScreenModel {
         guard !isStarting else { return }
         isStarting = true
         startError = nil
+        missingComponents = []
         defer { isStarting = false }
         do {
             let fresh = try await server.screenStart(width: 1280, height: 800)
@@ -131,18 +138,55 @@ final class ScreenModel {
             }
             await connect()
         } catch {
-            startError = Self.startFailure(error)
+            apply(Self.startFailure(error))
         }
     }
 
-    /// The sentence for a failed start or connection. Retry is always offered: starting again is the way out.
-    static func startFailure(_ error: Error) -> UserFacingMessage {
-        if let rpc = error as? RPCError, rpc.reason == "missing_component", let component = rpc.data?["component"]?.string {
-            return UserFacingMessage(text: L10n.Screen.missingComponent(component: component), technical: rpc.message, canRetry: true)
+    /// Installs the whole screen feature that is missing, as Server → Capabilities does (the programs the last start
+    /// named come first), then starts the screen again. The install's log shows in the area. Nothing starts when the
+    /// install did not finish (its failure shows, with "Установить" again).
+    func installMissing() async {
+        let required = missingComponents
+        guard !required.isEmpty, !setup.isRunning else { return }
+        // Fresh status: what the screen feature lacks now. If the status cannot be read, the named programs alone install.
+        await setup.load(server)
+        let feature = (setup.status?.components ?? [])
+            .filter { $0.feature == .screen && !$0.installed && $0.installable }
+            .map(\.id)
+        await setup.install(ScreenStartRules.installIds(required: required, feature: feature), server: server)
+        if setup.job?.state == .done {
+            await start()
+        }
+    }
+
+    /// Shows a failed start: the programs it names, or the sentence. Retry is always offered for a sentence: starting
+    /// again is the way out.
+    private func apply(_ failure: ScreenStartFailure) {
+        switch failure {
+        case .missingComponents(let names):
+            missingComponents = names
+            startError = nil
+        case .failed(let message):
+            missingComponents = []
+            startError = message
+        }
+    }
+
+    /// Reads a failed start or connection. An RPC error is read by `ScreenStartRules.failure`; any other error (the
+    /// server did not answer, the connection dropped) gets the usual sentence, and Retry.
+    static func startFailure(_ error: Error) -> ScreenStartFailure {
+        if let rpc = error as? RPCError {
+            let components: [String] = {
+                guard case .array(let items)? = rpc.data?["components"] else { return [] }
+                return items.compactMap(\.string)
+            }()
+            return ScreenStartRules.failure(
+                reason: rpc.reason, components: components, component: rpc.data?["component"]?.string,
+                message: rpc.message)
         }
         var message = UserFacingError.message(for: error)
         message.canRetry = true
-        return message
+        return .failed(message)
     }
 
     /// Connects to the running screen: the VNC port goes through a one-shot tunnel, with the screen's password.
@@ -181,7 +225,7 @@ final class ScreenModel {
             connection.connect()
             armFrameTimer()
         } catch {
-            startError = Self.startFailure(error)
+            apply(Self.startFailure(error))
         }
     }
 
@@ -279,6 +323,7 @@ final class ScreenModel {
     func stop() async {
         disconnect()
         startError = nil
+        missingComponents = []
         do {
             try await server.screenStop()
             status = try await server.screenStatus()

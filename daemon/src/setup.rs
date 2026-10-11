@@ -69,6 +69,9 @@ const SCREEN_COMPONENTS: [&str; 7] = [
     "window_manager",
     "fonts",
 ];
+/// What the server screen cannot start without. `window_manager` is optional (without it the screen runs with no
+/// window frames), and `fonts` is not needed to start Xvfb.
+pub const SCREEN_REQUIRED: [&str; 5] = ["xvfb", "x11vnc", "xdotool", "xauth", "imagemagick"];
 /// Components whose install goes through the system package manager, so through sudo.
 const SUDO_COMPONENTS: [&str; 8] = [
     "xvfb",
@@ -295,6 +298,26 @@ pub fn which(name: &str, path: &OsStr) -> Option<PathBuf> {
     std::env::split_paths(path)
         .map(|dir| dir.join(name))
         .find(|candidate| is_executable(candidate))
+}
+
+/// The program that shows a package component is installed (`Xvfb` for `xvfb`, `import` for `imagemagick`).
+/// `setup.status` and the screen's start check both use it, so they always agree.
+pub fn program_for(id: &'static str) -> &'static str {
+    match id {
+        "xvfb" => "Xvfb",
+        "window_manager" => "openbox",
+        "imagemagick" => "import",
+        other => other,
+    }
+}
+
+/// The required screen components (`SCREEN_REQUIRED`) whose program is not on `path`, in their order.
+/// Empty when the screen can start. Nothing is run.
+pub fn missing_screen_components(path: &OsStr) -> Vec<&'static str> {
+    SCREEN_REQUIRED
+        .into_iter()
+        .filter(|&id| which(program_for(id), path).is_none())
+        .collect()
 }
 
 /// Whether a browser is installed: one of the app bundles, or one of `BROWSERS` on `PATH`.
@@ -1065,15 +1088,7 @@ impl Setup {
                 let (installed, version) = self.binary(id, true).await;
                 (installed, version, None)
             }
-            _ => {
-                let name = match id {
-                    "xvfb" => "Xvfb",
-                    "window_manager" => "openbox",
-                    "imagemagick" => "import",
-                    other => other,
-                };
-                (self.binary(name, false).await.0, None, None)
-            }
+            _ => (self.binary(program_for(id), false).await.0, None, None),
         };
         let installable = plan_for(id, p).is_some();
         let hint = hint.or_else(|| (!installable && !installed).then(|| unavailable_hint(id, p)));
@@ -1912,6 +1927,22 @@ fpr:::::::::EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796:
         let status = setup.status().await;
         assert!(status.components.iter().any(|c| c.id == "imagemagick" && c.installed));
         assert_eq!(status.features.screen, Ready::Ready);
+    }
+
+    #[test]
+    fn missing_screen_components_are_the_required_ones_not_on_the_path_in_order() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["Xvfb", "xauth", "import"] {
+            stub(dir.path(), name);
+        }
+        let path = dir.path().as_os_str();
+        // window_manager (openbox) is optional: its absence is not listed.
+        assert_eq!(missing_screen_components(path), vec!["x11vnc", "xdotool"]);
+        for name in ["x11vnc", "xdotool"] {
+            stub(dir.path(), name);
+        }
+        assert!(missing_screen_components(path).is_empty());
+        assert!(missing_screen_components(OsStr::new("")).len() == SCREEN_REQUIRED.len());
     }
 
     /// Installs the Chrome repository with a scripted runner. `key_listing` is what gpg prints for the

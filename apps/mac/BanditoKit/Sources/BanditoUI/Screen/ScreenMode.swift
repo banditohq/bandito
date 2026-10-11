@@ -181,6 +181,12 @@ private struct ScreenCanvas: View {
             ScreenAsleep(model: model)
         case .starting:
             ScreenProgress(text: L10n.Screen.starting)
+        case .missingComponents(let names):
+            ScreenMissingComponents(components: names, setup: model.setup) {
+                Task { await model.installMissing() }
+            }
+        case .installing:
+            ScreenInstalling(setup: model.setup)
         case .connecting:
             ScreenProgress(text: L10n.Screen.connecting)
         case .noFrame:
@@ -236,7 +242,8 @@ private struct ScreenProgress: View {
     }
 }
 
-/// A start or a picture failed: the sentence, and "Повторить" (which starts the screen again).
+/// A start or a picture failed: the sentence, "Повторить" (which starts the screen again), and "Подробнее" with the
+/// technical reason (`UserFacingErrorView`).
 private struct ScreenFailure: View {
     let message: UserFacingMessage
     let retry: () -> Void
@@ -248,6 +255,68 @@ private struct ScreenFailure: View {
                 .foregroundStyle(Color.Bandito.text3)
             UserFacingErrorView(message: message, onRetry: retry)
                 .frame(maxWidth: 360)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// The server lacks programs the screen needs. The sentence names them; "Установить" installs them (the install of
+/// Server → Capabilities) and starts the screen again. The install's log, a password step and a failure show here too.
+struct ScreenMissingComponents: View {
+    let components: [String]
+    @Bindable var setup: SetupModel
+    let onInstall: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "display")
+                .font(.system(size: 34))
+                .foregroundStyle(Color.Bandito.text3)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(L10n.Screen.missingComponents(components: components.joined(separator: ", ")))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button(L10n.Setup.install, action: onInstall)
+                    .banditoButton(.signal())
+                    .disabled(setup.isRunning)
+                if let command = setup.passwordCommand {
+                    SetupPasswordNote(command: command)
+                }
+                if let job = setup.job {
+                    SetupJobPanel(setup: setup, job: job)
+                }
+                if let failed = setup.job?.failedComponent {
+                    Text(L10n.Setup.failed(component: failed))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let error = setup.error {
+                    UserFacingErrorView(message: error)
+                }
+            }
+            .frame(maxWidth: 360)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// The install of the missing programs runs: a spinner and its log, in place of the screen.
+struct ScreenInstalling: View {
+    @Bindable var setup: SetupModel
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.small)
+            Text(L10n.Screen.installing)
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+            if let job = setup.job {
+                SetupJobPanel(setup: setup, job: job)
+                    .frame(maxWidth: 480)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
