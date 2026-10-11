@@ -447,6 +447,8 @@ public enum EventBody: Sendable, Hashable {
     case formAnswered(formId: String, action: FormAction, values: [String: JSONValue]?, comment: String?)
     /// A reaction on the message with that `seq`; no `emoji` means it was taken off.
     case reaction(seq: Int64, emoji: String?, by: ReactionBy)
+    /// The Telegram bot or its linked chats changed (`telegram.changed`, no data). Read `telegram.status` again.
+    case telegramChanged
     /// A kind this app version doesn't know yet. Shown as nothing; kept for forward compatibility.
     case unknown(kind: String)
 }
@@ -576,6 +578,7 @@ extension Event: Decodable {
             body = .formAnswered(formId: x.formId, action: x.action, values: x.values, comment: x.comment)
         case "reaction":
             let x = try p(ReactionP.self); body = .reaction(seq: x.seq, emoji: x.emoji, by: x.by)
+        case "telegram.changed": body = .telegramChanged
         default: body = .unknown(kind: kind)
         }
     }

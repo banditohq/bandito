@@ -1,6 +1,6 @@
 # Settings (Настройки)
 
-The Settings window has a list of 12 sections on the left and the section on the right. Open it with ⌘, or from the menu
+The Settings window has a list of 13 sections on the left and the section on the right. Open it with ⌘, or from the menu
 Bandito → Settings (Настройки). Each entry below gives the path to the setting. Settings are stored on this Mac, except
 the approval rules and the server list, which live on the server and in your account.
 
@@ -206,6 +206,16 @@ A notification when a task is complete.
 A notification when an agent stops because of a failure.
 Где: Settings (⌘,) → Notifications (Уведомления) → Error (Ошибка)
 1. Turn the switch on or off. It is on by default.
+
+## Telegram
+
+<!-- id: set-telegram; covers: settings:telegram -->
+Approvals and agent replies can go to a Telegram chat, and you can write to agents from there. You bring the bot: create it in @BotFather and paste its token here. The token is stored on the server only, and the app never shows it again. The section appears when the server is version 0.1.8 or later.
+Где: Settings (⌘,) → Telegram
+1. Create a bot in @BotFather (send /newbot), paste its token into the Bot token (Токен бота) field and press Connect (Подключить). Telegram checks the token first; a refused token shows a message under the field.
+2. Press Link Telegram (Привязать Telegram). Scan the QR code with your phone, or press Open in Telegram (Открыть в Telegram), then press Start in the chat with the bot. The code is valid for ten minutes; when it runs out, press Get a new code (Получить новый код). The window closes by itself when the chat is linked.
+3. For each chat, choose Approvals (Одобрения) to be asked there when an agent needs approval, and Agent replies (Ответы агентов): All (Все), From Telegram (only the turns you started in Telegram) or None (Нет). Unlink (Отвязать) removes the chat.
+4. Disconnect bot (Отключить бота) deletes the token and unlinks every chat after you confirm. The bot line says Working (Работает) or Stopped (Остановлен); a problem with the bot is shown in words under it.
 
 ## Sounds (Звуки)
 

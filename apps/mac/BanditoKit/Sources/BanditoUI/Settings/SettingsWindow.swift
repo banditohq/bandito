@@ -23,11 +23,26 @@ enum SettingsHandoff {
     }
 }
 
-/// The Settings window (⌘,): 12 sections in a left navigation. Opens at 900 × 640 pt, never smaller than 760 × 520.
+/// The Settings window (⌘,): 13 sections in a left navigation (Telegram only with a daemon that has it). Opens at
+/// 900 × 640 pt, never smaller than 760 × 520.
 public struct SettingsWindow: View {
+    @Environment(AppModel.self) private var app
     @State private var section: SettingsSection = .general
 
     public init() {}
+
+    /// The sections the current server can show. Telegram is listed only once the probe has answered that the daemon
+    /// knows it: while the probe runs, or on an older daemon, the item is not there.
+    private var sections: [SettingsSection] {
+        let telegramShown = app.currentServer?.telegramSupport == .supported
+        return SettingsSection.allCases.filter { $0 != .telegram || telegramShown }
+    }
+
+    /// Asks the current server once it is connected, and again when another server is chosen.
+    private struct TelegramProbe: Hashable {
+        let server: UUID?
+        let connected: Bool
+    }
 
     public var body: some View {
         HStack(spacing: 0) {
@@ -47,6 +62,13 @@ public struct SettingsWindow: View {
         .preferredColorScheme(.dark)
         .onAppear(perform: takeRequest)
         .onChange(of: SettingsNavigation.shared.requested) { _, _ in takeRequest() }
+        .task(id: TelegramProbe(server: app.currentServer?.id, connected: app.currentServer?.info != nil)) {
+            await app.currentServer?.checkTelegramSupport()
+        }
+        // Without a confirmed Telegram daemon the section is not listed; the window then moves to General.
+        .onChange(of: app.currentServer?.telegramSupport ?? .unknown) { _, support in
+            if support != .supported, section == .telegram { section = .general }
+        }
     }
 
     private func takeRequest() {
@@ -66,7 +88,7 @@ public struct SettingsWindow: View {
                     .padding(.horizontal, 10)
                     .padding(.top, 26)
                     .padding(.bottom, 14)
-                ForEach(SettingsSection.allCases) { item in
+                ForEach(sections) { item in
                     let selected = item == section
                     Button {
                         section = item
@@ -109,6 +131,7 @@ public struct SettingsWindow: View {
         case .browserScreen: BrowserScreenSection()
         case .keysGestures: KeysAndGesturesSection()
         case .notifications: NotificationsSection()
+        case .telegram: TelegramSection()
         case .sounds: SoundsSection()
         case .appearance: AppearanceSection()
         case .updates: UpdatesSection()

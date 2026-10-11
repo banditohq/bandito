@@ -42,6 +42,8 @@ public struct RPCError: Error, Sendable, Equatable, LocalizedError {
     public static let unauthorized = -32001
     public static let rateLimited = -32002
     public static let invalidParams = -32602
+    /// The daemon does not know the method: an older daemon has no newer RPC (the Telegram section relies on it).
+    public static let methodNotFound = -32601
     /// File operation failed; `data.reason` says why (see docs/ARCHITECTURE.md#files).
     public static let fileError = -32020
     /// Terminal operation failed; the message starts with the reason (`not_found: …`).
