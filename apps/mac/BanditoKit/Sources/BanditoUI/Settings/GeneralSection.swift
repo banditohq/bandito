@@ -9,6 +9,8 @@ struct GeneralSection: View {
     @State private var language = Self.storedLanguage()
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var launchError: String?
+    @AppStorage(ChatLinkSettings.openTargetDefaultsKey) private var linkTarget = ChatLinkOpenTarget.builtIn.rawValue
+    @AppStorage(ChatLinkSettings.signInDefaultsKey) private var signInInMacBrowser = true
 
     private static let systemLanguage = InterfaceLanguageChoice.systemTag
 
@@ -35,6 +37,38 @@ struct GeneralSection: View {
                     keepsControlBeside: true
                 ) {
                     Toggle("", isOn: $demo.enabled)
+                        .labelsHidden()
+                        .toggleStyle(BanditoToggleStyle())
+                }
+                Divider().padding(.horizontal, 16)
+                SettingsRow(
+                    title: L10n.Settings.ChatLinks.open, hint: L10n.Settings.ChatLinks.openHint,
+                    icon: SettingsIcon(symbol: "link", tint: BanditoPalette.badgeTeal)
+                ) {
+                    BanditoSelect(
+                        selection: $linkTarget,
+                        sections: [
+                            SelectSection(options: [
+                                SelectOption(
+                                    value: ChatLinkOpenTarget.builtIn.rawValue,
+                                    title: L10n.Settings.ChatLinks.builtIn),
+                                SelectOption(
+                                    value: ChatLinkOpenTarget.macBrowser.rawValue,
+                                    title: L10n.Settings.ChatLinks.macBrowser),
+                            ])
+                        ],
+                        label: L10n.Settings.ChatLinks.open, placeholder: L10n.Settings.ChatLinks.builtIn,
+                        field: { SelectFieldView(option: $0?.titleOnly, placeholder: L10n.Settings.ChatLinks.builtIn) },
+                        footer: { _ in EmptyView() })
+                        .frame(width: 220)
+                }
+                Divider().padding(.horizontal, 16)
+                SettingsRow(
+                    title: L10n.Settings.ChatLinks.signIn, hint: L10n.Settings.ChatLinks.signInHint,
+                    icon: SettingsIcon(symbol: "person.badge.key", tint: BanditoPalette.badgeIndigo),
+                    keepsControlBeside: true
+                ) {
+                    Toggle("", isOn: $signInInMacBrowser)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())
                 }

@@ -353,6 +353,13 @@
 "chapter.startedToday" = "em andamento desde esta manhã";
 "chapter.title" = "Capítulo %1$lld";
 "chapter.usageHint" = "Quanto do capítulo atual já foi usado";
+"chatLinks.browser.fallback" = "navegador do Mac";
+"chatLinks.hint.builtInOnly" = "Abre no navegador integrado";
+"chatLinks.hint.builtInWithCommand" = "Abre no navegador integrado · ⌘ — no %1$@";
+"chatLinks.hint.macOnly" = "Abre no %1$@";
+"chatLinks.hint.macWithCommand" = "Abre no %1$@ · ⌘ — no navegador integrado";
+"chatLinks.toast.builtIn" = "Os links abrem no navegador integrado. ⌘-clique abre no %1$@. Mude isso em Ajustes.";
+"chatLinks.toast.mac" = "Os links abrem no %1$@. ⌘-clique abre no navegador integrado. Mude isso em Ajustes.";
 "claudeImport.addFolder" = "Adicionar pasta de projeto…";
 "claudeImport.clearAll" = "Limpar seleção";
 "claudeImport.conflict" = "Nome em uso";
@@ -1970,6 +1977,12 @@
 "settings.browserScreen.qualityHint" = "Mais rápido envia menos dados; mais nítido usa mais banda.";
 "settings.browserScreen.qualitySharper" = "Mais nítido";
 "settings.channelHint" = "A versão Beta recebe as prévias primeiro.";
+"settings.chatLinks.builtIn" = "Navegador integrado";
+"settings.chatLinks.macBrowser" = "Navegador do Mac";
+"settings.chatLinks.open" = "Abrir links do chat em";
+"settings.chatLinks.openHint" = "⌘-clique abre sempre na outra opção.";
+"settings.chatLinks.signIn" = "Links de login no navegador do Mac";
+"settings.chatLinks.signInHint" = "Login no Google, Microsoft, Apple, GitHub, Composio e Auth0, e qualquer página de login ou OAuth. O login funciona melhor no seu próprio navegador.";
 "settings.close" = "Fechar ajustes";
 "settings.general" = "Geral";
 "settings.group.background" = "Em segundo plano";
@@ -2454,8 +2467,6 @@
 "thread.hintStop" = "⌘. parar";
 "thread.jumpMany" = "99+ novas";
 "thread.jumpToLatest" = "Ir para a mensagem mais recente";
-"thread.link.fileHelp" = "Abre no painel · ⌥-clique mostra em Arquivos";
-"thread.link.urlHelp" = "Abre no painel do navegador · ⌘-clique abre no seu navegador";
 "thread.messageFor" = "Mensagem para %1$@";
 "thread.messageFrom" = "Mensagem de %1$@";
 "thread.more" = "Mais";

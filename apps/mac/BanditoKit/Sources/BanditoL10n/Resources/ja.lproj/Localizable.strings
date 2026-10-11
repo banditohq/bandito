@@ -353,6 +353,13 @@
 "chapter.startedToday" = "今朝から実行中";
 "chapter.title" = "チャプター %1$lld";
 "chapter.usageHint" = "現在のチャプターの使用量";
+"chatLinks.browser.fallback" = "Mac のブラウザ";
+"chatLinks.hint.builtInOnly" = "内蔵ブラウザで開きます";
+"chatLinks.hint.builtInWithCommand" = "内蔵ブラウザで開きます · ⌘ — %1$@で開く";
+"chatLinks.hint.macOnly" = "%1$@で開きます";
+"chatLinks.hint.macWithCommand" = "%1$@で開きます · ⌘ — 内蔵ブラウザで開く";
+"chatLinks.toast.builtIn" = "リンクは内蔵ブラウザで開きます。⌘クリックで %1$@ で開きます。設定で変更できます。";
+"chatLinks.toast.mac" = "リンクは %1$@ で開きます。⌘クリックで内蔵ブラウザで開きます。設定で変更できます。";
 "claudeImport.addFolder" = "プロジェクトのフォルダを追加…";
 "claudeImport.clearAll" = "選択を解除";
 "claudeImport.conflict" = "名前が重複";
@@ -1970,6 +1977,12 @@
 "settings.browserScreen.qualityHint" = "「速く」はデータ量が少なく、「鮮明」は帯域を多く使います。";
 "settings.browserScreen.qualitySharper" = "鮮明";
 "settings.channelHint" = "ベータ版は先にプレビュービルドを受け取ります。";
+"settings.chatLinks.builtIn" = "内蔵ブラウザ";
+"settings.chatLinks.macBrowser" = "Mac のブラウザ";
+"settings.chatLinks.open" = "チャットのリンクを開く場所";
+"settings.chatLinks.openHint" = "⌘クリックは常にもう一方で開きます。";
+"settings.chatLinks.signIn" = "サインインのリンクは Mac のブラウザで開く";
+"settings.chatLinks.signInHint" = "Google、Microsoft、Apple、GitHub、Composio、Auth0 のサインイン、およびログインや OAuth のページ。サインインは普段お使いのブラウザで行うのが確実です。";
 "settings.close" = "設定を閉じる";
 "settings.general" = "一般";
 "settings.group.background" = "バックグラウンド";
@@ -2454,8 +2467,6 @@
 "thread.hintStop" = "⌘. 停止";
 "thread.jumpMany" = "新着 99+ 件";
 "thread.jumpToLatest" = "最新のメッセージへ";
-"thread.link.fileHelp" = "パネルで開きます · ⌥クリックで「ファイル」に表示";
-"thread.link.urlHelp" = "パネルのブラウザで開きます · ⌘クリックでMacのブラウザで開く";
 "thread.messageFor" = "%1$@ へのメッセージ";
 "thread.messageFrom" = "%1$@ からのメッセージ";
 "thread.more" = "その他";

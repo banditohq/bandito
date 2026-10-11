@@ -353,6 +353,13 @@
 "chapter.startedToday" = "läuft seit heute Morgen";
 "chapter.title" = "Kapitel %1$lld";
 "chapter.usageHint" = "Wie viel des aktuellen Kapitels genutzt ist";
+"chatLinks.browser.fallback" = "Mac-Browser";
+"chatLinks.hint.builtInOnly" = "Öffnet im eingebauten Browser";
+"chatLinks.hint.builtInWithCommand" = "Öffnet im eingebauten Browser · ⌘ — im %1$@";
+"chatLinks.hint.macOnly" = "Öffnet im %1$@";
+"chatLinks.hint.macWithCommand" = "Öffnet im %1$@ · ⌘ — im eingebauten Browser";
+"chatLinks.toast.builtIn" = "Links öffnen sich im eingebauten Browser. ⌘-Klick öffnet sie im %1$@. Änderbar in den Einstellungen.";
+"chatLinks.toast.mac" = "Links öffnen sich im %1$@. ⌘-Klick öffnet sie im eingebauten Browser. Änderbar in den Einstellungen.";
 "claudeImport.addFolder" = "Projektordner hinzufügen …";
 "claudeImport.clearAll" = "Auswahl aufheben";
 "claudeImport.conflict" = "Name belegt";
@@ -1970,6 +1977,12 @@
 "settings.browserScreen.qualityHint" = "Schneller bedeutet weniger Daten; schärfer bedeutet mehr Traffic.";
 "settings.browserScreen.qualitySharper" = "Schärfer";
 "settings.channelHint" = "Beta erhält Vorabversionen früher.";
+"settings.chatLinks.builtIn" = "Eingebauter Browser";
+"settings.chatLinks.macBrowser" = "Mac-Browser";
+"settings.chatLinks.open" = "Links aus dem Chat öffnen in";
+"settings.chatLinks.openHint" = "⌘-Klick öffnet immer die andere Variante.";
+"settings.chatLinks.signIn" = "Anmeldelinks im Mac-Browser öffnen";
+"settings.chatLinks.signInHint" = "Anmeldung bei Google, Microsoft, Apple, GitHub, Composio und Auth0 sowie alle Login- und OAuth-Seiten. Anmelden klappt am besten im eigenen Browser.";
 "settings.close" = "Einstellungen schließen";
 "settings.general" = "Allgemein";
 "settings.group.background" = "Im Hintergrund";
@@ -2454,8 +2467,6 @@
 "thread.hintStop" = "⌘. stoppen";
 "thread.jumpMany" = "99+ neu";
 "thread.jumpToLatest" = "Zur neuesten Nachricht";
-"thread.link.fileHelp" = "Öffnet im Bereich · ⌥-Klick zeigt in „Dateien“";
-"thread.link.urlHelp" = "Öffnet im Browser-Bereich · ⌘-Klick öffnet im Mac-Browser";
 "thread.messageFor" = "Nachricht für %1$@";
 "thread.messageFrom" = "Nachricht von %1$@";
 "thread.more" = "Mehr";

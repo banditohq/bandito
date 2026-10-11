@@ -353,6 +353,13 @@
 "chapter.startedToday" = "running since this morning";
 "chapter.title" = "Chapter %1$lld";
 "chapter.usageHint" = "How much of the current chapter is used";
+"chatLinks.browser.fallback" = "the Mac browser";
+"chatLinks.hint.builtInOnly" = "Opens in the built-in browser";
+"chatLinks.hint.builtInWithCommand" = "Opens in the built-in browser · ⌘ — in %1$@";
+"chatLinks.hint.macOnly" = "Opens in %1$@";
+"chatLinks.hint.macWithCommand" = "Opens in %1$@ · ⌘ — in the built-in browser";
+"chatLinks.toast.builtIn" = "Links open in the built-in browser. ⌘-click opens them in %1$@. Change this in Settings.";
+"chatLinks.toast.mac" = "Links open in %1$@. ⌘-click opens them in the built-in browser. Change this in Settings.";
 "claudeImport.addFolder" = "Add a project folder…";
 "claudeImport.clearAll" = "Clear";
 "claudeImport.conflict" = "Name taken";
@@ -1970,6 +1977,12 @@
 "settings.browserScreen.qualityHint" = "Faster sends less data; sharper uses more bandwidth.";
 "settings.browserScreen.qualitySharper" = "Sharper";
 "settings.channelHint" = "Beta gets preview builds first.";
+"settings.chatLinks.builtIn" = "Built-in browser";
+"settings.chatLinks.macBrowser" = "Mac browser";
+"settings.chatLinks.open" = "Open links from chat in";
+"settings.chatLinks.openHint" = "⌘-click always opens the other one.";
+"settings.chatLinks.signIn" = "Sign-in links open in the Mac browser";
+"settings.chatLinks.signInHint" = "Sign-in to Google, Microsoft, Apple, GitHub, Composio and Auth0, and any login or OAuth page. Signing in works best in your own browser.";
 "settings.close" = "Close settings";
 "settings.general" = "General";
 "settings.group.background" = "In the background";
@@ -2454,8 +2467,6 @@
 "thread.hintStop" = "⌘. stop";
 "thread.jumpMany" = "99+ new";
 "thread.jumpToLatest" = "Jump to the newest message";
-"thread.link.fileHelp" = "Opens in the panel · ⌥-click shows it in Files";
-"thread.link.urlHelp" = "Opens in the browser panel · ⌘-click opens in your browser";
 "thread.messageFor" = "Message for %1$@";
 "thread.messageFrom" = "Message from %1$@";
 "thread.more" = "More";

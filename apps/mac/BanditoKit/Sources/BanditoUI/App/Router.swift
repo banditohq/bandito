@@ -246,6 +246,8 @@ public final class Router {
     public var marketSkillCategories: [String] = []
     /// What the last bot creation left to say: shown over the window as a toast until closed.
     var botNotice: BotNotice?
+    /// The one-time note after the first web link clicked in a chat: where links open, and what ⌘ does.
+    var chatLinkNotice: ChatLinkNotice?
     /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
     public var pendingTerminalCommand: String?
 

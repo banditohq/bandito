@@ -353,6 +353,13 @@
 "chapter.startedToday" = "从今天早上开始";
 "chapter.title" = "第 %1$lld 章";
 "chapter.usageHint" = "当前章节已用的比例";
+"chatLinks.browser.fallback" = "Mac 浏览器";
+"chatLinks.hint.builtInOnly" = "在内置浏览器中打开";
+"chatLinks.hint.builtInWithCommand" = "在内置浏览器中打开 · ⌘ — 在 %1$@ 中打开";
+"chatLinks.hint.macOnly" = "在 %1$@ 中打开";
+"chatLinks.hint.macWithCommand" = "在 %1$@ 中打开 · ⌘ — 在内置浏览器中打开";
+"chatLinks.toast.builtIn" = "链接在内置浏览器中打开。⌘-点击则在 %1$@ 中打开。可在设置中更改。";
+"chatLinks.toast.mac" = "链接在 %1$@ 中打开。⌘-点击则在内置浏览器中打开。可在设置中更改。";
 "claudeImport.addFolder" = "添加项目文件夹…";
 "claudeImport.clearAll" = "取消选择";
 "claudeImport.conflict" = "名称被占用";
@@ -1970,6 +1977,12 @@
 "settings.browserScreen.qualityHint" = "“更快”发送的数据更少；“更清晰”占用的带宽更多。";
 "settings.browserScreen.qualitySharper" = "更清晰";
 "settings.channelHint" = "Beta 版会优先获得预览版本。";
+"settings.chatLinks.builtIn" = "内置浏览器";
+"settings.chatLinks.macBrowser" = "Mac 浏览器";
+"settings.chatLinks.open" = "聊天中的链接打开方式";
+"settings.chatLinks.openHint" = "⌘-点击总是用另一种方式打开。";
+"settings.chatLinks.signIn" = "登录链接用 Mac 浏览器打开";
+"settings.chatLinks.signInHint" = "Google、Microsoft、Apple、GitHub、Composio、Auth0 的登录，以及任何登录或 OAuth 页面。在您自己的浏览器里登录更稳妥。";
 "settings.close" = "关闭设置";
 "settings.general" = "通用";
 "settings.group.background" = "后台";
@@ -2454,8 +2467,6 @@
 "thread.hintStop" = "⌘. 停止";
 "thread.jumpMany" = "99+ 条新消息";
 "thread.jumpToLatest" = "跳到最新消息";
-"thread.link.fileHelp" = "在面板中打开 · ⌥-点击则在“文件”中显示";
-"thread.link.urlHelp" = "在面板浏览器中打开 · ⌘-点击则在 Mac 浏览器中打开";
 "thread.messageFor" = "发给 %1$@ 的消息";
 "thread.messageFrom" = "来自 %1$@ 的消息";
 "thread.more" = "更多";

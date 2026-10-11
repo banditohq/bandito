@@ -353,6 +353,13 @@
 "chapter.startedToday" = "en cours depuis ce matin";
 "chapter.title" = "Chapitre %1$lld";
 "chapter.usageHint" = "Part du chapitre actuel déjà utilisée";
+"chatLinks.browser.fallback" = "le navigateur du Mac";
+"chatLinks.hint.builtInOnly" = "S'ouvre dans le navigateur intégré";
+"chatLinks.hint.builtInWithCommand" = "S'ouvre dans le navigateur intégré · ⌘ — dans %1$@";
+"chatLinks.hint.macOnly" = "S'ouvre dans %1$@";
+"chatLinks.hint.macWithCommand" = "S'ouvre dans %1$@ · ⌘ — dans le navigateur intégré";
+"chatLinks.toast.builtIn" = "Les liens s'ouvrent dans le navigateur intégré. ⌘-clic : dans %1$@. Modifiable dans les Réglages.";
+"chatLinks.toast.mac" = "Les liens s'ouvrent dans %1$@. ⌘-clic : dans le navigateur intégré. Modifiable dans les Réglages.";
 "claudeImport.addFolder" = "Ajouter un dossier de projet…";
 "claudeImport.clearAll" = "Tout désélectionner";
 "claudeImport.conflict" = "Nom déjà pris";
@@ -1970,6 +1977,12 @@
 "settings.browserScreen.qualityHint" = "Plus rapide envoie moins de données ; plus net utilise plus de bande passante.";
 "settings.browserScreen.qualitySharper" = "Plus net";
 "settings.channelHint" = "La version bêta reçoit les préversions en premier.";
+"settings.chatLinks.builtIn" = "Navigateur intégré";
+"settings.chatLinks.macBrowser" = "Navigateur du Mac";
+"settings.chatLinks.open" = "Ouvrir les liens du chat dans";
+"settings.chatLinks.openHint" = "⌘-clic ouvre toujours l'autre option.";
+"settings.chatLinks.signIn" = "Liens de connexion dans le navigateur du Mac";
+"settings.chatLinks.signInHint" = "Connexion à Google, Microsoft, Apple, GitHub, Composio et Auth0, et toute page de connexion ou OAuth. La connexion fonctionne mieux dans votre propre navigateur.";
 "settings.close" = "Fermer les réglages";
 "settings.general" = "Général";
 "settings.group.background" = "En arrière-plan";
@@ -2454,8 +2467,6 @@
 "thread.hintStop" = "⌘. arrêter";
 "thread.jumpMany" = "99+ nouveaux";
 "thread.jumpToLatest" = "Aller au dernier message";
-"thread.link.fileHelp" = "S'ouvre dans le panneau · ⌥-clic l'affiche dans Fichiers";
-"thread.link.urlHelp" = "S'ouvre dans le panneau du navigateur · ⌘-clic dans votre navigateur";
 "thread.messageFor" = "Message pour %1$@";
 "thread.messageFrom" = "Message de %1$@";
 "thread.more" = "Plus";

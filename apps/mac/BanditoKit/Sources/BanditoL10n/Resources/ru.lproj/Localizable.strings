@@ -353,6 +353,13 @@
 "chapter.startedToday" = "идёт с сегодняшнего утра";
 "chapter.title" = "Глава %1$lld";
 "chapter.usageHint" = "Сколько занято в текущей главе";
+"chatLinks.browser.fallback" = "браузере Mac";
+"chatLinks.hint.builtInOnly" = "Откроется во встроенном браузере";
+"chatLinks.hint.builtInWithCommand" = "Откроется во встроенном браузере · ⌘ — в %1$@";
+"chatLinks.hint.macOnly" = "Откроется в %1$@";
+"chatLinks.hint.macWithCommand" = "Откроется в %1$@ · ⌘ — во встроенном браузере";
+"chatLinks.toast.builtIn" = "Ссылки открываются во встроенном браузере. ⌘-клик — в %1$@. Изменить в Настройках.";
+"chatLinks.toast.mac" = "Ссылки открываются в %1$@. ⌘-клик — во встроенном браузере. Изменить в Настройках.";
 "claudeImport.addFolder" = "Добавить папку проекта…";
 "claudeImport.clearAll" = "Снять выбор";
 "claudeImport.conflict" = "Имя занято";
@@ -1970,6 +1977,12 @@
 "settings.browserScreen.qualityHint" = "Быстрее — меньше данных; чётче — больше трафика.";
 "settings.browserScreen.qualitySharper" = "Чётче";
 "settings.channelHint" = "Бета получает предварительные сборки раньше.";
+"settings.chatLinks.builtIn" = "Во встроенном браузере";
+"settings.chatLinks.macBrowser" = "В браузере Mac";
+"settings.chatLinks.open" = "Ссылки из чата открывать";
+"settings.chatLinks.openHint" = "⌘-клик всегда открывает по-другому.";
+"settings.chatLinks.signIn" = "Ссылки входа в сервисы — в браузере Mac";
+"settings.chatLinks.signInHint" = "Вход в Google, Microsoft, Apple, GitHub, Composio и Auth0, а также любые страницы входа и OAuth. Входить лучше в своём браузере.";
 "settings.close" = "Закрыть настройки";
 "settings.general" = "Общие";
 "settings.group.background" = "В фоне";
@@ -2454,8 +2467,6 @@
 "thread.hintStop" = "⌘. стоп";
 "thread.jumpMany" = "99+ новых";
 "thread.jumpToLatest" = "К последнему сообщению";
-"thread.link.fileHelp" = "Откроется в панели · ⌥-клик покажет в «Файлах»";
-"thread.link.urlHelp" = "Откроется во вкладке браузера · ⌘-клик откроет в браузере Mac";
 "thread.messageFor" = "Сообщение для %1$@";
 "thread.messageFrom" = "Сообщение от %1$@";
 "thread.more" = "Ещё";

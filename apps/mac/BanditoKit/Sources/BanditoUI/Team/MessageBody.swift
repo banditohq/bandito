@@ -13,7 +13,18 @@ struct MessageBodyView: View {
     var streaming = false
 
     var body: some View {
-        let blocks = MessageRenderCache.shared.blocks(for: text, markdown: markdown, cached: !streaming)
+        let message = MessageRenderCache.shared.message(for: text, markdown: markdown, cached: !streaming)
+        // A message with a web link shows the link hint on hover; the others are drawn without any hover tracking.
+        // The first web link was found when the message was parsed, not on every draw.
+        if let link = message.firstWebLink {
+            ChatLinkHintHost(link: link) { messageBody(message.blocks) }
+        } else {
+            messageBody(message.blocks)
+        }
+    }
+
+    @ViewBuilder
+    private func messageBody(_ blocks: [RenderedBlock]) -> some View {
         if blocks.contains(where: { if case .code = $0 { return true } else { return false } }) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
@@ -45,6 +56,13 @@ enum RenderedBlock {
     case code(language: String?, code: String)
 }
 
+/// A message ready to draw: its blocks, and the first web address among its links (the hover hint needs it). Both are
+/// found once, when the message is parsed.
+struct RenderedMessage {
+    let blocks: [RenderedBlock]
+    let firstWebLink: URL?
+}
+
 /// The parsed bodies of messages, by text. Parsing Markdown and finding links is the costly part of drawing a bubble;
 /// it must not be redone every time a row is built (a scroll builds rows again and again). Bounded by size (8 MB of text), and a
 /// message still streaming is never kept: its text changes at every token.
@@ -52,7 +70,7 @@ final class MessageRenderCache: @unchecked Sendable {
     static let shared = MessageRenderCache()
 
     private struct Entry {
-        let blocks: [RenderedBlock]
+        let message: RenderedMessage
         let cost: Int
         var used: UInt64
     }
@@ -71,26 +89,31 @@ final class MessageRenderCache: @unchecked Sendable {
     var parses: Int { lock.withLock { parsedCount } }
 
     func blocks(for text: String, markdown: Bool, cached: Bool = true) -> [RenderedBlock] {
+        message(for: text, markdown: markdown, cached: cached).blocks
+    }
+
+    /// The parsed message: its blocks and its first web link, parsed once and kept with the blocks.
+    func message(for text: String, markdown: Bool, cached: Bool = true) -> RenderedMessage {
         guard cached else {
             lock.withLock { parsedCount += 1 }
-            return Self.build(text, markdown: markdown)
+            return Self.rendered(text, markdown: markdown)
         }
         let key = (markdown ? "m:" : "p:") + text
-        if let hit = lock.withLock({ () -> [RenderedBlock]? in
+        if let hit = lock.withLock({ () -> RenderedMessage? in
             guard var entry = entries[key] else { return nil }
             tick += 1
             entry.used = tick
             entries[key] = entry
-            return entry.blocks
+            return entry.message
         }) {
             return hit
         }
-        let built = Self.build(text, markdown: markdown)
+        let built = Self.rendered(text, markdown: markdown)
         lock.withLock {
             parsedCount += 1
             tick += 1
             let cost = text.utf8.count
-            if let old = entries.updateValue(Entry(blocks: built, cost: cost, used: tick), forKey: key) {
+            if let old = entries.updateValue(Entry(message: built, cost: cost, used: tick), forKey: key) {
                 totalCost -= old.cost
             }
             totalCost += cost
@@ -103,6 +126,11 @@ final class MessageRenderCache: @unchecked Sendable {
             }
         }
         return built
+    }
+
+    static func rendered(_ text: String, markdown: Bool) -> RenderedMessage {
+        let blocks = build(text, markdown: markdown)
+        return RenderedMessage(blocks: blocks, firstWebLink: ChatLinkRouting.firstWebLink(in: blocks))
     }
 
     static func build(_ text: String, markdown: Bool) -> [RenderedBlock] {
