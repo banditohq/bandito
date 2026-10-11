@@ -284,6 +284,8 @@
 "browser.emptyPage" = "Aucune page ouverte";
 "browser.error" = "Impossible de joindre le navigateur";
 "browser.forward" = "Avancer";
+"browser.frameTimeoutRetry" = "Réessayer";
+"browser.frameTimeoutTitle" = "Le navigateur n'a envoyé aucune image";
 "browser.hint" = "Le navigateur tourne sur le serveur. Les connexions sont conservées, et les agents voient les mêmes onglets que vous. Les agents isolés ont leur propre navigateur.";
 "browser.hintShort" = "Les connexions sont gardées sur le serveur, et les agents utilisent les mêmes onglets.";
 "browser.install" = "Installer";
@@ -294,6 +296,8 @@
 "browser.needsChromeHint" = "Bandito peut installer Google Chrome sur ce serveur. Le navigateur y conserve vos connexions.";
 "browser.newTab" = "Nouvel onglet";
 "browser.newTabHelp" = "Nouvel onglet (⌘T)";
+"browser.noTabsHint" = "Ouvrez un nouvel onglet. Les agents peuvent aussi en ouvrir.";
+"browser.noTabsTitle" = "Aucun onglet";
 "browser.onServer" = "ouvert sur le serveur";
 "browser.onServerHelp" = "La page est ouverte dans le navigateur du serveur, pas sur ce Mac";
 "browser.openFullscreen" = "Ouvrir en plein écran";
@@ -304,6 +308,10 @@
 "browser.previewTitle" = "Aperçu";
 "browser.reload" = "Recharger";
 "browser.start" = "Démarrer le navigateur";
+"browser.startAgentTabs" = "Onglets des agents";
+"browser.startHint" = "Saisissez une adresse ou une recherche dans la barre ci-dessus.";
+"browser.startNoRecent" = "Les adresses que vous ouvrez apparaîtront ici.";
+"browser.startRecent" = "Récents";
 "browser.stopped" = "Le navigateur ne tourne pas";
 "browser.stoppedHint" = "Le navigateur tourne sur le serveur : les agents voient les mêmes onglets.";
 "browser.tabs" = "Onglets";

@@ -284,6 +284,8 @@
 "browser.emptyPage" = "Nenhuma página aberta";
 "browser.error" = "Não foi possível conectar ao navegador";
 "browser.forward" = "Avançar";
+"browser.frameTimeoutRetry" = "Tentar de novo";
+"browser.frameTimeoutTitle" = "O navegador não enviou nenhuma imagem";
 "browser.hint" = "O navegador roda no servidor. Os logins são mantidos, e os agentes veem as mesmas abas que você. Agentes isolados têm o próprio navegador.";
 "browser.hintShort" = "Os logins ficam salvos no servidor, e os agentes usam as mesmas abas.";
 "browser.install" = "Instalar";
@@ -294,6 +296,8 @@
 "browser.needsChromeHint" = "O Bandito pode instalar o Google Chrome neste servidor. O navegador guarda os logins ali.";
 "browser.newTab" = "Nova aba";
 "browser.newTabHelp" = "Nova aba (⌘T)";
+"browser.noTabsHint" = "Abra uma nova aba. Os agentes também podem abrir as deles.";
+"browser.noTabsTitle" = "Nenhuma aba";
 "browser.onServer" = "aberto no servidor";
 "browser.onServerHelp" = "A página está aberta no navegador do servidor, não neste Mac";
 "browser.openFullscreen" = "Abrir em tela cheia";
@@ -304,6 +308,10 @@
 "browser.previewTitle" = "Pré-visualização";
 "browser.reload" = "Recarregar";
 "browser.start" = "Iniciar navegador";
+"browser.startAgentTabs" = "Abas dos agentes";
+"browser.startHint" = "Digite um endereço ou uma busca na barra acima.";
+"browser.startNoRecent" = "Os endereços que você abrir aparecerão aqui.";
+"browser.startRecent" = "Recentes";
 "browser.stopped" = "O navegador não está rodando";
 "browser.stoppedHint" = "O navegador roda no servidor: os agentes veem as mesmas abas.";
 "browser.tabs" = "Abas";

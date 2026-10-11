@@ -75,8 +75,25 @@ Two-finger swipe moves back and forward through the pages, and an arrow at the e
 ## Close a tab (⌘W)
 
 <!-- id: browser-close-tab; covers: -->
-Closes the shown tab. A tab that hangs and does not answer is closed anyway after 3 seconds, and the next tab opens in its place.
+Closes the shown tab. A tab that hangs and does not answer is closed anyway after 3 seconds, and the next tab opens in its place. Closing the last tab leaves no tab: nothing opens by itself (see [No tabs](#no-tabs-and-the-start-page-new-tab)).
 Где: Browser → ⌘W, or the × on a tab
 1. Press ⌘W while the Browser mode is shown.
 2. If the tab does not answer, wait a moment: the server closes it by force.
 Хоткей: ⌘W
+
+## No tabs and the start page (No tabs, New tab)
+
+<!-- id: browser-start; covers: -->
+When every tab is closed, the page area says No tabs (Вкладок нет). Press New tab (Новая вкладка) or ⌘T to open one. A new tab shows a start page: the address bar has the focus, Recent (Недавние) lists the last addresses you opened on this server, and Agent tabs (Вкладки агентов) lists the tabs agents opened. Click an address to open it, or type one in the address bar.
+Где: Browser → page area (when no tab is open); Browser → toolbar → New tab (Новая вкладка) or ⌘T
+1. Press ⌘T, or click New tab (Новая вкладка), to open a blank tab.
+2. Type an address and press ↵, or click an address under Recent (Недавние).
+3. Click a tab under Agent tabs (Вкладки агентов) to open the tab an agent opened.
+
+## A page without a picture (Retry)
+
+<!-- id: browser-retry-picture; covers: -->
+A page shows its picture as it loads. When no picture comes for 10 seconds, the page area says The browser sent no picture (Браузер не прислал картинку) and offers Retry (Повторить), which connects to the page again.
+Где: Browser → page area, after 10 seconds without a picture
+1. Click Retry (Повторить) to connect to the page again.
+2. If the picture still does not come, check that the server is running (Server → Daemon log, see [server.md](server.md)).

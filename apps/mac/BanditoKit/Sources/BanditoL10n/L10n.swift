@@ -427,6 +427,8 @@ public enum L10n {
         public static var emptyPage: String { L10n.tr("browser.emptyPage") }
         public static var error: String { L10n.tr("browser.error") }
         public static var forward: String { L10n.tr("browser.forward") }
+        public static var frameTimeoutRetry: String { L10n.tr("browser.frameTimeoutRetry") }
+        public static var frameTimeoutTitle: String { L10n.tr("browser.frameTimeoutTitle") }
         public static var hint: String { L10n.tr("browser.hint") }
         public static var hintShort: String { L10n.tr("browser.hintShort") }
         public static var install: String { L10n.tr("browser.install") }
@@ -437,6 +439,8 @@ public enum L10n {
         public static var needsChromeHint: String { L10n.tr("browser.needsChromeHint") }
         public static var newTab: String { L10n.tr("browser.newTab") }
         public static var newTabHelp: String { L10n.tr("browser.newTabHelp") }
+        public static var noTabsHint: String { L10n.tr("browser.noTabsHint") }
+        public static var noTabsTitle: String { L10n.tr("browser.noTabsTitle") }
         public static var onServer: String { L10n.tr("browser.onServer") }
         public static var onServerHelp: String { L10n.tr("browser.onServerHelp") }
         public static var openFullscreen: String { L10n.tr("browser.openFullscreen") }
@@ -447,6 +451,10 @@ public enum L10n {
         public static var previewTitle: String { L10n.tr("browser.previewTitle") }
         public static var reload: String { L10n.tr("browser.reload") }
         public static var start: String { L10n.tr("browser.start") }
+        public static var startAgentTabs: String { L10n.tr("browser.startAgentTabs") }
+        public static var startHint: String { L10n.tr("browser.startHint") }
+        public static var startNoRecent: String { L10n.tr("browser.startNoRecent") }
+        public static var startRecent: String { L10n.tr("browser.startRecent") }
         public static var stopped: String { L10n.tr("browser.stopped") }
         public static var stoppedHint: String { L10n.tr("browser.stoppedHint") }
         public static var tabs: String { L10n.tr("browser.tabs") }

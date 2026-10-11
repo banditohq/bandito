@@ -20,7 +20,8 @@ import Testing
     static let settingsColumn: CGFloat = 520
 
     static var cases: [AuditCase] {
-        settings + sheets + dataSheets + serverScreens + marketScreens + onboardingScreens + flowSheets + approvalViews
+        settings + sheets + dataSheets + serverScreens + marketScreens + onboardingScreens + flowSheets + browserScreens
+            + approvalViews
     }
 
     static let settings: [AuditCase] = [
@@ -235,6 +236,35 @@ import Testing
             env.hub.me = try? JSONDecoder().decode(Me.self, from: Data(me.utf8))
             env.hub.pending = (try? JSONDecoder().decode([PendingDevice].self, from: Data(pending.utf8))) ?? []
             return AnyView(AccountSheet())
+        },
+    ]
+
+    // MARK: browser page area
+
+    /// The page area of Browser mode at its narrowest (a panel in the workbench is narrower than the window).
+    static let browserStartRecent = [
+        "https://www.marketplace.example.com/catalog/category/very-long-path/item-with-a-long-name?ref=start",
+        "https://docs.example.org/guide/getting-started",
+        "https://news.example.net/",
+    ]
+
+    static let browserStartAgentTabs = [
+        BrowserTab(id: "A1", title: "Заказ №4417 — оплата", url: "https://shop.example.ru/order/4417", agent: true),
+        BrowserTab(id: "A2", title: "", url: "https://api.example.com/v2/reports/monthly", agent: true),
+    ]
+
+    static let browserScreens: [AuditCase] = [
+        AuditCase(name: "browser-no-tabs", width: 420, height: 300) { _ in
+            AnyView(BrowserNoTabsView(onNewTab: {}))
+        },
+        AuditCase(name: "browser-start-page", width: 420, height: 520) { _ in
+            AnyView(
+                BrowserStartPageView(
+                    recent: browserStartRecent, agentTabs: browserStartAgentTabs,
+                    onOpenAddress: { _ in }, onSelectTab: { _ in }))
+        },
+        AuditCase(name: "browser-frame-timeout", width: 420, height: 260) { _ in
+            AnyView(BrowserFrameTimedOutView(onRetry: {}))
         },
     ]
 

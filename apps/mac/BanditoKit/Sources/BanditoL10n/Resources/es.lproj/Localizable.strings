@@ -284,6 +284,8 @@
 "browser.emptyPage" = "No hay ninguna página abierta";
 "browser.error" = "No se pudo conectar con el navegador";
 "browser.forward" = "Adelante";
+"browser.frameTimeoutRetry" = "Reintentar";
+"browser.frameTimeoutTitle" = "El navegador no envió ninguna imagen";
 "browser.hint" = "El navegador vive en el servidor. Las sesiones se mantienen y los agentes ven las mismas pestañas que tú. Los agentes aislados tienen su propio navegador.";
 "browser.hintShort" = "Los inicios de sesión se guardan en el servidor, y los agentes usan las mismas pestañas.";
 "browser.install" = "Instalar";
@@ -294,6 +296,8 @@
 "browser.needsChromeHint" = "Bandito puede instalar Google Chrome en este servidor. El navegador guarda allí tus sesiones.";
 "browser.newTab" = "Nueva pestaña";
 "browser.newTabHelp" = "Nueva pestaña (⌘T)";
+"browser.noTabsHint" = "Abre una pestaña nueva. Los agentes también pueden abrir las suyas.";
+"browser.noTabsTitle" = "No hay pestañas";
 "browser.onServer" = "abierto en el servidor";
 "browser.onServerHelp" = "La página está abierta en el navegador del servidor, no en este Mac";
 "browser.openFullscreen" = "Abrir en pantalla completa";
@@ -304,6 +308,10 @@
 "browser.previewTitle" = "Vista previa";
 "browser.reload" = "Recargar";
 "browser.start" = "Iniciar navegador";
+"browser.startAgentTabs" = "Pestañas de los agentes";
+"browser.startHint" = "Escribe una dirección o una búsqueda en la barra de arriba.";
+"browser.startNoRecent" = "Aquí aparecerán las direcciones que abras.";
+"browser.startRecent" = "Recientes";
 "browser.stopped" = "El navegador no está en marcha";
 "browser.stoppedHint" = "El navegador funciona en el servidor: los agentes ven las mismas pestañas.";
 "browser.tabs" = "Pestañas";

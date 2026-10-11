@@ -95,6 +95,13 @@ final class BrowserModel {
     private var reconnect = BrowserReconnectPolicy()
     /// True after five reconnects in a row failed: the browser is shown as stopped, with a button to start it.
     private(set) var gaveUp = false
+    /// True when a page sent no picture for `BrowserPageStateRule.frameTimeout` after it connected: the page area then
+    /// says so and offers a retry. Written once when it turns true, and cleared with the next connection.
+    private(set) var frameWaitExpired = false
+    /// The timer of that wait (see `startFrameWait`).
+    private var frameWait: Task<Void, Never>?
+    /// Counts up each time the address field is asked for the focus (a new tab's start page wants it at once).
+    private(set) var addressFocusRequest = 0
 
     init(server: ServerModel) {
         self.server = server
@@ -187,7 +194,8 @@ final class BrowserModel {
     /// holds. The browser is asked to close it and given 3 s; a tab that does not answer, or is refused, is closed by the
     /// daemon (`browser.close_tab`). Either way the tab leaves the list: a hung page never keeps its tab open.
     /// When the shown page is the one closed, the next tab takes its place (see `BrowserTabPolicy`); when none is
-    /// left, a blank tab opens. While an agent drives the browser, it asks to take control instead.
+    /// left, the page area says there are no tabs, and nothing opens a new one. While an agent drives the browser, it
+    /// asks to take control instead.
     func closeTab(_ id: String) async {
         guard status?.isRelay == true else { return }
         guard canInteract else {
@@ -212,13 +220,10 @@ final class BrowserModel {
             return
         case .show(let next):
             await selectPage(next)
-        case .openBlank:
+        case .empty:
+            // Nothing opens in the closed tab's place: the page area shows that there are no tabs (see `pageState`).
             await closeClient()
             selection = nil
-            if let blank = await createBlankTab() {
-                tabs = (try? await server.browserTabs()) ?? tabs
-                await selectPage(blank)
-            }
         }
     }
 
@@ -287,8 +292,8 @@ final class BrowserModel {
                 // The page's own history is the truth for the address: it repairs one the events missed.
                 if let client, !isEditingAddress { await readCurrentAddress(client: client) }
             }
-            // The page connection follows the page tabs; a preview needs none.
-            if client == nil, !isPreviewSelected {
+            // The page connection follows the page tabs; a preview needs none. With no tab there is nothing to connect to.
+            if client == nil, !isPreviewSelected, !tabs.isEmpty {
                 await reconnectIfDue()
             }
             if Date().timeIntervalSince(lastTouch) > 60, NSApplication.shared.isActive {
@@ -611,8 +616,10 @@ final class BrowserModel {
             clientTabID = tab.id
             if selection == nil { selection = .page(tab.id) }
             currentURL = tab.url
+            rememberAddress(tab.url)
             addressText = BrowserAddressRule.shownAddress(tab.url)
             pageTitle = tab.title
+            startFrameWait()
             eventTask = Task { [weak self] in
                 for await event in client.events {
                     guard let self else { return }
@@ -701,7 +708,66 @@ final class BrowserModel {
         if let image {
             lastFrames.set(image)
             if !hasLastFrame { hasLastFrame = true }
+            // The page has its picture: nothing is waiting for one any more.
+            if frameWait != nil || frameWaitExpired { cancelFrameWait() }
         }
+    }
+
+    /// Starts the wait for the first picture of a page connection. After `BrowserPageStateRule.frameTimeout` without
+    /// one, `frameWaitExpired` turns on, and the page area offers a retry.
+    private func startFrameWait() {
+        frameWait?.cancel()
+        frameWaitExpired = false
+        frameWait = Task { [weak self] in
+            try? await Task.sleep(for: BrowserPageStateRule.frameTimeout)
+            guard !Task.isCancelled, let self, !self.hasFrame else { return }
+            self.frameWaitExpired = true
+        }
+    }
+
+    private func cancelFrameWait() {
+        frameWait?.cancel()
+        frameWait = nil
+        frameWaitExpired = false
+    }
+
+    /// What the page area shows, decided from the tabs, the shown address and the picture (see `BrowserPageStateRule`).
+    var pageState: BrowserPageState {
+        let shownURL = currentURL.isEmpty ? (tabs.first { $0.id == pageTabID }?.url ?? "") : currentURL
+        return BrowserPageStateRule.make(
+            hasTabs: !tabs.isEmpty, url: shownURL, hasFrame: hasFrame, frameWaitExpired: frameWaitExpired)
+    }
+
+    /// Asks the page's retry: the page connection is made again, so the picture is asked for again.
+    func retryFrame() async {
+        guard let id = pageTabID else { return }
+        await selectPage(id)
+    }
+
+    /// The addresses opened on this server, newest first: the start page's "recent" list.
+    var recentAddresses: [String] {
+        BrowserRecentAddresses.list(serverKey: server.id.uuidString)
+    }
+
+    /// The tabs agents opened, except the one shown: the start page's "agent tabs" list.
+    var agentTabs: [BrowserTab] {
+        tabs.filter { $0.agent && $0.id != pageTabID }
+    }
+
+    /// Opens an address from the recent list, as if it were typed into the address field.
+    func openRecent(_ url: String) {
+        addressText = url
+        submitAddress()
+    }
+
+    /// Asks the address field for the focus: a new tab's start page wants the address typed at once.
+    func requestAddressFocus() {
+        addressFocusRequest += 1
+    }
+
+    /// Keeps a web address in the recent list of this server (see `BrowserRecentAddresses`).
+    private func rememberAddress(_ url: String) {
+        BrowserRecentAddresses.remember(url, serverKey: server.id.uuidString)
     }
 
     /// The page shows another size than the viewport it was given (the override was lost): sends it again, at most
@@ -782,6 +848,7 @@ final class BrowserModel {
         let next = BrowserAddressRule.afterPageMoved(to: url, currentURL: currentURL, typed: addressText, editing: isEditingAddress)
         currentURL = next.currentURL
         addressText = next.typed
+        rememberAddress(url)
         // The tab row in the sidebar names the tab by its address too, so its entry follows the page.
         if let clientTabID, let index = tabs.firstIndex(where: { $0.id == clientTabID }), tabs[index].url != url {
             tabs[index].url = url
@@ -816,6 +883,7 @@ final class BrowserModel {
         stopWheel()
         eventTask?.cancel()
         eventTask = nil
+        cancelFrameWait()
         let old = client
         client = nil
         clientTabID = nil
@@ -910,15 +978,15 @@ enum BrowserTabPolicy {
         case keep
         /// The shown page closed: show this tab.
         case show(String)
-        /// The shown page closed and no tab is left: open a blank one.
-        case openBlank
+        /// The shown page closed and no tab is left: nothing is shown, and nothing opens in its place.
+        case empty
     }
 
     /// `before` is the tab ids before the close, `remaining` the ids after it (without `closedID`). The tab that takes
     /// the place of the closed one is the one on its right, or the last one when it was the last of the row.
     static func afterClosing(closedID: String, shownID: String?, before: [String], remaining: [String]) -> Outcome {
         guard shownID == closedID else { return .keep }
-        guard !remaining.isEmpty else { return .openBlank }
+        guard !remaining.isEmpty else { return .empty }
         let index = before.firstIndex(of: closedID) ?? 0
         return .show(remaining[min(index, remaining.count - 1)])
     }

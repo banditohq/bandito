@@ -284,6 +284,8 @@
 "browser.emptyPage" = "Нет открытой страницы";
 "browser.error" = "Не удалось подключиться к браузеру";
 "browser.forward" = "Вперёд";
+"browser.frameTimeoutRetry" = "Повторить";
+"browser.frameTimeoutTitle" = "Браузер не прислал картинку";
 "browser.hint" = "Браузер живёт на сервере. Входы на сайты сохраняются, агенты видят те же вкладки, что и вы. У изолированных агентов — свой браузер.";
 "browser.hintShort" = "Входы сохраняются на сервере. Агенты видят те же вкладки.";
 "browser.install" = "Установить";
@@ -294,6 +296,8 @@
 "browser.needsChromeHint" = "Bandito может установить Google Chrome на этот сервер. Браузер хранит на нём ваши входы.";
 "browser.newTab" = "Новая вкладка";
 "browser.newTabHelp" = "Новая вкладка (⌘T)";
+"browser.noTabsHint" = "Откройте новую вкладку. Агенты тоже смогут открывать свои.";
+"browser.noTabsTitle" = "Вкладок нет";
 "browser.onServer" = "открыто на сервере";
 "browser.onServerHelp" = "Страница открыта в браузере на сервере, а не на этом Mac";
 "browser.openFullscreen" = "Открыть во весь экран";
@@ -304,6 +308,10 @@
 "browser.previewTitle" = "Превью";
 "browser.reload" = "Обновить";
 "browser.start" = "Запустить браузер";
+"browser.startAgentTabs" = "Вкладки агентов";
+"browser.startHint" = "Введите адрес или запрос в строке сверху.";
+"browser.startNoRecent" = "Здесь появятся адреса, которые вы открывали.";
+"browser.startRecent" = "Недавние";
 "browser.stopped" = "Браузер не запущен";
 "browser.stoppedHint" = "Браузер работает на сервере: агенты видят те же вкладки.";
 "browser.tabs" = "Вкладки";

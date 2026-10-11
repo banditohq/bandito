@@ -284,6 +284,8 @@
 "browser.emptyPage" = "Keine Seite geöffnet";
 "browser.error" = "Verbindung zum Browser nicht möglich";
 "browser.forward" = "Vor";
+"browser.frameTimeoutRetry" = "Erneut versuchen";
+"browser.frameTimeoutTitle" = "Der Browser hat kein Bild geschickt";
 "browser.hint" = "Der Browser läuft auf dem Server. Anmeldungen bleiben erhalten, und Agenten sehen dieselben Tabs wie Sie. Isolierte Agenten haben ihren eigenen Browser.";
 "browser.hintShort" = "Anmeldungen bleiben auf dem Server, Agenten nutzen dieselben Tabs.";
 "browser.install" = "Installieren";
@@ -294,6 +296,8 @@
 "browser.needsChromeHint" = "Bandito kann Google Chrome auf diesem Server installieren. Der Browser bewahrt dort Ihre Anmeldungen auf.";
 "browser.newTab" = "Neuer Tab";
 "browser.newTabHelp" = "Neuer Tab (⌘T)";
+"browser.noTabsHint" = "Öffne einen neuen Tab. Agenten können eigene öffnen.";
+"browser.noTabsTitle" = "Keine Tabs";
 "browser.onServer" = "auf dem Server geöffnet";
 "browser.onServerHelp" = "Die Seite ist im Browser auf dem Server geöffnet, nicht auf diesem Mac";
 "browser.openFullscreen" = "Im Vollbild öffnen";
@@ -304,6 +308,10 @@
 "browser.previewTitle" = "Vorschau";
 "browser.reload" = "Neu laden";
 "browser.start" = "Browser starten";
+"browser.startAgentTabs" = "Tabs der Agenten";
+"browser.startHint" = "Gib oben in der Leiste eine Adresse oder eine Suche ein.";
+"browser.startNoRecent" = "Hier erscheinen die Adressen, die du öffnest.";
+"browser.startRecent" = "Zuletzt";
 "browser.stopped" = "Der Browser läuft nicht";
 "browser.stoppedHint" = "Der Browser läuft auf dem Server: Agenten sehen dieselben Tabs.";
 "browser.tabs" = "Tabs";

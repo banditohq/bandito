@@ -284,6 +284,8 @@
 "browser.emptyPage" = "No page open";
 "browser.error" = "Could not reach the browser";
 "browser.forward" = "Forward";
+"browser.frameTimeoutRetry" = "Retry";
+"browser.frameTimeoutTitle" = "The browser sent no picture";
 "browser.hint" = "The browser lives on the server. Sign-ins are kept, and agents see the same tabs you do. Isolated agents have their own browser.";
 "browser.hintShort" = "Sign-ins are kept on the server, and agents use the same tabs.";
 "browser.install" = "Install";
@@ -294,6 +296,8 @@
 "browser.needsChromeHint" = "Bandito can install Google Chrome on this server. The browser keeps its sign-ins there.";
 "browser.newTab" = "New tab";
 "browser.newTabHelp" = "New tab (⌘T)";
+"browser.noTabsHint" = "Open a new tab. Agents can open their own, too.";
+"browser.noTabsTitle" = "No tabs";
 "browser.onServer" = "on server";
 "browser.onServerHelp" = "The page is open in the browser on the server, not on this Mac";
 "browser.openFullscreen" = "Open full screen";
@@ -304,6 +308,10 @@
 "browser.previewTitle" = "Preview";
 "browser.reload" = "Reload";
 "browser.start" = "Start browser";
+"browser.startAgentTabs" = "Agent tabs";
+"browser.startHint" = "Type an address or a search in the bar above.";
+"browser.startNoRecent" = "Addresses you open will appear here.";
+"browser.startRecent" = "Recent";
 "browser.stopped" = "The browser is not running";
 "browser.stoppedHint" = "The browser runs on the server: agents see the same tabs.";
 "browser.tabs" = "Tabs";
