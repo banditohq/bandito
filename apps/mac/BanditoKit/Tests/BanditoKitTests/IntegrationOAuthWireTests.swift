@@ -73,6 +73,14 @@ import Testing
         #expect(draft["headers"] == nil && draft["env"] == nil)
     }
 
+    @Test func theBeginAnswerSaysHowTheServiceComesBack() throws {
+        let loopback = Data(#"{"authorize_url":"https://a/b","state":"s","redirect":"loopback"}"#.utf8)
+        #expect(try RPCClient.decoder.decode(OAuthBegun.self, from: loopback).usesLoopback)
+        // An older daemon says nothing: the scheme.
+        let older = Data(#"{"authorize_url":"https://a/b","state":"s"}"#.utf8)
+        #expect(try RPCClient.decoder.decode(OAuthBegun.self, from: older).usesLoopback == false)
+    }
+
     // MARK: the way back
 
     @Test func theCallbackAddressGivesCodeAndState() throws {

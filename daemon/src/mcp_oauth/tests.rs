@@ -757,6 +757,7 @@ fn waiting_sign_ins_are_capped_and_the_oldest_goes_first() {
         url: String::new(),
         verifier: String::new(),
         client_id: String::new(),
+        redirect_uri: String::new(),
         issuer: String::new(),
         token_endpoint: String::new(),
         revocation_endpoint: None,
@@ -1535,4 +1536,129 @@ fn tunnel_and_relay_ranges_are_local_too() {
     ] {
         assert!(remote(good).is_ok(), "{good} must pass");
     }
+}
+
+// ---- loopback redirect (RFC 8252) ----
+
+async fn begin_loopback(store: &Store, flows: &Flows, target: Target, loopback: bool, now: i64) -> Begun {
+    begin_with(store, flows, "dev1", target, None, loopback, now)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_loopback_only_service_signs_in_with_the_loopback_address() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    fake.set(|i| i.loopback_only = true);
+    let now = now_ms();
+    let begun = begin_loopback(&store, &flows, Target::Draft(draft("stripe", &fake.url())), true, now).await;
+    assert_eq!(begun.redirect, "loopback");
+    assert_eq!(query_of(&begun.authorize_url)["redirect_uri"], LOOPBACK_REDIRECT_URI);
+    let reg = fake.inner.lock().unwrap().registrations.clone();
+    assert_eq!(reg[0]["redirect_uris"], json!([LOOPBACK_REDIRECT_URI]));
+    let (code, state) = fake.authorize(&begun.authorize_url);
+    let done = complete(&store, &flows, "dev1", &state, &code, None, now)
+        .await
+        .unwrap();
+    // The exchange names the loopback address too.
+    let request = fake.inner.lock().unwrap().token_requests[0].clone();
+    assert_eq!(request["redirect_uri"], LOOPBACK_REDIRECT_URI);
+    // The client is kept with its address and reused after a disconnect, without a second registration.
+    let client = load_client(&store, &done.integration.id).unwrap().unwrap();
+    assert_eq!(client.redirect_uri, LOOPBACK_REDIRECT_URI);
+    let again = begin_loopback(&store, &flows, Target::Existing(done.integration), true, now).await;
+    assert_eq!(again.redirect, "loopback");
+    assert_eq!(fake.inner.lock().unwrap().registrations.len(), 1);
+}
+
+#[tokio::test]
+async fn an_app_without_loopback_support_gets_the_scheme_as_before() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    let begun = begin_loopback(
+        &store,
+        &flows,
+        Target::Draft(draft("notion", &fake.url())),
+        false,
+        now_ms(),
+    )
+    .await;
+    assert_eq!(begun.redirect, "scheme");
+    assert_eq!(query_of(&begun.authorize_url)["redirect_uri"], REDIRECT_URI);
+    assert_eq!(
+        fake.inner.lock().unwrap().registrations[0]["redirect_uris"],
+        json!([REDIRECT_URI])
+    );
+}
+
+#[tokio::test]
+async fn a_client_registered_with_the_scheme_keeps_working_with_a_loopback_app() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    let now = now_ms();
+    // An earlier sign-in, from before the loopback address.
+    let done = connect(&store, &flows, &fake, now).await;
+    let old = load_client(&store, &done.integration.id).unwrap().unwrap();
+    assert_eq!(old.redirect_uri, REDIRECT_URI);
+    // A newer app asks again: the old client and its scheme are used, nothing is registered.
+    let begun = begin_loopback(&store, &flows, Target::Existing(done.integration), true, now).await;
+    assert_eq!(begun.redirect, "scheme");
+    assert_eq!(query_of(&begun.authorize_url)["redirect_uri"], REDIRECT_URI);
+    assert_eq!(query_of(&begun.authorize_url)["client_id"], old.client_id);
+    assert_eq!(fake.inner.lock().unwrap().registrations.len(), 1);
+    let (code, state) = fake.authorize(&begun.authorize_url);
+    complete(&store, &flows, "dev1", &state, &code, None, now)
+        .await
+        .unwrap();
+    let request = fake.inner.lock().unwrap().token_requests[1].clone();
+    assert_eq!(request["redirect_uri"], REDIRECT_URI);
+}
+
+#[tokio::test]
+async fn a_loopback_client_is_not_reused_by_an_app_that_cannot_receive_it() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    let now = now_ms();
+    let begun = begin_loopback(&store, &flows, Target::Draft(draft("stripe", &fake.url())), true, now).await;
+    let (code, state) = fake.authorize(&begun.authorize_url);
+    let done = complete(&store, &flows, "dev1", &state, &code, None, now)
+        .await
+        .unwrap();
+    let again = begin_loopback(&store, &flows, Target::Existing(done.integration), false, now).await;
+    assert_eq!(again.redirect, "scheme");
+    assert_eq!(fake.inner.lock().unwrap().registrations.len(), 2);
+}
+
+#[tokio::test]
+async fn a_service_that_refuses_the_scheme_says_so() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    fake.set(|i| i.loopback_only = true);
+    let err = begin(
+        &store,
+        &flows,
+        "dev1",
+        Target::Draft(draft("stripe", &fake.url())),
+        None,
+        now_ms(),
+    )
+    .await
+    .err()
+    .unwrap();
+    assert!(format!("{err:#}").contains("refused to register"), "{err:#}");
+}
+
+#[test]
+fn a_client_id_is_printable_ascii_up_to_4096() {
+    assert!(valid_client_id("client-1"));
+    assert!(valid_client_id(&"eyJhbGciOi.".repeat(137))); // a JWT of about 1500 characters
+    assert!(valid_client_id(&"a".repeat(4096)));
+    assert!(!valid_client_id(&"a".repeat(4097)));
+    assert!(!valid_client_id(""));
+    assert!(!valid_client_id("has space"));
+    assert!(!valid_client_id("tab\there"));
+    assert!(!valid_client_id("line\nbreak"));
+    assert!(!valid_client_id("nul\u{0}x"));
+    assert!(!valid_client_id("caf\u{e9}"));
 }

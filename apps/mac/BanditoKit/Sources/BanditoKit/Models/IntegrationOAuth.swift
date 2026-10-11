@@ -19,11 +19,17 @@ public struct OAuthBegun: Decodable, Sendable, Equatable {
     public var state: String
     /// Unix milliseconds the daemon stops waiting.
     public var expiresAt: Int64?
+    /// How the service sends the owner back: `"loopback"` (the app listens on 127.0.0.1) or `"scheme"`
+    /// (`bandito://oauth/callback`). Absent from an older daemon: the scheme.
+    public var redirect: String?
 
-    public init(authorizeUrl: String, state: String, expiresAt: Int64? = nil) {
+    public var usesLoopback: Bool { redirect == "loopback" }
+
+    public init(authorizeUrl: String, state: String, expiresAt: Int64? = nil, redirect: String? = nil) {
         self.authorizeUrl = authorizeUrl
         self.state = state
         self.expiresAt = expiresAt
+        self.redirect = redirect
     }
 }
 

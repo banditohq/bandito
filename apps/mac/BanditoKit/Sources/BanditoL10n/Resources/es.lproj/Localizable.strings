@@ -815,9 +815,12 @@
 "integrations.oauth.done" = "Listo";
 "integrations.oauth.failed" = "No se pudo terminar el inicio de sesión.";
 "integrations.oauth.finishing" = "Terminando el inicio de sesión…";
+"integrations.oauth.loopback.done" = "Listo: vuelve a Bandito";
+"integrations.oauth.loopback.failed" = "El inicio de sesión no se completó. Vuelve a Bandito e inténtalo de nuevo.";
 "integrations.oauth.lost" = "Este inicio de sesión ya no está esperando. Pulsa Conectar para empezar de nuevo.";
 "integrations.oauth.needsUpdate" = "Actualiza el servidor para conectar %1$@ desde el navegador.";
 "integrations.oauth.openAgain" = "Abrir el navegador de nuevo";
+"integrations.oauth.portBusy" = "Otra aplicación está usando el puerto 45819. Ciérrala e inténtalo de nuevo.";
 "integrations.oauth.retry" = "Reintentar";
 "integrations.oauth.signInAgain" = "Iniciar sesión de nuevo";
 "integrations.oauth.starting" = "Abriendo el navegador…";

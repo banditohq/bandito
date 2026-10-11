@@ -62,6 +62,9 @@ struct BeginParams {
     /// The request of an agent this connection answers (see `connect.rs`): when it succeeds, the agent is told.
     #[serde(default)]
     connect_request_id: Option<String>,
+    /// The ways the app can receive the answer: `"loopback"` and/or `"scheme"`. Absent: the scheme only (an older app).
+    #[serde(default)]
+    redirect_supported: Option<Vec<String>>,
 }
 
 /// `integrations.add` may say it answers an agent's request too.
@@ -191,7 +194,9 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 draft,
                 client_id,
                 connect_request_id,
+                redirect_supported,
             } = params(p)?;
+            let loopback = redirect_supported.is_some_and(|r| r.iter().any(|x| x == "loopback"));
             let target = match (integration, draft) {
                 (Some(id), None) => Target::Existing(store.integration_get(&id)?.ok_or_else(|| no_integration(&id))?),
                 (None, Some(draft)) => {
@@ -221,7 +226,7 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 None => None,
             };
             let now = now_ms();
-            let begun = mcp_oauth::begin(store, &app.oauth, &device, target, client_id, now)
+            let begun = mcp_oauth::begin_with(store, &app.oauth, &device, target, client_id, loopback, now)
                 .await
                 .map_err(invalid)?;
             if let Some(bound) = bound {
@@ -231,6 +236,7 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 "authorize_url": begun.authorize_url,
                 "state": begun.state,
                 "expires_at": now + mcp_oauth::FLOW_TTL_MS,
+                "redirect": begun.redirect,
             }))
         }
         "integrations.oauth_complete" => {

@@ -1184,12 +1184,18 @@ public enum L10n {
             public static var lost: String { L10n.tr("integrations.oauth.lost") }
             public static func needsUpdate(name: String) -> String { L10n.tr("integrations.oauth.needsUpdate", name) }
             public static var openAgain: String { L10n.tr("integrations.oauth.openAgain") }
+            public static var portBusy: String { L10n.tr("integrations.oauth.portBusy") }
             public static var retry: String { L10n.tr("integrations.oauth.retry") }
             public static var signInAgain: String { L10n.tr("integrations.oauth.signInAgain") }
             public static var starting: String { L10n.tr("integrations.oauth.starting") }
             public static func title(name: String) -> String { L10n.tr("integrations.oauth.title", name) }
             public static var waiting: String { L10n.tr("integrations.oauth.waiting") }
             public static var waitingHint: String { L10n.tr("integrations.oauth.waitingHint") }
+
+            public enum Loopback {
+                public static var done: String { L10n.tr("integrations.oauth.loopback.done") }
+                public static var failed: String { L10n.tr("integrations.oauth.loopback.failed") }
+            }
         }
 
         public enum Problem {

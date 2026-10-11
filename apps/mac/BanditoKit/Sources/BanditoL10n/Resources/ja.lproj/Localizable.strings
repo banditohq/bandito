@@ -815,9 +815,12 @@
 "integrations.oauth.done" = "完了";
 "integrations.oauth.failed" = "ログインを完了できませんでした。";
 "integrations.oauth.finishing" = "ログインを完了しています…";
+"integrations.oauth.loopback.done" = "完了しました。Bandito に戻ってください";
+"integrations.oauth.loopback.failed" = "ログインが完了しませんでした。Bandito に戻ってもう一度お試しください。";
 "integrations.oauth.lost" = "このログインはもう待機していません。「接続」を押してやり直してください。";
 "integrations.oauth.needsUpdate" = "ブラウザで %1$@ を接続するには、サーバーを更新してください。";
 "integrations.oauth.openAgain" = "ブラウザをもう一度開く";
+"integrations.oauth.portBusy" = "ポート 45819 は別のアプリが使用中です。そのアプリを閉じてからもう一度お試しください。";
 "integrations.oauth.retry" = "再試行";
 "integrations.oauth.signInAgain" = "再ログイン";
 "integrations.oauth.starting" = "ブラウザを開いています…";

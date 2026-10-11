@@ -98,11 +98,16 @@ extension ServerModel: OAuthServer {
             var integration: String?
             var draft: NewIntegration?
             var connectRequestId: String?
+            var redirectSupported: [String]?
         }
+        // A daemon with `oauth_loopback` may register the loopback address, which the app then listens on.
+        let redirects = supports("oauth_loopback") ? ["loopback", "scheme"] : nil
         let params: P
         switch target {
-        case .existing(let id): params = P(integration: id, connectRequestId: connectRequestId)
-        case .draft(let draft): params = P(draft: draft, connectRequestId: connectRequestId)
+        case .existing(let id):
+            params = P(integration: id, connectRequestId: connectRequestId, redirectSupported: redirects)
+        case .draft(let draft):
+            params = P(draft: draft, connectRequestId: connectRequestId, redirectSupported: redirects)
         }
         return try await rpc().call("integrations.oauth_begin", params, as: OAuthBegun.self, timeout: .seconds(30))
     }

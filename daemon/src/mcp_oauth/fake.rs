@@ -22,6 +22,9 @@ pub struct Inner {
     pub no_pkce: bool,
     /// A redirect address the registration answers with instead of the one asked for.
     pub registered_redirect: Option<String>,
+    /// Takes only the loopback redirect (RFC 8252) and answers 400 to a registration with anything else, as many
+    /// real services do.
+    pub loopback_only: bool,
     pub expires_in: i64,
     /// The token answers carry no `expires_in` at all.
     pub no_expires_in: bool,
@@ -34,8 +37,8 @@ pub struct Inner {
     pub registrations: Vec<Value>,
     pub token_requests: Vec<HashMap<String, String>>,
     pub revoked: Vec<HashMap<String, String>>,
-    /// code -> (challenge, client_id)
-    codes: HashMap<String, (String, String)>,
+    /// code -> (challenge, client_id, redirect_uri)
+    codes: HashMap<String, (String, String, String)>,
     pub access: String,
     pub refresh: String,
     counter: u32,
@@ -153,14 +156,27 @@ impl Fake {
         let q = query_of(authorize_url);
         assert_eq!(q["response_type"], "code");
         assert_eq!(q["code_challenge_method"], "S256");
-        assert_eq!(q["redirect_uri"], super::REDIRECT_URI);
+        assert!(
+            q["redirect_uri"] == super::REDIRECT_URI || q["redirect_uri"] == super::LOOPBACK_REDIRECT_URI,
+            "{}",
+            q["redirect_uri"]
+        );
         assert!(q.contains_key("resource") && q.contains_key("state") && q.contains_key("client_id"));
         let mut inner = self.inner.lock().unwrap();
+        assert!(
+            !inner.loopback_only || q["redirect_uri"] == super::LOOPBACK_REDIRECT_URI,
+            "the service takes only the loopback redirect"
+        );
         inner.counter += 1;
         let code = format!("code-{}", inner.counter);
-        inner
-            .codes
-            .insert(code.clone(), (q["code_challenge"].clone(), q["client_id"].clone()));
+        inner.codes.insert(
+            code.clone(),
+            (
+                q["code_challenge"].clone(),
+                q["client_id"].clone(),
+                q["redirect_uri"].clone(),
+            ),
+        );
         (code, q["state"].clone())
     }
 }
@@ -199,6 +215,9 @@ async fn register(State(f): State<Arc<Fake>>, body: Bytes) -> Response {
     let asked: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
     let mut inner = f.inner.lock().unwrap();
     inner.registrations.push(asked.clone());
+    if inner.loopback_only && asked["redirect_uris"][0].as_str() != Some(super::LOOPBACK_REDIRECT_URI) {
+        return json_response(400, json!({ "error": "invalid_redirect_uri" }));
+    }
     let redirect = inner
         .registered_redirect
         .clone()
@@ -233,13 +252,13 @@ async fn token(State(f): State<Arc<Fake>>, body: Bytes) -> Response {
     match grant.as_str() {
         "authorization_code" => {
             let code = req.get("code").cloned().unwrap_or_default();
-            let Some((challenge, client)) = inner.codes.remove(&code) else {
+            let Some((challenge, client, redirect)) = inner.codes.remove(&code) else {
                 return json_response(400, json!({ "error": "invalid_grant" }));
             };
             let verifier = req.get("code_verifier").cloned().unwrap_or_default();
             let ok = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes())) == challenge
                 && req.get("client_id") == Some(&client)
-                && req.get("redirect_uri").map(String::as_str) == Some(super::REDIRECT_URI)
+                && req.get("redirect_uri") == Some(&redirect)
                 && req.contains_key("resource");
             if !ok {
                 return json_response(400, json!({ "error": "invalid_grant" }));

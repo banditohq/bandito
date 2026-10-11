@@ -815,9 +815,12 @@
 "integrations.oauth.done" = "Pronto";
 "integrations.oauth.failed" = "O login não foi concluído.";
 "integrations.oauth.finishing" = "Concluindo o login…";
+"integrations.oauth.loopback.done" = "Pronto — volte para o Bandito";
+"integrations.oauth.loopback.failed" = "O login não foi concluído. Volte para o Bandito e tente de novo.";
 "integrations.oauth.lost" = "Este login não está mais aguardando. Toque em Conectar para começar de novo.";
 "integrations.oauth.needsUpdate" = "Atualize o servidor para conectar %1$@ pelo navegador.";
 "integrations.oauth.openAgain" = "Abrir o navegador de novo";
+"integrations.oauth.portBusy" = "Outro app está usando a porta 45819. Feche-o e tente de novo.";
 "integrations.oauth.retry" = "Tentar de novo";
 "integrations.oauth.signInAgain" = "Entrar de novo";
 "integrations.oauth.starting" = "Abrindo o navegador…";
