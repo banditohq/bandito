@@ -14,9 +14,21 @@ import Testing
 
     @Test func aNewThreadBuildsItsNewestRows() {
         let w = window(500)
-        #expect(w.range == 484..<500)
+        // The newest rows that fill the first screen (900 pt): nine rows of 112 pt, and the one that starts it.
+        #expect(w.range == 490..<500)
         #expect(window(10).range == 0..<10)
         #expect(window(0).range == 0..<0)
+    }
+
+    @Test func aSmallFirstScreenBuildsFewerRowsAndATallOneAtMostSixteen() {
+        var small = ThreadVirtualWindow()
+        small.firstScreen = 300
+        small.setRows(ids: ids(500)) { _ in 100 }
+        #expect(small.range == 496..<500)
+        var tall = ThreadVirtualWindow()
+        tall.firstScreen = 10_000
+        tall.setRows(ids: ids(500)) { _ in 100 }
+        #expect(tall.range.count == ThreadVirtualWindow.initialRows)
     }
 
     @Test func theSpacesAddUpToTheWholeThread() {
@@ -94,8 +106,8 @@ import Testing
         let before = (w.lowID, w.highID)
         w.setRows(ids: ids(50, prefix: "old") + ids(100)) { _ in 100 }
         #expect((w.lowID, w.highID) == before)
-        #expect(w.range.count == 16)
-        #expect(w.range.lowerBound == 50 + 84)
+        #expect(w.range.count == 10)
+        #expect(w.range.lowerBound == 50 + 90)
     }
 
     @Test func aThreadAtItsEndKeepsFollowingIt() {
@@ -116,7 +128,7 @@ import Testing
     @Test func aThreadThatLostItsRowsStartsAtItsEnd() {
         var w = window(100)
         w.setRows(ids: ids(80, prefix: "other")) { _ in 100 }
-        #expect(w.range == 64..<80)
+        #expect(w.range == 70..<80)
     }
 
     @Test func anotherWidthForgetsTheHeights() {

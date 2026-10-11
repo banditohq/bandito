@@ -22,9 +22,9 @@ struct ThreadVirtualWindow: Equatable {
     /// heights already fill `firstScreen`: an agent switch builds what shows, and the rows around it come a few a frame
     /// (`rowsPerStep`), not all in the frame of the switch.
     static let initialRows = 16
-    /// The height the newest rows of a thread shown for the first time must fill: the last thread's screen, with a
-    /// margin. A guess until a thread was measured.
-    nonisolated(unsafe) static var firstScreen: CGFloat = 900
+    /// The height the newest rows of a thread shown for the first time must fill: the screen of the thread, with a
+    /// margin (the host sets it from the last thread it measured).
+    var firstScreen: CGFloat = 900
     /// The guess for a row that has none.
     static let defaultEstimate: CGFloat = 100
 
@@ -69,7 +69,7 @@ struct ThreadVirtualWindow: Equatable {
         let count = ids.count
         var low = count - 1
         var filled: CGFloat = 0
-        while low > 0, count - low < Self.initialRows, filled < Self.firstScreen {
+        while low > 0, count - low < Self.initialRows, filled < firstScreen {
             filled += height(of: ids[low]) + Self.rowSpacing
             low -= 1
         }
@@ -325,7 +325,14 @@ struct ThreadRowsScope<Content: View>: View {
 /// to it while they are drawn, and none of that is view state.
 @MainActor
 final class ThreadVirtualHost {
-    var window = ThreadVirtualWindow()
+    /// The screen of the last thread measured, with a margin: the first screen of the next thread to fill.
+    private static var lastFirstScreen: CGFloat = 900
+
+    var window: ThreadVirtualWindow = {
+        var window = ThreadVirtualWindow()
+        window.firstScreen = ThreadVirtualHost.lastFirstScreen
+        return window
+    }()
     let bridge = ThreadScrollBridge()
     let ticker = ThreadVirtualTicker()
 
@@ -365,9 +372,7 @@ final class ThreadVirtualHost {
 
     /// The range to build for the screen now, committed. True when it changed (the thread is to be drawn again).
     func update(offset: CGFloat, viewport: CGFloat) {
-        if viewport > 0, abs(ThreadVirtualWindow.firstScreen - (viewport + 200)) > 1 {
-            ThreadVirtualWindow.firstScreen = viewport + 200
-        }
+        if viewport > 0 { Self.lastFirstScreen = viewport + 200 }
         guard let needed = window.neededRange(offset: offset, viewport: viewport) else { return }
         window.commit(low: needed.low, high: needed.high)
         ticker.bump()
