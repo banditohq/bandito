@@ -156,6 +156,11 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     /// The agent template this bot was made from (`agents.create_from_template`); `nil` for an agent made by hand, and
     /// for a daemon that does not send the field. Read only: the app never sends it.
     public var templateId: String?
+    /// The server the agent was moved to (`migrated_to`, the server's name); `nil` when it was not moved. Set by
+    /// `agents.migrate_done` with `moved_to`, which also pauses the agent. A daemon before the feature sends none.
+    public var migratedTo: String?
+    /// When it was moved (Unix milliseconds, `migrated_at`); `nil` with `migratedTo`.
+    public var migratedAt: Int64?
     /// The newest user or assistant message; `nil` when there is none, or when the daemon predates the field.
     public var lastMessage: LastMessage?
     /// The status from the agent's newest `agent.status` event; `nil` before any, or when the daemon predates the field.
@@ -192,8 +197,12 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         capabilities: [String]? = nil,
         integrations: [String]? = nil,
         lead: Bool = false,
-        templateId: String? = nil
+        templateId: String? = nil,
+        migratedTo: String? = nil,
+        migratedAt: Int64? = nil
     ) {
+        self.migratedTo = migratedTo
+        self.migratedAt = migratedAt
         self.templateId = templateId
         self.lead = lead
         self.avatar = avatar
@@ -263,6 +272,8 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         integrations = try c.decodeIfPresent([String].self, forKey: .integrations)
         lead = try c.decodeIfPresent(Bool.self, forKey: .lead) ?? false
         templateId = try c.decodeIfPresent(String.self, forKey: .templateId)
+        migratedTo = try c.decodeIfPresent(String.self, forKey: .migratedTo)
+        migratedAt = try c.decodeIfPresent(Int64.self, forKey: .migratedAt)
         status = try c.decodeIfPresent(AgentStatus.self, forKey: .status)
         pendingApprovals = try c.decodeIfPresent(Int.self, forKey: .pendingApprovals) ?? 0
         pendingApprovalIds = Set(try c.decodeIfPresent([String].self, forKey: .pendingApprovalIds) ?? [])

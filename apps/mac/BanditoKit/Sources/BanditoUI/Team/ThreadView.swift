@@ -370,6 +370,9 @@ struct ThreadView: View {
                     state: router.workbenchState(for: agent.id), runningTools: runningToolNames),
                 showsBrowserButton: server.supports("browser"),
                 onShowBrowser: { router.showInWorkbench(.browser, agentID: agent.id) })
+            if let movedTo = agent.migratedTo {
+                MigratedAgentStrip(agent: agent, source: server, movedTo: movedTo)
+            }
 
             ScrollViewReader { proxy in
                 rows(proxy)

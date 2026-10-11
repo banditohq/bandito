@@ -39,7 +39,7 @@ Each agent has one status. Agents that need you are sorted to the top and get th
 ## Sidebar: pin, delete, pause
 
 <!-- id: team-sidebar-menu; covers: -->
-Pinned agents are listed at the top. The context menu of an agent has Pin (Закрепить) or Unpin (Открепить), Pause (Приостановить) or Resume (Продолжить), and Delete… (Удалить…). A paused agent shows a pause mark next to its name, and its avatar sleeps.
+Pinned agents are listed at the top. The context menu of an agent has Pin (Закрепить) or Unpin (Открепить), Pause (Приостановить) or Resume (Продолжить), and Move to… (Перенести на…) when another connected server takes moved agents, and Delete… (Удалить…). A paused agent shows a pause mark next to its name, and its avatar sleeps.
 Где: Team → sidebar → agent → right click
 1. Right-click an agent and choose Pause (Приостановить). The mark appears and the avatar goes to sleep.
 2. Right-click it again and choose Resume (Продолжить) to bring it back.
@@ -53,6 +53,15 @@ Pause all agents (Пауза для всех агентов) pauses every agent 
 2. To pause every agent, press ⌘⇧P or choose Agent → Pause all agents. Choose it again to resume them all.
 3. To resume one agent, click Resume (Продолжить) in the same place.
 4. On a server with an older Bandito the pause items are disabled (see [troubleshooting.md](troubleshooting.md)).
+
+## Move an agent to another server (Перенести на…)
+
+<!-- id: team-move-agent; covers: sheet:moveAgent -->
+Move to… (Перенести на…) in the agent's menu moves it to another connected server of yours that takes moved agents. Its settings, memory and chat history move; the project folder (the code) does not, so you choose the project folder on the new server: a new folder in the agents folder, or an existing one. The agent is paused on the old server while it moves. Progress goes through packing, copying, unpacking and done. Cancel (Остановить перенос) stops it before the new server has the agent. A failed move leaves the agent on the old server as it was, and Try again (Повторить) starts it over.
+Где: Team → sidebar → agent → right click → Move to… (Перенести на…). The item is there only when another connected server takes moved agents.
+1. Right-click an agent and choose Move to… (Перенести на…). Pick the server and the project folder there, then Move (Перенести).
+2. Wait for Done (Готово). Then choose Done to open the agent on the new server.
+3. On the old server the agent shows Moved to <server> (Перенесён на <сервер>) under its header, paused. Open there (Открыть там) goes to it; Delete here (Удалить здесь) deletes the copy on the old server after a confirmation.
 
 ## Team home (⌘0)
 

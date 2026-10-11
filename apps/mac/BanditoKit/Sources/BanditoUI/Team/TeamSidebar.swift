@@ -243,6 +243,12 @@ struct TeamSidebar: View {
             router.inspectorTab = .details
             router.showInWorkbench(.details, agentID: agent.id)
         }
+        // Moving needs another connected server with the feature; a moved agent is not moved again from here.
+        if agent.migratedTo == nil, !MigrationTargets.eligible(source: server, among: app.servers).isEmpty {
+            Button(L10n.Migrate.menu) {
+                router.sheet = .moveAgent(agentID: agent.id, serverID: server.id)
+            }
+        }
         Divider()
         Button(L10n.Agent.Menu.delete, role: .destructive) {
             pendingDelete = agent
