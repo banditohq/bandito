@@ -780,6 +780,18 @@
 "integrations.custom.useSelected" = "Auswahl verwenden: %1$lld";
 "integrations.custom.variables" = "Umgebungsvariablen";
 "integrations.custom.willBe" = "wird: %1$@";
+"integrations.device.codeHint" = "Gib diesen Code auf %1$@ ein, um den Zugriff zu erlauben, und komm dann zurück zu Bandito.";
+"integrations.device.copied" = "Kopiert";
+"integrations.device.copy" = "Kopieren";
+"integrations.device.expired" = "Der Code ist abgelaufen. Versuche es erneut, um einen neuen zu bekommen.";
+"integrations.device.expiresIn" = "Der Code gilt noch %1$@";
+"integrations.device.needsUpdate" = "Aktualisiere den Server, um %1$@ mit einem Code zu verbinden.";
+"integrations.device.network" = "Der Bandito-Server konnte den Dienst nicht erreichen. Prüfe die Verbindung und versuche es erneut.";
+"integrations.device.open" = "%1$@ öffnen";
+"integrations.device.refused" = "Der Dienst hat die Anmeldung nicht akzeptiert.";
+"integrations.device.revokeHint" = "Der Zugriff bleibt beim Dienst gültig, bis du ihn dort entfernst: github.com/settings/applications.";
+"integrations.device.starting" = "Code wird angefordert …";
+"integrations.device.waiting" = "Warte auf deine Bestätigung auf %1$@ …";
 "integrations.edit" = "Bearbeiten";
 "integrations.empty" = "Noch nichts verbunden. Verbinden Sie einen Dienst aus dem Katalog oder fügen Sie eine eigene Integration hinzu.";
 "integrations.failure.missingProgram" = "Das Programm ist auf dem Server nicht installiert. Installieren Sie es dort und prüfen Sie erneut.";
@@ -1049,6 +1061,7 @@
 "market.step.fillPath" = "Ersetzen Sie im Befehl den Beispielordner oder -pfad durch Ihren.";
 "market.step.getKey" = "Besorgen Sie den Schlüssel oder das Token. Wo, steht in der Dokumentation.";
 "market.step.signIn" = "Klicken Sie auf „Verbinden“ und erlauben Sie den Zugriff auf der Seite des Dienstes im Browser.";
+"market.step.signInCode" = "Klicke auf „Verbinden“ und gib den Code, den Bandito zeigt, auf der Seite des Dienstes ein.";
 "market.subtitle" = "Verbinden Sie die Dienste, die Agenten nutzen können.";
 "market.tab.bots" = "Bots";
 "market.tab.services" = "Dienste";

@@ -2674,5 +2674,18 @@
   "share.mine.updated": "Auf Version {number} aktualisiert.",
   "share.install.services": "Dienste: {names}",
   "share.install.schedulesPending": "Zeitpläne: {count} — werden ausgeschaltet angelegt",
-  "share.install.warningSkill": "Von der Community erstellt. Prüfen Sie die Dateien des Skills, bevor Sie ihn starten."
+  "share.install.warningSkill": "Von der Community erstellt. Prüfen Sie die Dateien des Skills, bevor Sie ihn starten.",
+  "integrations.device.starting": "Code wird angefordert …",
+  "integrations.device.codeHint": "Gib diesen Code auf {site} ein, um den Zugriff zu erlauben, und komm dann zurück zu Bandito.",
+  "integrations.device.copy": "Kopieren",
+  "integrations.device.copied": "Kopiert",
+  "integrations.device.open": "{address} öffnen",
+  "integrations.device.waiting": "Warte auf deine Bestätigung auf {site} …",
+  "integrations.device.expiresIn": "Der Code gilt noch {time}",
+  "integrations.device.expired": "Der Code ist abgelaufen. Versuche es erneut, um einen neuen zu bekommen.",
+  "integrations.device.network": "Der Bandito-Server konnte den Dienst nicht erreichen. Prüfe die Verbindung und versuche es erneut.",
+  "integrations.device.refused": "Der Dienst hat die Anmeldung nicht akzeptiert.",
+  "integrations.device.needsUpdate": "Aktualisiere den Server, um {name} mit einem Code zu verbinden.",
+  "integrations.device.revokeHint": "Der Zugriff bleibt beim Dienst gültig, bis du ihn dort entfernst: github.com/settings/applications.",
+  "market.step.signInCode": "Klicke auf „Verbinden“ und gib den Code, den Bandito zeigt, auf der Seite des Dienstes ein."
 }

@@ -780,6 +780,18 @@
 "integrations.custom.useSelected" = "Use selected: %1$lld";
 "integrations.custom.variables" = "Environment variables";
 "integrations.custom.willBe" = "will be: %1$@";
+"integrations.device.codeHint" = "Type this code on %1$@ to allow access, then come back to Bandito.";
+"integrations.device.copied" = "Copied";
+"integrations.device.copy" = "Copy";
+"integrations.device.expired" = "The code expired. Try again to get a new one.";
+"integrations.device.expiresIn" = "The code works for another %1$@";
+"integrations.device.needsUpdate" = "Update the server to connect %1$@ with a code.";
+"integrations.device.network" = "Bandito's server could not reach the service. Check the connection and try again.";
+"integrations.device.open" = "Open %1$@";
+"integrations.device.refused" = "The service did not accept the sign-in.";
+"integrations.device.revokeHint" = "The access stays valid at the service until you remove it there: github.com/settings/applications.";
+"integrations.device.starting" = "Asking for a code…";
+"integrations.device.waiting" = "Waiting for you to confirm on %1$@…";
 "integrations.edit" = "Edit";
 "integrations.empty" = "Nothing is connected yet. Connect one from the catalog, or add your own.";
 "integrations.failure.missingProgram" = "The program is not installed on the server. Install it there, then check again.";
@@ -1049,6 +1061,7 @@
 "market.step.fillPath" = "Replace the example folder or path in the command with yours.";
 "market.step.getKey" = "Get the key or token. The documentation tells where.";
 "market.step.signIn" = "Press Connect and allow access on the service's page in the browser.";
+"market.step.signInCode" = "Press Connect, then type the code Bandito shows on the service's page.";
 "market.subtitle" = "Connect the services the agents can use.";
 "market.tab.bots" = "Bots";
 "market.tab.services" = "Services";

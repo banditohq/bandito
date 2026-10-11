@@ -109,6 +109,9 @@ struct MarketView: View {
         .onChange(of: app.oauth.phase) { _, phase in
             if case .connected(_, let id) = phase { Task { await signedIn(id) } }
         }
+        .onChange(of: app.device.phase) { _, phase in
+            if case .connected(_, let id) = phase { Task { await signedIn(id) } }
+        }
         .banditoSheet(item: $editing, dismissOnOutsideClick: false) { target in
             if let server = app.currentServer {
                 if case .custom = target {
@@ -134,9 +137,16 @@ struct MarketView: View {
                 Task { await remove(integration) }
             }
             Button(L10n.Common.cancel, role: .cancel) {}
-        } message: { _ in
-            Text(L10n.Integrations.removeMessage)
+        } message: { integration in
+            Text(removeMessage(for: integration))
         }
+    }
+
+    /// What the dialog says about removing: a sign-in with a code cannot be taken back from here, so it says where.
+    private func removeMessage(for integration: Integration) -> String {
+        integration.auth == .device
+            ? L10n.Integrations.removeMessage + " " + L10n.Integrations.Device.revokeHint
+            : L10n.Integrations.removeMessage
     }
 
     private var server: ServerModel? { app.currentServer }
@@ -724,7 +734,7 @@ struct MarketView: View {
                 Task { await check(integration.id) }
             }
             .disabled(busy || !integration.enabled)
-            if integration.auth == .oauth {
+            if integration.auth.isDaemonSignIn {
                 Button(L10n.Integrations.Oauth.signInAgain) { signInAgain(integration) }
             } else {
                 Button(L10n.Integrations.edit) { editing = .edit(integration) }
@@ -791,7 +801,7 @@ struct MarketView: View {
             }
             .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(Color.Bandito.ok)
-            if integration.auth != .oauth {
+            if !integration.auth.isDaemonSignIn {
                 Button(L10n.Market.configure) { editing = .edit(integration) }
                     .banditoButton(.link)
                     .fixedSize()
@@ -870,8 +880,13 @@ struct MarketView: View {
         }
     }
 
-    /// Connect: a service that signs in in the browser starts the sign-in; the others open the sheet of keys.
+    /// Connect: a service that signs in with a code shows the code, one that signs in in the browser opens it; the
+    /// others open the sheet of keys.
     private func connect(_ template: IntegrationCatalogEntry) {
+        if template.usesDevice, let url = template.url {
+            connectWithCode(template, url: url)
+            return
+        }
         guard template.usesOAuth, let url = template.url else {
             editing = .catalog(template)
             return
@@ -885,11 +900,29 @@ struct MarketView: View {
         Task { await app.oauth.begin(server: server, target: .draft(draft), name: template.name) }
     }
 
+    /// Connect for a service that signs in with a code. A daemon without the feature says to update.
+    private func connectWithCode(_ template: IntegrationCatalogEntry, url: String) {
+        guard let server else { return }
+        guard server.supports("integrations_device") else {
+            error = UserFacingMessage(text: L10n.Integrations.Device.needsUpdate(name: template.name))
+            return
+        }
+        let draft = NewIntegration(name: template.id, kind: .http, url: url)
+        Task { await app.device.begin(server: server, target: .draft(draft), name: template.name) }
+    }
+
     private func signInAgain(_ integration: Integration) {
         guard let server else { return }
         // The name the card shows: a service's name, or the owner's own name for an own integration.
         let entry = MarketLogic.entries(catalog: catalog, integrations: integrations, languageCode: "en")
             .first { $0.integration?.id == integration.id }
+        if integration.auth == .device {
+            Task {
+                await app.device.begin(
+                    server: server, target: .existing(id: integration.id), name: entry?.name ?? integration.name)
+            }
+            return
+        }
         Task { await app.oauth.begin(server: server, target: .existing(id: integration.id), name: entry?.name ?? integration.name) }
     }
 

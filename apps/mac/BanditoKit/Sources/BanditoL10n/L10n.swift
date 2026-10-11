@@ -1138,6 +1138,21 @@ public enum L10n {
             }
         }
 
+        public enum Device {
+            public static func codeHint(site: String) -> String { L10n.tr("integrations.device.codeHint", site) }
+            public static var copied: String { L10n.tr("integrations.device.copied") }
+            public static var copy: String { L10n.tr("integrations.device.copy") }
+            public static var expired: String { L10n.tr("integrations.device.expired") }
+            public static func expiresIn(time: String) -> String { L10n.tr("integrations.device.expiresIn", time) }
+            public static func needsUpdate(name: String) -> String { L10n.tr("integrations.device.needsUpdate", name) }
+            public static var network: String { L10n.tr("integrations.device.network") }
+            public static func `open`(address: String) -> String { L10n.tr("integrations.device.open", address) }
+            public static var refused: String { L10n.tr("integrations.device.refused") }
+            public static var revokeHint: String { L10n.tr("integrations.device.revokeHint") }
+            public static var starting: String { L10n.tr("integrations.device.starting") }
+            public static func waiting(site: String) -> String { L10n.tr("integrations.device.waiting", site) }
+        }
+
         public enum Failure {
             public static var missingProgram: String { L10n.tr("integrations.failure.missingProgram") }
             public static var other: String { L10n.tr("integrations.failure.other") }
@@ -1498,6 +1513,7 @@ public enum L10n {
             public static var fillPath: String { L10n.tr("market.step.fillPath") }
             public static var getKey: String { L10n.tr("market.step.getKey") }
             public static var signIn: String { L10n.tr("market.step.signIn") }
+            public static var signInCode: String { L10n.tr("market.step.signInCode") }
         }
 
         public enum Tab {

@@ -2675,5 +2675,18 @@
   "share.mine.updated": "Actualizado a la versión {number}.",
   "share.install.services": "Servicios: {names}",
   "share.install.schedulesPending": "Programaciones: {count} — se crearán desactivadas",
-  "share.install.warningSkill": "Hecho por la comunidad. Revise los archivos del skill antes de ejecutarlo."
+  "share.install.warningSkill": "Hecho por la comunidad. Revise los archivos del skill antes de ejecutarlo.",
+  "integrations.device.starting": "Pidiendo un código…",
+  "integrations.device.codeHint": "Escribe este código en {site} para permitir el acceso y vuelve a Bandito.",
+  "integrations.device.copy": "Copiar",
+  "integrations.device.copied": "Copiado",
+  "integrations.device.open": "Abrir {address}",
+  "integrations.device.waiting": "Esperando tu confirmación en {site}…",
+  "integrations.device.expiresIn": "El código sigue siendo válido {time}",
+  "integrations.device.expired": "El código ha caducado. Inténtalo de nuevo para obtener uno nuevo.",
+  "integrations.device.network": "El servidor de Bandito no pudo conectar con el servicio. Revisa la conexión e inténtalo de nuevo.",
+  "integrations.device.refused": "El servicio no aceptó el inicio de sesión.",
+  "integrations.device.needsUpdate": "Actualiza el servidor para conectar {name} con un código.",
+  "integrations.device.revokeHint": "El acceso sigue activo en el servicio hasta que lo quites allí: github.com/settings/applications.",
+  "market.step.signInCode": "Pulsa «Conectar» e introduce en la página del servicio el código que muestra Bandito."
 }

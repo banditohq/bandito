@@ -22,19 +22,16 @@
       "Читать и открывать pull request",
       "Дополнительные группы инструментов: Actions, оповещения безопасности, проекты, gist"
     ],
-    "needs_en": "A GitHub personal access token with the scopes your tasks need.",
-    "needs_ru": "Персональный токен доступа GitHub с правами, нужными для ваших задач.",
+    "needs_en": "A GitHub account: click Connect, then enter the code shown on github.com.",
+    "needs_ru": "Аккаунт GitHub: нажмите «Подключить», введите показанный код на github.com.",
     "kind": "http",
     "url": "https://api.githubcopilot.com/mcp/",
-    "headers_keys": [
-      {
-        "key": "Authorization",
-        "label_en": "Personal access token",
-        "label_ru": "Персональный токен доступа",
-        "secret": true,
-        "value_template": "Bearer {secret}"
-      }
-    ],
+    "auth": "device",
+    "device": {
+      "provider": "github",
+      "client_id": "Ov23li0wlXVpaoceVJoD",
+      "scope": "repo read:org read:user"
+    },
     "docs_url": "https://github.com/github/github-mcp-server",
     "icon": "github",
     "accent": "#24292F",
@@ -48,10 +45,7 @@
           "Pull Requests lesen und öffnen",
           "Optionale Werkzeuggruppen: Actions, Sicherheitswarnungen, Projekte, Gists"
         ],
-        "needs": "Ein persönliches GitHub-Zugriffstoken mit den Berechtigungen, die Ihre Aufgaben brauchen.",
-        "labels": {
-          "Authorization": "Persönliches Zugriffstoken"
-        }
+        "needs": "Ein GitHub-Konto: auf „Verbinden“ klicken und den angezeigten Code auf github.com eingeben."
       },
       "es": {
         "description": "Repositorios, issues y pull requests, a través del servidor MCP oficial de GitHub.",
@@ -62,10 +56,7 @@
           "Leer y abrir pull requests",
           "Grupos opcionales de herramientas: Actions, alertas de seguridad, proyectos, gists"
         ],
-        "needs": "Un token de acceso personal de GitHub con los permisos que necesiten tus tareas.",
-        "labels": {
-          "Authorization": "Token de acceso personal"
-        }
+        "needs": "Una cuenta de GitHub: pulsa «Conectar» e introduce el código que se muestra en github.com."
       },
       "fr": {
         "description": "Dépôts, tickets et pull requests, via le serveur MCP officiel de GitHub.",
@@ -76,10 +67,7 @@
           "Lire et ouvrir des pull requests",
           "Groupes d'outils facultatifs : Actions, alertes de sécurité, projets, gists"
         ],
-        "needs": "Un jeton d'accès personnel GitHub avec les droits dont vos tâches ont besoin.",
-        "labels": {
-          "Authorization": "Jeton d'accès personnel"
-        }
+        "needs": "Un compte GitHub : cliquez sur « Connecter », puis saisissez le code affiché sur github.com."
       },
       "ja": {
         "description": "GitHub 公式の MCP サーバーで、リポジトリ、Issue、プルリクエストを扱います。",
@@ -90,10 +78,7 @@
           "プルリクエストの閲覧と作成",
           "任意のツール群: Actions、セキュリティアラート、プロジェクト、gist"
         ],
-        "needs": "タスクに必要な権限を持つ GitHub の個人用アクセストークン。",
-        "labels": {
-          "Authorization": "個人用アクセストークン"
-        }
+        "needs": "GitHub アカウント。「接続」を押し、表示されたコードを github.com で入力します。"
       },
       "ko": {
         "description": "GitHub 공식 MCP 서버로 리포지토리, 이슈, 풀 리퀘스트를 다뤄요.",
@@ -104,10 +89,7 @@
           "풀 리퀘스트 읽기와 열기",
           "선택 도구 묶음: Actions, 보안 경고, 프로젝트, gist"
         ],
-        "needs": "작업에 필요한 권한을 가진 GitHub 개인 액세스 토큰이 필요해요.",
-        "labels": {
-          "Authorization": "개인 액세스 토큰"
-        }
+        "needs": "GitHub 계정이 필요해요. '연결'을 누르고 표시된 코드를 github.com에 입력하세요."
       },
       "pt-BR": {
         "description": "Repositórios, issues e pull requests, pelo servidor MCP oficial do GitHub.",
@@ -118,10 +100,7 @@
           "Ler e abrir pull requests",
           "Grupos opcionais de ferramentas: Actions, alertas de segurança, projetos, gists"
         ],
-        "needs": "Um token de acesso pessoal do GitHub com as permissões que suas tarefas precisam.",
-        "labels": {
-          "Authorization": "Token de acesso pessoal"
-        }
+        "needs": "Uma conta do GitHub: clique em Conectar e digite o código mostrado em github.com."
       },
       "zh-Hans": {
         "description": "通过 GitHub 官方 MCP 服务器处理仓库、议题和拉取请求。",
@@ -132,10 +111,7 @@
           "读取和打开拉取请求",
           "可选的工具组：Actions、安全警报、项目、gist"
         ],
-        "needs": "一个个人访问令牌（GitHub），权限需满足你的任务。",
-        "labels": {
-          "Authorization": "个人访问令牌"
-        }
+        "needs": "需要一个 GitHub 账号：点击“连接”，然后在 github.com 输入显示的代码。"
       }
     }
   },

@@ -2742,5 +2742,18 @@
   "share.mine.updated": "Обновлено до версии {number}.",
   "share.install.services": "Сервисы: {names}",
   "share.install.schedulesPending": "Расписания: {count} — будут созданы выключенными",
-  "share.install.warningSkill": "Сделано сообществом. Проверьте файлы скилла, прежде чем запускать."
+  "share.install.warningSkill": "Сделано сообществом. Проверьте файлы скилла, прежде чем запускать.",
+  "integrations.device.starting": "Запрашиваем код…",
+  "integrations.device.codeHint": "Введите этот код на {site}, чтобы разрешить доступ, и вернитесь в Bandito.",
+  "integrations.device.copy": "Скопировать",
+  "integrations.device.copied": "Скопировано",
+  "integrations.device.open": "Открыть {address}",
+  "integrations.device.waiting": "Ждём подтверждения на {site}…",
+  "integrations.device.expiresIn": "Код действует ещё {time}",
+  "integrations.device.expired": "Код истёк. Попробуйте снова, чтобы получить новый.",
+  "integrations.device.network": "Сервер Bandito не достучался до сервиса. Проверьте соединение и попробуйте снова.",
+  "integrations.device.refused": "Сервис не принял вход.",
+  "integrations.device.needsUpdate": "Обновите сервер, чтобы подключить {name} по коду.",
+  "integrations.device.revokeHint": "Доступ остаётся действующим в сервисе, пока вы не отзовёте его там: github.com/settings/applications.",
+  "market.step.signInCode": "Нажмите «Подключить» и введите показанный Bandito код на странице сервиса."
 }
