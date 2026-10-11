@@ -57,7 +57,8 @@ enum BackupReason: Equatable {
 enum BackupDateLabel {
     /// "Today, 03:12", "Yesterday, 03:12", or, for an older copy, the date and the time (`absolute`).
     static func short(_ date: Date, now: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
-        let time = formatter(calendar, locale, dateStyle: .none).string(from: date)
+        let time = DateFormatterCache.shared.string(
+            from: date, calendar: calendar, locale: locale, dateStyle: .none, timeStyle: .short)
         if calendar.isDate(date, inSameDayAs: now) {
             return L10n.Backups.whenToday(time: time)
         }
@@ -71,18 +72,8 @@ enum BackupDateLabel {
 
     /// The date and the time in full, such as "15 Jan 2027, 08:00". Used where the day in words would read oddly.
     static func absolute(_ date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
-        formatter(calendar, locale, dateStyle: .medium).string(from: date)
-    }
-
-    /// Time of day with the date style given; the time is always short ("03:12" in 24-hour locales).
-    private static func formatter(_ calendar: Calendar, _ locale: Locale, dateStyle: DateFormatter.Style) -> DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
-        formatter.dateStyle = dateStyle
-        formatter.timeStyle = .short
-        return formatter
+        DateFormatterCache.shared.string(
+            from: date, calendar: calendar, locale: locale, dateStyle: .medium, timeStyle: .short)
     }
 }
 

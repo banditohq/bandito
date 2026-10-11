@@ -66,13 +66,9 @@ enum CallJournalText {
         _ atMs: Int64, now: Date = Date(), calendar: Calendar = .current, locale: Locale = .current
     ) -> String {
         let date = Date(timeIntervalSince1970: Double(atMs) / 1000)
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.calendar = calendar
-        formatter.timeZone = calendar.timeZone
-        formatter.timeStyle = .short
-        formatter.dateStyle = calendar.isDate(date, inSameDayAs: now) ? .none : .short
-        return formatter.string(from: date)
+        let style: DateFormatter.Style = calendar.isDate(date, inSameDayAs: now) ? .none : .short
+        return DateFormatterCache.shared.string(
+            from: date, calendar: calendar, locale: locale, dateStyle: style, timeStyle: .short)
     }
 
     static func decision(_ decision: ToolCallDecision) -> String {

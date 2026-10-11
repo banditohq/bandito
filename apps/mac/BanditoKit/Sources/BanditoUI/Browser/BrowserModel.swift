@@ -118,7 +118,8 @@ final class BrowserModel {
         guard attachments.attach() else { return }
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.refresh()
+                // A browser view in a window nobody looks at does not need the tab list every two seconds.
+                if AppActivity.isActive { await self?.refresh() }
                 try? await Task.sleep(for: .seconds(2))
             }
         }

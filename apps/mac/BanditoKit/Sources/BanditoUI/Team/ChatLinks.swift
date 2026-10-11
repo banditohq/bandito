@@ -83,8 +83,13 @@ public enum ChatLinks {
 
     // MARK: - Helpers
 
+    /// The two patterns, compiled once: compiling a regular expression costs more than running it over a message, and every
+    /// message that is built asked for two.
+    private static let urlRegex = try? NSRegularExpression(pattern: urlPattern)
+    private static let wordRegex = try? NSRegularExpression(pattern: wordPattern)
+
     private static func matches(_ pattern: String, in text: String) -> [Range<String.Index>] {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        guard let regex = pattern == urlPattern ? urlRegex : wordRegex else { return [] }
         let whole = NSRange(text.startIndex..., in: text)
         return regex.matches(in: text, range: whole).compactMap { Range($0.range, in: text) }
     }
@@ -100,8 +105,8 @@ public enum ChatLinks {
         }
         range = range.lowerBound..<text.index(range.lowerBound, offsetBy: raw.count)
         // `:42` or `:42:7` after the name.
-        if let colon = raw.range(of: #":\d+(:\d+)?$"#, options: .regularExpression) {
-            raw = String(raw[..<colon.lowerBound])
+        if let cut = lineSuffixStart(in: raw) {
+            raw = String(raw[..<cut])
             range = range.lowerBound..<text.index(range.lowerBound, offsetBy: raw.count)
         }
         if isFilePath(raw) { return (raw, range, true) }
@@ -110,6 +115,31 @@ public enum ChatLinks {
         let folder = raw.count > 1 ? String(raw.reversed().drop(while: { $0 == "/" }).reversed()) : raw
         let end = text.index(range.lowerBound, offsetBy: folder.count)
         return (folder, range.lowerBound..<end, false)
+    }
+
+    /// Where a trailing `:42` or `:42:7` starts in `word`, nil when it has none. Read by hand: a regular expression here was
+    /// compiled again for every word of every message.
+    static func lineSuffixStart(in word: String) -> String.Index? {
+        /// The start of the run of ASCII digits that ends at `end`, nil when there is none.
+        func digitsStart(endingAt end: String.Index) -> String.Index? {
+            var start = end
+            while start > word.startIndex {
+                let previous = word.index(before: start)
+                guard word[previous].isASCII, word[previous].isNumber else { break }
+                start = previous
+            }
+            return start < end ? start : nil
+        }
+        /// The colon right before `index`, nil when there is not one.
+        func colon(before index: String.Index) -> String.Index? {
+            guard index > word.startIndex else { return nil }
+            let previous = word.index(before: index)
+            return word[previous] == ":" ? previous : nil
+        }
+        guard let last = digitsStart(endingAt: word.endIndex), let lastColon = colon(before: last) else { return nil }
+        // `:42:7`: the line and the column; the suffix starts at the first colon.
+        if let line = digitsStart(endingAt: lastColon), let firstColon = colon(before: line) { return firstColon }
+        return lastColon
     }
 
     /// True for an absolute path or a `~/` path without an extension: `/Users/me/app`, `~/Documents`. An absolute one

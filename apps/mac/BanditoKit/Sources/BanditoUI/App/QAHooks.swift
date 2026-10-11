@@ -2,6 +2,7 @@
 import AppKit
 import BanditoKit
 import Foundation
+import os
 
 // QA hooks for the QA copies of the app (`dev.bandito.mac.debug.qa<n>`, driven by `scripts/qa`). Debug builds only:
 // the whole file and its call sites are compiled out of a release build.
@@ -41,6 +42,8 @@ enum QACommand: Equatable {
     case tab(ServerSection)
     /// The workbench of the agent on screen: `details`, `terminal`, `browser`, `changes`, `toggle`, `split`.
     case workbench(String)
+    /// A performance scenario (`perf thread|inspector|market|switch|typing [result path]`, see `PerfScenarios`).
+    case perf(PerfScenario, path: String?)
 
     static func parse(_ text: String) -> QACommand? {
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -68,6 +71,11 @@ enum QACommand: Equatable {
             return ServerSection(rawValue: name).map { .tab($0) }
         case ("workbench", let action?) where ["details", "terminal", "browser", "changes", "toggle", "split"].contains(action):
             return .workbench(action)
+        case ("perf", let rest?):
+            let words = rest.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard let name = words.first, let scenario = PerfScenario(rawValue: String(name)) else { return nil }
+            let path = words.count > 1 ? String(words[1]).trimmingCharacters(in: .whitespaces) : nil
+            return .perf(scenario, path: path?.isEmpty == false ? path : nil)
         default:
             return nil
         }
@@ -128,10 +136,13 @@ enum QAHooks {
 
     /// One command line, from the notification. Unknown commands are logged and ignored.
     static func handle(_ text: String) {
+        let log = Logger(subsystem: "dev.bandito", category: "qa")
         guard let command = QACommand.parse(text) else {
             NSLog("QA unknown command \(text)")
+            log.notice("unknown command: \(text, privacy: .public)")
             return
         }
+        log.notice("command: \(text, privacy: .public)")
         guard let router, let onboarding else { return }
         switch command {
         case .mode(let mode):
@@ -156,6 +167,8 @@ enum QAHooks {
             router.serverSection = section
         case .workbench(let action):
             runWorkbench(action, router: router)
+        case .perf(let scenario, let path):
+            PerfScenarios.start(scenario, path: path, router: router, app: app)
         }
     }
 

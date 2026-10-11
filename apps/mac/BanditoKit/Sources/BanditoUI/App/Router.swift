@@ -162,6 +162,10 @@ public final class Router {
     public private(set) var mode: AppMode {
         didSet {
             if mode != oldValue, let screen = mode.telemetryScreen { Telemetry.count(.screen(screen)) }
+            if mode != oldValue {
+                HangMonitor.note(screen: mode)
+                HangMonitor.note(action: "mode.switch")
+            }
         }
     }
 
@@ -170,7 +174,10 @@ public final class Router {
         didSet {
             if selectedAgentID != nil { showsTeamHome = false }
             // The picture viewer belongs to the chat it was opened in: another agent closes it.
-            if selectedAgentID != oldValue { imageViewer = nil }
+            if selectedAgentID != oldValue {
+                imageViewer = nil
+                HangMonitor.note(action: "agent.select")
+            }
         }
     }
     /// Team: the home screen (greeting, templates, recent agents) is shown instead of a chat.
@@ -310,7 +317,9 @@ public final class Router {
         terminalsOpening.remove(workbenchKey(agentID))
     }
 
-    public var sheet: Sheet?
+    public var sheet: Sheet? {
+        didSet { if sheet != oldValue, sheet != nil { HangMonitor.note(action: "sheet.open") } }
+    }
     /// The address the add-server sheet starts with: set by "Connect again" on a server that refused this Mac's key.
     public var addServerAddress: String?
     /// The picture viewer: the pictures to show, and the first one. Set to show it over the main window; `nil` closes it.
@@ -335,6 +344,7 @@ public final class Router {
 
     public init(mode: AppMode = .team, defaults: UserDefaults = .standard) {
         self.mode = mode
+        HangMonitor.note(screen: mode)
         marketTab = MarketTabStore.load(defaults: defaults)
     }
 

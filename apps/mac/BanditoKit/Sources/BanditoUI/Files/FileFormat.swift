@@ -1,18 +1,19 @@
 import BanditoKit
 import BanditoL10n
 import Foundation
+import os
 
 /// Text for file metadata: when it changed, how big it is, what kind it is.
 enum FileFormat {
     /// "just now", "5 min ago", "today, 14:05", "yesterday, 19:40", or "8 Oct" for older files.
     static func changed(ms: Int64, now: Date = .now) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
-        let time = date.formatted(date: .omitted, time: .shortened)
+        // Making a date format costs about as much as drawing the row: only the cases that show a time make one.
         switch RelativeTime.bucket(ms: ms, now: now, calendar: .current) {
         case .justNow: return L10n.Files.Time.justNow
         case .minutes(let count): return L10n.Files.Time.minutes(count: count)
-        case .today: return L10n.Files.Time.today(time: time)
-        case .yesterday: return L10n.Files.Time.yesterday(time: time)
+        case .today: return L10n.Files.Time.today(time: date.formatted(date: .omitted, time: .shortened))
+        case .yesterday: return L10n.Files.Time.yesterday(time: date.formatted(date: .omitted, time: .shortened))
         case .earlier: return date.formatted(.dateTime.day().month(.abbreviated))
         }
     }
@@ -20,8 +21,16 @@ enum FileFormat {
     /// "6.4 KB" style size. Folders have none, so the text is empty (not a dash).
     static func size(of entry: FsEntry) -> String {
         guard entry.kind == .file else { return "" }
-        return ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file)
+        return byteCounts.withLock { $0.string(fromByteCount: entry.size) }
     }
+
+    /// One formatter for all rows: a new one per row of a folder with a thousand files was most of the cost of the list.
+    /// A formatter is not safe to share between threads, so it sits behind a lock.
+    private static let byteCounts: OSAllocatedUnfairLock<ByteCountFormatter> = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return OSAllocatedUnfairLock(uncheckedState: formatter)
+    }()
 
     /// The Size column: a dash for folders, the size for files, empty for links and other entries (as before).
     static func sizeCell(of entry: FsEntry) -> String {

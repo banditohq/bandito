@@ -23,9 +23,18 @@ public enum TelemetryEvent: Hashable, Sendable {
     case turnComplete
     /// An agent turn ended without `ok`: `turn.fail.<kind>`.
     case turnFail(TurnFailure)
+    /// The main thread did not answer for a quarter of a second or more, on this screen (`perf.hang.<screen>`).
+    /// Only the screen's name and a count leave the Mac: no stack, no duration, no content.
+    case hang(HangScreen)
 
     public enum Screen: String, CaseIterable, Sendable {
         case team, market, settings, terminals, files, browser
+    }
+
+    /// Where a hang happened. `other` is everything that is not one of the seven sections (settings, a window
+    /// that is closed, the start of the app).
+    public enum HangScreen: String, CaseIterable, Sendable {
+        case team, files, terminals, browser, screen, market, server, other
     }
 
     public enum AgentCreateSource: String, CaseIterable, Sendable {
@@ -66,6 +75,7 @@ public enum TelemetryEvent: Hashable, Sendable {
         case .formReply: "form.reply"
         case .turnComplete: "turn.complete"
         case .turnFail(let kind): "turn.fail.\(kind.rawValue)"
+        case .hang(let screen): "perf.hang.\(screen.rawValue)"
         }
     }
 
@@ -78,6 +88,7 @@ public enum TelemetryEvent: Hashable, Sendable {
             "telegram.link", "import.run", "form.reply", "turn.complete",
         ])
         names.formUnion(TurnFailure.allCases.map { "turn.fail.\($0.rawValue)" })
+        names.formUnion(HangScreen.allCases.map { "perf.hang.\($0.rawValue)" })
         return names
     }()
 

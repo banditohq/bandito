@@ -56,16 +56,16 @@ public struct RaccoonAvatar: View {
     public let customHex: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.avatarSleepRests) private var sleepRests
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
-    /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings. A sleeping avatar also rests where
-    /// a list shows many of them (`avatarSleepRests`).
-    private var still: Bool {
-        reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion
-            || AvatarSleepPolicy.rests(mood: mood, listed: sleepRests)
+    /// The avatar is inside the part of a scroll view that shows (see `AvatarPresence`).
+    @State private var onScreen = true
+    /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
+    private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
+    /// No frames are asked for while the avatar is scrolled out of view, or (a sleeping one) while the window is not
+    /// the active one: nobody sees the "z" rise.
+    private var paused: Bool {
+        AvatarSleepPolicy.paused(mood: mood, still: still, onScreen: onScreen, windowActive: scenePhase == .active)
     }
-    /// No frames are asked for while the window is not the active one: nobody sees the "z" rise.
-    private var paused: Bool { still || AvatarSleepPolicy.pausesWhenInactive(mood: mood, active: scenePhase == .active) }
 
     /// - Parameters:
     ///   - name: Agent name; also the seed for the automatic color and face and for the rhythm.
@@ -97,6 +97,7 @@ public struct RaccoonAvatar: View {
             RaccoonFace(resolved: resolved, tint: tint, pose: pose, size: size)
         }
         .frame(width: size, height: size)
+        .avatarPresence($onScreen)
         // Decorative: the agent name is always shown next to the avatar.
         .accessibilityHidden(true)
     }
@@ -123,25 +124,7 @@ private struct RaccoonFace: View {
             .offset(x: pose.shakeX * unit, y: pose.bodyOffsetY * unit)
             .opacity(pose.opacity)
 
-            if pose.showsDots {
-                ForEach(0..<3, id: \.self) { index in
-                    Circle()
-                        .fill(tint)
-                        .frame(width: 2.6 * 2 * unit, height: 2.6 * 2 * unit)
-                        .opacity(pose.dotOpacities[index])
-                        .position(x: (20 + Double(index) * 6) * unit, y: 7 * unit)
-                }
-            }
-            if pose.showsZ {
-                ForEach(0..<2, id: \.self) { index in
-                    let progress = pose.zProgresses[index]
-                    Text("z")
-                        .font(BanditoFont.text(size: size * (index == 0 ? 0.3 : 0.24), weight: 700))
-                        .foregroundStyle(Color.Bandito.info)
-                        .opacity(zOpacity(progress))
-                        .offset(x: size * 0.36 + size * 0.2 * progress, y: -size * 0.36 - size * 0.42 * progress)
-                }
-            }
+            AvatarMarks(pose: pose, tint: tint, size: size)
         }
         .frame(width: size, height: size)
     }
@@ -160,12 +143,6 @@ private struct RaccoonFace: View {
             .scaleEffect(x: 1, y: pose.eyeScaleY, anchor: .center)
             .offset(x: pose.eyeOffsetX * unit)
         }
-    }
-
-    /// Fades a "z" in, then out again over its progress from 0 to 1.
-    private func zOpacity(_ progress: Double) -> Double {
-        if progress < 0.3 { return progress / 0.3 }
-        return max(0, 1 - (progress - 0.3) / 0.7)
     }
 }
 
@@ -344,33 +321,79 @@ struct RaccoonDashEyes: Shape {
     }
 }
 
-/// Where a sleeping avatar rests or runs. Pure, so the rules are tested alone.
+/// Where an avatar rests or runs. Pure, so the rules are tested alone.
 enum AvatarSleepPolicy {
-    /// A sleeping avatar in a list (the sidebar) is drawn at rest: a list holds many of them, and each rising "z" would
-    /// cost a redraw several times a second for a mark nobody looks at.
-    static func rests(mood: AvatarMood, listed: Bool) -> Bool {
-        mood == .sleeping && listed
-    }
-
-    /// A sleeping avatar asks for no frames while its window is not active.
-    static func pausesWhenInactive(mood: AvatarMood, active: Bool) -> Bool {
-        mood == .sleeping && !active
+    /// Whether an avatar asks for no frames: its motion is off, it is scrolled out of view, or it sleeps in a window that
+    /// is not the active one (nobody sees the "z" rise).
+    static func paused(mood: AvatarMood, still: Bool, onScreen: Bool, windowActive: Bool) -> Bool {
+        still || !onScreen || (mood == .sleeping && !windowActive)
     }
 }
 
-private struct AvatarSleepRestsKey: EnvironmentKey {
-    static let defaultValue = false
-}
+/// The dots of a thinking avatar and the rising "z" of a sleeping one, drawn over the tile from a pose. Shared by the
+/// raccoon and by the tiles of avatars that are a picture or an emoji.
+struct AvatarMarks: View {
+    let pose: AvatarPose
+    let tint: Color
+    let size: CGFloat
 
-extension EnvironmentValues {
-    /// True inside a list of agents: sleeping avatars there do not animate.
-    var avatarSleepRests: Bool {
-        get { self[AvatarSleepRestsKey.self] }
-        set { self[AvatarSleepRestsKey.self] = newValue }
+    var body: some View {
+        let unit = size / DesignGrid.edge
+        ZStack {
+            if pose.showsDots {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(tint)
+                        .frame(width: 2.6 * 2 * unit, height: 2.6 * 2 * unit)
+                        .opacity(pose.dotOpacities[index])
+                        .position(x: (20 + Double(index) * 6) * unit, y: 7 * unit)
+                }
+            }
+            if pose.showsZ {
+                ForEach(0..<2, id: \.self) { index in
+                    let progress = pose.zProgresses[index]
+                    Text("z")
+                        .font(BanditoFont.text(size: size * (index == 0 ? 0.3 : 0.24), weight: 700))
+                        .foregroundStyle(Color.Bandito.info)
+                        .opacity(Self.zOpacity(progress))
+                        .offset(x: size * 0.36 + size * 0.2 * progress, y: -size * 0.36 - size * 0.42 * progress)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+    }
+
+    /// Fades a "z" in, then out again over its progress from 0 to 1.
+    static func zOpacity(_ progress: Double) -> Double {
+        if progress < 0.3 { return progress / 0.3 }
+        return max(0, 1 - (progress - 0.3) / 0.7)
     }
 }
 
-/// When an avatar needs a new frame: 20 times a second while its mood moves, and not at all in between. An idle
+/// Tells an avatar whether it is inside the part of a scroll view that shows (macOS 15 and later), so that one scrolled
+/// out of view asks for no frames. The state is written only when the answer changes, a few times per scroll at most.
+/// Before macOS 15, and outside a scroll view, the avatar counts as on screen.
+private struct AvatarPresence: ViewModifier {
+    @Binding var onScreen: Bool
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, iOS 18.0, *) {
+            content.onScrollVisibilityChange(threshold: 0.01) { visible in
+                if visible != onScreen { onScreen = visible }
+            }
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func avatarPresence(_ onScreen: Binding<Bool>) -> some View {
+        modifier(AvatarPresence(onScreen: onScreen))
+    }
+}
+
+/// When an avatar needs a new frame: 30 times a second while its mood moves, and not at all in between. An idle
 /// raccoon blinks for a third of a second every five seconds, so it is drawn about seven times per blink instead of
 /// a hundred times; a row of agents in the sidebar costs next to nothing.
 struct AvatarSchedule: TimelineSchedule {
@@ -378,9 +401,9 @@ struct AvatarSchedule: TimelineSchedule {
     let phase: Double
     let paused: Bool
 
-    static let frameInterval: TimeInterval = 1.0 / 20
+    static let frameInterval: TimeInterval = 1.0 / 30
     /// A sleeping avatar moves slowly (a "z" rises in 2.6 s) and is drawn all the time, so it gets fewer frames.
-    static let sleepingInterval: TimeInterval = 1.0 / 8
+    static let sleepingInterval: TimeInterval = 1.0 / 12
 
     /// The time between two frames of `mood`.
     static func interval(for mood: AvatarMood) -> TimeInterval {

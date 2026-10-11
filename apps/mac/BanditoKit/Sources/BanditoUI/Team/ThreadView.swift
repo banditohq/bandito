@@ -12,9 +12,6 @@ struct ThreadView: View {
     var agent: Agent
     /// Which replies are read aloud (a reference type: changes do not redraw the thread).
     @State private var readAloud = ReadAloudTracker()
-    /// Which tab the inspector opens on; the header's schedules button sets it.
-    @Binding var inspectorTab: InspectorTab
-
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -89,7 +86,7 @@ struct ThreadView: View {
 
     /// The agent's details in the workbench, on their details tab (the capsule and the schedules button).
     private func showDetails() {
-        inspectorTab = .details
+        router.inspectorTab = .details
         router.showInWorkbench(.details, agentID: agent.id)
     }
 
@@ -113,9 +110,9 @@ struct ThreadView: View {
                 chat: chat,
                 typing: thread.turnRunning && !isStreaming,
                 turnStartedAt: thread.turnStartedAt,
-                onRowSpan: { [scroll] id, span in scroll.rowSpans[id] = span },
                 onContent: { offset, height in contentChanged(offset: offset, height: height, proxy) },
-                arrival: arrival)
+                arrival: arrival,
+                virtual: scroll.virtual)
         }
         .coordinateSpace(name: ThreadScroll.scrollSpace)
         .modifier(ThreadGeometryGate { old, new in scrollGeometryChanged(old, new, proxy) })
@@ -131,6 +128,7 @@ struct ThreadView: View {
         if offset != scroll.offset { ThreadScrollActivity.noteMove() }
         scroll.offset = offset
         scroll.contentHeight = height
+        virtualUpdate()
         let near = ThreadScroll.nearTop(offset: offset)
         if near != scroll.nearTop {
             scroll.nearTop = near
@@ -177,10 +175,35 @@ struct ThreadView: View {
         return nil
     }
 
+    /// The row on top of what shows, from where the rows are (`ThreadVirtualWindow`: the built rows have their real
+    /// heights, the rest the ones their empty spaces were made with).
+    private func topRowID() -> String? {
+        guard let id = scroll.virtual.rowID(atOffset: CGFloat(scroll.offset)) else { return nil }
+        return shownRowIDs.contains(id) ? id : nil
+    }
+
+    /// Sets the rows to build for the screen where it is. Written only when the range changes.
+    private func virtualUpdate() {
+        guard scroll.containerHeight > 0 else { return }
+        scroll.virtual.update(offset: CGFloat(scroll.offset), viewport: CGFloat(scroll.containerHeight))
+    }
+
+    /// Builds the rows around `id` if they are not built, and runs `action` once they are drawn (a scroll to a row that is
+    /// only an empty space would go nowhere).
+    private func reveal(_ id: String, then action: @escaping () -> Void) {
+        guard scroll.virtual.reveal(id) else {
+            action()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+            guard scroll.alive else { return }
+            action()
+        }
+    }
+
     /// Notes the row on top, so that rows put above it do not move it: it is scrolled back to once they are drawn.
     private func keepTopRow() {
-        scroll.anchorRow = ThreadScroll.topRow(
-            spans: scroll.rowSpans, offset: scroll.offset, valid: Set(shownRowIDs))
+        scroll.anchorRow = topRowID()
         if scroll.anchorRow != nil { scroll.skipFollow = true }
     }
 
@@ -301,7 +324,7 @@ struct ThreadView: View {
                     setAtBottom(false)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
                         guard scroll.alive else { return }
-                        proxy.scrollTo(id, anchor: .top)
+                        reveal(id) { proxy.scrollTo(id, anchor: .top) }
                     }
                     return
                 }
@@ -315,7 +338,7 @@ struct ThreadView: View {
             proxy.scrollTo(ThreadScroll.bottomID, anchor: .bottom)
         case .row(let id):
             setAtBottom(false)
-            proxy.scrollTo(id, anchor: .top)
+            reveal(id) { proxy.scrollTo(id, anchor: .top) }
         }
     }
 
@@ -326,12 +349,8 @@ struct ThreadView: View {
         router.requestComposerFocus(agentID: agent.id)
     }
 
-    /// The composer text of this agent, kept by the Router (see `Router.drafts`).
-    private var draft: Binding<String> {
-        Binding(get: { router.drafts[agent.id] ?? "" }, set: { router.drafts[agent.id] = $0 })
-    }
-
     var body: some View {
+        let _ = PerfCounters.hit("ThreadView")
         chatColumn
             // Files dragged anywhere over the chat (thread and composer) are attached to this agent.
             .overlay {
@@ -372,7 +391,7 @@ struct ThreadView: View {
                 onShowBrowser: { router.showInWorkbench(.browser, agentID: agent.id) })
 
             ScrollViewReader { proxy in
-                rows(proxy)
+                ThreadRowsScope(ticker: scroll.virtual.ticker) { rows(proxy) }
                     // Follow a new item only while the bottom is on screen: prepending older history, or reading
                     // further up, must not jump to the bottom. (Growth of the last item, a stream or an opened
                     // card, is followed from the scroll geometry.)
@@ -417,7 +436,7 @@ struct ThreadView: View {
                         scroll.anchorRow = nil
                         DispatchQueue.main.async {
                             guard scroll.alive else { return }
-                            proxy.scrollTo(id, anchor: .top)
+                            reveal(id) { proxy.scrollTo(id, anchor: .top) }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 scroll.skipFollow = false
                                 // Still at the top after the rows were drawn: once more, not in a loop (an empty
@@ -431,8 +450,10 @@ struct ThreadView: View {
                     }
                     .onChange(of: scrollRequest) { _, request in
                         guard let request else { return }
-                        withAnimation(.easeOut(duration: BanditoMotion.base)) {
-                            proxy.scrollTo(request.id, anchor: .center)
+                        reveal(request.id) {
+                            withAnimation(.easeOut(duration: BanditoMotion.base)) {
+                                proxy.scrollTo(request.id, anchor: .center)
+                            }
                         }
                     }
             }
@@ -460,7 +481,6 @@ struct ThreadView: View {
                 }
             }
             Composer(
-                draft: draft,
                 agentName: agent.name,
                 running: thread.turnRunning,
                 contextFraction: ContextUsage.fraction(tokens: agent.contextTokens, budget: agent.contextBudget),
@@ -497,7 +517,7 @@ struct ThreadView: View {
             jumpTask?.cancel()
             highlightTask?.cancel()
             scroll.alive = false
-            let top = ThreadScroll.topRow(spans: scroll.rowSpans, offset: scroll.offset, valid: Set(shownRowIDs))
+            let top = topRowID()
             router.threadPlaces[agent.id] = ThreadScroll.place(atBottom: atBottom, topRowID: top)
         }
         // The header names the model from the server's list, so the list is asked once per server, not on opening
@@ -824,7 +844,8 @@ private struct ScrollRequest: Equatable {
 /// planned work. A reference, so that a scroll changes it without a redraw.
 @MainActor
 final class ThreadScrollMemory {
-    var rowSpans: [String: ThreadRowSpan] = [:]
+    /// Which rows are built and how tall they are (see `ThreadVirtualWindow`).
+    let virtual = ThreadVirtualHost()
     var offset = 0.0
     var contentHeight = 0.0
     var containerHeight = 0.0
@@ -870,6 +891,23 @@ private struct ThreadGeometryGate: ViewModifier {
     }
 }
 
+/// Reports the height of a row that is built, to the window of built rows. The height is the row's own size: it does not
+/// change when the thread scrolls, so this costs nothing per step.
+private struct RowHeightReporter: ViewModifier {
+    var id: String
+    var virtual: ThreadVirtualHost?
+
+    func body(content: Content) -> some View {
+        if let virtual {
+            content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                virtual.record(id: id, height: height)
+            }
+        } else {
+            content
+        }
+    }
+}
+
 /// The rows of a thread. Separate from the scroll view so it can be rendered on its own (snapshots, previews).
 struct ThreadItemsView: View {
     var items: [ThreadItem]
@@ -884,21 +922,25 @@ struct ThreadItemsView: View {
     var typing = false
     /// When the running turn began (Unix ms), for the elapsed time on the typing indicator.
     var turnStartedAt: Int64?
-    /// Where a row is in the content (its id, top and bottom edge): for the memory of the place.
-    var onRowSpan: (String, ThreadRowSpan) -> Void = { _, _ in }
     /// The content's offset in the scroll view and its height.
     var onContent: (Double, Double) -> Void = { _, _ in }
     /// Which messages came in live (see `ThreadArrival`); only those rise in. Empty by default: nothing animates.
     var arrival = ThreadArrival()
+    /// The rows built, with the empty spaces for the rest. Nil: every row is built (a thread on its own, a snapshot).
+    var virtual: ThreadVirtualHost?
 
     var body: some View {
-        let rows = ThreadRows.build(items)
+        let _ = PerfCounters.hit("ThreadItemsView")
+        let allRows = ThreadRows.build(items)
+        let plan = virtual?.prepare(allRows)
+        let rows = plan.map { Array(allRows[$0.range]) } ?? allRows
         var rowChat = chat
         rowChat.lastAgentID = items.last(where: { item in
             if case .assistant = item { return true }
             return false
         })?.id
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: ThreadVirtualWindow.rowSpacing) {
+            if let plan, plan.before > 0 { Color.clear.frame(height: plan.before) }
             ForEach(rows) { row in
                 EquatableThreadRow(
                     key: ThreadRowKey(
@@ -907,13 +949,9 @@ struct ThreadItemsView: View {
                     server: server, chat: rowChat, onError: onError)
                     .equatable()
                     .modifier(LiveArrivalModifier(live: arrival.isLive(seq: ThreadArrival.seq(of: row))))
-                    .onGeometryChange(for: ThreadRowSpan.self) { proxy in
-                        let frame = proxy.frame(in: .named(ThreadScroll.contentSpace))
-                        return ThreadRowSpan(minY: Double(frame.minY).rounded(), maxY: Double(frame.maxY).rounded())
-                    } action: { span in
-                        onRowSpan(row.id, span)
-                    }
+                    .modifier(RowHeightReporter(id: row.id, virtual: virtual))
             }
+            if let plan, plan.after > 0 { Color.clear.frame(height: plan.after) }
             if typing {
                 TypingIndicator(activity: AgentActivity.current(in: items), since: turnStartedAt)
             }
@@ -925,6 +963,10 @@ struct ThreadItemsView: View {
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity)
         .coordinateSpace(name: ThreadScroll.contentSpace)
+        .background { ThreadScrollFinder(bridge: virtual?.bridge) }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            virtual?.setWidth(width)
+        }
         .onGeometryChange(for: ThreadRowSpan.self) { proxy in
             let frame = proxy.frame(in: .named(ThreadScroll.scrollSpace))
             // minY..maxY is the content's place in the scroll view: -minY is the offset, the length the height.

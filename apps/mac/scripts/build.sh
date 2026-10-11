@@ -18,6 +18,12 @@ args=(-project Bandito.xcodeproj -scheme Bandito -configuration Debug
     -derivedDataPath "$derived" -destination 'platform=macOS' -skipPackagePluginValidation
     "BUILD_DIR=$derived/Build/Products" "OBJROOT=$derived/Build/Intermediates.noindex"
     "CARGO_TARGET_DIR=$cargo_target")
+# Extra build settings, for example BANDITO_XCODE_EXTRA="SWIFT_OPTIMIZATION_LEVEL=-O" for a QA copy that is measured
+# for speed: the app keeps its DEBUG hooks but is compiled the way a release is (a -Onone build is several times slower).
+if [ -n "${BANDITO_XCODE_EXTRA:-}" ]; then
+    # shellcheck disable=SC2206
+    args+=(${BANDITO_XCODE_EXTRA})
+fi
 xcodebuild "${args[@]}" -quiet build
 # Ask Xcode where the products are, so the printed path is the real one.
 products="$(xcodebuild "${args[@]}" -showBuildSettings 2>/dev/null | awk -F' = ' '/ BUILT_PRODUCTS_DIR =/ {print $2; exit}')"

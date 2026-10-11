@@ -580,9 +580,41 @@ public final class ServerModel: Identifiable {
     }
 
     private func setAgents(_ list: [Agent]) {
+        #if DEBUG
+        // QA perf scenarios: synthetic agents survive a refresh of the list.
+        agents = list + syntheticAgents.values.filter { s in !list.contains { $0.id == s.id } }.sorted { $0.name < $1.name }
+        #else
         agents = list
+        #endif
         agentsReadAt = Date()
     }
+
+    #if DEBUG
+    /// Agents that exist only in the app, for the QA performance scenarios (`perf thread`, `perf switch`): a thread
+    /// built in memory, no daemon behind it. Debug builds only.
+    @ObservationIgnored private var syntheticAgents: [String: Agent] = [:]
+
+    /// Adds an agent with a ready thread. Its history is never asked of the daemon.
+    public func installSyntheticAgent(_ agent: Agent, items: [ThreadItem]) {
+        syntheticAgents[agent.id] = agent
+        var thread = AgentThread()
+        thread.items = items
+        thread.lastSeq = Int64(items.count)
+        threads[agent.id] = thread
+        hasMoreHistory[agent.id] = false
+        replaceAgent(agent)
+    }
+
+    /// Takes the synthetic agents out again.
+    public func removeSyntheticAgents() {
+        let ids = Set(syntheticAgents.keys)
+        syntheticAgents.removeAll()
+        agents.removeAll { ids.contains($0.id) }
+        for id in ids { threads[id] = nil }
+    }
+
+    public func isSynthetic(_ agentId: String) -> Bool { syntheticAgents[agentId] != nil }
+    #endif
 
     /// Reads `agents.list` now and waits for the answer, for a caller that must see the list as it is (after a create
     /// that failed, the agents it made may be in it). Throws when the read fails; the list stays as it was.
@@ -677,6 +709,9 @@ public final class ServerModel: Identifiable {
     /// Loads the newest page of an agent's thread. Live state that arrived meanwhile
     /// (streaming text, status, turn flag) is kept.
     public func loadHistory(_ agentId: String) async throws {
+        #if DEBUG
+        if syntheticAgents[agentId] != nil { return }
+        #endif
         let page = try await rpc().call(
             "events.page", PageRequest(agentId: agentId, before: nil), as: [Event].self)
         var t = AgentThread()
@@ -718,6 +753,9 @@ public final class ServerModel: Identifiable {
 
     /// Prepends the page before the oldest loaded event.
     public func loadOlder(_ agentId: String) async throws {
+        #if DEBUG
+        if syntheticAgents[agentId] != nil { return }
+        #endif
         guard let before = oldestSeq[agentId] else { return }
         let page = try await rpc().call(
             "events.page", PageRequest(agentId: agentId, before: before), as: [Event].self)

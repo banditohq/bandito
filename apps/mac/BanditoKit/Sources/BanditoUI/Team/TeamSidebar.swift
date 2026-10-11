@@ -14,8 +14,6 @@ struct TeamSidebar: View {
     var body: some View {
         if let server = app.currentServer {
             content(server)
-                // Many agents, some asleep: their "z" stands still here.
-                .environment(\.avatarSleepRests, true)
         } else {
             SidebarPlaceholder(mode: .team)
         }
@@ -23,6 +21,7 @@ struct TeamSidebar: View {
 
     @ViewBuilder
     private func content(_ server: ServerModel) -> some View {
+        let _ = PerfCounters.hit("TeamSidebar")
         // The main agent goes first in the whole list, before the list is split into its groups.
         let lead = server.leadAgentID
         let agents = LeadAgent.leadFirst(server.sortedAgents, id: \.id, lead: lead)
@@ -55,7 +54,9 @@ struct TeamSidebar: View {
                             .padding(.bottom, 6)
                         VStack(spacing: 8) {
                             ForEach(waiting) { agent in
-                                waitingCard(agent, thread: server.thread(for: agent.id), server: server)
+                                ThreadReader(server: server, agentID: agent.id) { thread in
+                                    waitingCard(agent, thread: thread, server: server)
+                                }
                             }
                         }
                         .padding(.horizontal, 8)
@@ -78,10 +79,12 @@ struct TeamSidebar: View {
                     .padding(.bottom, 2)
                     VStack(spacing: 2) {
                         ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
-                            teamRow(
-                                agent, thread: server.thread(for: agent.id), server: server, selected: shown == agent.id,
-                                isLead: lead == agent.id)
-                                .banditoRise(delay: Double(index) * 0.06)
+                            ThreadReader(server: server, agentID: agent.id) { thread in
+                                teamRow(
+                                    agent, thread: thread, server: server, selected: shown == agent.id,
+                                    isLead: lead == agent.id)
+                            }
+                            .banditoRise(delay: Double(index) * 0.06)
                         }
                     }
                     .padding(.horizontal, 8)
@@ -116,7 +119,7 @@ struct TeamSidebar: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(agents) { agent in
-                    let thread = server.thread(for: agent.id)
+                    ThreadReader(server: server, agentID: agent.id) { thread in
                     let status = server.status(of: agent.id)
                     Button {
                         router.selectAgent(agent.id, on: server)
@@ -141,6 +144,7 @@ struct TeamSidebar: View {
                     .banditoButton(.row(cornerRadius: 10, hoverOpacity: 0.06))
                     .help(agent.name)
                     .contextMenu { menu(for: agent, server: server) }
+                    }
                 }
             }
             .padding(.horizontal, 18)
@@ -274,6 +278,19 @@ struct TeamSidebar: View {
     }
 }
 
+/// Reads the thread of one agent for a row of the sidebar. The sidebar itself does not read threads: a stream writes
+/// the threads several times a second, and every view that read them was built again. Here only the rows are, and a
+/// row is a few views.
+private struct ThreadReader<Content: View>: View {
+    let server: ServerModel
+    let agentID: String
+    @ViewBuilder var content: (AgentThread) -> Content
+
+    var body: some View {
+        content(server.thread(for: agentID))
+    }
+}
+
 /// One agent in the team list: avatar with its status dot, name, role, the time of the last event and a preview.
 struct AgentRow: View {
     var agent: Agent
@@ -289,6 +306,7 @@ struct AgentRow: View {
     var isLead = false
 
     var body: some View {
+        let _ = PerfCounters.hit("AgentRow")
         HStack(alignment: .center, spacing: 11) {
             AgentAvatarView(
                 agent: agent, server: server, size: 40,

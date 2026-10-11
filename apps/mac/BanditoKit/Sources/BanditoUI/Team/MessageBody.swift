@@ -13,6 +13,7 @@ struct MessageBodyView: View {
     var streaming = false
 
     var body: some View {
+        let _ = PerfCounters.hit("MessageBody")
         let blocks = MessageRenderCache.shared.blocks(for: text, markdown: markdown, cached: !streaming)
         if blocks.contains(where: { if case .code = $0 { return true } else { return false } }) {
             VStack(alignment: .leading, spacing: 10) {

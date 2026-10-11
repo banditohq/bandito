@@ -42,6 +42,12 @@ SwiftUI, macOS, dark theme. The app is a thin shell (`apps/mac/Bandito`); all co
 - Live pictures (browser screencast) go to a `CALayer` (`BrowserFrameLayer`), never through `@Observable` per frame.
   Decode images off the main thread.
 - No shadows, blurs or materials on every row of a long list; use them on hover or on single surfaces.
+- A scroll step costs about 0.08 ms for every row that exists in a non-lazy stack, built or not on screen. The thread builds only the rows near the screen and stands in empty spaces for the rest (`ThreadVirtualWindow`); a new long list does the same or is lazy.
+- Never pass a `Binding(get:set:)` that reads an `@Observable` into a child (`Composer` used to take one from `ThreadView`): the parent reads it while it builds the child, so each typed letter rebuilt the whole thread. The child reads and writes the model itself.
+- Per-row work that repeats on every redraw (regex, `DateFormatter`, `ByteCountFormatter`, `NSRegularExpression(pattern:)`) is made once and kept (`PlainLineCache`, `DateFormatterCache`, static regexes in `ChatLinks`).
+- A view that reads `server.thread(for:)` is rebuilt at every streamed token: read it in the row (`ThreadReader`), not in the list that holds the rows.
+- Polling that only feeds a screen skips its tick while the app is not active (`AppActivity.isActive`).
+- Measure with the QA scenarios (`perf thread|threadfast|typing|switch|inspector|market|settings|modes`, `PerfScenarios.swift`; the JSON lists frames, the main thread's work per frame and `bodies`, how often key views built). A build for speed: `BANDITO_XCODE_EXTRA="SWIFT_OPTIMIZATION_LEVEL=-O" scripts/build.sh`. Hangs of the main thread of 250 ms or more are logged by `HangMonitor` (`dev.bandito` / `perf`) and counted as `perf.hang.<screen>`.
 
 ## Decoding replies
 
