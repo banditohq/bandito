@@ -2599,8 +2599,6 @@
   "share.install.capabilities": "できること",
   "share.install.noCapabilities": "要求された機能はありません。",
   "share.install.riskyCapability": "危険：初期設定はオフ",
-  "share.install.servicesCount": "サービス: {count}",
-  "share.install.schedulesCount": "スケジュール: {count}",
   "share.install.prompt": "プロンプト",
   "share.install.license": "ライセンス",
   "share.install.files": "ファイル: {count}",
@@ -2637,5 +2635,8 @@
   "share.own.title": "自分のスキル",
   "share.own.sharedBadge": "リンク経由",
   "share.skipped": "次のファイルは送信されません: {files}",
-  "share.mine.updated": "バージョン {number} に更新しました。"
+  "share.mine.updated": "バージョン {number} に更新しました。",
+  "share.install.services": "サービス: {names}",
+  "share.install.schedulesPending": "スケジュール: {count}件 — オフの状態で作成されます",
+  "share.install.warningSkill": "コミュニティ製です。実行する前にスキルのファイルを確認してください。"
 }

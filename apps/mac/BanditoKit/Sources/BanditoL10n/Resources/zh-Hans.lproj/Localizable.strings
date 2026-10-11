@@ -2065,14 +2065,15 @@
 "share.install.reported" = "已举报";
 "share.install.riskyCapability" = "有风险：默认关闭";
 "share.install.role" = "角色";
-"share.install.schedulesCount" = "定时任务：%1$lld";
 "share.install.schedulesOff" = "定时任务（%1$lld个）已创建为关闭状态。检查提示词后，请在机器人设置中开启。";
+"share.install.schedulesPending" = "定时任务：%1$lld 个 — 将以关闭状态创建";
 "share.install.scripts" = "代理可以运行的脚本：%1$lld";
 "share.install.scriptsAck" = "我知道代理将能够运行这些脚本";
-"share.install.servicesCount" = "服务：%1$lld";
+"share.install.services" = "服务：%1$@";
 "share.install.unknownServices" = "目录中不存在，因此机器人不会获得：%1$@";
 "share.install.version" = "版本 %1$@";
 "share.install.warning" = "由社区制作。运行前请检查提示词。";
+"share.install.warningSkill" = "由社区制作。运行前请检查技能的文件。";
 "share.kind.bot" = "机器人";
 "share.kind.skill" = "技能";
 "share.menu" = "分享…";

@@ -2630,8 +2630,6 @@
   "share.install.capabilities": "Was er darf",
   "share.install.noCapabilities": "Keine Berechtigungen angefragt.",
   "share.install.riskyCapability": "Riskant: standardmäßig aus",
-  "share.install.servicesCount": "Dienste: {count}",
-  "share.install.schedulesCount": "Zeitpläne: {count}",
   "share.install.prompt": "Prompt",
   "share.install.license": "Lizenz",
   "share.install.files": "Dateien: {count}",
@@ -2668,5 +2666,8 @@
   "share.own.title": "Meine Skills",
   "share.own.sharedBadge": "über Link",
   "share.skipped": "Diese Dateien werden nicht gesendet: {files}",
-  "share.mine.updated": "Auf Version {number} aktualisiert."
+  "share.mine.updated": "Auf Version {number} aktualisiert.",
+  "share.install.services": "Dienste: {names}",
+  "share.install.schedulesPending": "Zeitpläne: {count} — werden ausgeschaltet angelegt",
+  "share.install.warningSkill": "Von der Community erstellt. Prüfen Sie die Dateien des Skills, bevor Sie ihn starten."
 }

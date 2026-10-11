@@ -2065,14 +2065,15 @@
 "share.install.reported" = "Denunciado";
 "share.install.riskyCapability" = "Riesgoso: desactivado por defecto";
 "share.install.role" = "Rol";
-"share.install.schedulesCount" = "Programaciones: %1$lld";
 "share.install.schedulesOff" = "Las programaciones (%1$lld) se crearon desactivadas. Actívelas en los ajustes del bot cuando haya revisado el prompt.";
+"share.install.schedulesPending" = "Programaciones: %1$lld — se crearán desactivadas";
 "share.install.scripts" = "Scripts que los agentes podrán ejecutar: %1$lld";
 "share.install.scriptsAck" = "Entiendo que los agentes podrán ejecutar estos scripts";
-"share.install.servicesCount" = "Servicios: %1$lld";
+"share.install.services" = "Servicios: %1$@";
 "share.install.unknownServices" = "No están en el catálogo, así que el bot no los recibirá: %1$@.";
 "share.install.version" = "Versión %1$@";
 "share.install.warning" = "Hecho por la comunidad. Revise el prompt antes de ejecutarlo.";
+"share.install.warningSkill" = "Hecho por la comunidad. Revise los archivos del skill antes de ejecutarlo.";
 "share.kind.bot" = "Bot";
 "share.kind.skill" = "Skill";
 "share.menu" = "Compartir…";

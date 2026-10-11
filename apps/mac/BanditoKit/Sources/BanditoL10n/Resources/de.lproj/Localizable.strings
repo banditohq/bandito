@@ -2065,14 +2065,15 @@
 "share.install.reported" = "Gemeldet";
 "share.install.riskyCapability" = "Riskant: standardmäßig aus";
 "share.install.role" = "Rolle";
-"share.install.schedulesCount" = "Zeitpläne: %1$lld";
 "share.install.schedulesOff" = "Zeitpläne (%1$lld) wurden ausgeschaltet angelegt. Schalten Sie sie in den Einstellungen des Bots ein, wenn Sie den Prompt geprüft haben.";
+"share.install.schedulesPending" = "Zeitpläne: %1$lld — werden ausgeschaltet angelegt";
 "share.install.scripts" = "Skripte, die Agenten ausführen können: %1$lld";
 "share.install.scriptsAck" = "Mir ist bewusst, dass Agenten diese Skripte ausführen können";
-"share.install.servicesCount" = "Dienste: %1$lld";
+"share.install.services" = "Dienste: %1$@";
 "share.install.unknownServices" = "Nicht im Katalog, daher erhält der Bot sie nicht: %1$@.";
 "share.install.version" = "Version %1$@";
 "share.install.warning" = "Von der Community erstellt. Prüfen Sie den Prompt, bevor Sie ihn starten.";
+"share.install.warningSkill" = "Von der Community erstellt. Prüfen Sie die Dateien des Skills, bevor Sie ihn starten.";
 "share.kind.bot" = "Bot";
 "share.kind.skill" = "Skill";
 "share.menu" = "Teilen…";

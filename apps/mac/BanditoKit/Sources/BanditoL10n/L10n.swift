@@ -2827,14 +2827,15 @@ public enum L10n {
             public static var reported: String { L10n.tr("share.install.reported") }
             public static var riskyCapability: String { L10n.tr("share.install.riskyCapability") }
             public static var role: String { L10n.tr("share.install.role") }
-            public static func schedulesCount(count: Int) -> String { L10n.tr("share.install.schedulesCount", count) }
             public static func schedulesOff(count: Int) -> String { L10n.tr("share.install.schedulesOff", count) }
+            public static func schedulesPending(count: Int) -> String { L10n.tr("share.install.schedulesPending", count) }
             public static func scripts(count: Int) -> String { L10n.tr("share.install.scripts", count) }
             public static var scriptsAck: String { L10n.tr("share.install.scriptsAck") }
-            public static func servicesCount(count: Int) -> String { L10n.tr("share.install.servicesCount", count) }
+            public static func services(names: String) -> String { L10n.tr("share.install.services", names) }
             public static func unknownServices(names: String) -> String { L10n.tr("share.install.unknownServices", names) }
             public static func version(number: String) -> String { L10n.tr("share.install.version", number) }
             public static var warning: String { L10n.tr("share.install.warning") }
+            public static var warningSkill: String { L10n.tr("share.install.warningSkill") }
         }
 
         public enum Kind {

@@ -2065,14 +2065,15 @@
 "share.install.reported" = "通報済み";
 "share.install.riskyCapability" = "危険：初期設定はオフ";
 "share.install.role" = "役割";
-"share.install.schedulesCount" = "スケジュール: %1$lld";
 "share.install.schedulesOff" = "スケジュール（%1$lld件）はオフの状態で作成されました。プロンプトを確認したら、ボットの設定でオンにしてください。";
+"share.install.schedulesPending" = "スケジュール: %1$lld件 — オフの状態で作成されます";
 "share.install.scripts" = "エージェントが実行できるスクリプト: %1$lld";
 "share.install.scriptsAck" = "これらのスクリプトをエージェントが実行できることを理解しています";
-"share.install.servicesCount" = "サービス: %1$lld";
+"share.install.services" = "サービス: %1$@";
 "share.install.unknownServices" = "カタログにないため、ボットには渡されません: %1$@";
 "share.install.version" = "バージョン %1$@";
 "share.install.warning" = "コミュニティ製です。実行する前にプロンプトを確認してください。";
+"share.install.warningSkill" = "コミュニティ製です。実行する前にスキルのファイルを確認してください。";
 "share.kind.bot" = "ボット";
 "share.kind.skill" = "スキル";
 "share.menu" = "共有…";

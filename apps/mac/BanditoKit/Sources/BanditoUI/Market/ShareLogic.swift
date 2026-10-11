@@ -72,8 +72,8 @@ public struct SharedPayloadInfo: Equatable, Sendable {
     public var systemPrompt: String?
     /// Bot: the capability names it asks for.
     public var capabilities: [String]
-    /// Bot: how many catalog services it names.
-    public var serviceCount: Int
+    /// Bot: the catalog ids of the services it may use, in the payload's order.
+    public var services: [String]
     /// Bot: how many schedules it carries.
     public var scheduleCount: Int
     /// Bot: the first message, put in the input field.
@@ -86,6 +86,8 @@ public struct SharedPayloadInfo: Equatable, Sendable {
     public var files: [String]
     /// Skill: the paths the payload marks executable.
     public var executables: [String]
+    /// Skill: the text of `SKILL.md`, the skill's own description of what to do, when the payload has it.
+    public var skillMarkdown: String?
 
     /// Skill: every file agents may run: each file under `scripts/` and each path marked executable, once, sorted.
     /// The install sheet names all of them and needs the owner's tick whenever there is one.
@@ -100,13 +102,20 @@ public struct SharedPayloadInfo: Equatable, Sendable {
         role = payload["role"]?.string
         systemPrompt = payload["system_prompt"]?.string
         capabilities = Self.strings(payload["capabilities"])
-        serviceCount = Self.count(payload["services"])
+        services = Self.strings(payload["services"])
         scheduleCount = Self.count(payload["schedules"])
         starter = payload["starter"]?.string
         description = payload["description"]?.string
         license = payload["license"]?.string
         files = Self.files(payload["files"])
         executables = Self.strings(payload["executable"])
+        skillMarkdown = payload["files"]?["SKILL.md"]?.string
+    }
+
+    /// The names of the services a bot names, for the screen: the catalog's name where the catalog has the id, the id
+    /// as it is where it does not (a service this server does not know).
+    public static func serviceNames(_ ids: [String], catalog: [String: String]) -> [String] {
+        ids.map { catalog[$0] ?? $0 }
     }
 
     private static func strings(_ value: JSONValue?) -> [String] {
