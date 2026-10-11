@@ -152,7 +152,7 @@ private struct ItemView: View {
     @ViewBuilder
     private var content: some View {
         switch item {
-        case .user(let id, let text, let source, let from, _, let files):
+        case .user(let id, let text, let source, let from, let ts, let files):
             if source == .user {
                 let seq = item.messageSeq
                 if text.isEmpty, !files.isEmpty {
@@ -164,7 +164,7 @@ private struct ItemView: View {
                 } else {
                     MessageContainer(
                         itemID: id, seq: seq, text: text, fromUser: true, chat: chat, files: files, agentID: agentID,
-                        server: server
+                        server: server, sentAt: Date(timeIntervalSince1970: TimeInterval(ts) / 1000)
                     ) {
                         VStack(alignment: .trailing, spacing: 4) {
                             UserBubble(text: text) { quote(forSeq: seq) }
@@ -194,9 +194,12 @@ private struct ItemView: View {
                     }
                 }
             }
-        case .assistant(let id, let text, _):
+        case .assistant(let id, let text, let ts):
             let seq = item.messageSeq
-            MessageContainer(itemID: id, seq: seq, text: text, fromUser: false, chat: chat) {
+            MessageContainer(
+                itemID: id, seq: seq, text: text, fromUser: false, chat: chat,
+                sentAt: Date(timeIntervalSince1970: TimeInterval(ts) / 1000)
+            ) {
                 AgentBubble(text: text) { quote(forSeq: seq) }
             }
         case .streaming(let text):

@@ -66,6 +66,8 @@ struct MessageContainer<Bubble: View>: View {
     var files: [AgentAttachment] = []
     var agentID = ""
     var server: ServerModel?
+    /// When the message was sent: a quiet time at the far end of the row of actions (see `MessageTimeStamp`).
+    var sentAt: Date?
     @ViewBuilder var bubble: () -> Bubble
 
     @State private var hovering = false
@@ -88,6 +90,9 @@ struct MessageContainer<Bubble: View>: View {
     /// This message is the one being read aloud: its menu says "Stop reading".
     private var reading: Bool { SpeechOutput.shared.speakingKey == itemID }
     private var readTitle: String { reading ? L10n.Speech.stop : L10n.Speech.read }
+    /// The time shows only while the row is in full (hover, or an open popover or menu), never on the faint row that
+    /// the last agent message keeps.
+    private var showsTime: Bool { rowOpacity == 1 }
     private var rowOpacity: Double {
         MessageActionsPlacement.opacity(
             hovering: hovering, open: reactOpen || selecting || focus != nil, selectingText: dragging, isUser: fromUser,
@@ -188,10 +193,12 @@ struct MessageContainer<Bubble: View>: View {
 
     // MARK: The row
 
-    /// The icons under the bubble. The agent's: copy, react, reply, more. The person's: copy, reply, react.
+    /// The icons under the bubble. The agent's: copy, react, reply, more. The person's: copy, reply, react. The time
+    /// sits at the far end from the bubble's edge: after the icons for the agent, before them for the person.
     private var actionRow: some View {
         HStack(spacing: 2) {
             if fromUser {
+                if let sentAt, showsTime { MessageTimeStamp(date: sentAt).equatable().transition(.opacity) }
                 copyButton
                 if canReply { replyButton }
                 if canReact { reactButton }
@@ -200,6 +207,7 @@ struct MessageContainer<Bubble: View>: View {
                 if canReact { reactButton }
                 if canReply { replyButton }
                 moreMenu
+                if let sentAt, showsTime { MessageTimeStamp(date: sentAt).equatable().transition(.opacity) }
             }
         }
         .frame(height: MessageActionsPlacement.rowHeight)

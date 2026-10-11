@@ -1233,6 +1233,9 @@
 "message.reactionSame" = "同样回应";
 "message.resend" = "重新发送";
 "message.selectText" = "选择文字";
+"message.time.dated" = "%1$@ %2$@";
+"message.time.today" = "今天 %1$@";
+"message.time.yesterday" = "昨天 %1$@";
 "migrate.banner.delete" = "在此删除";
 "migrate.banner.deleteMessage" = "智能体已在 %1$@ 上工作。此处的历史和记忆将被删除。";
 "migrate.banner.deleteTitle" = "在此删除 %1$@？";

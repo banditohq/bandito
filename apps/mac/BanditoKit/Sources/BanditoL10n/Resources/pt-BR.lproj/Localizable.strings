@@ -1233,6 +1233,9 @@
 "message.reactionSame" = "Reagir da mesma forma";
 "message.resend" = "Enviar novamente";
 "message.selectText" = "Selecionar texto";
+"message.time.dated" = "%1$@, %2$@";
+"message.time.today" = "hoje, %1$@";
+"message.time.yesterday" = "ontem, %1$@";
 "migrate.banner.delete" = "Apagar aqui";
 "migrate.banner.deleteMessage" = "O agente já trabalha em %1$@. O histórico e a memória daqui serão apagados.";
 "migrate.banner.deleteTitle" = "Apagar %1$@ aqui?";

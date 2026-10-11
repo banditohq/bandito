@@ -1233,6 +1233,9 @@
 "message.reactionSame" = "同じリアクションをする";
 "message.resend" = "もう一度送る";
 "message.selectText" = "テキストを選択";
+"message.time.dated" = "%1$@ %2$@";
+"message.time.today" = "今日 %1$@";
+"message.time.yesterday" = "昨日 %1$@";
 "migrate.banner.delete" = "ここから削除";
 "migrate.banner.deleteMessage" = "エージェントは既に %1$@ で動いています。ここにある履歴とメモリは削除されます。";
 "migrate.banner.deleteTitle" = "ここの %1$@ を削除しますか？";

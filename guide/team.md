@@ -133,6 +133,14 @@ Web addresses and file paths in a message are links. A file opens in the workben
 1. Click a web address: it opens in the built-in browser. Hold ⌘ and click: it opens in the browser of the Mac.
 2. To change which one a click uses, open Settings (⌘,) → General (Общие) → Open links from chat in (Ссылки из чата открывать).
 
+## When a message was sent (Когда отправлено)
+
+<!-- id: team-message-time; covers: -->
+Point at a message, yours or the agent's, and the row of its actions shows when it was sent: quietly, at the end of the row, without moving the text. Today it reads сегодня, 14:22:05; yesterday вчера, 09:03:12; earlier this year 3 окт., 22:14:37; in an older year 11 окт. 2025, 22:14:37. The clock is 24-hour and shows the seconds. Hover over the time for a moment to see the full date with the weekday, the year and the seconds.
+Где: Team → agent thread → hover over a message; the time is at the end of the row under it
+1. Point at a message. The time appears under it, at the end of the row of actions (on the agent's message after the ⋯ button, on yours before the icons).
+2. Hover over the time: a tooltip gives the whole date, for example Sunday, October 11, 2026, 22:14:37.
+
 ## Attach a file to a message
 
 <!-- id: team-attach; covers: -->

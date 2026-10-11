@@ -21,7 +21,7 @@ import Testing
 
     static var cases: [AuditCase] {
         settings + sheets + dataSheets + serverScreens + marketScreens + onboardingScreens + flowSheets + browserScreens
-            + approvalViews
+            + approvalViews + messageTimeRows
     }
 
     static let settings: [AuditCase] = [
@@ -267,6 +267,45 @@ import Testing
             AnyView(BrowserFrameTimedOutView(onRetry: {}))
         },
     ]
+
+    // MARK: the time of a message in its row of actions
+
+    /// The row under a message on hover, as `MessageContainer` draws it: the icons, and the time at the far end from the
+    /// bubble's edge. The date is the longest form (an older year), so the row is checked at its widest.
+    static let messageTimeRows: [AuditCase] = [
+        AuditCase(name: "message-time-row-person", width: 360) { _ in AnyView(messageTimeRow(fromUser: true)) },
+        AuditCase(name: "message-time-row-agent", width: 360) { _ in AnyView(messageTimeRow(fromUser: false)) },
+    ]
+
+    static func messageTimeRow(fromUser: Bool) -> some View {
+        let sent = Calendar.current.date(
+            from: DateComponents(year: 2025, month: 10, day: 11, hour: 22, minute: 14, second: 37)) ?? .distantPast
+        return HStack(spacing: 2) {
+            if fromUser {
+                MessageTimeStamp(date: sent).equatable()
+                auditRowIcon("doc.on.doc", label: L10n.Thread.copy)
+                auditRowIcon("arrowshape.turn.up.left", label: L10n.Thread.reply)
+                auditRowIcon("face.smiling", label: L10n.Message.react)
+            } else {
+                auditRowIcon("doc.on.doc", label: L10n.Thread.copy)
+                auditRowIcon("face.smiling", label: L10n.Message.react)
+                auditRowIcon("arrowshape.turn.up.left", label: L10n.Thread.reply)
+                auditRowIcon("ellipsis", label: L10n.Message.more)
+                MessageTimeStamp(date: sent).equatable()
+            }
+        }
+        .frame(height: MessageActionsPlacement.rowHeight)
+    }
+
+    /// One icon of the row, drawn with the row's own button style.
+    private static func auditRowIcon(_ symbol: String, label: String) -> some View {
+        Button {
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .medium))
+        }
+        .buttonStyle(MessageActionStyle(label: label))
+    }
 
     // MARK: approvals in the thread and the agent's details
 

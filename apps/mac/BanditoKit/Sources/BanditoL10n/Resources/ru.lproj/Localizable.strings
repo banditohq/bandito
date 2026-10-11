@@ -1233,6 +1233,9 @@
 "message.reactionSame" = "Поставить такую же реакцию";
 "message.resend" = "Отправить снова";
 "message.selectText" = "Выделить текст";
+"message.time.dated" = "%1$@, %2$@";
+"message.time.today" = "сегодня, %1$@";
+"message.time.yesterday" = "вчера, %1$@";
 "migrate.banner.delete" = "Удалить здесь";
 "migrate.banner.deleteMessage" = "Агент уже работает на %1$@. Его история и память здесь удалятся.";
 "migrate.banner.deleteTitle" = "Удалить %1$@ здесь?";

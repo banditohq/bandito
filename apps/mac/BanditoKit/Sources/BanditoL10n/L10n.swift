@@ -1774,6 +1774,12 @@ public enum L10n {
         public static var reactionSame: String { L10n.tr("message.reactionSame") }
         public static var resend: String { L10n.tr("message.resend") }
         public static var selectText: String { L10n.tr("message.selectText") }
+
+        public enum Time {
+            public static func dated(date: String, time: String) -> String { L10n.tr("message.time.dated", date, time) }
+            public static func today(time: String) -> String { L10n.tr("message.time.today", time) }
+            public static func yesterday(time: String) -> String { L10n.tr("message.time.yesterday", time) }
+        }
     }
 
     public enum Migrate {
