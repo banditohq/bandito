@@ -985,22 +985,16 @@ mod update_tests {
 
     #[test]
     fn a_uvx_pin_and_an_npx_pin_are_version_changes() {
-        let grafana = row(
-            "grafana",
-            IntegrationKind::Stdio,
-            Some("uvx"),
-            &["mcp-grafana==1.0.0"],
-            None,
-        );
-        assert_eq!(versions(&grafana), ver("1.0.0", "2.0.2"));
-        let deepl = row(
-            "deepl",
+        let kagi = row("kagi", IntegrationKind::Stdio, Some("uvx"), &["kagimcp==1.0.0"], None);
+        assert_eq!(versions(&kagi), ver("1.0.0", "1.0.2"));
+        let snyk = row(
+            "snyk",
             IntegrationKind::Stdio,
             Some("npx"),
-            &["-y", "deepl-mcp-server@1.3.0"],
+            &["-y", "snyk@1.1300.0", "mcp", "-t", "stdio"],
             None,
         );
-        assert_eq!(versions(&deepl), ver("1.3.0", "1.3.13"));
+        assert_eq!(versions(&snyk), ver("1.1300.0", "1.1308.0"));
         // A scoped package keeps its own `@`: the version is what follows the last one.
         let toolbox = row(
             "toolbox-postgres",
@@ -1015,10 +1009,10 @@ mod update_tests {
     #[test]
     fn the_same_version_or_no_pin_at_all_is_no_update() {
         let same = row(
-            "deepl",
+            "toolbox-postgres",
             IntegrationKind::Stdio,
             Some("npx"),
-            &["-y", "deepl-mcp-server@1.3.13"],
+            &["-y", "@toolbox-sdk/server@1.14.0", "--prebuilt=postgres", "--stdio"],
             None,
         );
         assert_eq!(versions(&same), None);
@@ -1045,32 +1039,20 @@ mod update_tests {
         );
         assert_eq!(versions(&git), None);
         // Another package behind the pin, another command, another number of arguments, another kind.
-        let other_package = row(
-            "grafana",
-            IntegrationKind::Stdio,
-            Some("uvx"),
-            &["mcp-grafana-x==1.0.0"],
-            None,
-        );
+        let other_package = row("kagi", IntegrationKind::Stdio, Some("uvx"), &["kagimcp-x==1.0.0"], None);
         assert_eq!(versions(&other_package), None);
-        let other_command = row(
-            "grafana",
-            IntegrationKind::Stdio,
-            Some("npx"),
-            &["mcp-grafana==1.0.0"],
-            None,
-        );
+        let other_command = row("kagi", IntegrationKind::Stdio, Some("npx"), &["kagimcp==1.0.0"], None);
         assert_eq!(versions(&other_command), None);
         let extra_arg = row(
-            "grafana",
+            "kagi",
             IntegrationKind::Stdio,
             Some("uvx"),
-            &["mcp-grafana==1.0.0", "--x"],
+            &["kagimcp==1.0.0", "--x"],
             None,
         );
         assert_eq!(versions(&extra_arg), None);
         let other_kind = row(
-            "deepl",
+            "kagi",
             IntegrationKind::Http,
             None,
             &[],
@@ -1140,15 +1122,9 @@ mod update_tests {
     #[test]
     fn the_update_points_at_the_template_it_takes_its_pieces_from() {
         let all = templates();
-        let grafana = row(
-            "grafana",
-            IntegrationKind::Stdio,
-            Some("uvx"),
-            &["mcp-grafana==1.0.0"],
-            None,
-        );
-        let update = template_update(&grafana, &all).unwrap();
-        assert_eq!(update.template.id, "grafana");
-        assert_eq!(update.template.args, vec!["mcp-grafana==2.0.2".to_string()]);
+        let kagi = row("kagi", IntegrationKind::Stdio, Some("uvx"), &["kagimcp==1.0.0"], None);
+        let update = template_update(&kagi, &all).unwrap();
+        assert_eq!(update.template.id, "kagi");
+        assert_eq!(update.template.args, vec!["kagimcp==1.0.2".to_string()]);
     }
 }

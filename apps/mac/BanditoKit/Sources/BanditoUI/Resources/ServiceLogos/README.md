@@ -13,6 +13,7 @@ The logos on the Marketplace tiles of the Mac app. Each file is named after the 
 - License of the icon set: **CC0 1.0 Universal** (public domain dedication; `LICENSE.md` of the package).
 - Not included, because the catalog has no template that uses them, or Simple Icons 13.21.0 has no such logo:
   `playwright`, `exa`, `context7`, `firecrawl`, `composio`, `neon` (no logo in this version; their tiles keep the symbol),
+  `monday` (no logo: Simple Icons has no such slug in 13.21.0 or in the current release; its tile keeps the symbol),
   `bitrix24-docs` and `yandex-metrika` (no Bitrix24, Yandex or МойСклад logo in Simple Icons 13.21.0; `yandexcloud` is a different product),
   and `tavily`, `fal`, `stability-ai`, `apify`, `browserbase`, `brightdata`, `serpapi`, `alpha-vantage`, `openweather` (no logo under
   these slugs in Simple Icons 13.21.0; their tiles keep the symbol).

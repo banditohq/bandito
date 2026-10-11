@@ -369,7 +369,7 @@
     "kind": "http",
     "url": "https://mcp.atlassian.com/v2/mcp",
     "auth": "oauth",
-    "docs_url": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/configuring-authentication-via-api-token/",
+    "docs_url": "https://support.atlassian.com/rovo/docs/getting-started-with-the-atlassian-remote-mcp-server/",
     "icon": "atlassian",
     "accent": "#0052CC",
     "l10n": {
@@ -2885,29 +2885,11 @@
       "Запрашивать Prometheus и Loki",
       "Смотреть источники данных"
     ],
-    "needs_en": "Grafana (cloud or self-hosted) and a service account token. For reading, give the token the Viewer role only.",
-    "needs_ru": "Grafana (облачная или своя) и токен service account. Для чтения дайте токену только роль Viewer.",
-    "kind": "stdio",
-    "command": "uvx",
-    "args": [
-      "mcp-grafana==2.0.2"
-    ],
-    "env_keys": [
-      {
-        "key": "GRAFANA_URL",
-        "label_en": "Grafana address",
-        "label_ru": "Адрес Grafana",
-        "secret": true,
-        "value_template": "{secret}"
-      },
-      {
-        "key": "GRAFANA_SERVICE_ACCOUNT_TOKEN",
-        "label_en": "Service account token",
-        "label_ru": "Токен service account",
-        "secret": true,
-        "value_template": "{secret}"
-      }
-    ],
+    "needs_en": "A Grafana account. Sign in in the browser after you press Connect. Grafana Cloud. For your own Grafana, use Own integration.",
+    "needs_ru": "Аккаунт Grafana: войдите в браузере после нажатия «Подключить». Grafana Cloud; для своей Grafana — Своя интеграция.",
+    "kind": "http",
+    "url": "https://mcp.grafana.com/mcp",
+    "auth": "oauth",
     "docs_url": "https://github.com/grafana/mcp-grafana",
     "icon": "grafana",
     "accent": "#F46800",
@@ -2921,11 +2903,7 @@
           "Prometheus und Loki abfragen",
           "Datenquellen ansehen"
         ],
-        "needs": "Grafana (Cloud oder eigene Installation) und ein Token für ein Service Account. Zum Lesen geben Sie dem Token nur die Rolle Viewer.",
-        "labels": {
-          "GRAFANA_URL": "Adresse von Grafana",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Token des Service Accounts"
-        }
+        "needs": "Ein Grafana-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an. Grafana Cloud. Für eine eigene Grafana-Installation nehmen Sie Eigene Integration."
       },
       "es": {
         "description": "Dashboards, alertas, fuentes de datos y consultas en Grafana, a través del servidor MCP de Grafana.",
@@ -2936,11 +2914,7 @@
           "Consultar Prometheus y Loki",
           "Revisar fuentes de datos"
         ],
-        "needs": "Grafana (en la nube o propia) y un token de service account. Para leer, dale al token solo el rol Viewer.",
-        "labels": {
-          "GRAFANA_URL": "Dirección de Grafana",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Token de service account"
-        }
+        "needs": "Una cuenta de Grafana. Inicia sesión en el navegador después de pulsar Conectar. Grafana Cloud. Para tu propio Grafana, usa Integración propia."
       },
       "fr": {
         "description": "Tableaux de bord, alertes, sources de données et requêtes dans Grafana, via le serveur MCP de Grafana.",
@@ -2951,11 +2925,7 @@
           "Interroger Prometheus et Loki",
           "Consulter les sources de données"
         ],
-        "needs": "Grafana (Cloud ou auto-hébergé) et un jeton de service account. Pour la lecture, donnez au jeton le seul rôle Viewer.",
-        "labels": {
-          "GRAFANA_URL": "Adresse de Grafana",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Jeton du service account"
-        }
+        "needs": "Un compte Grafana. Connectez-vous dans le navigateur après avoir cliqué sur Connecter. Grafana Cloud. Pour votre propre Grafana, utilisez Intégration personnalisée."
       },
       "ja": {
         "description": "Grafana のダッシュボード、アラート、データソース、クエリを、Grafana の MCP サーバー経由で扱います。",
@@ -2966,11 +2936,7 @@
           "Prometheus と Loki にクエリ",
           "データソースを確認"
         ],
-        "needs": "Grafana（クラウドまたは自前のもの）と service account のトークン。読み取りだけなら、トークンには Viewer ロールのみを付与してください。",
-        "labels": {
-          "GRAFANA_URL": "Grafana のアドレス",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "service account のトークン"
-        }
+        "needs": "Grafana のアカウント。「接続」を押したあと、ブラウザでサインインしてください。 Grafana Cloud 向けです。自分で運用する Grafana は独自の連携を使ってください。"
       },
       "ko": {
         "description": "Grafana의 대시보드, 알림, 데이터 소스, 쿼리를 Grafana 공식 MCP 서버로 다뤄요.",
@@ -2981,11 +2947,7 @@
           "Prometheus와 Loki 쿼리",
           "데이터 소스 보기"
         ],
-        "needs": "Grafana(클라우드 또는 자체 설치)와 service account 토큰. 읽기만 하려면 토큰에 Viewer 역할만 주세요.",
-        "labels": {
-          "GRAFANA_URL": "Grafana 주소",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "service account 토큰"
-        }
+        "needs": "Grafana 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요. Grafana Cloud용이에요. 직접 운영하는 Grafana는 직접 추가를 쓰세요."
       },
       "pt-BR": {
         "description": "Dashboards, alertas, fontes de dados e consultas no Grafana, pelo servidor MCP do Grafana.",
@@ -2996,11 +2958,7 @@
           "Consultar Prometheus e Loki",
           "Ver fontes de dados"
         ],
-        "needs": "Grafana (na nuvem ou próprio) e um token de service account. Para leitura, dê ao token somente o papel Viewer.",
-        "labels": {
-          "GRAFANA_URL": "Endereço do Grafana",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Token do service account"
-        }
+        "needs": "Uma conta no Grafana. Entre no navegador depois de clicar em Conectar. Grafana Cloud. Para o seu próprio Grafana, use Integração própria."
       },
       "zh-Hans": {
         "description": "通过 Grafana 官方 MCP 服务器处理 Grafana 的仪表板、告警、数据源和查询。",
@@ -3011,11 +2969,7 @@
           "查询 Prometheus 和 Loki",
           "查看数据源"
         ],
-        "needs": "Grafana（云端或自建）以及一个服务账号（service account）令牌。如只做读取，请只给该令牌 Viewer 角色。",
-        "labels": {
-          "GRAFANA_URL": "Grafana 地址",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "服务账号令牌"
-        }
+        "needs": "一个 Grafana 账号。点击“连接”后在浏览器中登录。 适用于 Grafana Cloud。自建的 Grafana 请使用自定义集成。"
       }
     }
   },
@@ -4894,23 +4848,11 @@
       "Смотреть и читать глоссарии",
       "Показывать поддерживаемые языки и стили письма"
     ],
-    "needs_en": "A DeepL API key from deepl.com. The README does not say whether there is a free plan; the plans are on that site. Node.js for npx.",
-    "needs_ru": "Ключ DeepL API с deepl.com. В README не сказано, есть ли бесплатный тариф; тарифы — на том же сайте. Node.js для npx.",
-    "kind": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "deepl-mcp-server@1.3.13"
-    ],
-    "env_keys": [
-      {
-        "key": "DEEPL_API_KEY",
-        "label_en": "DeepL API key",
-        "label_ru": "Ключ DeepL API",
-        "secret": true,
-        "value_template": "{secret}"
-      }
-    ],
+    "needs_en": "A DeepL account. Sign in in the browser after you press Connect. A DeepL Pro subscription is needed.",
+    "needs_ru": "Аккаунт DeepL: войдите в браузере после нажатия «Подключить». Нужна подписка DeepL Pro.",
+    "kind": "http",
+    "url": "https://mcp.deepl.com/v1/mcp",
+    "auth": "oauth",
     "docs_url": "https://github.com/DeepL/deepl-mcp-server",
     "icon": "deepl",
     "accent": "#5B9BD5",
@@ -4924,10 +4866,7 @@
           "Glossare anzeigen und lesen",
           "Unterstützte Sprachen und Schreibstile anzeigen"
         ],
-        "needs": "Ein DeepL-API-Schlüssel von deepl.com. Die README sagt nicht, ob es einen kostenlosen Tarif gibt; die Tarife stehen dort. Node.js für npx.",
-        "labels": {
-          "DEEPL_API_KEY": "DeepL-API-Schlüssel"
-        }
+        "needs": "Ein DeepL-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an. Ein DeepL-Pro-Abo ist nötig."
       },
       "es": {
         "description": "Traducción, reformulación, glosarios y reglas de estilo en DeepL, mediante el servidor MCP oficial de DeepL.",
@@ -4938,10 +4877,7 @@
           "Ver y leer glosarios",
           "Mostrar los idiomas y estilos de escritura compatibles"
         ],
-        "needs": "Una clave de la API de DeepL de deepl.com. El README no indica si hay un plan gratuito; los planes están en esa web. Node.js para npx.",
-        "labels": {
-          "DEEPL_API_KEY": "Clave de la API de DeepL"
-        }
+        "needs": "Una cuenta de DeepL. Inicia sesión en el navegador después de pulsar Conectar. Se necesita una suscripción de DeepL Pro."
       },
       "fr": {
         "description": "Traduction, reformulation, glossaires et règles de style dans DeepL, via le serveur MCP officiel de DeepL.",
@@ -4952,10 +4888,7 @@
           "Lister et lire les glossaires",
           "Afficher les langues et styles d'écriture pris en charge"
         ],
-        "needs": "Une clé d'API DeepL depuis deepl.com. Le README ne dit pas s'il existe une offre gratuite ; les forfaits sont sur ce site. Node.js pour npx.",
-        "labels": {
-          "DEEPL_API_KEY": "Clé d'API DeepL"
-        }
+        "needs": "Un compte DeepL. Connectez-vous dans le navigateur après avoir cliqué sur Connecter. Un abonnement DeepL Pro est nécessaire."
       },
       "ja": {
         "description": "DeepL の翻訳、言い換え、用語集、文体ルールを、DeepL 公式の MCP サーバー経由で利用できます。",
@@ -4966,10 +4899,7 @@
           "用語集を一覧表示して読む",
           "対応言語と文章スタイルを表示する"
         ],
-        "needs": "deepl.com で取得した DeepL API キー。README には無料プランがあるかの記載がないため、プランは同サイトで確認してください。npx 用の Node.js。",
-        "labels": {
-          "DEEPL_API_KEY": "DeepL API キー"
-        }
+        "needs": "DeepL のアカウント。「接続」を押したあと、ブラウザでサインインしてください。 DeepL Pro のサブスクリプションが必要です。"
       },
       "ko": {
         "description": "DeepL의 번역, 문장 다듬기, 용어집, 문체 규칙을 DeepL 공식 MCP 서버로 사용해요.",
@@ -4980,10 +4910,7 @@
           "용어집 목록 보기와 읽기",
           "지원 언어와 글쓰기 스타일 보기"
         ],
-        "needs": "deepl.com에서 발급받은 DeepL API 키. README에는 무료 요금제 여부가 없으니 요금제는 해당 사이트에서 확인하세요. npx용 Node.js.",
-        "labels": {
-          "DEEPL_API_KEY": "DeepL API 키"
-        }
+        "needs": "DeepL 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요. DeepL Pro 구독이 필요해요."
       },
       "pt-BR": {
         "description": "Tradução, reescrita, glossários e regras de estilo no DeepL, pelo servidor MCP oficial do DeepL.",
@@ -4994,10 +4921,7 @@
           "Listar e ler glossários",
           "Mostrar idiomas e estilos de escrita disponíveis"
         ],
-        "needs": "Uma chave da API do DeepL, obtida em deepl.com. O README não diz se há plano gratuito; os planos estão nesse site. Node.js para o npx.",
-        "labels": {
-          "DEEPL_API_KEY": "Chave da API do DeepL"
-        }
+        "needs": "Uma conta no DeepL. Entre no navegador depois de clicar em Conectar. É preciso uma assinatura do DeepL Pro."
       },
       "zh-Hans": {
         "description": "DeepL 的翻译、改写、术语表和风格规则，通过 DeepL 官方 MCP 服务器提供。",
@@ -5008,10 +4932,7 @@
           "列出并读取术语表",
           "显示支持的语言和写作风格"
         ],
-        "needs": "在 deepl.com 获取的 DeepL API 密钥。README 没有说明是否有免费套餐，请在该网站查看套餐。npx 需要 Node.js。",
-        "labels": {
-          "DEEPL_API_KEY": "DeepL API 密钥"
-        }
+        "needs": "一个 DeepL 账号。点击“连接”后在浏览器中登录。 需要 DeepL Pro 订阅。"
       }
     }
   },
@@ -7114,6 +7035,108 @@
           "访问范围限于你的 PayPal 账号权限"
         ],
         "needs": "一个 PayPal 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "monday",
+    "name": "monday.com",
+    "category": "productivity",
+    "publisher": "monday.com",
+    "official": true,
+    "homepage": "https://monday.com",
+    "description_en": "Boards, items and updates in monday.com, through monday.com's MCP server.",
+    "description_ru": "Доски, элементы и обновления в monday.com через MCP-сервер monday.com.",
+    "long_en": "monday.com's MCP server lets an agent read your boards and items and update them. For example: list the late items on a board, or add an update to an item.",
+    "long_ru": "MCP-сервер monday.com позволяет агенту читать ваши доски и элементы и обновлять их. Например: показать просроченные элементы на доске или добавить обновление к элементу.",
+    "abilities_en": [
+      "Find and read boards and items",
+      "Create and update items",
+      "Access limited to the boards your account can see"
+    ],
+    "abilities_ru": [
+      "Находить и читать доски и элементы",
+      "Создавать и обновлять элементы",
+      "Доступ только к доскам, которые видит ваш аккаунт"
+    ],
+    "needs_en": "A monday.com account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт monday.com: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.monday.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developer.monday.com/api-reference/docs/mondaycom-mcp",
+    "icon": "monday",
+    "accent": "#6161FF",
+    "l10n": {
+      "de": {
+        "description": "Boards, Elemente und Updates in monday.com, über den MCP-Server von monday.com.",
+        "long": "Der MCP-Server von monday.com erlaubt dem Agenten, Ihre Boards und Elemente zu lesen und zu ändern. Zum Beispiel: die überfälligen Elemente eines Boards anzeigen oder einem Element ein Update hinzufügen.",
+        "abilities": [
+          "Boards und Elemente finden und lesen",
+          "Elemente anlegen und ändern",
+          "Zugriff nur auf Boards, die Ihr Konto sieht"
+        ],
+        "needs": "Ein monday.com-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Tableros, elementos y actualizaciones en monday.com, a través del servidor MCP de monday.com.",
+        "long": "El servidor MCP de monday.com permite al agente leer y actualizar tus tableros y elementos. Por ejemplo: listar los elementos atrasados de un tablero, o añadir una actualización a un elemento.",
+        "abilities": [
+          "Buscar y leer tableros y elementos",
+          "Crear y actualizar elementos",
+          "Acceso solo a los tableros que ve tu cuenta"
+        ],
+        "needs": "Una cuenta de monday.com. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Tableaux, éléments et mises à jour dans monday.com, via le serveur MCP de monday.com.",
+        "long": "Le serveur MCP de monday.com permet à l'agent de lire et de mettre à jour vos tableaux et éléments. Par exemple : lister les éléments en retard d'un tableau, ou ajouter une mise à jour à un élément.",
+        "abilities": [
+          "Trouver et lire tableaux et éléments",
+          "Créer et mettre à jour des éléments",
+          "Accès limité aux tableaux visibles par votre compte"
+        ],
+        "needs": "Un compte monday.com. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "monday.com の MCP サーバーで、ボード、アイテム、更新を扱います。",
+        "long": "monday.com の MCP サーバーを使うと、エージェントがボードとアイテムを読み取り、更新できます。例: ボード上の期限切れのアイテムを一覧にする、アイテムに更新を追加する。",
+        "abilities": [
+          "ボードとアイテムを探して読む",
+          "アイテムを作成し、更新する",
+          "アカウントから見えるボードだけにアクセスする"
+        ],
+        "needs": "monday.com のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "monday.com의 MCP 서버로 보드, 항목, 업데이트를 다뤄요.",
+        "long": "monday.com MCP 서버를 쓰면 에이전트가 보드와 항목을 읽고 업데이트할 수 있어요. 예를 들어 보드에서 기한이 지난 항목을 보거나, 항목에 업데이트를 남길 수 있어요.",
+        "abilities": [
+          "보드와 항목 찾기와 읽기",
+          "항목 만들기와 업데이트",
+          "내 계정이 볼 수 있는 보드에만 접근"
+        ],
+        "needs": "monday.com 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Quadros, itens e atualizações no monday.com, pelo servidor MCP do monday.com.",
+        "long": "O servidor MCP do monday.com permite que o agente leia e atualize seus quadros e itens. Por exemplo: listar os itens atrasados de um quadro, ou adicionar uma atualização a um item.",
+        "abilities": [
+          "Encontrar e ler quadros e itens",
+          "Criar e atualizar itens",
+          "Acesso apenas aos quadros que a sua conta vê"
+        ],
+        "needs": "Uma conta no monday.com. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 monday.com 的 MCP 服务器处理 monday.com 中的看板、项目和更新。",
+        "long": "monday.com 的 MCP 服务器让智能体读取并更新你的看板和项目。例如：列出某看板上逾期的项目，或为某个项目添加更新。",
+        "abilities": [
+          "查找并读取看板和项目",
+          "创建并更新项目",
+          "只能访问你的账号可见的看板"
+        ],
+        "needs": "一个 monday.com 账号。点击“连接”后在浏览器中登录。"
       }
     }
   }

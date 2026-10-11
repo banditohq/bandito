@@ -1813,8 +1813,8 @@ mod tests {
             &app,
             "integrations.add",
             json!({
-                "name": "grafana", "kind": "stdio", "command": "uvx", "args": ["mcp-grafana==1.0.0"],
-                "env": { "GRAFANA_TOKEN": "secret:GRAFANA_TOKEN" }, "enabled": false
+                "name": "kagi", "kind": "stdio", "command": "uvx", "args": ["kagimcp==1.0.0"],
+                "env": { "KAGI_API_KEY": "secret:KAGI_API_KEY" }, "enabled": false
             }),
         )
         .await
@@ -1822,20 +1822,20 @@ mod tests {
         let id = made["id"].as_str().unwrap().to_string();
         let list = owner(&app, "integrations.list", json!({})).await.unwrap();
         assert_eq!(
-            listed(&list, "grafana")["template_update"],
-            json!({"from": "1.0.0", "to": "2.0.2"})
+            listed(&list, "kagi")["template_update"],
+            json!({"from": "1.0.0", "to": "1.0.2"})
         );
 
         let done = owner(&app, "integrations.update_from_template", json!({ "id": id }))
             .await
             .unwrap();
-        assert_eq!(done["args"], json!(["mcp-grafana==2.0.2"]));
+        assert_eq!(done["args"], json!(["kagimcp==1.0.2"]));
         assert_eq!(done["command"], "uvx");
-        assert_eq!(done["env"], json!({"GRAFANA_TOKEN": "secret:GRAFANA_TOKEN"}));
+        assert_eq!(done["env"], json!({"KAGI_API_KEY": "secret:KAGI_API_KEY"}));
         assert_eq!(done["enabled"], false);
         let list = owner(&app, "integrations.list", json!({})).await.unwrap();
         assert!(
-            listed(&list, "grafana").get("template_update").is_none(),
+            listed(&list, "kagi").get("template_update").is_none(),
             "up to date: no field"
         );
         let again = owner(&app, "integrations.update_from_template", json!({ "id": id }))
