@@ -4,7 +4,7 @@
 //! Secret values never go into an argument list: Claude gets them in its owner-only `--mcp-config` file, Grok
 //! in the ACP request on stdin, and Codex through environment variables that its `env_http_headers` names.
 
-use crate::store::{Integration, IntegrationKind, check_name};
+use crate::store::{Integration, IntegrationAuth, IntegrationKind, check_name};
 use anyhow::{Result, bail};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, HashMap};
@@ -410,6 +410,16 @@ pub fn resolve(list: &[&Integration], secrets: &HashMap<String, String>) -> Vec<
                 },
                 IntegrationKind::Http => {
                     let mut headers = pairs(&i.headers)?;
+                    if i.auth == IntegrationAuth::Device
+                        && !crate::mcp_oauth::device::server_allowed(i.url.as_deref().unwrap_or_default())
+                    {
+                        // The token of a code sign-in is for the provider's server only: at any other address it stays here.
+                        tracing::warn!(
+                            integration = i.name,
+                            "integration skipped: its address is not the sign-in's service"
+                        );
+                        return None;
+                    }
                     if i.auth.holds_token() {
                         // The token is the daemon's, not a header the owner wrote: it replaces any `Authorization`.
                         let Some(token) = secrets.get(&oauth_access_name(&i.id)) else {
@@ -917,6 +927,22 @@ mod tests {
             "equal values share the key"
         );
         assert!(cfg.env.iter().all(|(k, _)| k != "PATH"));
+    }
+
+    #[test]
+    fn a_code_sign_in_token_goes_only_to_the_providers_server() {
+        let mut row = http("gh", &[]);
+        row.auth = IntegrationAuth::Device;
+        let mut map = secrets();
+        map.insert(oauth_access_name(&row.id), "at-device-token".into());
+        // The address is not the provider's MCP server: the token would leave for another host, so none is sent.
+        assert!(resolve(&[&row], &map).is_empty());
+        row.url = Some("https://api.githubcopilot.com/mcp/".into());
+        let servers = resolve(&[&row], &map);
+        match &servers[0].transport {
+            Transport::Http { headers, .. } => assert_eq!(headers[0].value, "Bearer at-device-token"),
+            _ => panic!(),
+        }
     }
 
     #[test]
