@@ -66,9 +66,7 @@
 "agentSheet.advancedFallback" = "대체: %1$@";
 "agentSheet.apiKey" = "API 키";
 "agentSheet.apiKeyHint" = "모든 모델, 토큰당 과금. 곧 출시돼요.";
-"agentSheet.approvals" = "승인";
-"agentSheet.approvalsHint" = "%1$@ 밖의 push, 배포, 삭제, 쓰기는 승인을 기다려요. 나머지는 스스로 처리해요.";
-"agentSheet.askAbout" = "확인을 요청할 작업";
+"agentSheet.askAbout" = "허락 요청";
 "agentSheet.autoName" = "에이전트 %1$@";
 "agentSheet.avatar" = "아바타";
 "agentSheet.cancel" = "취소";
@@ -199,9 +197,12 @@
 "approval.why.sudo" = "관리자 권한으로 실행해요";
 "approval.why.yourRule" = "설정한 규칙: %1$@";
 "approval.withdrawn" = "철회됨";
-"approvalMode.always" = "전부";
-"approvalMode.never" = "없음";
-"approvalMode.risky" = "위험한 작업만";
+"approvalMode.always" = "모든 작업 확인";
+"approvalMode.hint.always" = "모든 명령과 서비스 안의 작업 전에 물어봐요";
+"approvalMode.hint.never" = "모든 것을 스스로 처리해요. 에이전트를 신뢰한다면 적합해요";
+"approvalMode.hint.risky" = "push, 배포, 삭제, 폴더 밖 쓰기, 서비스가 확인을 요구하는 작업에 대해 물어봐요";
+"approvalMode.never" = "아무것도 확인 안 함";
+"approvalMode.risky" = "위험한 작업만 확인";
 "avatar.allEmoji" = "모든 이모지";
 "avatar.color" = "배경 색";
 "avatar.colorAria" = "아바타 색상";
@@ -733,7 +734,7 @@
 "inspector.aboutAgent" = "에이전트 정보";
 "inspector.addRole" = "역할 추가";
 "inspector.addSchedule" = "일정 추가";
-"inspector.approvals" = "승인";
+"inspector.approvals" = "허락 요청";
 "inspector.askRisky" = "위험한 작업은 확인";
 "inspector.avatar.help" = "아바타 편집: 사진, 이모지, 색, 얼굴";
 "inspector.cronLabel" = "일정 (cron)";

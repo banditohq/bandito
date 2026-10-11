@@ -8,10 +8,10 @@ actions wait for your yes. Read the limits below too: this is a safety net, not 
 
 <!-- id: sec-modes; covers: settings:approvals -->
 Each agent has one mode that decides when it asks you. The mode is set when the agent is created and can be changed later.
-Где: Team → agent → Agent details (⌘I) → Details → Approvals (Одобрения); New agent sheet → Ask me about (Что спрашивать у вас)
-1. Risky only (Только рискованное), the default: routine work goes on by itself; actions in the risky list below are asked about.
-2. Everything (Всё подряд): every tool call that the CLI asks about goes to you.
-3. Nothing (Ничего): the agent runs without asking. Use it only for a sandbox you do not care about.
+Где: Team → agent → Agent details (⌘I) → Details → Ask for permission (Спрашивать разрешение); New agent sheet → Ask for permission (Спрашивать разрешение)
+1. Only the risky ones (Только о рискованном), the default: routine work goes on by itself; actions in the risky list below are asked about.
+2. About everything (Обо всём): every tool call that the CLI asks about goes to you.
+3. About nothing (Ни о чём): the agent runs without asking. Use it only for a sandbox you do not care about.
 
 ## Approval card (Needs you)
 
@@ -98,9 +98,9 @@ A sandbox is a place where an agent cannot reach your files, network or other ag
 
 <!-- id: sec-limits; covers: -->
 The risky checks read the command line. They stop a mistake. They do not stop an agent that tries to get around them: a script, an interpreter or a link can reach files that the check does not follow. A real boundary is a separate user or a container.
-Где: Team → agent → Agent details → Details → Approvals (Одобрения)
+Где: Team → agent → Agent details → Details → Ask for permission (Спрашивать разрешение)
 1. Keep the agents' rights small: a separate user on the server for each agent, and no keys you do not need.
-2. Keep Risky only (Только рискованное) or Everything (Всё подряд) on for agents that touch production.
+2. Keep Only the risky ones (Только о рискованном) or About everything (Обо всём) on for agents that touch production.
 3. The checks look at the actions the agent asks for: the tool, the command text and the paths. They do not look inside a program the agent wrote and runs (a script, `npm test`, a build script, a git hook). Such a program can read whatever the server user can read. For real isolation use a container.
 ## Touch ID and auto-deny (planned)
 

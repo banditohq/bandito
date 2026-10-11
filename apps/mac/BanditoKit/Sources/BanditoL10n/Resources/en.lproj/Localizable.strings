@@ -66,9 +66,7 @@
 "agentSheet.advancedFallback" = "Fallback: %1$@";
 "agentSheet.apiKey" = "API key";
 "agentSheet.apiKeyHint" = "Any model, pay per token. Coming soon.";
-"agentSheet.approvals" = "Approvals";
-"agentSheet.approvalsHint" = "Pushes, deploys, deletes and writes outside %1$@ wait for your go-ahead. It handles the rest on its own.";
-"agentSheet.askAbout" = "Ask me about";
+"agentSheet.askAbout" = "Ask for permission";
 "agentSheet.autoName" = "Agent %1$@";
 "agentSheet.avatar" = "Avatar";
 "agentSheet.cancel" = "Cancel";
@@ -199,9 +197,12 @@
 "approval.why.sudo" = "runs as administrator";
 "approval.why.yourRule" = "your rule: %1$@";
 "approval.withdrawn" = "Withdrawn";
-"approvalMode.always" = "Everything";
-"approvalMode.never" = "Nothing";
-"approvalMode.risky" = "Risky only";
+"approvalMode.always" = "About everything";
+"approvalMode.hint.always" = "Asks before every command and every action in a service";
+"approvalMode.hint.never" = "Does everything on its own. Fits if you trust the agent";
+"approvalMode.hint.risky" = "Asks about pushes, deploys, deletes, writes outside the folder, and actions a service asks you to confirm";
+"approvalMode.never" = "About nothing";
+"approvalMode.risky" = "Only the risky ones";
 "avatar.allEmoji" = "All emoji";
 "avatar.color" = "Background";
 "avatar.colorAria" = "Avatar color";
@@ -733,7 +734,7 @@
 "inspector.aboutAgent" = "Agent info";
 "inspector.addRole" = "Add role";
 "inspector.addSchedule" = "Add schedule";
-"inspector.approvals" = "Approvals";
+"inspector.approvals" = "Ask for permission";
 "inspector.askRisky" = "Ask for risky actions";
 "inspector.avatar.help" = "Edit the avatar: picture, emoji, color, face";
 "inspector.cronLabel" = "Schedule (cron)";

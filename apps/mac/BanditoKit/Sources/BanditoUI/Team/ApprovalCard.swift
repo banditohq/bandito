@@ -70,31 +70,24 @@ struct ApprovalCard: View {
                 .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
-            HStack(spacing: 10) {
-                Button {
-                    onDecide(.deny, false)
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(L10n.Approval.deny)
-                        KeyCap(text: "esc")
+            // Wide: the checkbox sits beside the buttons. Narrow: the checkbox takes a line of its own above them.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    denyButton
+                    approveButton
+                    Spacer(minLength: 8)
+                    rememberBox
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    rememberBox
+                    ActionRow {
+                        denyButton
+                        approveButton
                     }
                 }
-                .banditoButton(.quiet())
-
-                Button {
-                    onDecide(.allow, remember)
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(L10n.Approval.approve)
-                        KeyCap(text: "⌘↵")
-                    }
-                }
-                .banditoButton(.signal())
-
-                Spacer(minLength: 8)
-
-                CheckBoxRow(isOn: $remember, label: L10n.Approval.alwaysHere)
             }
+            // ViewThatFits takes all the height on offer; the card is only as tall as its chosen variant.
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
         .background(
@@ -114,6 +107,36 @@ struct ApprovalCard: View {
             in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
         .shadow(color: Color.Bandito.signal.opacity(0.3), radius: 24, x: 0, y: 14)
+    }
+
+    private var denyButton: some View {
+        Button {
+            onDecide(.deny, false)
+        } label: {
+            HStack(spacing: 8) {
+                Text(L10n.Approval.deny)
+                KeyCap(text: "esc")
+            }
+        }
+        .banditoButton(.quiet())
+    }
+
+    private var approveButton: some View {
+        Button {
+            onDecide(.allow, remember)
+        } label: {
+            HStack(spacing: 8) {
+                Text(L10n.Approval.approve)
+                KeyCap(text: "⌘↵")
+            }
+        }
+        .banditoButton(.signal())
+    }
+
+    /// The "always allow here" checkbox. Its label is one line in both layouts: it never breaks letter by letter.
+    private var rememberBox: some View {
+        CheckBoxRow(isOn: $remember, label: L10n.Approval.alwaysHere)
+            .fixedSize(horizontal: true, vertical: false)
     }
 
     private var commandBlock: some View {

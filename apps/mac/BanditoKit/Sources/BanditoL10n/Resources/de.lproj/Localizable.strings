@@ -66,9 +66,7 @@
 "agentSheet.advancedFallback" = "Ersatz: %1$@";
 "agentSheet.apiKey" = "API-Schlüssel";
 "agentSheet.apiKeyHint" = "Beliebiges Modell, Bezahlung pro Token. Kommt bald.";
-"agentSheet.approvals" = "Freigaben";
-"agentSheet.approvalsHint" = "Pushes, Deployments, Löschungen und Schreibzugriffe außerhalb von %1$@ warten auf Ihr Okay. Den Rest erledigt er selbst.";
-"agentSheet.askAbout" = "Nachfragen bei";
+"agentSheet.askAbout" = "Um Erlaubnis fragen";
 "agentSheet.autoName" = "Agent %1$@";
 "agentSheet.avatar" = "Avatar";
 "agentSheet.cancel" = "Abbrechen";
@@ -199,9 +197,12 @@
 "approval.why.sudo" = "läuft als Administrator";
 "approval.why.yourRule" = "Ihre Regel: %1$@";
 "approval.withdrawn" = "Zurückgezogen";
-"approvalMode.always" = "Alles";
-"approvalMode.never" = "Nichts";
-"approvalMode.risky" = "Nur Riskantes";
+"approvalMode.always" = "Bei allem";
+"approvalMode.hint.always" = "Fragt vor jedem Befehl und jeder Aktion in einem Dienst";
+"approvalMode.hint.never" = "Erledigt alles selbst. Passt, wenn Sie dem Agenten vertrauen";
+"approvalMode.hint.risky" = "Fragt bei Pushes, Deployments, Löschungen, Schreibzugriffen außerhalb des Ordners und bei Aktionen, die ein Dienst zur Bestätigung vorlegt";
+"approvalMode.never" = "Bei nichts";
+"approvalMode.risky" = "Nur bei Riskantem";
 "avatar.allEmoji" = "Alle Emoji";
 "avatar.color" = "Hintergrund";
 "avatar.colorAria" = "Avatarfarbe";
@@ -733,7 +734,7 @@
 "inspector.aboutAgent" = "Agenteninfo";
 "inspector.addRole" = "Rolle hinzufügen";
 "inspector.addSchedule" = "Zeitplan hinzufügen";
-"inspector.approvals" = "Freigaben";
+"inspector.approvals" = "Um Erlaubnis fragen";
 "inspector.askRisky" = "Bei Riskantem nachfragen";
 "inspector.avatar.help" = "Avatar bearbeiten: Bild, Emoji, Farbe, Gesicht";
 "inspector.cronLabel" = "Zeitplan (cron)";

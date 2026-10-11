@@ -66,9 +66,7 @@
 "agentSheet.advancedFallback" = "代替: %1$@";
 "agentSheet.apiKey" = "API キー";
 "agentSheet.apiKeyHint" = "どのモデルでも、トークン単位の従量課金。近日公開。";
-"agentSheet.approvals" = "承認";
-"agentSheet.approvalsHint" = "%1$@ の外への push、デプロイ、削除、書き込みは、あなたの許可を待ちます。それ以外は自分で処理します。";
-"agentSheet.askAbout" = "確認を求める内容";
+"agentSheet.askAbout" = "許可を求める";
 "agentSheet.autoName" = "エージェント %1$@";
 "agentSheet.avatar" = "アバター";
 "agentSheet.cancel" = "キャンセル";
@@ -199,9 +197,12 @@
 "approval.why.sudo" = "管理者として実行されます";
 "approval.why.yourRule" = "あなたのルール: %1$@";
 "approval.withdrawn" = "取り下げ済み";
-"approvalMode.always" = "すべて";
-"approvalMode.never" = "なし";
-"approvalMode.risky" = "危険な操作のみ";
+"approvalMode.always" = "すべて確認";
+"approvalMode.hint.always" = "コマンドやサービス内のすべての操作の前に確認します";
+"approvalMode.hint.never" = "すべて自動で行います。エージェントを信頼できる場合に向いています";
+"approvalMode.hint.risky" = "push、デプロイ、削除、フォルダ外への書き込み、サービスが確認を求める操作について確認します";
+"approvalMode.never" = "何も確認しない";
+"approvalMode.risky" = "危険な操作だけ確認";
 "avatar.allEmoji" = "すべての絵文字";
 "avatar.color" = "背景色";
 "avatar.colorAria" = "アバターの色";
@@ -733,7 +734,7 @@
 "inspector.aboutAgent" = "エージェント情報";
 "inspector.addRole" = "役割を追加";
 "inspector.addSchedule" = "スケジュールを追加";
-"inspector.approvals" = "承認";
+"inspector.approvals" = "許可を求める";
 "inspector.askRisky" = "危険な操作は確認";
 "inspector.avatar.help" = "アバターを編集：画像、絵文字、色、顔";
 "inspector.cronLabel" = "スケジュール（cron）";

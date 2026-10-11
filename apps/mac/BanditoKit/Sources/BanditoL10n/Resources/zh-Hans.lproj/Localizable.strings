@@ -66,9 +66,7 @@
 "agentSheet.advancedFallback" = "备用：%1$@";
 "agentSheet.apiKey" = "API 密钥";
 "agentSheet.apiKeyHint" = "任意模型，按令牌付费。即将推出。";
-"agentSheet.approvals" = "审批";
-"agentSheet.approvalsHint" = "推送、部署、删除以及 %1$@ 之外的写入都会等待确认。其余操作由它自行完成。";
-"agentSheet.askAbout" = "需要我确认的操作";
+"agentSheet.askAbout" = "请求许可";
 "agentSheet.autoName" = "智能体 %1$@";
 "agentSheet.avatar" = "头像";
 "agentSheet.cancel" = "取消";
@@ -199,9 +197,12 @@
 "approval.why.sudo" = "以管理员身份运行";
 "approval.why.yourRule" = "自定义规则：%1$@";
 "approval.withdrawn" = "已撤回";
-"approvalMode.always" = "全部";
-"approvalMode.never" = "无";
-"approvalMode.risky" = "仅危险操作";
+"approvalMode.always" = "所有操作都询问";
+"approvalMode.hint.always" = "每条命令和服务中的每个操作前都会询问";
+"approvalMode.hint.never" = "全部自动完成。适合您信任该智能体的情况";
+"approvalMode.hint.risky" = "对推送、部署、删除、写入文件夹之外的内容，以及服务要求确认的操作进行询问";
+"approvalMode.never" = "从不询问";
+"approvalMode.risky" = "仅询问危险操作";
 "avatar.allEmoji" = "所有表情符号";
 "avatar.color" = "背景颜色";
 "avatar.colorAria" = "头像颜色";
@@ -733,7 +734,7 @@
 "inspector.aboutAgent" = "代理信息";
 "inspector.addRole" = "添加角色";
 "inspector.addSchedule" = "添加计划";
-"inspector.approvals" = "审批";
+"inspector.approvals" = "请求许可";
 "inspector.askRisky" = "危险操作需确认";
 "inspector.avatar.help" = "编辑头像：图片、表情、颜色、脸";
 "inspector.cronLabel" = "计划（cron）";
