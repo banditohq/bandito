@@ -169,10 +169,6 @@ public enum HangMonitor {
                     } ?? 0
                     let slide = busy < wall
                     var hang = shared.tracker.sleep(at: at)
-                    if wall > 100_000_000 {
-                        let atWake = shared.sheetsAtWake
-                        log.notice("TMPSTRETCH wall \(Int(wall / 1_000_000)) cpu \(Int(used / 1_000_000)) busy \(Int(busy / 1_000_000)) sheets \(atWake)->\(sheets)")
-                    }
                     if slide {
                         // A sheet slid: its waiting in AppKit's loop is not work, and not a freeze.
                         shared.slides += 1

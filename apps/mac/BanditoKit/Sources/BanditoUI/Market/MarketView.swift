@@ -53,6 +53,8 @@ struct MarketView: View {
     @State private var columns = 3
     /// The entries and the page for the last inputs, so the body does not rebuild them on every pass.
     @State private var memo = MarketListMemo()
+    /// The shelves of All, kept apart from the page in front (see `scrollArea`).
+    @State private var shelvesMemo = MarketListMemo()
 
     var body: some View {
         Group {
@@ -351,32 +353,51 @@ struct MarketView: View {
     /// margin; the margin is inside the content. The columns of a grid come from its width. The view is made again when
     /// the page or its filter changes, so a category's page opens at its top.
     private func scrollArea(supported: Bool, entries: [MarketEntry]) -> some View {
-        let recommendation = tab == .services && supported ? recommendationContext : nil
+        let services = tab == .services && supported
+        let recommendation = services ? recommendationContext : nil
+        let recommended = recommendation?.items.count ?? 0
         let content: MarketContent? =
-            tab == .services && supported
-            ? memo.content(
-                entries, filter: router.marketFilter, query: search.text, recommended: recommendation?.items.count ?? 0)
-            : nil
-        return ScrollView {
-            if let content {
-                servicesContent(content, recommendation: recommendation)
-            } else {
-                VStack(alignment: .leading, spacing: 18) {
-                    if tab == .bots {
-                        botsContent
-                    } else if tab == .skills {
-                        skillsContent
+            services
+            ? memo.content(entries, filter: router.marketFilter, query: search.text, recommended: recommended) : nil
+        let onShelves = if case .shelves? = content { true } else { false }
+        return ZStack(alignment: .top) {
+            if services {
+                // The shelves stay built under a category's page or a search: going back shows them at once, where they
+                // were left (building them again was 100 ms and more). Out of sight they take no height and no clicks.
+                ScrollView {
+                    servicesContent(
+                        shelvesMemo.content(entries, filter: .all, query: "", recommended: recommended),
+                        recommendation: recommendation)
+                }
+                .scrollIndicators(.automatic)
+                .frame(maxHeight: onShelves ? .infinity : 0, alignment: .top)
+                .opacity(onShelves ? 1 : 0)
+                .allowsHitTesting(onShelves)
+                .accessibilityHidden(!onShelves)
+            }
+            if !onShelves {
+                ScrollView {
+                    if let content {
+                        servicesContent(content, recommendation: recommendation)
                     } else {
-                        ServerUnavailable(server: server)
+                        VStack(alignment: .leading, spacing: 18) {
+                            if tab == .bots {
+                                botsContent
+                            } else if tab == .skills {
+                                skillsContent
+                            } else {
+                                ServerUnavailable(server: server)
+                            }
+                        }
+                        .padding(.top, MarketShelfMetrics.topInset)
+                        .padding(.bottom, 24)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
-                .padding(.top, MarketShelfMetrics.topInset)
-                .padding(.bottom, 24)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .id(pageKey)
+                .scrollIndicators(.automatic)
             }
         }
-        .id(pageKey)
-        .scrollIndicators(.automatic)
         .environment(\.marketColumns, columns)
         .onGeometryChange(for: Int.self) { MarketGridLayout.columns(scrollWidth: $0.size.width) } action: { new in
             if columns != new { columns = new }

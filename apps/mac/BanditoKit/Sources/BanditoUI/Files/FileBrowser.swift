@@ -107,12 +107,10 @@ struct FileBrowser: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: BrowserWidthKey.self, value: proxy.size.width)
-            }
-        )
-        .onPreferenceChange(BrowserWidthKey.self) { browserWidth = $0 }
+        // The width, written only when it changes (a preference read through the whole list cost at every layout).
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            if browserWidth != width { browserWidth = width }
+        }
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: panelShown)
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: model.upload != nil)
         .task(id: requested) {
@@ -491,15 +489,6 @@ enum NameSheet: Identifiable, Hashable {
     case folder, file
 
     var id: Self { self }
-}
-
-/// Width of the browser, read from the layout so the details panel can follow the window.
-private struct BrowserWidthKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
 }
 
 /// The toolbar of the browser, 52 pt high, items 32 pt high and centred: back and forward, the path trail,

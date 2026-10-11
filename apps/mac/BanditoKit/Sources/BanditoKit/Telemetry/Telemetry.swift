@@ -50,6 +50,9 @@ public final class Telemetry: @unchecked Sendable {
     }
 
     private let lock = NSLock()
+    /// The counts as last read or written, so a count does not decode them from the defaults again (each mode switch,
+    /// each screen counts one, on the main thread). Under `lock`.
+    private var counterCache: [String: [String: Int]]?
     private let defaults: UserDefaults
     private let http: HTTPClient
     private let baseURL: URL
@@ -89,7 +92,10 @@ public final class Telemetry: @unchecked Sendable {
         set {
             lock.withLock {
                 defaults.set(newValue, forKey: Key.statsEnabled)
-                if !newValue { defaults.removeObject(forKey: Key.counters) }
+                if !newValue {
+                    defaults.removeObject(forKey: Key.counters)
+                    counterCache = nil
+                }
             }
         }
     }
@@ -137,9 +143,14 @@ public final class Telemetry: @unchecked Sendable {
     }
 
     private func loadCounters() -> [String: [String: Int]] {
+        if let counterCache { return counterCache }
         guard let data = defaults.data(forKey: Key.counters),
             let all = try? JSONDecoder().decode([String: [String: Int]].self, from: data)
-        else { return [:] }
+        else {
+            counterCache = [:]
+            return [:]
+        }
+        counterCache = all
         return all
     }
 
@@ -148,6 +159,7 @@ public final class Telemetry: @unchecked Sendable {
         for day in kept.keys.sorted().dropLast(Self.maxDays) {
             kept[day] = nil
         }
+        counterCache = kept
         if kept.isEmpty {
             defaults.removeObject(forKey: Key.counters)
         } else if let data = try? JSONEncoder().encode(kept) {
@@ -205,6 +217,7 @@ public final class Telemetry: @unchecked Sendable {
         }
         lock.withLock {
             defaults.removeObject(forKey: Key.counters)
+            counterCache = nil
             defaults.set(UUID().uuidString.lowercased(), forKey: Key.installID)
         }
     }
