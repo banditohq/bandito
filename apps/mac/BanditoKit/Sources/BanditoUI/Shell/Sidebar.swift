@@ -16,6 +16,7 @@ struct Sidebar: View {
             ModeBar()
             ModeSidebarContent()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            UpdateBannerSlot()
             SidebarFooter()
         }
         .frame(width: Self.width)

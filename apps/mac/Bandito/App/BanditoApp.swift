@@ -36,6 +36,7 @@ struct BanditoApp: App {
                 .environment(demo)
                 .environment(onboarding)
                 .environment(accountHub)
+                .environment(updater.center)
                 .environment(\.focusMode, focusMode)
                 .task {
                     // Tab and arrow keys show the focus ring; a click hides it.
@@ -82,6 +83,7 @@ struct BanditoApp: App {
                 .environment(gestures)
                 .environment(demo)
                 .environment(accountHub)
+                .environment(updater.center)
                 .focusEffectDisabled()
         }
 

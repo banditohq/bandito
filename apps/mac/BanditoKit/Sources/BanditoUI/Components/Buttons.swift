@@ -1,14 +1,16 @@
 import BanditoDesign
 import SwiftUI
 
-/// Button size. `regular` matches the Mac mockups; `large` is for the main action of a dialog.
+/// Button size. `regular` matches the Mac mockups; `large` is for the main action of a dialog; `compact` is for a
+/// button inside a small card (the update banner in the sidebar).
 public enum BanditoButtonSize: Sendable {
-    case regular, large
+    case compact, regular, large
 }
 
 extension BanditoButtonSize {
     var height: CGFloat {
         switch self {
+        case .compact: 30
         case .regular: 38
         case .large: 46
         }
@@ -16,6 +18,7 @@ extension BanditoButtonSize {
 
     var fontSize: CGFloat {
         switch self {
+        case .compact: 12.5
         case .regular: 13.5
         case .large: 15
         }
@@ -23,6 +26,7 @@ extension BanditoButtonSize {
 
     var horizontalPadding: CGFloat {
         switch self {
+        case .compact: 14
         case .regular: 18
         case .large: 22
         }
