@@ -119,7 +119,10 @@ public enum OAuthLoopback {
 
     /// One line in a given language (the generated resources hold all nine; the page follows the browser, not the app).
     static func text(_ key: String, language: String) -> String {
-        let bundle = L10n.bundle.path(forResource: language, ofType: "lproj").flatMap(Bundle.init(path:)) ?? L10n.bundle
+        // The folder's name can differ in case from the code ("zh-hans.lproj" for "zh-Hans") depending on how the
+        // resources were built, so the bundle's own list of localizations is matched without case.
+        let name = L10n.bundle.localizations.first { $0.lowercased() == language.lowercased() } ?? language
+        let bundle = L10n.bundle.path(forResource: name, ofType: "lproj").flatMap(Bundle.init(path:)) ?? L10n.bundle
         return bundle.localizedString(forKey: key, value: nil, table: "Localizable")
     }
 
