@@ -59,13 +59,21 @@ pub enum IntegrationAuth {
     None,
     /// Signed in through the service's own page in the browser.
     Oauth,
+    /// Signed in with a code the person types on the service's page (OAuth Device Flow, `mcp_oauth/device.rs`).
+    Device,
 }
 
 impl IntegrationAuth {
+    /// Whether the daemon keeps the token of this sign-in in its secrets and sends it as `Authorization: Bearer`.
+    pub fn holds_token(self) -> bool {
+        matches!(self, Self::Oauth | Self::Device)
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
             Self::Oauth => "oauth",
+            Self::Device => "device",
         }
     }
 
@@ -73,6 +81,7 @@ impl IntegrationAuth {
         match s {
             "none" => Some(Self::None),
             "oauth" => Some(Self::Oauth),
+            "device" => Some(Self::Device),
             _ => None,
         }
     }

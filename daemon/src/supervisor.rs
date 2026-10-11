@@ -1291,7 +1291,7 @@ impl Actor {
         // The sign-in tokens this session starts with, to know later whether a renewal concerns it.
         let oauth_tokens: HashMap<String, String> = chosen
             .iter()
-            .filter(|i| i.auth == crate::store::IntegrationAuth::Oauth)
+            .filter(|i| i.auth.holds_token())
             .filter_map(|i| {
                 secret_map
                     .get(&crate::integrations::oauth_access_name(&i.id))

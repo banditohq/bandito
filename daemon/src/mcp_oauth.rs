@@ -1695,7 +1695,12 @@ async fn ready_within(store: &Arc<Store>, rows: &[&Integration], now: i64, wait:
         })
         .collect();
     let deadline = tokio::time::Instant::now() + wait;
-    let mut skipped = Vec::new();
+    // A sign-in with a code has no renewal: it is usable or the person signs in again.
+    let mut skipped: Vec<(String, bool)> = rows
+        .iter()
+        .filter(|r| r.auth == IntegrationAuth::Device && device::needs_sign_in(store, &r.id))
+        .map(|r| (r.id.clone(), true))
+        .collect();
     for (row, task) in tasks {
         match tokio::time::timeout_at(deadline, task).await {
             Ok(Ok(Ok(Outcome::NeedsLogin))) => skipped.push((row.id.clone(), true)),
@@ -1813,6 +1818,8 @@ pub async fn disconnect(store: &Store, row: &Integration, remove: bool) -> Resul
     forget_held(&row.id);
     Ok(revoked)
 }
+
+pub mod device;
 
 #[cfg(test)]
 pub(crate) mod fake;

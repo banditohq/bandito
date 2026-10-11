@@ -4,7 +4,7 @@
 //! Secret values never go into an argument list: Claude gets them in its owner-only `--mcp-config` file, Grok
 //! in the ACP request on stdin, and Codex through environment variables that its `env_http_headers` names.
 
-use crate::store::{Integration, IntegrationAuth, IntegrationKind, check_name};
+use crate::store::{Integration, IntegrationKind, check_name};
 use anyhow::{Result, bail};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, HashMap};
@@ -56,10 +56,24 @@ pub struct CatalogEntry {
     pub url_hint: Option<String>,
     pub headers_keys: Option<Vec<CatalogKey>>,
     /// `oauth` for a service that signs in in the browser (see docs/ARCHITECTURE.md#integrations): Connect starts the
-    /// sign-in, and the entry holds no header keys.
+    /// sign-in, and the entry holds no header keys. `device` for one that signs in with a code (then `device` names
+    /// the provider).
     pub auth: Option<String>,
+    /// For `auth: "device"`: how the code sign-in runs (see `mcp_oauth/device.rs`, which holds the same values).
+    pub device: Option<CatalogDevice>,
     /// The texts for the other app languages, by language code (see [`CATALOG_LANGUAGES`]).
     pub l10n: Option<BTreeMap<String, CatalogTranslation>>,
+}
+
+/// The `device` field of a catalog entry: which provider's code sign-in it uses. The daemon takes its addresses and
+/// client from its own list of providers, never from the catalog or from a request.
+#[cfg(test)]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogDevice {
+    pub provider: String,
+    pub client_id: String,
+    pub scope: String,
 }
 
 /// One language of a catalog entry's `l10n`: the texts the app shows in that language. `labels` maps the `key` of
@@ -322,7 +336,7 @@ fn args_differ_by_version(ours: &[String], theirs: &[String]) -> Option<Option<(
 /// get one: their address cannot change. `None` when nothing differs, and when another part of the command or the
 /// arguments differs (then the owner changed it, and an update would overwrite that).
 pub fn template_update<'a>(row: &Integration, templates: &'a [Template]) -> Option<TemplateUpdate<'a>> {
-    if row.auth == IntegrationAuth::Oauth {
+    if row.auth.holds_token() {
         return None;
     }
     let template = template_of(row, templates)?;
@@ -358,7 +372,7 @@ pub fn secret_names(list: &[&Integration]) -> Vec<String> {
         .map(str::to_string)
         .chain(
             list.iter()
-                .filter(|i| i.auth == IntegrationAuth::Oauth)
+                .filter(|i| i.auth.holds_token())
                 .map(|i| oauth_access_name(&i.id)),
         )
         .collect();
@@ -391,7 +405,7 @@ pub fn resolve(list: &[&Integration], secrets: &HashMap<String, String>) -> Vec<
                 },
                 IntegrationKind::Http => {
                     let mut headers = pairs(&i.headers)?;
-                    if i.auth == IntegrationAuth::Oauth {
+                    if i.auth.holds_token() {
                         // The token is the daemon's, not a header the owner wrote: it replaces any `Authorization`.
                         let Some(token) = secrets.get(&oauth_access_name(&i.id)) else {
                             tracing::warn!(integration = i.name, "integration skipped: not signed in");
@@ -652,6 +666,7 @@ fn pairs_list(pairs: &[Pair], name: &str, value: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::IntegrationAuth;
 
     fn stdio(name: &str, env: &[(&str, &str)]) -> Integration {
         Integration {

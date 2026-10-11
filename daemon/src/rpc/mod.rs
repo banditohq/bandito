@@ -94,6 +94,7 @@ pub fn features() -> Vec<&'static str> {
         "integrations_probe",
         "integrations_oauth",
         "integrations_oauth_probe",
+        "integrations_device",
         "integrations_call_tool",
         "template_updates",
         "tool_permissions",
@@ -150,6 +151,8 @@ pub struct App {
     safe_mode: std::sync::OnceLock<String>,
     /// Browser sign-ins to MCP servers that wait for their answer (see docs/ARCHITECTURE.md#integrations).
     pub oauth: crate::mcp_oauth::Flows,
+    /// Sign-ins with a code that wait for the person to confirm them on the provider's page.
+    pub device: crate::mcp_oauth::device::DeviceFlows,
     /// The Telegram bot (see docs/ARCHITECTURE.md#telegram). Started by `main` unless the daemon is in safe mode.
     pub telegram: Arc<crate::telegram::Telegram>,
 }
@@ -194,6 +197,7 @@ impl App {
             models: crate::runtime::models::ModelCache::default(),
             safe_mode: std::sync::OnceLock::new(),
             oauth: crate::mcp_oauth::Flows::default(),
+            device: crate::mcp_oauth::device::DeviceFlows::default(),
             telegram,
         })
     }
@@ -1238,6 +1242,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         | "integrations.oauth_cancel"
         | "integrations.oauth_status"
         | "integrations.oauth_disconnect"
+        | "integrations.device_begin"
+        | "integrations.device_status"
+        | "integrations.device_cancel"
         | "integrations.tools"
         | "integrations.call_tool"
         | "integrations.recommend"
