@@ -42,7 +42,7 @@ SwiftUI, macOS, dark theme. The app is a thin shell (`apps/mac/Bandito`); all co
   reactions and VoiceOver are the SwiftUI ones. A row is measured once per width (`ThreadListCell.height`), guessed
   (`ThreadHeightGuess`, once per line) until then; rows above the screen that change height move the offset with them.
   The lines are kept between updates (`ThreadListMemo`, handed over in a versioned box): a token makes and reconfigures
-  the streamed line only. A thread just opened makes only the rows that show (`ThreadTableView.prepareOnlyVisible`).
+  the streamed line only. A thread just opened makes only the rows that show (`ThreadTableView.prepareOnlyVisible`). The lists of the last four agents are kept (`ThreadListHost`): going back to one shows it at once, where it was.
   Message bodies are parsed once (`MessageRenderCache`).
 - Live pictures (browser screencast) go to a `CALayer` (`BrowserFrameLayer`), never through `@Observable` per frame.
   Decode images off the main thread.

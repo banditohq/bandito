@@ -383,6 +383,16 @@ private struct PerfSteps {
             await settle(12)
         }
         recorder.endSegment("agents")
+        // Back and forth between the last few, as a person does between the agents they work with.
+        recorder.beginSegment()
+        for _ in 0..<3 {
+            for id in ids.suffix(3) {
+                try check()
+                router.selectedAgentID = id
+                await settle(12)
+            }
+        }
+        recorder.endSegment("recent agents")
         recorder.beginSegment()
         for mode in AppMode.allCases {
             try check()
@@ -392,7 +402,8 @@ private struct PerfSteps {
         router.select(mode: .team)
         await settle(20)
         recorder.endSegment("modes")
-        return "\(ids.count) agents of \(PerfDemoWorld.agentRows) rows switched one after the other, then every mode"
+        return "\(ids.count) agents of \(PerfDemoWorld.agentRows) rows switched one after the other, the last three "
+            + "three times over, then every mode"
     }
 
     // MARK: files, terminals, browser, screen

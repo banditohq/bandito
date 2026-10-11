@@ -115,7 +115,7 @@ final class ThreadListController {
     var metrics: ThreadScrollMetrics? { list?.metrics }
 }
 
-/// The list in SwiftUI.
+/// The list in SwiftUI: the lists of the last few agents shown, the current one on screen (see `ThreadListHost`).
 struct ThreadList: NSViewRepresentable {
     var lines: ThreadListLines
     /// The version of `lines`: what SwiftUI compares.
@@ -123,18 +123,45 @@ struct ThreadList: NSViewRepresentable {
     var context: ThreadListContext
     var controller: ThreadListController
 
-    func makeNSView(context: Context) -> ThreadListView {
-        let view = ThreadListView()
-        controller.list = view
-        view.controller = controller
-        view.update(lines: lines.lines, change: .all, version: version, context: self.context)
-        return view
+    func makeNSView(context: Context) -> ThreadListHost {
+        let host = ThreadListHost()
+        updateNSView(host, context: context)
+        return host
     }
 
-    func updateNSView(_ view: ThreadListView, context: Context) {
-        controller.list = view
-        view.controller = controller
-        view.update(lines: lines.lines, change: lines.change, version: version, context: self.context)
+    func updateNSView(_ host: ThreadListHost, context: Context) {
+        let list = host.show(agentID: self.context.agentID, controller: controller)
+        controller.list = list
+        list.update(lines: lines.lines, change: lines.change, version: version, context: self.context)
+    }
+}
+
+/// Keeps the lists of the last agents shown, each with its cells made and measured and its place: going back to one of
+/// them shows it at once, where it was left, instead of making its rows again (5–8 ms a row without a GPU). Only the
+/// current one is on screen and reports to the controller; the oldest goes when a fifth agent comes.
+final class ThreadListHost: NSView {
+    static let kept = 4
+    /// Most recent last.
+    private var lists: [(agentID: String, view: ThreadListView)] = []
+
+    func show(agentID: String, controller: ThreadListController) -> ThreadListView {
+        if let index = lists.firstIndex(where: { $0.agentID == agentID }) {
+            lists.append(lists.remove(at: index))
+        } else {
+            let view = ThreadListView()
+            view.frame = bounds
+            view.autoresizingMask = [.width, .height]
+            addSubview(view)
+            lists.append((agentID, view))
+            if lists.count > Self.kept { lists.removeFirst().view.removeFromSuperview() }
+        }
+        let current = lists[lists.count - 1].view
+        for entry in lists {
+            let shown = entry.view === current
+            if entry.view.isHidden == shown { entry.view.isHidden = !shown }
+            entry.view.controller = shown ? controller : nil
+        }
+        return current
     }
 }
 
