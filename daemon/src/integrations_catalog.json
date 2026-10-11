@@ -2272,132 +2272,102 @@
   {
     "id": "composio",
     "name": "Composio",
-    "category": "other",
+    "category": "productivity",
     "publisher": "Composio",
     "official": true,
     "homepage": "https://composio.dev",
-    "description_en": "Hundreds of apps through one MCP server. Replace the server id and user id in the URL with yours.",
-    "description_ru": "Сотни приложений через один MCP-сервер. В адресе замените идентификатор сервера и пользователя на свои.",
-    "long_en": "Composio gives an agent a set of apps behind one MCP server. You create the server in Composio, choose its apps, and get an address for your user. The apps you choose must be signed in to first.",
-    "long_ru": "Composio даёт агенту набор приложений за одним MCP-сервером. Вы создаёте сервер в Composio, выбираете приложения и получаете адрес для своего пользователя. Сначала нужно войти в выбранные приложения.",
+    "description_en": "Gmail, Slack, Notion, GitHub and 1000+ more apps through one sign-in.",
+    "description_ru": "Gmail, Slack, Notion, GitHub и ещё 1000+ приложений через один вход.",
+    "long_en": "Composio Connect gives an agent every app it supports through one connection. Sign in once in the browser; when the agent first needs an app, it sends you a link to approve that app, and the connection stays. For example: read today's unread mail and post a summary to Slack.",
+    "long_ru": "Composio Connect даёт агенту все свои приложения через одно подключение. Войдите один раз в браузере; когда агенту впервые понадобится приложение, он пришлёт ссылку, чтобы вы его разрешили, и подключение сохранится. Например: прочитать сегодняшние непрочитанные письма и выложить сводку в Slack.",
     "abilities_en": [
-      "Use the apps you add to the Composio server",
-      "Limit the server to chosen tools",
-      "One address and one key for all of them"
+      "Find the right tool among 1000+ apps",
+      "Ask you to approve an app with one link",
+      "Work across several apps in one task"
     ],
     "abilities_ru": [
-      "Работать с приложениями, добавленными на сервер Composio",
-      "Ограничить сервер выбранными инструментами",
-      "Один адрес и один ключ на все приложения"
+      "Находить нужный инструмент среди 1000+ приложений",
+      "Просить разрешить приложение одной ссылкой",
+      "Работать с несколькими приложениями в одной задаче"
     ],
-    "needs_en": "A Composio account, an MCP server created there, and your Composio API key. Edit the address: server id and user id.",
-    "needs_ru": "Аккаунт Composio, созданный там MCP-сервер и ваш ключ API Composio. В адресе замените идентификатор сервера и пользователя.",
+    "needs_en": "A free Composio account. Sign in in the browser after you press Connect; no keys to copy.",
+    "needs_ru": "Бесплатный аккаунт Composio: войдите в браузере после нажатия «Подключить», ключи копировать не нужно.",
     "kind": "http",
-    "url": null,
-    "url_hint": "https://backend.composio.dev/v3/mcp/<SERVER_ID>?user_id=<USER_ID>",
-    "headers_keys": [
-      {
-        "key": "x-api-key",
-        "label_en": "Composio API key",
-        "label_ru": "Ключ API Composio",
-        "secret": true,
-        "value_template": "{secret}"
-      }
-    ],
-    "docs_url": "https://docs.composio.dev/docs/mcp",
+    "url": "https://connect.composio.dev/mcp",
+    "auth": "oauth",
+    "docs_url": "https://docs.composio.dev/docs/composio-connect",
     "icon": "composio",
-    "accent": "#1F2937",
+    "accent": "#7C5CFF",
     "l10n": {
       "de": {
-        "description": "Hunderte Apps über einen MCP-Server. Ersetzen Sie in der Adresse die Server-ID und die Benutzer-ID durch Ihre.",
-        "long": "Composio gibt dem Agenten einen Satz Apps hinter einem MCP-Server. Sie erstellen den Server in Composio, wählen seine Apps und erhalten eine Adresse für Ihren Benutzer. Bei den gewählten Apps müssen Sie sich vorher anmelden.",
+        "description": "Gmail, Slack, Notion, GitHub und über 1000 weitere Apps mit einer Anmeldung.",
+        "long": "Composio Connect gibt dem Agenten alle unterstützten Apps über eine Verbindung. Melden Sie sich einmal im Browser an; braucht der Agent zum ersten Mal eine App, schickt er Ihnen einen Link zur Freigabe, und die Verbindung bleibt bestehen. Zum Beispiel: die ungelesenen Mails von heute lesen und eine Zusammenfassung in Slack posten.",
         "abilities": [
-          "Die Apps nutzen, die Sie dem Composio-Server hinzugefügt haben",
-          "Den Server auf ausgewählte Werkzeuge beschränken",
-          "Eine Adresse und ein Schlüssel für alle"
+          "Das richtige Werkzeug unter über 1000 Apps finden",
+          "Eine App per Link von Ihnen freigeben lassen",
+          "In einer Aufgabe mit mehreren Apps arbeiten"
         ],
-        "needs": "Ein Composio-Konto, ein dort angelegter MCP-Server und Ihr Composio-API-Schlüssel. Ergänzen Sie die Adresse um die Server-ID und die Benutzer-ID.",
-        "labels": {
-          "x-api-key": "Composio-API-Schlüssel"
-        }
+        "needs": "Ein kostenloses Composio-Konto. Nach „Verbinden“ im Browser anmelden – keine Schlüssel kopieren."
       },
       "es": {
-        "description": "Cientos de aplicaciones a través de un solo servidor MCP. Sustituye en la dirección el id del servidor y el id de usuario por los tuyos.",
-        "long": "Composio da al agente un conjunto de aplicaciones detrás de un solo servidor MCP. Creas el servidor en Composio, eliges sus aplicaciones y obtienes una dirección para tu usuario. Primero hay que iniciar sesión en las aplicaciones que elijas.",
+        "description": "Gmail, Slack, Notion, GitHub y más de 1000 apps con un solo inicio de sesión.",
+        "long": "Composio Connect da al agente todas sus apps con una sola conexión. Inicia sesión una vez en el navegador; cuando el agente necesite una app por primera vez, te enviará un enlace para aprobarla y la conexión se mantendrá. Por ejemplo: leer el correo no leído de hoy y publicar un resumen en Slack.",
         "abilities": [
-          "Usar las aplicaciones que añadas al servidor de Composio",
-          "Limitar el servidor a las herramientas elegidas",
-          "Una dirección y una clave para todas"
+          "Encontrar la herramienta adecuada entre más de 1000 apps",
+          "Pedirte aprobar una app con un enlace",
+          "Trabajar con varias apps en una tarea"
         ],
-        "needs": "Una cuenta de Composio, un servidor MCP creado allí y tu clave de API de Composio. Edita la dirección: id del servidor e id de usuario.",
-        "labels": {
-          "x-api-key": "Clave de API de Composio"
-        }
+        "needs": "Una cuenta gratuita de Composio. Inicia sesión en el navegador tras pulsar Conectar; no hay claves que copiar."
       },
       "fr": {
-        "description": "Des centaines d'applications via un seul serveur MCP. Remplacez dans l'adresse l'identifiant du serveur et celui de l'utilisateur par les vôtres.",
-        "long": "Composio donne à l'agent un ensemble d'applications derrière un seul serveur MCP. Vous créez le serveur dans Composio, choisissez ses applications et obtenez une adresse pour votre utilisateur. Il faut d'abord vous connecter aux applications choisies.",
+        "description": "Gmail, Slack, Notion, GitHub et plus de 1000 apps avec une seule connexion.",
+        "long": "Composio Connect donne à l’agent toutes ses apps via une seule connexion. Connectez-vous une fois dans le navigateur ; la première fois que l’agent a besoin d’une app, il vous envoie un lien pour l’autoriser, et la connexion est conservée. Par exemple : lire les e-mails non lus du jour et publier un résumé dans Slack.",
         "abilities": [
-          "Utiliser les applications ajoutées au serveur Composio",
-          "Limiter le serveur à certains outils",
-          "Une adresse et une clé pour toutes"
+          "Trouver le bon outil parmi plus de 1000 apps",
+          "Vous demander d’autoriser une app par un lien",
+          "Travailler avec plusieurs apps dans une tâche"
         ],
-        "needs": "Un compte Composio, un serveur MCP créé dans Composio et votre clé d'API Composio. Modifiez l'adresse : identifiant du serveur et identifiant de l'utilisateur.",
-        "labels": {
-          "x-api-key": "Clé d'API Composio"
-        }
+        "needs": "Un compte Composio gratuit. Connectez-vous dans le navigateur après avoir touché Connecter ; aucune clé à copier."
       },
       "ja": {
-        "description": "1 つの MCP サーバーで数百のアプリを扱います。アドレス内のサーバー ID とユーザー ID を自分のものに置き換えてください。",
-        "long": "Composio は、1 つの MCP サーバーの裏にある複数のアプリを、エージェントに提供します。Composio でサーバーを作成し、使うアプリを選び、ユーザー用のアドレスを取得します。選んだアプリには、事前にサインインしておく必要があります。",
+        "description": "Gmail、Slack、Notion、GitHub など 1000 以上のアプリに 1 回のサインインで。",
+        "long": "Composio Connect は、1 つの接続で対応するすべてのアプリをエージェントに提供します。ブラウザで一度サインインすれば、エージェントが初めてアプリを必要としたときに承認用のリンクが届き、接続はそのまま保たれます。例: 今日の未読メールを読み、要約を Slack に投稿する。",
         "abilities": [
-          "Composio サーバーに追加したアプリを使う",
-          "サーバーを選んだツールに限定する",
-          "1 つのアドレスと 1 つのキーで全てのアプリを扱う"
+          "1000 以上のアプリから適切なツールを見つける",
+          "リンク 1 つでアプリの承認を依頼する",
+          "1 つのタスクで複数のアプリを使う"
         ],
-        "needs": "Composio のアカウント、そこで作成した MCP サーバー、Composio の API キー。アドレスのサーバー ID とユーザー ID を編集してください。",
-        "labels": {
-          "x-api-key": "Composio の API キー"
-        }
+        "needs": "無料の Composio アカウント。「接続」を押したあとブラウザでサインインします。キーのコピーは不要です。"
       },
       "ko": {
-        "description": "MCP 서버 하나로 수백 개의 앱을 써요. 주소의 서버 ID와 사용자 ID를 내 것으로 바꾸세요.",
-        "long": "Composio는 MCP 서버 하나 뒤에 있는 앱 묶음을 에이전트에 제공해요. Composio에서 서버를 만들고, 앱을 고르고, 사용자용 주소를 받아요. 고른 앱에는 먼저 로그인해야 해요.",
+        "description": "Gmail, Slack, Notion, GitHub 등 1000개 이상의 앱을 한 번의 로그인으로.",
+        "long": "Composio Connect는 하나의 연결로 지원하는 모든 앱을 에이전트에게 제공합니다. 브라우저에서 한 번 로그인하면, 에이전트가 처음 앱이 필요할 때 승인 링크를 보내 주고 연결은 계속 유지됩니다. 예: 오늘 읽지 않은 메일을 읽고 요약을 Slack에 올리기.",
         "abilities": [
-          "Composio 서버에 추가한 앱 사용",
-          "선택한 도구로 서버 제한",
-          "주소 하나와 키 하나로 모든 앱 사용"
+          "1000개 이상의 앱에서 알맞은 도구 찾기",
+          "링크 하나로 앱 승인 요청하기",
+          "한 작업에서 여러 앱 함께 사용하기"
         ],
-        "needs": "Composio 계정, 거기서 만든 MCP 서버, Composio API 키가 필요해요. 주소의 서버 ID와 사용자 ID를 고치세요.",
-        "labels": {
-          "x-api-key": "Composio API 키"
-        }
+        "needs": "무료 Composio 계정. \"연결\"을 누른 뒤 브라우저에서 로그인하세요. 키를 복사할 필요가 없습니다."
       },
       "pt-BR": {
-        "description": "Centenas de apps por um único servidor MCP. No endereço, troque o id do servidor e o id do usuário pelos seus.",
-        "long": "O Composio dá ao agente um conjunto de apps atrás de um único servidor MCP. Você cria o servidor no Composio, escolhe os apps e recebe um endereço para o seu usuário. Antes, é preciso entrar nos apps escolhidos.",
+        "description": "Gmail, Slack, Notion, GitHub e mais de 1000 apps com um único login.",
+        "long": "O Composio Connect dá ao agente todos os apps compatíveis com uma só conexão. Entre uma vez no navegador; quando o agente precisar de um app pela primeira vez, ele envia um link para você aprovar, e a conexão fica salva. Por exemplo: ler os e-mails não lidos de hoje e postar um resumo no Slack.",
         "abilities": [
-          "Usar os apps adicionados ao servidor do Composio",
-          "Limitar o servidor às ferramentas escolhidas",
-          "Um endereço e uma chave para todos"
+          "Encontrar a ferramenta certa entre mais de 1000 apps",
+          "Pedir sua aprovação de um app com um link",
+          "Trabalhar com vários apps em uma tarefa"
         ],
-        "needs": "Uma conta no Composio, um servidor MCP criado lá e sua chave de API do Composio. Edite o endereço: id do servidor e id do usuário.",
-        "labels": {
-          "x-api-key": "Chave de API do Composio"
-        }
+        "needs": "Uma conta gratuita do Composio. Entre no navegador depois de tocar em Conectar; não é preciso copiar chaves."
       },
       "zh-Hans": {
-        "description": "通过一个 MCP 服务器使用数百个应用。请将地址中的服务器 ID 和用户 ID 替换为你自己的。",
-        "long": "Composio 在一个 MCP 服务器背后为智能体提供一组应用。你在 Composio 中创建服务器、选择应用，并获得为你的用户准备的地址。使用前，需要先登录所选的应用。",
+        "description": "一次登录即可使用 Gmail、Slack、Notion、GitHub 等 1000 多个应用。",
+        "long": "Composio Connect 通过一个连接为代理提供它支持的所有应用。在浏览器中登录一次；代理第一次需要某个应用时，会发给你一个授权链接，连接随后会一直保留。例如：读取今天的未读邮件，并把摘要发到 Slack。",
         "abilities": [
-          "使用添加到 Composio 服务器中的应用",
-          "将服务器限制在所选工具范围内",
-          "所有应用共用一个地址和一个密钥"
+          "在 1000 多个应用中找到合适的工具",
+          "用一个链接请你授权应用",
+          "在一个任务中同时使用多个应用"
         ],
-        "needs": "一个 Composio 账号、在其中创建的 MCP 服务器，以及你的 Composio API 密钥。请编辑地址中的服务器 ID 和用户 ID。",
-        "labels": {
-          "x-api-key": "Composio API 密钥"
-        }
+        "needs": "一个免费的 Composio 账户。点按“连接”后在浏览器中登录，无需复制任何密钥。"
       }
     }
   },
