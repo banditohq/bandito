@@ -226,7 +226,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 
 - `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime, paused, use_personal_settings, avatar_color, avatar_face, capabilities)`: `avatar_color` and `avatar_face` are the [avatar](#capabilities) (both NULL = derived from the name); `capabilities` is a JSON array of [capabilities](#capabilities), NULL = all. `fallback_runtime`, `fallback_model` and `active_runtime` are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`. `migrated_to` (the other server's name) and `migrated_at` (Unix ms) are NULL until [`agents.migrate_done`](#agent-migration) marks the agent as moved; `paused` is the [pause](#pause) flag
 - `events(seq INTEGER PRIMARY KEY, agent_id, ts, kind, payload JSON)`
-- `tool_calls(id INTEGER PRIMARY KEY, at_ms, agent_id, integration, tool, duration_ms, ok, error, decision)`: the [call journal](#call-journal) of integration tools; kept 30 days and at most 20 000 rows
+- `tool_calls(id INTEGER PRIMARY KEY, at_ms, agent_id, integration, tool, duration_ms, ok, error, decision)`: the [call journal](#call-journal) of integration tools; kept 30 days and at most 20 000 rows (the cap is counted every 200 recorded calls and at start, so it can be over by up to 199 between checks)
 - `approvals(id, agent_id, call_id, tool, title, payload JSON, status, decision, created_at, resolved_at)`
 - `rules(id, agent_id NULL, pattern, action)`
 - `schedules(id, agent_id, cron, tz, prompt, enabled, last_run_at, next_run_at, title)`
@@ -238,7 +238,9 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 
 - `telegram_chats(chat_id, user_id, title, language, linked_at, approvals, answers, current_agent)`, `telegram_messages(chat_id, message_id, agent_id, kind, ref_id, created_at)` and `telegram_state(key, value)`: the [Telegram bot](#telegram). The bot's token is a hidden secret, not a column
 
-Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`.
+Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`. `0026_query_indexes.sql` adds the indexes of the hot reads (schedule due, one agent's schedules, forms by status, and two partial indexes for the start-up checks of queued messages and connect requests).
+
+Connection: WAL, `synchronous=NORMAL`, `busy_timeout=5000`, `foreign_keys=ON`. `daemon/tests/query_plans.rs` builds a 300 000-event database and runs `EXPLAIN QUERY PLAN` on every hot statement: a `SCAN` of a table over 1 000 rows fails it, except the listed bounded statements (the capped call journal, the two unfiltered lists). It also prints the plans and the timings of the hottest reads.
 
 ## Backups
 
@@ -495,7 +497,7 @@ Runtimes: Claude Code names an MCP call `mcp__<integration>__<tool>`, and it is 
 
 Limits of the recording: a call whose result never comes (the turn ended, the agent's process died, the daemon restarted) keeps its row with `duration_ms` and `ok` NULL.
 
-Retention: every write removes the rows older than 30 days, then the oldest rows (by `at_ms`) beyond 20 000. Reads and stats count only the last 30 days before now. Deleting an agent (`agent_delete`) deletes its rows in the same transaction.
+Retention: every recorded call removes the rows older than 30 days; the oldest rows (by `at_ms`) beyond 20 000 are removed every 200 recorded calls and at start. Reads and stats count only the last 30 days before now. Deleting an agent (`agent_delete`) deletes its rows in the same transaction.
 
 RPC (owner and devices; agents are refused; feature `integrations_calls`):
 - `integrations.calls {integration?, agent_id?, limit? (1 to 200, default 50), before?}` → the rows, newest first. `before` is the `id` of the last row of the previous page. A `limit` out of range is `INVALID_PARAMS`.

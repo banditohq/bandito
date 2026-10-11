@@ -101,16 +101,28 @@ impl Store {
             .optional()?)
     }
 
-    /// Forms, newest first; filtered by agent and by status when given.
+    /// Forms, newest first; filtered by agent and by status when given. Each filter is a condition of its own (not
+    /// `? IS NULL OR`), so the planner can use `forms_agent_status` or `forms_status`.
     pub fn form_list(&self, agent_id: Option<&str>, status: Option<FormStatus>) -> Result<Vec<Form>> {
+        let mut conditions = Vec::new();
+        let mut args: Vec<String> = Vec::new();
+        if let Some(agent) = agent_id {
+            conditions.push("agent_id = ?");
+            args.push(agent.to_string());
+        }
+        if let Some(status) = status {
+            conditions.push("status = ?");
+            args.push(status.as_str().to_string());
+        }
+        let mut sql = format!("SELECT {COLS} FROM forms");
+        if !conditions.is_empty() {
+            sql.push_str(" WHERE ");
+            sql.push_str(&conditions.join(" AND "));
+        }
+        sql.push_str(" ORDER BY created_at DESC, id DESC");
         let conn = self.conn();
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {COLS} FROM forms
-             WHERE (?1 IS NULL OR agent_id = ?1) AND (?2 IS NULL OR status = ?2)
-             ORDER BY created_at DESC, id DESC"
-        ))?;
-        let status = status.map(FormStatus::as_str);
-        let rows = stmt.query_map(params![agent_id, status], from_row)?;
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(args), from_row)?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
