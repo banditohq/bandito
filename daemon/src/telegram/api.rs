@@ -73,6 +73,22 @@ pub fn curl_config(base: &str, token: &str, method: &str, body: &Value, max_time
     Ok(config)
 }
 
+/// Takes DEL and the C1 controls (U+007F, U+0080 to U+009F) out of every string of a body. JSON escapes the controls
+/// below U+0020 but not these, and `curl`'s configuration refuses any control character, so a message that held one
+/// (a command an agent printed, say) would never go out. Telegram shows none of them anyway.
+pub fn strip_controls(value: &mut Value) {
+    match value {
+        Value::String(s) => {
+            if s.chars().any(|c| matches!(c, '\u{7f}'..='\u{9f}')) {
+                *s = s.chars().filter(|c| !matches!(c, '\u{7f}'..='\u{9f}')).collect();
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(strip_controls),
+        Value::Object(map) => map.values_mut().for_each(strip_controls),
+        _ => {}
+    }
+}
+
 /// `text` with the token, and anything shaped like a bot token (`digits:letters`, also after `/bot`), replaced.
 pub fn scrub(text: &str, token: &str) -> String {
     let text = if token.is_empty() {
@@ -142,7 +158,8 @@ impl Api {
     }
 
     /// One Bot API call: `Ok` is the `result` of the answer. `max_time` is the seconds `curl` may take.
-    pub async fn call(&self, token: &str, method: &str, body: Value, max_time: u64) -> Result<Value, ApiError> {
+    pub async fn call(&self, token: &str, method: &str, mut body: Value, max_time: u64) -> Result<Value, ApiError> {
+        strip_controls(&mut body);
         let raw = self.run(token, method, &body, max_time).await.map_err(|e| {
             let line: String = scrub(&format!("{e:#}"), token)
                 .chars()

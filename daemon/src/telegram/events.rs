@@ -6,7 +6,7 @@
 
 use super::format::{escape_html, format_answer, truncate_chars};
 use super::strings::tr;
-use super::{Sent, Telegram};
+use super::{Edited, Sent, Telegram};
 use crate::event::{DecidedBy, Decision, Event, EventBody, Source, TurnStatus};
 use crate::redact::Redactor;
 use crate::store::{Approval, ApprovalStatus, TgChat};
@@ -280,7 +280,21 @@ impl Telegram {
             };
             let line = tr(&chat.language, key, &[]);
             let html = self.card_html(&chat.language, approval, Some(&line));
-            self.edit_html(row.chat_id, row.message_id, &html).await;
+            // A failed edit is tried again (3 times in all); if it still fails, the claim is given back, so the
+            // next press on the card, or the next event, closes it.
+            let mut edited = Edited::Failed;
+            for attempt in 1..=3u32 {
+                edited = self.edit_html(row.chat_id, row.message_id, &html).await;
+                if edited != Edited::Failed {
+                    break;
+                }
+                tokio::time::sleep(self.timing.backoff_start * attempt).await;
+            }
+            if edited == Edited::Failed
+                && let Err(e) = store.tg_msg_claim(row.chat_id, row.message_id, "approval_done", "approval")
+            {
+                tracing::warn!("telegram: could not give a card back: {e:#}");
+            }
         }
         self.lock().decided_here.remove(approval_id);
     }

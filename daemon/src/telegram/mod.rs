@@ -44,12 +44,18 @@ const KEY_NAME: &str = "bot_name";
 /// A code is eight characters of base32.
 const CODE_LEN: usize = 8;
 const CODE_ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-/// Wrong codes a code survives.
-const MAX_CODE_FAILURES: u32 = 10;
+/// Wrong codes a code survives, from all chats together.
+const MAX_CODE_FAILURES: u32 = 50;
+/// Wrong codes one chat may try while a code lives; after that the chat is locked out until the code is gone.
+const MAX_CHAT_CODE_FAILURES: u32 = 5;
+/// Replies to chats that are not linked, in all, in a minute.
+const STRANGER_REPLIES_PER_MINUTE: usize = 20;
+/// Messages that may wait in one chat's line; over it the oldest are let go.
+const MAX_QUEUE: usize = 200;
 /// The answer to a wrong code goes to one chat this often.
 const BAD_CODE_GAP: Duration = Duration::from_secs(3);
-/// A message that would wait longer than this to go out (an answer, not a card or a reply) is dropped.
-const MAX_SEND_BACKLOG: Duration = Duration::from_secs(30);
+/// An unimportant message (an answer) is not queued behind more than this many others, which is half a minute.
+const MAX_UNIMPORTANT_QUEUE: usize = 30;
 /// Rows of sent messages are kept this long.
 const MESSAGE_KEEP_MS: i64 = 7 * 24 * 3600 * 1000;
 /// Entries a bookkeeping map may hold before it is emptied (a runaway sender must not grow memory).
@@ -60,8 +66,8 @@ const MAP_LIMIT: usize = 2000;
 pub struct Timing {
     /// The long-poll timeout of `getUpdates`, seconds.
     pub poll_secs: u64,
-    /// Rest after a poll that brought nothing (the long poll itself waits, so none in production).
-    pub idle_pause: Duration,
+    /// Least time from the start of one poll to the start of the next after an empty answer.
+    pub min_poll_cycle: Duration,
     /// Wait after a 409 before polling again.
     pub conflict_wait: Duration,
     /// First wait after a network failure; it doubles up to `backoff_max`.
@@ -83,7 +89,7 @@ impl Default for Timing {
     fn default() -> Self {
         Self {
             poll_secs: 50,
-            idle_pause: Duration::ZERO,
+            min_poll_cycle: Duration::from_secs(1),
             conflict_wait: Duration::from_secs(60),
             backoff_start: Duration::from_secs(1),
             backoff_max: Duration::from_secs(60),
@@ -102,7 +108,7 @@ impl Timing {
     pub fn fast() -> Self {
         Self {
             poll_secs: 1,
-            idle_pause: Duration::from_millis(10),
+            min_poll_cycle: Duration::from_millis(10),
             conflict_wait: Duration::from_millis(100),
             backoff_start: Duration::from_millis(10),
             backoff_max: Duration::from_millis(100),
@@ -182,6 +188,15 @@ struct LinkCode {
     code: String,
     expires_at: i64,
     failures: u32,
+    /// Wrong codes by chat.
+    chat_failures: HashMap<i64, u32>,
+}
+
+/// A place in a chat's line of messages.
+struct Ticket {
+    id: u64,
+    important: bool,
+    let_go: Arc<AtomicBool>,
 }
 
 /// A text that waits for the person to choose an agent.
@@ -209,8 +224,13 @@ struct State {
     /// `(chat, kind)` to when it was last answered, for notices that come at most so often.
     notices: HashMap<(i64, &'static str), Instant>,
     held: HashMap<i64, Held>,
-    /// Chat to the earliest time its next message may go out.
-    send_slots: HashMap<i64, Instant>,
+    /// Chat to the messages waiting to go out, first in line first.
+    queues: HashMap<i64, VecDeque<Ticket>>,
+    /// Chat to when its last message went out.
+    last_sent: HashMap<i64, Instant>,
+    next_ticket: u64,
+    /// When the last replies to strangers went out (the last minute only).
+    stranger_replies: VecDeque<Instant>,
     /// Agent to the messages sent to it from Telegram that its thread has not shown yet.
     sent: HashMap<String, VecDeque<Sent>>,
     /// `(agent, seq)` of a message that waits in an agent's queue, to the chat it came from.
@@ -235,7 +255,6 @@ impl State {
         }
         cap(&mut self.notices);
         cap(&mut self.held);
-        cap(&mut self.send_slots);
         cap(&mut self.sent);
         cap(&mut self.queued);
         cap(&mut self.last_turn);
@@ -244,12 +263,39 @@ impl State {
         cap(&mut self.decided_here);
     }
 
+    /// Forgets when chats last sent once that no longer matters (the gap is over, nobody waits); if the map is still
+    /// too big, the oldest go first, never one that has messages waiting.
+    fn evict_old_sends(&mut self, gap: Duration) {
+        if self.last_sent.len() <= MAP_LIMIT {
+            return;
+        }
+        let now = Instant::now();
+        let waiting: Vec<i64> = self.queues.keys().copied().collect();
+        self.last_sent
+            .retain(|chat, at| now.duration_since(*at) < gap || waiting.contains(chat));
+        while self.last_sent.len() > MAP_LIMIT {
+            let oldest = self
+                .last_sent
+                .iter()
+                .filter(|(chat, _)| !waiting.contains(chat))
+                .min_by_key(|(_, at)| **at)
+                .map(|(chat, _)| *chat);
+            match oldest {
+                Some(chat) => {
+                    self.last_sent.remove(&chat);
+                }
+                None => break,
+            }
+        }
+    }
+
     /// Forgets what belongs to the linked chats and the turns (not the poller's own bookkeeping).
     fn forget_chats(&mut self) {
         self.link = None;
         self.notices.clear();
         self.held.clear();
-        self.send_slots.clear();
+        self.last_sent.clear();
+        self.stranger_replies.clear();
         self.sent.clear();
         self.queued.clear();
         self.last_turn.clear();
@@ -263,6 +309,27 @@ impl State {
 struct Tasks {
     poller: Option<JoinHandle<()>>,
     listener: Option<JoinHandle<()>>,
+}
+
+/// Takes its ticket out of a chat's line when it is dropped (a sent message has left the line already).
+struct Place<'a> {
+    tg: &'a Telegram,
+    chat: i64,
+    id: u64,
+}
+
+impl Drop for Place<'_> {
+    fn drop(&mut self) {
+        let mut st = self.tg.lock();
+        if let Some(line) = st.queues.get_mut(&self.chat) {
+            line.retain(|t| t.id != self.id);
+            if line.is_empty() {
+                st.queues.remove(&self.chat);
+            }
+        }
+        drop(st);
+        self.tg.line_moved.notify_waiters();
+    }
 }
 
 /// Ends the `running` of its poller when the poller's task ends, however it ends.
@@ -288,6 +355,8 @@ pub struct Telegram {
     configured: AtomicBool,
     state: Mutex<State>,
     tasks: Mutex<Tasks>,
+    /// Woken when a line of messages moves.
+    line_moved: tokio::sync::Notify,
 }
 
 impl Telegram {
@@ -311,6 +380,7 @@ impl Telegram {
             configured: AtomicBool::new(configured),
             state: Mutex::new(State::default()),
             tasks: Mutex::new(Tasks::default()),
+            line_moved: tokio::sync::Notify::new(),
         })
     }
 
@@ -472,6 +542,7 @@ impl Telegram {
             code: code.clone(),
             expires_at,
             failures: 0,
+            chat_failures: HashMap::new(),
         });
         Ok(json!({
             "code": code,
@@ -667,6 +738,7 @@ impl Telegram {
                 .ok()
                 .flatten()
                 .and_then(|v| v.parse::<i64>().ok());
+            let started = Instant::now();
             let body = updates_body(self.timing.poll_secs, offset);
             match self
                 .api
@@ -678,7 +750,10 @@ impl Telegram {
                     self.set_error(None, false);
                     let updates = result.as_array().cloned().unwrap_or_default();
                     if updates.is_empty() {
-                        tokio::time::sleep(self.timing.idle_pause).await;
+                        // A poll that came back empty and early (a proxy cutting the long poll, a server that
+                        // ignores the timeout) must not turn the loop into a busy one.
+                        let rest = self.timing.min_poll_cycle.saturating_sub(started.elapsed());
+                        tokio::time::sleep(rest).await;
                         continue;
                     }
                     for update in updates {
@@ -719,25 +794,95 @@ impl Telegram {
         true
     }
 
-    /// Takes the next place in the chat's line (one message a second) and waits for it. `false`: the line is so long
-    /// that an unimportant message is dropped.
+    /// Whether a reply to a chat that is not linked may go out: 20 a minute in all, so a flood of strangers neither
+    /// fills the line nor costs the owner's chats their turn.
+    fn allow_stranger_reply(&self) -> bool {
+        let mut st = self.lock();
+        let now = Instant::now();
+        while st
+            .stranger_replies
+            .front()
+            .is_some_and(|at| now.duration_since(*at) >= Duration::from_secs(60))
+        {
+            st.stranger_replies.pop_front();
+        }
+        if st.stranger_replies.len() >= STRANGER_REPLIES_PER_MINUTE {
+            return false;
+        }
+        st.stranger_replies.push_back(now);
+        true
+    }
+
+    /// Takes a place at the end of the chat's line (one message a second, first come first served) and waits for the
+    /// turn. `false`: the message was let go. An unimportant message is not queued behind 30 others; when the line is
+    /// full (200) the oldest unimportant message in it is let go, and only if there is none, the oldest important one
+    /// (logged).
     async fn reserve(&self, chat: i64, important: bool) -> bool {
-        let slot = {
+        let let_go = Arc::new(AtomicBool::new(false));
+        let id = {
             let mut st = self.lock();
-            let now = Instant::now();
-            let slot = st.send_slots.get(&chat).copied().unwrap_or(now).max(now);
-            if !important && slot.duration_since(now) > MAX_SEND_BACKLOG {
+            st.next_ticket += 1;
+            let id = st.next_ticket;
+            let line = st.queues.entry(chat).or_default();
+            if !important && line.len() >= MAX_UNIMPORTANT_QUEUE {
                 return false;
             }
-            st.send_slots.insert(chat, slot + self.timing.send_gap);
-            st.bound();
-            slot
+            if line.len() >= MAX_QUEUE {
+                let victim = line.iter().position(|t| !t.important).or(Some(0));
+                if let Some(at) = victim
+                    && let Some(old) = line.remove(at)
+                {
+                    if old.important {
+                        tracing::warn!("telegram: the line of a chat is full; an important message was let go");
+                    }
+                    old.let_go.store(true, Ordering::SeqCst);
+                }
+            }
+            line.push_back(Ticket {
+                id,
+                important,
+                let_go: let_go.clone(),
+            });
+            id
         };
-        let wait = slot.saturating_duration_since(Instant::now());
-        if !wait.is_zero() {
-            tokio::time::sleep(wait).await;
+        // Takes the ticket out of the line if this future is dropped while waiting.
+        let _place = Place { tg: self, chat, id };
+        self.line_moved.notify_waiters();
+        loop {
+            let moved = self.line_moved.notified();
+            tokio::pin!(moved);
+            moved.as_mut().enable();
+            let wait = {
+                let mut st = self.lock();
+                if let_go.load(Ordering::SeqCst) {
+                    return false;
+                }
+                let now = Instant::now();
+                let first = st.queues.get(&chat).and_then(|l| l.front()).map(|t| t.id);
+                if first == Some(id) {
+                    let ready = st.last_sent.get(&chat).map(|at| *at + self.timing.send_gap);
+                    match ready {
+                        Some(at) if at > now => at - now,
+                        _ => {
+                            if let Some(line) = st.queues.get_mut(&chat) {
+                                line.pop_front();
+                                if line.is_empty() {
+                                    st.queues.remove(&chat);
+                                }
+                            }
+                            st.last_sent.insert(chat, now);
+                            st.evict_old_sends(self.timing.send_gap);
+                            drop(st);
+                            self.line_moved.notify_waiters();
+                            return true;
+                        }
+                    }
+                } else {
+                    Duration::from_secs(1)
+                }
+            };
+            let _ = tokio::time::timeout(wait, moved).await;
         }
-        true
     }
 
     /// One call, repeated after a 429 (once the wait is over) and after a network failure (twice).
@@ -800,25 +945,47 @@ impl Telegram {
         }
     }
 
-    /// Replaces a message's text and takes its buttons off.
-    async fn edit_html(&self, chat: i64, message_id: i64, html: &str) {
+    /// Replaces a message's text and takes its buttons off. Text too long for one message, or that Telegram cannot
+    /// parse, goes as plain text (with no `parse_mode`).
+    async fn edit_html(&self, chat: i64, message_id: i64, html: &str) -> Edited {
         let Some(token) = self.token() else {
-            return;
+            return Edited::Gone;
         };
-        self.reserve(chat, true).await;
-        let body = json!({
-            "chat_id": chat,
-            "message_id": message_id,
-            "text": if utf16_len(html) > MESSAGE_LIMIT { fit(&plain_from_html(html)) } else { html.to_string() },
-            "parse_mode": "HTML",
-            "link_preview_options": { "is_disabled": true },
-            "reply_markup": { "inline_keyboard": [] },
-        });
-        match self.call_retrying(&token, "editMessageText", body).await {
-            Ok(_) => {}
-            // The same text twice is no failure.
-            Err(ApiError::Rejected { description, .. }) if description.contains("not modified") => {}
-            Err(e) => tracing::warn!("telegram: could not edit a message: {e}"),
+        if !self.reserve(chat, true).await {
+            return Edited::Failed;
+        }
+        let mut plain = utf16_len(html) > MESSAGE_LIMIT;
+        loop {
+            let mut body = json!({
+                "chat_id": chat,
+                "message_id": message_id,
+                "text": if plain { fit(&plain_from_html(html)) } else { html.to_string() },
+                "link_preview_options": { "is_disabled": true },
+                "reply_markup": { "inline_keyboard": [] },
+            });
+            if !plain {
+                body["parse_mode"] = json!("HTML");
+            }
+            return match self.call_retrying(&token, "editMessageText", body).await {
+                Ok(_) => Edited::Done,
+                // The same text twice is no failure.
+                Err(ApiError::Rejected { description, .. }) if description.contains("not modified") => Edited::Done,
+                Err(ApiError::Rejected { code: 400, description })
+                    if !plain && description.to_lowercase().contains("parse") =>
+                {
+                    plain = true;
+                    continue;
+                }
+                // The message is gone, too old to edit, or the chat does not take the bot any more: no use to retry.
+                Err(ApiError::Rejected { code, description }) if code < 500 => {
+                    tracing::warn!("telegram: could not edit a message ({code}: {description})");
+                    Edited::Gone
+                }
+                Err(e) => {
+                    tracing::warn!("telegram: could not edit a message: {e}");
+                    Edited::Failed
+                }
+            };
         }
     }
 
@@ -850,6 +1017,16 @@ impl Telegram {
         self.send_html(chat.chat_id, &tr(&chat.language, key, args), None, true)
             .await
     }
+}
+
+/// How an edit of a message came out.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Edited {
+    Done,
+    /// It cannot be done and will not be: nothing to retry.
+    Gone,
+    /// It did not work now; trying again may.
+    Failed,
 }
 
 /// `text` cut to what one message holds.

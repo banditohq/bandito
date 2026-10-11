@@ -354,10 +354,10 @@ async fn the_code_is_case_insensitive_and_wrong_codes_do_not_link() {
 }
 
 #[tokio::test]
-async fn ten_wrong_codes_burn_the_code() {
+async fn fifty_wrong_codes_burn_the_code() {
     let rig = rig().await;
     let code = link_code(&rig);
-    for i in 0..10 {
+    for i in 0..50 {
         // A different chat each time, so no per-chat limit can be what stops the right code later.
         rig.tg.handle_update(msg(500 + i, "/start WRONGCOD")).await;
     }
@@ -369,10 +369,10 @@ async fn ten_wrong_codes_burn_the_code() {
 }
 
 #[tokio::test]
-async fn nine_wrong_codes_leave_the_code_alive() {
+async fn forty_nine_wrong_codes_leave_the_code_alive() {
     let rig = rig().await;
     let code = link_code(&rig);
-    for i in 0..9 {
+    for i in 0..49 {
         rig.tg.handle_update(msg(500 + i, "/start WRONGCOD")).await;
     }
     rig.tg.handle_update(msg(OWNER, &format!("/start {code}"))).await;
@@ -1880,4 +1880,244 @@ async fn wait_for(cond: impl Fn() -> bool) {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("the condition never came true");
+}
+
+// ---- the review of the first version ----
+
+#[tokio::test]
+async fn wrong_codes_from_a_stranger_do_not_keep_the_owner_from_linking() {
+    let rig = rig().await;
+    let code = link_code(&rig);
+    for _ in 0..10 {
+        rig.tg.handle_update(msg(500, "/start WRONGCOD")).await;
+    }
+    rig.tg.handle_update(msg(OWNER, &format!("/start {code}"))).await;
+    assert!(rig.store.tg_chat_get(OWNER).unwrap().is_some());
+}
+
+#[tokio::test]
+async fn a_chat_with_five_wrong_codes_is_locked_out_for_the_life_of_the_code() {
+    let rig = rig().await;
+    let code = link_code(&rig);
+    for _ in 0..5 {
+        rig.tg.handle_update(msg(500, "/start WRONGCOD")).await;
+    }
+    // Even the right code does not work from that chat now...
+    rig.tg.handle_update(msg(500, &format!("/start {code}"))).await;
+    assert!(rig.store.tg_chat_get(500).unwrap().is_none());
+    // ...but it still works from another.
+    rig.tg.handle_update(msg(OWNER, &format!("/start {code}"))).await;
+    assert!(rig.store.tg_chat_get(OWNER).unwrap().is_some());
+    // A new code starts the count again.
+    let again = link_code(&rig);
+    rig.tg.handle_update(msg(500, &format!("/start {again}"))).await;
+    assert!(rig.store.tg_chat_get(500).unwrap().is_some());
+}
+
+#[tokio::test]
+async fn text_with_delete_and_c1_characters_still_goes_out() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    rig.pending_approval("echo a\u{7f}b\u{85}c\u{9f}d").await;
+    let card = rig.cards(OWNER).pop().expect("the card reached the chat");
+    let text = text_of(&card);
+    assert!(text.contains("echo abcd"), "{text:?}");
+    assert!(!text.contains(['\u{7f}', '\u{85}', '\u{9f}']));
+    // Line breaks and tabs stay.
+    rig.tg.send_html(OWNER, "a\nb\tc\u{80}", None, true).await;
+    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), "a\nb\tc");
+}
+
+#[tokio::test]
+async fn strangers_get_twenty_replies_a_minute_in_all() {
+    let rig = rig().await;
+    for i in 0..60 {
+        rig.tg.handle_update(msg(10_000 + i, "hi")).await;
+    }
+    assert_eq!(rig.fake.calls("sendMessage").len(), 20);
+    // A linked chat is not a stranger: it still gets its answers.
+    rig.link(OWNER);
+    rig.tg.handle_update(msg(OWNER, "/help")).await;
+    assert_eq!(rig.fake.sent_to(OWNER).len(), 1);
+}
+
+#[tokio::test]
+async fn a_flood_of_strangers_keeps_the_throttle_and_the_cards_of_a_linked_chat() {
+    let mut rig = rig_with(Timing {
+        send_gap: Duration::from_millis(300),
+        ..fast()
+    })
+    .await;
+    rig.link(OWNER);
+    rig.tg.send_html(OWNER, "first", None, true).await;
+    for i in 0..3000 {
+        rig.tg.handle_update(msg(10_000 + i, "hi")).await;
+    }
+    let flooded = std::time::Instant::now();
+    rig.pending_approval("ls").await;
+    let mine = rig.fake.calls_full("sendMessage");
+    let mine: Vec<_> = mine.iter().filter(|c| c.body["chat_id"] == OWNER).collect();
+    assert_eq!(mine.len(), 2);
+    assert!(
+        mine[1].at - mine[0].at >= Duration::from_millis(280),
+        "{:?}",
+        mine[1].at - mine[0].at
+    );
+    assert!(mine[1].at.duration_since(flooded) < Duration::from_secs(2));
+    assert!(rig.fake.calls("sendMessage").len() <= 22);
+}
+
+#[tokio::test]
+async fn the_line_of_one_chat_holds_at_most_two_hundred() {
+    let rig = rig_with(Timing {
+        send_gap: Duration::from_secs(60),
+        ..fast()
+    })
+    .await;
+    rig.link(OWNER);
+    let mut tasks = Vec::new();
+    for i in 0..205 {
+        let tg = rig.tg.clone();
+        tasks.push(tokio::spawn(async move {
+            tg.send_html(OWNER, &format!("m{i}"), None, true).await
+        }));
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    // One went at once, four of the oldest in line were let go, 200 wait.
+    let finished = tasks.iter().filter(|t| t.is_finished()).count();
+    assert_eq!(finished, 5);
+    for t in &tasks {
+        t.abort();
+    }
+}
+
+#[tokio::test]
+async fn unimportant_messages_are_let_go_before_important_ones() {
+    let rig = rig_with(Timing {
+        send_gap: Duration::from_secs(60),
+        ..fast()
+    })
+    .await;
+    rig.link(OWNER);
+    rig.tg.send_html(OWNER, "now", None, true).await;
+    // 30 unimportant ones wait; the 31st is dropped at once.
+    let mut tasks = Vec::new();
+    for i in 0..31 {
+        let tg = rig.tg.clone();
+        tasks.push(tokio::spawn(async move {
+            tg.send_html(OWNER, &format!("u{i}"), None, false).await
+        }));
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(tasks.iter().filter(|t| t.is_finished()).count(), 1);
+    for t in &tasks {
+        t.abort();
+    }
+}
+
+#[tokio::test]
+async fn a_long_edit_goes_as_plain_text_without_a_parse_mode() {
+    let rig = rig().await;
+    rig.link(OWNER);
+    rig.tg.edit_html(OWNER, 5, &"<b>x</b>".repeat(1000)).await;
+    let edits = rig.fake.calls("editMessageText");
+    assert_eq!(edits.len(), 1);
+    assert!(edits[0].get("parse_mode").is_none(), "{}", edits[0]);
+    let text = text_of(&edits[0]);
+    assert!(!text.contains("<b>") && text.chars().count() <= 4096);
+
+    // HTML Telegram refuses is edited again as plain text.
+    rig.fake
+        .fail_next("editMessageText", 400, "Bad Request: can't parse entities", None);
+    rig.tg.edit_html(OWNER, 6, "<b>bold</b> & more").await;
+    let edits = rig.fake.calls("editMessageText");
+    assert_eq!(edits.len(), 3);
+    assert!(edits[2].get("parse_mode").is_none());
+    assert_eq!(text_of(&edits[2]), "bold & more");
+}
+
+#[tokio::test]
+async fn a_card_whose_edit_failed_is_edited_again() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    let id = rig.pending_approval("ls").await;
+    rig.fake
+        .fail_next("editMessageText", 500, "Internal Server Error", None);
+    rig.sup.resolve(&id, Decision::Allow, false).await.unwrap();
+    rig.feed_until(|b| matches!(b, EventBody::ApprovalResolved { .. }))
+        .await;
+    let edits = rig.fake.calls("editMessageText");
+    assert_eq!(edits.len(), 2, "{edits:?}");
+    assert_eq!(rig.store.tg_msgs_for_ref("approval", &id).unwrap().len(), 0);
+    assert_eq!(rig.store.tg_msgs_for_ref("approval_done", &id).unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_card_that_cannot_be_edited_keeps_its_claim_open_for_a_later_press() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    let id = rig.pending_approval("ls").await;
+    let card = rig.fake.last_message_id();
+    for _ in 0..3 {
+        rig.fake
+            .fail_next("editMessageText", 500, "Internal Server Error", None);
+    }
+    rig.sup.resolve(&id, Decision::Allow, false).await.unwrap();
+    rig.feed_until(|b| matches!(b, EventBody::ApprovalResolved { .. }))
+        .await;
+    assert_eq!(rig.fake.calls("editMessageText").len(), 3);
+    // The card still has its buttons, so the claim was given back...
+    assert_eq!(rig.store.tg_msgs_for_ref("approval", &id).unwrap().len(), 1);
+    // ...and a press on it (answered "already decided") closes it now.
+    rig.tg
+        .handle_update(callback(OWNER, OWNER, card, &format!("a:{id}:y")))
+        .await;
+    assert_eq!(rig.fake.calls("editMessageText").len(), 4);
+    assert_eq!(rig.store.tg_msgs_for_ref("approval_done", &id).unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn an_empty_poll_that_came_back_fast_waits_out_the_minimum_cycle() {
+    let fake = FakeTelegram::start(TOKEN).await;
+    let store = Arc::new(Store::open_in_memory().unwrap());
+    let sup = Supervisor::new(Hub::new(store.clone()), Runtimes::default(), None);
+    let tg = Telegram::with_base(
+        sup,
+        &fake.base,
+        Timing {
+            poll_secs: 0,
+            min_poll_cycle: Duration::from_millis(250),
+            ..fast()
+        },
+    );
+    tg.set_token(TOKEN).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+    let polls = fake.calls("getUpdates").len();
+    assert!((3..=6).contains(&polls), "{polls} polls in a second");
+    tg.stop_for_test().await;
+}
+
+#[tokio::test]
+async fn the_wait_after_a_slow_empty_poll_is_only_what_is_left_of_the_cycle() {
+    let fake = FakeTelegram::start(TOKEN).await;
+    let store = Arc::new(Store::open_in_memory().unwrap());
+    let sup = Supervisor::new(Hub::new(store.clone()), Runtimes::default(), None);
+    // The fake holds an empty poll for 1 s; the cycle is 1.5 s, so the next poll comes 0.5 s later, not 1.5 s.
+    let tg = Telegram::with_base(
+        sup,
+        &fake.base,
+        Timing {
+            poll_secs: 1,
+            min_poll_cycle: Duration::from_millis(1500),
+            ..fast()
+        },
+    );
+    tg.set_token(TOKEN).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(3400)).await;
+    assert!(
+        fake.calls("getUpdates").len() >= 3,
+        "{}",
+        fake.calls("getUpdates").len()
+    );
+    tg.stop_for_test().await;
 }

@@ -4,7 +4,9 @@
 
 use super::format::{escape_html, truncate_chars};
 use super::strings::tr;
-use super::{BAD_CODE_GAP, CODE_LEN, Held, LinkCode, MAX_CODE_FAILURES, Sent, Telegram, map_language};
+use super::{
+    BAD_CODE_GAP, CODE_LEN, Held, LinkCode, MAX_CHAT_CODE_FAILURES, MAX_CODE_FAILURES, Sent, Telegram, map_language,
+};
 use crate::commands::prepare as prepare_message;
 use crate::event::{DecidedBy, Decision, Source};
 use crate::store::{Agent, ApprovalStatus, TgChat, TgLink, now_ms};
@@ -126,7 +128,7 @@ impl Telegram {
         }
         if m["chat"]["type"].as_str() != Some("private") {
             // Groups and channels are not for this bot.
-            if self.allow_notice(chat_id, "leave", self.timing.notice_gap) {
+            if self.allow_notice(chat_id, "leave", self.timing.notice_gap) && self.allow_stranger_reply() {
                 self.leave_chat(chat_id).await;
             }
             return;
@@ -171,7 +173,7 @@ impl Telegram {
             self.try_link(m, chat_id, lang, word).await;
             return;
         }
-        if self.allow_notice(chat_id, "not_linked", self.timing.notice_gap) {
+        if self.allow_notice(chat_id, "not_linked", self.timing.notice_gap) && self.allow_stranger_reply() {
             self.send_html(chat_id, &tr(lang, "not_linked", &[]), None, true).await;
         }
     }
@@ -185,12 +187,18 @@ impl Telegram {
             match st.link.take() {
                 None => None,
                 Some(mut link) => {
+                    let tried = link.chat_failures.get(&chat_id).copied().unwrap_or(0);
                     if now >= link.expires_at {
+                        None
+                    } else if tried >= MAX_CHAT_CODE_FAILURES {
+                        // This chat has used up its tries on this code, the right one included.
+                        st.link = Some(link);
                         None
                     } else if input.len() == CODE_LEN && same_code(&link.code, &input) {
                         Some(link)
                     } else {
                         link.failures += 1;
+                        link.chat_failures.insert(chat_id, tried + 1);
                         if link.failures < MAX_CODE_FAILURES {
                             st.link = Some(link);
                         }
@@ -200,7 +208,7 @@ impl Telegram {
             }
         };
         let Some(link) = taken else {
-            if self.allow_notice(chat_id, "bad_code", BAD_CODE_GAP) {
+            if self.allow_notice(chat_id, "bad_code", BAD_CODE_GAP) && self.allow_stranger_reply() {
                 self.send_html(chat_id, &tr(lang, "bad_code", &[]), None, true).await;
             }
             return;
