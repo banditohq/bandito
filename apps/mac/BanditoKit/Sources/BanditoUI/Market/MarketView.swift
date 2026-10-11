@@ -418,11 +418,11 @@ struct MarketView: View {
         onActive: @escaping (Int?) -> Void
     ) -> some View {
         let actions = cardActions
-        LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-            ForEach([MarketScrollDriver.topID], id: \.self) { _ in
-                Color.clear.frame(height: MarketSectionMetrics.topInset)
-                    .marketAnchor { tracker.reportTop($0) }
-            }
+        // Not a lazy stack: it does not know the height of what it has not built, so a jump upward landed in the wrong
+        // place. A page of about eight blocks and sixty light, Equatable cards is cheap to build once.
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear.frame(height: MarketSectionMetrics.topInset)
+                .id(MarketScrollDriver.topID)
             switch content {
             case .sections(let sections):
                 if let recommendation, !firstIsConnected {
@@ -431,17 +431,21 @@ struct MarketView: View {
                         .padding(.bottom, 14)
                 }
                 ForEach(Array(sections.enumerated()), id: \.element.scrollID) { index, section in
-                    Color.clear.frame(height: 0)
-                        .marketAnchor { y in
-                            if tracker.report(index: index, minY: y) { onActive(tracker.active) }
-                        }
-                    Section {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // The place of the header; the header itself is drawn over it and stays at the top.
+                        Color.clear.frame(height: MarketSectionMetrics.headerHeight)
                         sectionBody(
                             section, actions: actions,
                             recommendation: section.kind == .connected ? recommendation : nil)
                         Color.clear.frame(height: MarketSectionMetrics.sectionGap)
-                    } header: {
-                        MarketSectionHeader(title: title(of: section), count: section.entries.count, tone: .of(section))
+                    }
+                    .overlay {
+                        MarketStickyHeader(
+                            title: title(of: section), count: section.entries.count, tone: .of(section))
+                    }
+                    .id(section.scrollID)
+                    .marketAnchor { y in
+                        if tracker.report(index: index, minY: y) { onActive(tracker.active) }
                     }
                 }
                 if let last = sections.last {
