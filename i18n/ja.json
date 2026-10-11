@@ -2662,7 +2662,7 @@
   "integrations.device.codeHint": "アクセスを許可するため、{site} でこのコードを入力してから Bandito に戻ってください。",
   "integrations.device.copy": "コピー",
   "integrations.device.copied": "コピーしました",
-  "integrations.device.open": "{address} を開く",
+  "integrations.device.openGithub": "GitHubを開く",
   "integrations.device.waiting": "{site} での確認を待っています…",
   "integrations.device.expiresIn": "コードの有効期限まであと {time}",
   "integrations.device.expired": "コードの有効期限が切れました。もう一度試して新しいコードを取得してください。",

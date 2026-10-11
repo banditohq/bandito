@@ -85,28 +85,30 @@ struct ImportSheet: View {
                     sections: [SelectSection(options: runtimes.map { SelectOption(value: $0, title: $0.title) })],
                     label: L10n.ClaudeImport.runtime, placeholder: "", style: .compact)
             }
-            Spacer(minLength: 8)
-            if runner.finished {
-                Button(L10n.ClaudeImport.done) { dismiss() }
-                    .banditoButton(.signal())
-                    .fixedSize()
-            } else {
-                if runner.running {
-                    Button(L10n.ClaudeImport.stop) { runner.cancel() }
-                        .banditoButton(.quiet())
+            ActionRow {
+                if runner.finished {
+                    Button(L10n.ClaudeImport.done) { dismiss() }
+                        .banditoButton(.signal())
                         .fixedSize()
                 } else {
-                    Button(L10n.Common.cancel) { dismiss() }
-                        .banditoButton(.quiet())
-                        .fixedSize()
+                    if runner.running {
+                        Button(L10n.ClaudeImport.stop) { runner.cancel() }
+                            .banditoButton(.quiet())
+                            .fixedSize()
+                    } else {
+                        Button(L10n.Common.cancel) { dismiss() }
+                            .banditoButton(.quiet())
+                            .fixedSize()
+                    }
+                    Button(runner.running ? L10n.ClaudeImport.running(done: String(runner.done), total: String(plan.count)) : L10n.ClaudeImport.start(count: plan.count)) {
+                        start()
+                    }
+                    .banditoButton(.signal())
+                    .disabled(runner.running || !plan.canImport || server == nil)
+                    .fixedSize()
                 }
-                Button(runner.running ? L10n.ClaudeImport.running(done: String(runner.done), total: String(plan.count)) : L10n.ClaudeImport.start(count: plan.count)) {
-                    start()
-                }
-                .banditoButton(.signal())
-                .disabled(runner.running || !plan.canImport || server == nil)
-                .fixedSize()
             }
+            .layoutPriority(1)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 14)

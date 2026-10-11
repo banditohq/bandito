@@ -172,8 +172,7 @@ struct ScheduleEditor: View {
             if let error {
                 UserFacingErrorView(message: error)
             }
-            HStack(spacing: 10) {
-                Spacer()
+            ActionRow {
                 Button(L10n.Common.cancel) { dismiss() }
                     .banditoButton(.quiet())
                     .fixedSize()

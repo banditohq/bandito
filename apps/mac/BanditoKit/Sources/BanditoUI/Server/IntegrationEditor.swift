@@ -98,8 +98,7 @@ struct IntegrationEditor: View {
             if let error {
                 UserFacingErrorView(message: error, onRetry: { save() })
             }
-            HStack(spacing: 10) {
-                Spacer(minLength: 8)
+            ActionRow {
                 Button(L10n.Common.cancel) { dismiss() }
                     .banditoButton(.quiet())
                     .fixedSize()

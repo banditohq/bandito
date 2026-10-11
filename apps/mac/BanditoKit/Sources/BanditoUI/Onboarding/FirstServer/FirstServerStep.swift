@@ -361,7 +361,7 @@ struct FirstServerStep: View {
                 .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
-            HStack(spacing: 10) {
+            ActionRow {
                 Button {
                     Task { await model.trustHost(preview, app: app) }
                 } label: {
@@ -458,7 +458,7 @@ struct FirstServerStep: View {
     /// Retry, back, and copy the journal, in one row. Retry is left out for a new host: its fingerprint review is the
     /// way on.
     private var failureButtons: some View {
-        HStack(spacing: 10) {
+        ActionRow {
             if model.failure != .sshFailed(.hostKeyUnknown) {
                 Button {
                     retryInstall()
@@ -514,7 +514,7 @@ struct FirstServerStep: View {
                 .font(BanditoFont.text(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
-            HStack(spacing: 10) {
+            ActionRow {
                 Button { model.retryConnection(app: app) } label: { Text(L10n.Onboarding.Server.connectRetry).oneLine() }
                     .banditoButton(.signal())
                 Button { model.backToChoice() } label: { Text(L10n.Onboarding.Server.back).oneLine() }

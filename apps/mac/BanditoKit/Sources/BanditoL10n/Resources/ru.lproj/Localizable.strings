@@ -798,7 +798,7 @@
 "integrations.device.expiresIn" = "Код действует ещё %1$@";
 "integrations.device.needsUpdate" = "Обновите сервер, чтобы подключить %1$@ по коду.";
 "integrations.device.network" = "Сервер Bandito не достучался до сервиса. Проверьте соединение и попробуйте снова.";
-"integrations.device.open" = "Открыть %1$@";
+"integrations.device.openGithub" = "Открыть GitHub";
 "integrations.device.refused" = "Сервис не принял вход.";
 "integrations.device.revokeHint" = "Доступ остаётся действующим в сервисе, пока вы не отзовёте его там: github.com/settings/applications.";
 "integrations.device.starting" = "Запрашиваем код…";

@@ -61,6 +61,7 @@ Build only from these. Need something that is not here: add it to the system fir
 | Need | Use | Where |
 | --- | --- | --- |
 | Any button | `.banditoButton(.signal() / .quiet() / .lightPill() / .icon(label:) / .row() / .link / .brighten)` | `Components/Buttons.swift`, `Interaction.swift` |
+| Bottom row of buttons in a sheet or dialog (a row that turns into a column when it does not fit) | `ActionRow` | `Components/ActionRow.swift` |
 | Card or option surface | `.banditoCard(selected:hoverLift:)` | `Components/Card.swift` |
 | Text input | `.banditoField(error:)`, `.banditoEditor(error:)` | `Components/BanditoField.swift` |
 | Choose one of many | `BanditoSelect` (`.field`, `.compact`, `.regular`) | `Components/BanditoSelect.swift` |

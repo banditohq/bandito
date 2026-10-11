@@ -51,7 +51,7 @@ struct MarketPanelFooter<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             Rectangle().fill(Color.Bandito.line).frame(height: 1)
-            HStack(spacing: 10) {
+            ActionRow {
                 content
             }
             .padding(.horizontal, 24)

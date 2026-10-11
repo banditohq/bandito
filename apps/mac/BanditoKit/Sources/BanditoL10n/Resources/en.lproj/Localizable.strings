@@ -798,7 +798,7 @@
 "integrations.device.expiresIn" = "The code works for another %1$@";
 "integrations.device.needsUpdate" = "Update the server to connect %1$@ with a code.";
 "integrations.device.network" = "Bandito's server could not reach the service. Check the connection and try again.";
-"integrations.device.open" = "Open %1$@";
+"integrations.device.openGithub" = "Open GitHub";
 "integrations.device.refused" = "The service did not accept the sign-in.";
 "integrations.device.revokeHint" = "The access stays valid at the service until you remove it there: github.com/settings/applications.";
 "integrations.device.starting" = "Asking for a code…";

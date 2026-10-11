@@ -376,8 +376,7 @@ struct TelegramLinkSheet: View {
             if let failure {
                 UserFacingErrorView(message: failure.message)
             }
-            HStack(spacing: 10) {
-                Spacer(minLength: 0)
+            ActionRow {
                 Button(L10n.Common.close) { isPresented = false }
                     .banditoButton(.quiet())
                 if expired {

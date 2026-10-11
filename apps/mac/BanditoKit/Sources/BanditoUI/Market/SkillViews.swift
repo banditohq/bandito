@@ -343,7 +343,6 @@ struct SkillDetailPanel: View {
             .scrollIndicators(.never)
             .frame(maxHeight: 460)
             MarketPanelFooter {
-                Spacer(minLength: 8)
                 Button(L10n.Common.close, action: onClose)
                     .banditoButton(.quiet())
                     .fixedSize()
@@ -580,7 +579,6 @@ struct SkillInstallPanel: View {
             }
             .padding(24)
             MarketPanelFooter {
-                Spacer(minLength: 8)
                 Button(L10n.Common.cancel, action: onClose)
                     .banditoButton(.quiet())
                     .disabled(installing)

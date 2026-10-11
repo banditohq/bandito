@@ -2761,7 +2761,7 @@
   "integrations.device.codeHint": "Введите этот код на {site}, чтобы разрешить доступ, и вернитесь в Bandito.",
   "integrations.device.copy": "Скопировать",
   "integrations.device.copied": "Скопировано",
-  "integrations.device.open": "Открыть {address}",
+  "integrations.device.openGithub": "Открыть GitHub",
   "integrations.device.waiting": "Ждём подтверждения на {site}…",
   "integrations.device.expiresIn": "Код действует ещё {time}",
   "integrations.device.expired": "Код истёк. Попробуйте снова, чтобы получить новый.",

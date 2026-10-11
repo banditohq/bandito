@@ -798,7 +798,7 @@
 "integrations.device.expiresIn" = "O código vale por mais %1$@";
 "integrations.device.needsUpdate" = "Atualize o servidor para conectar %1$@ com um código.";
 "integrations.device.network" = "O servidor do Bandito não conseguiu falar com o serviço. Verifique a conexão e tente de novo.";
-"integrations.device.open" = "Abrir %1$@";
+"integrations.device.openGithub" = "Abrir o GitHub";
 "integrations.device.refused" = "O serviço não aceitou o login.";
 "integrations.device.revokeHint" = "O acesso continua válido no serviço até você removê-lo lá: github.com/settings/applications.";
 "integrations.device.starting" = "Pedindo um código…";

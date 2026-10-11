@@ -212,8 +212,7 @@ private struct SecretEditor: View {
             if let error {
                 UserFacingErrorView(message: error)
             }
-            HStack {
-                Spacer()
+            ActionRow {
                 Button(L10n.Common.cancel) { dismiss() }
                     .banditoButton(.quiet())
                 Button(L10n.Common.save) { save() }

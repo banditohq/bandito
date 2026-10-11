@@ -233,8 +233,10 @@ struct Composer: View {
                             return .handled
                         }
 
+                    // The row is bottom-aligned: the 34 pt send disc, and the + and mic (30 pt plus 2) centre 17 pt
+                    // above the bottom. The 22 pt indicator sits 6 pt up from the bottom, so its centre matches them.
                     contextIndicator
-                        .padding(.bottom, 9)
+                        .padding(.bottom, 6)
 
                     sendOrStop
                 }
@@ -897,11 +899,13 @@ struct Composer: View {
                         .lineLimit(2)
                 }
             }
-            Spacer(minLength: 8)
-            Button(L10n.Common.cancel) { mention.connectPrompt = nil }
-                .banditoButton(.quiet())
-            Button(L10n.Mention.connectAndSend) { connectService(item) }
-                .banditoButton(.signal())
+            ActionRow {
+                Button(L10n.Common.cancel) { mention.connectPrompt = nil }
+                    .banditoButton(.quiet())
+                Button(L10n.Mention.connectAndSend) { connectService(item) }
+                    .banditoButton(.signal())
+            }
+            .layoutPriority(1)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)

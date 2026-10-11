@@ -2662,7 +2662,7 @@
   "integrations.device.codeHint": "접근을 허용하려면 {site}에서 이 코드를 입력한 다음 Bandito로 돌아오세요.",
   "integrations.device.copy": "복사",
   "integrations.device.copied": "복사했어요",
-  "integrations.device.open": "{address} 열기",
+  "integrations.device.openGithub": "GitHub 열기",
   "integrations.device.waiting": "{site}에서 확인하기를 기다리는 중…",
   "integrations.device.expiresIn": "코드가 {time} 동안 유효해요",
   "integrations.device.expired": "코드가 만료됐어요. 다시 시도해 새 코드를 받으세요.",

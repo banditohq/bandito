@@ -2693,7 +2693,7 @@
   "integrations.device.codeHint": "Gib diesen Code auf {site} ein, um den Zugriff zu erlauben, und komm dann zurück zu Bandito.",
   "integrations.device.copy": "Kopieren",
   "integrations.device.copied": "Kopiert",
-  "integrations.device.open": "{address} öffnen",
+  "integrations.device.openGithub": "GitHub öffnen",
   "integrations.device.waiting": "Warte auf deine Bestätigung auf {site} …",
   "integrations.device.expiresIn": "Der Code gilt noch {time}",
   "integrations.device.expired": "Der Code ist abgelaufen. Versuche es erneut, um einen neuen zu bekommen.",

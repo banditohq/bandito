@@ -170,7 +170,6 @@ struct BundlePanel: View {
             if let result {
                 resultBody(result)
                 MarketPanelFooter {
-                    Spacer(minLength: 8)
                     if let first = BundleLogic.firstAgent(result) {
                         Button(L10n.Common.close, action: onClose)
                             .banditoButton(.quiet())
@@ -187,7 +186,6 @@ struct BundlePanel: View {
             } else {
                 detailBody
                 MarketPanelFooter {
-                    Spacer(minLength: 8)
                     Button(L10n.Common.close, action: onClose)
                         .banditoButton(.quiet())
                         .disabled(creating)

@@ -79,7 +79,7 @@ struct ProfileSignInBlock: View {
                     .foregroundStyle(Color.Bandito.text)
                     .tracking(3)
                     .textSelection(.enabled)
-                HStack(spacing: 12) {
+                ActionRow {
                     Button(L10n.Onboarding.Account.Github.copyAndOpen) {
                         github.copyAndOpen()
                         copiedNote = true
