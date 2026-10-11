@@ -6,6 +6,8 @@ import SwiftUI
 import AppKit
 #endif
 
+enum ThreadExp { nonisolated(unsafe) static var on: Set<Int> = [] }
+
 /// The thread of one agent: header, the rows, banners and the composer.
 struct ThreadView: View {
     var server: ServerModel
@@ -269,6 +271,7 @@ struct ThreadView: View {
 
     private var chatColumn: some View {
         VStack(spacing: 0) {
+            if ThreadExp.on.contains(1) { Color.red.frame(height: 56) } else {
             ThreadHeader(
                 agent: agent,
                 server: server,
@@ -287,11 +290,12 @@ struct ThreadView: View {
                     state: router.workbenchState(for: agent.id), runningTools: runningToolNames),
                 showsBrowserButton: server.supports("browser"),
                 onShowBrowser: { router.showInWorkbench(.browser, agentID: agent.id) })
+            }
             if let movedTo = agent.migratedTo {
                 MigratedAgentStrip(agent: agent, source: server, movedTo: movedTo)
             }
 
-            ThreadRowsScope { rowList }
+            ThreadRowsScope { if ThreadExp.on.contains(2) { Color.blue } else { rowList } }
                 .background {
                     ThreadWatch(
                         server: server, agentID: agent.id,
@@ -348,6 +352,7 @@ struct ThreadView: View {
                 }
             }
             QuickRepliesHost(server: server, agentID: agent.id, onReply: sendQuickReply, onOpen: openQuickLink)
+            if ThreadExp.on.contains(3) { Color.green.frame(height: 90) } else {
             Composer(
                 agentName: agent.name,
                 running: summary.turnRunning,
@@ -370,6 +375,7 @@ struct ThreadView: View {
                 .frame(maxWidth: 780)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 14)
+            }
         }
         .frame(maxWidth: .infinity)
         .background(Color.Bandito.bg)

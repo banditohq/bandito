@@ -426,6 +426,9 @@ public enum TeamSelection {
     /// The agent the team shows now: `resolve` over this server's sidebar order.
     @MainActor
     public static func shownAgentID(server: ServerModel, selected: String?, pinned: Set<String>) -> String? {
+        // The chosen agent is on this server: it is the one, whatever the order (the order reads every agent's
+        // state, which made the team's body depend on all of them and cost a sort at every switch).
+        if let selected, server.agents.contains(where: { $0.id == selected }) { return selected }
         let order = TeamSidebarOrder.ids(agents: server.sortedAgents, pinned: pinned) { server.needsPerson($0) }
         return resolve(
             selected: selected,

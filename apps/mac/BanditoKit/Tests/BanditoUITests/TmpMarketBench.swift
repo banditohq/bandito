@@ -101,8 +101,24 @@ import Testing
         }
         world.router.select(mode: .team)
         pump(hosting, 0.3)
-        for (index, id) in world.agentIDs.prefix(6).enumerated() {
-            _ = timed("agent \(index)", hosting) { world.router.selectedAgentID = id }
+        if ProcessInfo.processInfo.environment["BENCH_LOOP"] != nil {
+            let end = Date().addingTimeInterval(14)
+            var i = 0
+            while Date() < end {
+                world.router.selectedAgentID = world.agentIDs[i % 40]
+                hosting.layoutSubtreeIfNeeded()
+                pump(hosting, 0.001)
+                i += 1
+            }
+            print("BENCHX loop \(i) switches")
+        }
+        for exp in [[], []] as [Set<Int>] {
+            ThreadExp.on = exp
+            var total = 0.0
+            for id in world.agentIDs.prefix(16) {
+                total += timed("agent", hosting) { world.router.selectedAgentID = id }
+            }
+            print("BENCHX agents exp \(exp.sorted()) \(Int(total / 16))")
         }
         world.router.select(mode: .market)
         pump(hosting, 0.3)

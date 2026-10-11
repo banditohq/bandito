@@ -105,6 +105,9 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
     private var context: ThreadListContext?
     /// Measured heights of rows at `measuredWidth`, by line id.
     private var heights: [String: CGFloat] = [:]
+    /// The guessed heights of rows not measured yet, by line id: the table asks for every row's height (a long
+    /// thread's 1500 rows) at each reload and each width; a guess is made once per line.
+    private var guesses: [String: CGFloat] = [:]
     private var measuredWidth: CGFloat = 0
     /// The rows whose measured height differs from the one the table has; told to the table once per pass.
     private var pendingHeights = IndexSet()
@@ -164,9 +167,11 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
         guard next != version else { return }
         version = next
         let old = lines
+        if old.isEmpty { table.prepareOnlyVisible() }
         if change == .last, new.count == old.count, !new.isEmpty {
             // A stream: only the last row is given its new content.
             lines = new
+            guesses[new[new.count - 1].id] = nil
             reconfigure(IndexSet(integer: new.count - 1))
             return
         }
@@ -214,6 +219,7 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
         guard !indexes.isEmpty else { return }
         for index in indexes {
             let line = lines[index]
+            guesses[line.id] = nil
             if let cell = table.view(atColumn: 0, row: index, makeIfNecessary: false) as? ThreadListCell {
                 configure(cell, with: line)
                 measure(cell, line: line, row: index)
@@ -277,10 +283,14 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
         guard lines.indices.contains(row) else { return 1 }
         let line = lines[row]
         if let known = heights[line.id] { return known }
-        switch line {
-        case .row(let key, _): return ThreadHeightGuess.height(of: key.row) + Self.rowSpacing
-        case .typing: return 44 + Self.rowSpacing
-        }
+        if let guess = guesses[line.id] { return guess }
+        let guess: CGFloat =
+            switch line {
+            case .row(let key, _): ThreadHeightGuess.height(of: key.row) + Self.rowSpacing
+            case .typing: 44 + Self.rowSpacing
+            }
+        guesses[line.id] = guess
+        return guess
     }
 
     // MARK: table
@@ -419,6 +429,23 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
 final class ThreadTableView: NSTableView {
     override var acceptsFirstResponder: Bool { false }
     override func validateProposedFirstResponder(_ responder: NSResponder, for event: NSEvent?) -> Bool { true }
+
+    /// Until then the table makes only the rows that show: a thread just opened (an agent switch) makes its first
+    /// screen in the frame of the switch; the rows above and below it (AppKit's overdraw) come with the first scroll.
+    private var visibleOnlyUntil: CFTimeInterval = 0
+
+    func prepareOnlyVisible() {
+        visibleOnlyUntil = CACurrentMediaTime() + 0.25
+    }
+
+    override func prepareContent(in rect: NSRect) {
+        if CACurrentMediaTime() < visibleOnlyUntil {
+            let visible = visibleRect
+            super.prepareContent(in: visible.isEmpty ? rect : visible)
+        } else {
+            super.prepareContent(in: rect)
+        }
+    }
 }
 
 /// A row view that draws nothing: the rows draw their own look.
