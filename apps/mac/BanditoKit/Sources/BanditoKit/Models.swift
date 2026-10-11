@@ -375,6 +375,19 @@ public struct Plan: Codable, Sendable, Hashable {
         self.id = id
         self.label = label
     }
+
+    /// Older daemons send the size of a Max plan (`max_5x` / «Max ×5») from a CLI field that is not kept up to
+    /// date, so every Max plan reads as plain «Max».
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try c.decode(String.self, forKey: .id)
+        let label = try c.decode(String.self, forKey: .label)
+        if id.lowercased().hasPrefix("max_") {
+            self.init(id: "max", label: "Max")
+        } else {
+            self.init(id: id, label: label)
+        }
+    }
 }
 
 /// Rate-limit windows of one runtime, as the app last learned them.
