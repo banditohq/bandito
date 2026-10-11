@@ -45,6 +45,7 @@ pub mod skills;
 pub mod store;
 pub mod supervisor;
 pub mod team;
+pub mod telegram;
 pub mod terminal;
 pub mod tool_policy;
 pub mod update;
