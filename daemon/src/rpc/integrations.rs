@@ -7,7 +7,8 @@ use crate::mcp_oauth::{self, Outcome, Target, Why};
 use crate::recommend;
 use crate::redact::Redactor;
 use crate::store::{
-    CallFilter, Integration, IntegrationAuth, IntegrationPatch, IntegrationTool, NewIntegration, Store, now_ms,
+    CallFilter, Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, IntegrationTool, NewIntegration,
+    Store, now_ms,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -607,7 +608,19 @@ async fn probe_row(store: &Store, row: &Integration, draft: bool) -> RpcResult {
         Err(Refused::SignIn) => {
             ok(json!({ "ok": false, "tools": [], "error": "sign in to this service again", "needs_login": true }))
         }
-        Err(Refused::Failed(e)) => ok(json!({ "ok": false, "tools": [], "error": format!("{e:#}") })),
+        Err(Refused::Failed(e)) => {
+            // A draft the service refuses with 401 may sign in in the browser: the app offers that, not a failure.
+            let refused = e.downcast_ref::<HttpStatus>().is_some_and(|s| s.0 == 401);
+            if draft
+                && refused
+                && row.kind == IntegrationKind::Http
+                && let Some(url) = &row.url
+                && mcp_oauth::offers_sign_in(url).await
+            {
+                return ok(json!({ "ok": false, "tools": [], "oauth": true }));
+            }
+            ok(json!({ "ok": false, "tools": [], "error": format!("{e:#}") }))
+        }
     }
 }
 
@@ -2900,6 +2913,26 @@ mod tests {
             }
             let err = call(&app, "integrations.oauth_begin", json!({})).await.unwrap_err();
             assert_eq!(err.code, crate::rpc::INVALID_PARAMS);
+        }
+
+        #[tokio::test]
+        async fn a_draft_the_service_answers_with_a_browser_sign_in_is_offered_it_and_saves_nothing() {
+            let app = app();
+            let fake = Fake::start().await;
+            let draft = json!({ "name": "notion", "kind": "http", "url": fake.url() });
+            let probed = call(&app, "integrations.probe", json!({ "draft": draft }))
+                .await
+                .unwrap();
+            assert_eq!(probed, json!({ "ok": false, "tools": [], "oauth": true }));
+            assert_eq!(call(&app, "integrations.list", json!({})).await.unwrap(), json!([]));
+            // An address that is not there is a failure as before, not a sign-in.
+            let other = json!({ "name": "notion", "kind": "http", "url": format!("{}/elsewhere/mcp", fake.base) });
+            let failed = call(&app, "integrations.probe", json!({ "draft": other }))
+                .await
+                .unwrap();
+            assert_eq!(failed["ok"], false);
+            assert!(failed["error"].is_string(), "{failed}");
+            assert!(failed.get("oauth").is_none(), "{failed}");
         }
     }
 }
