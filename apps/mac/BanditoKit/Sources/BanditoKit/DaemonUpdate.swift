@@ -9,6 +9,21 @@ public struct DaemonUpdate: Codable, Sendable, Hashable {
     public var available: Bool
     /// When the check ran, Unix milliseconds.
     public var checkedAt: Int64
+
+    public init(current: String, latest: String, available: Bool, checkedAt: Int64) {
+        self.current = current
+        self.latest = latest
+        self.available = available
+        self.checkedAt = checkedAt
+    }
+}
+
+/// The answer of `daemon.update_check`: the daemon's check made now. Unlike `DaemonUpdate` it has no `checked_at`, and
+/// `latest` is nil when the check found no release to name.
+public struct DaemonUpdateCheck: Decodable, Sendable, Equatable {
+    public var current: String
+    public var latest: String?
+    public var available: Bool
 }
 
 /// The answer of `daemon.update_apply`: the release is installed. `restarting` is false when no service manager
@@ -28,6 +43,20 @@ public enum DaemonUpdateOffer {
             ReleaseFeed.isUpdateAvailable(current: update.current, latest: latest)
         else { return nil }
         return update
+    }
+
+    /// The one update every Server screen offers for a daemon (the button, the menu dot). The daemon's own offer in
+    /// `daemon.info` wins. Otherwise the last answer to `daemon.update_check` counts, when the daemon has the `update`
+    /// feature and the answer names a release newer than its version. The last check replaces the earlier one, so
+    /// nothing else decides by age.
+    public static func shown(info: DaemonInfo?, check: DaemonUpdateCheck?, checkedAt: Date?) -> DaemonUpdate? {
+        if let offer = offer(for: info) { return offer }
+        guard let info, info.supports("update"), let check, check.available, let text = check.latest,
+            let latest = SemanticVersion(text), ReleaseFeed.isUpdateAvailable(current: info.version, latest: latest)
+        else { return nil }
+        let when = checkedAt ?? Date()
+        return DaemonUpdate(
+            current: info.version, latest: text, available: true, checkedAt: Int64(when.timeIntervalSince1970 * 1000))
     }
 
     /// True once the daemon reports `target` as its version. After a restart the reconnect sets `info` again.

@@ -40,8 +40,9 @@ private struct ScreenMainArea: View {
         Group {
             if model.server.info == nil {
                 ScreenNote(text: L10n.Screen.connecting)
-            } else if !model.isSupported {
-                ScreenUnsupported()
+            } else if model.phase == .needsUpdate {
+                // An older Linux daemon is fixed by an update; a Mac has no server screen at all.
+                if model.server.info?.os == "linux" { ScreenNeedsUpdate() } else { ScreenUnsupported() }
             } else {
                 VStack(spacing: 0) {
                     ScreenToolbar(model: model)
@@ -157,7 +158,8 @@ private struct ScreenCanvas: View {
 
     @ViewBuilder
     private var surface: some View {
-        if model.status?.running == true, model.connection != nil {
+        switch model.phase {
+        case .running:
             ZStack {
                 #if os(macOS)
                 VNCScreenView(model: model)
@@ -173,32 +175,105 @@ private struct ScreenCanvas: View {
                         .background(Color(red: 0.09, green: 0.075, blue: 0.06))
                 }
             }
-        } else if model.status?.running == true {
-            if let errorText = model.errorText {
-                UserFacingErrorView(message: errorText)
-                    .padding(16)
-            } else {
-                ScreenNote(text: L10n.Screen.connecting)
+        case .needsUpdate:
+            ScreenNeedsUpdate()
+        case .idle:
+            ScreenAsleep(model: model)
+        case .starting:
+            ScreenProgress(text: L10n.Screen.starting)
+        case .connecting:
+            ScreenProgress(text: L10n.Screen.connecting)
+        case .noFrame:
+            ScreenFailure(message: UserFacingMessage(text: L10n.Screen.noFrame, canRetry: true)) {
+                Task { await model.start() }
             }
-        } else {
-            VStack(spacing: 14) {
-                Image(systemName: "display")
-                    .font(.system(size: 34))
-                    .foregroundStyle(Color.Bandito.text3)
-                Text(L10n.Screen.asleep)
-                    .font(BanditoFont.text(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
-                if let text = model.errorText {
-                    UserFacingErrorView(message: text)
-                        .frame(maxWidth: 360)
-                }
-                Button(L10n.Screen.start) {
-                    Task { await model.start() }
-                }
-                .banditoButton(.signal())
+        case .failed(let message):
+            ScreenFailure(message: message) {
+                Task { await model.start() }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+/// The screen is asleep: the start button. A failure of an earlier stop or refresh shows above it.
+private struct ScreenAsleep: View {
+    @Bindable var model: ScreenModel
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "display")
+                .font(.system(size: 34))
+                .foregroundStyle(Color.Bandito.text3)
+            Text(L10n.Screen.asleep)
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+            if let text = model.errorText {
+                UserFacingErrorView(message: text)
+                    .frame(maxWidth: 360)
+            }
+            Button(L10n.Screen.start) {
+                Task { await model.start() }
+            }
+            .banditoButton(.signal())
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// The start is in flight, or the screen runs and its picture is on the way: a spinner in place of the button.
+private struct ScreenProgress: View {
+    let text: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.small)
+            Text(text)
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// A start or a picture failed: the sentence, and "Повторить" (which starts the screen again).
+private struct ScreenFailure: View {
+    let message: UserFacingMessage
+    let retry: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "display")
+                .font(.system(size: 34))
+                .foregroundStyle(Color.Bandito.text3)
+            UserFacingErrorView(message: message, onRetry: retry)
+                .frame(maxWidth: 360)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// An older daemon on a Linux server: it has no screen feature. The update fixes it, so the page opens Server → Updates.
+private struct ScreenNeedsUpdate: View {
+    @Environment(Router.self) private var router
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "display")
+                .font(.system(size: 34))
+                .foregroundStyle(Color.Bandito.text3)
+            Text(L10n.Screen.needsUpdate)
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
+            Button(L10n.Screen.openUpdates) {
+                router.select(mode: .server)
+                router.serverSection = .updates
+            }
+            .banditoButton(.signal())
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

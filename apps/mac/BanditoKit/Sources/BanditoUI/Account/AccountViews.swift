@@ -181,7 +181,7 @@ struct DeviceApprovalStep: View {
                 .font(BanditoFont.text(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
-            HStack(spacing: 10) {
+            ActionRow {
                 Button(L10n.Onboarding.Account.codesMatch) { confirm() }
                     .banditoButton(.signal())
                 Button(L10n.Onboarding.Account.codesDiffer) {
@@ -209,7 +209,7 @@ struct DeviceApprovalStep: View {
     private var failed: some View {
         VStack(alignment: .leading, spacing: 16) {
             UserFacingErrorView(message: errorText ?? UserFacingMessage(text: L10n.Onboarding.Account.errorGeneric))
-            HStack(spacing: 10) {
+            ActionRow {
                 // Checking the device again is safe: it reads the account state from the start.
                 Button(L10n.Onboarding.Server.retry) { Task { await retryStart() } }
                     .banditoButton(.signal(size: .regular))

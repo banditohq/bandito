@@ -384,15 +384,17 @@ struct CustomIntegrationSheet: View {
                     .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
-            Spacer(minLength: 8)
-            Button(L10n.Common.cancel) { dismiss() }
-                .banditoButton(.quiet())
-                .fixedSize()
-            Button(checking ? L10n.Integrations.checking : L10n.Integrations.check) { check() }
-                .banditoButton(.quiet())
-                .disabled(busy || checking)
-                .fixedSize()
-            primaryButton
+            ActionRow(hugging: true) {
+                Button(L10n.Common.cancel) { dismiss() }
+                    .banditoButton(.quiet())
+                    .fixedSize()
+                Button(checking ? L10n.Integrations.checking : L10n.Integrations.check) { check() }
+                    .banditoButton(.quiet())
+                    .disabled(busy || checking)
+                    .fixedSize()
+                primaryButton
+            }
+            .layoutPriority(1)
         }
     }
 

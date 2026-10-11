@@ -273,11 +273,6 @@ struct MessageContainer<Bubble: View>: View {
                 ForEach(ReactionRules.common, id: \.self) { emoji in
                     Button(emoji) { chat.onReact(seq, emoji == mine ? nil : emoji) }
                 }
-                Divider()
-                Button(L10n.Message.reactMore) {
-                    hovering = true
-                    reactOpen = true
-                }
             }
         }
         if fromUser, let seq, chat.undelivered.contains(seq) {
@@ -419,95 +414,28 @@ struct ReactionChipsRow: View {
     }
 }
 
-/// The popover of the react button: the six usual emoji, and "More…", which opens the system emoji picker.
+/// The popover of the react button: the reaction emoji in two rows of eight. The current reaction is lit.
 struct ReactionPicker: View {
     var current: String?
     var onPick: (String) -> Void
 
-    @State private var more = false
-    @State private var typed = ""
-    @FocusState private var typedFocused: Bool
-
-    /// A few more, for when the system panel does not come up.
-    private static let extra = [
-        "🙏", "🎉", "😮", "😢", "🤔", "👏", "💯", "🚀",
-        "👎", "😅", "🙌", "💡", "🐛", "⚠️", "❌", "🤝",
-    ]
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // The quick row: a capsule of the usual emoji, then "+" for the system panel.
-            HStack(spacing: 2) {
-                ForEach(ReactionRules.common, id: \.self) { emoji in
-                    QuickReaction(emoji: emoji, isCurrent: emoji == current) { onPick(emoji) }
-                }
-                plusButton
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(Color.Bandito.surface2))
-            .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 1))
-            .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
-            if more {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(L10n.Message.reactPickerHint)
-                        .font(BanditoFont.text(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .fixedSize(horizontal: false, vertical: true)
-                    TextField("", text: $typed)
-                        .banditoField()
-                        .font(BanditoFont.text(size: 18, weight: 400))
-                        .focused($typedFocused)
-                        .accessibilityLabel(L10n.Message.reactMore)
-                        .onChange(of: typed) { _, text in
-                            if let emoji = ReactionRules.firstEmoji(in: text) { onPick(emoji) }
-                        }
-                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 2), count: 8), spacing: 2) {
-                        ForEach(Self.extra, id: \.self) { emojiButton($0, size: 18) }
+        let emoji = ReactionRules.common
+        VStack(spacing: 2) {
+            ForEach([Array(emoji.prefix(8)), Array(emoji.dropFirst(8))], id: \.self) { row in
+                HStack(spacing: 2) {
+                    ForEach(row, id: \.self) { item in
+                        QuickReaction(emoji: item, isCurrent: item == current) { onPick(item) }
                     }
                 }
             }
         }
+        .padding(6)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.Bandito.surface2))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
         .padding(12)
         .fixedSize()
-    }
-
-    /// "+": opens the system's emoji panel and the field that takes what is typed into it.
-    private var plusButton: some View {
-        Button {
-            more = true
-            typedFocused = true
-            Self.openSystemPicker()
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 12, weight: .semibold))
-        }
-        .buttonStyle(MessageActionStyle(label: L10n.Message.reactMore))
-        .help(L10n.Message.reactMore)
-    }
-
-    private func emojiButton(_ emoji: String, size: CGFloat) -> some View {
-        Button {
-            onPick(emoji)
-        } label: {
-            Text(emoji)
-                .font(BanditoFont.text(size: size, weight: 400))
-                .frame(width: 34, height: 34)
-                .background(
-                    emoji == current ? Color.Bandito.signal.opacity(0.18) : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .banditoButton(.row(cornerRadius: 8))
-        .accessibilityLabel(emoji)
-    }
-
-    /// The system's character panel. It types into the focused field, which `onChange` reads.
-    private static func openSystemPicker() {
-        #if os(macOS)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            NSApp.orderFrontCharacterPalette(nil)
-        }
-        #endif
     }
 }
 

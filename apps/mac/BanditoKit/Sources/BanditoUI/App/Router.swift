@@ -78,10 +78,14 @@ public enum MarketCategory {
     /// The order of the sidebar. A category the daemon adds later comes after these.
     static let order = ["dev", "productivity", "data", "web", "design", "other"]
 
-    /// The categories the catalog uses, in the sidebar order.
+    /// The categories the catalog uses, in the sidebar order. A service without a category counts as `other` when the
+    /// catalog has categories at all (the Services page puts it in that block); an older daemon that sends none has
+    /// no categories.
     public static func present(in catalog: [IntegrationCatalogEntry]) -> [String] {
-        let used = Set(catalog.compactMap(\.category))
-        return order.filter { used.contains($0) } + used.subtracting(order).sorted()
+        let named = catalog.compactMap(\.category)
+        guard !named.isEmpty else { return [] }
+        let used = Set(catalog.map { $0.category ?? MarketSections.fallbackCategory })
+        return MarketSections.orderedCategories(used)
     }
 
     public static func title(_ name: String) -> String {
@@ -155,7 +159,11 @@ enum InspectorTab: String, CaseIterable, Hashable, Sendable {
 @MainActor
 @Observable
 public final class Router {
-    public private(set) var mode: AppMode
+    public private(set) var mode: AppMode {
+        didSet {
+            if mode != oldValue, let screen = mode.telemetryScreen { Telemetry.count(.screen(screen)) }
+        }
+    }
 
     /// Team: the agent whose chat is open. Choosing one leaves the team home.
     public var selectedAgentID: String? {
@@ -210,6 +218,19 @@ public final class Router {
     public var marketDetail: String?
     /// Marketplace: the categories of the loaded catalog, for the sidebar. Set by the Marketplace page.
     public var marketCategories: [String] = []
+    /// Marketplace, Services page under All: the category block in view (its name), nil at the top or in the connected
+    /// block. The sidebar lights its row. Set by the page when the block changes.
+    public var marketSection: String?
+    /// Marketplace, Services page: a jump the sidebar asked for. The page takes it once (and sets it back to nil).
+    var marketScroll: MarketScrollRequest?
+    @ObservationIgnored private var marketScrollCount = 0
+
+    /// Asks the Services page to scroll to a place; each call is a new request, so a second click on the same row scrolls
+    /// again.
+    func requestMarketScroll(_ target: MarketScrollTarget) {
+        marketScrollCount += 1
+        marketScroll = MarketScrollRequest(id: marketScrollCount, target: target)
+    }
     /// Marketplace: the page in front (services, bots or skills). Restored from the app's defaults at start. The
     /// page shown is `MarketTab.effective(_:available:)`: a server without the feature falls back to services.
     public var marketTab: MarketTab = .services

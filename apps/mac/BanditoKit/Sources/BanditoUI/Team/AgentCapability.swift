@@ -36,6 +36,14 @@ public enum AgentCapability: String, CaseIterable, Identifiable, Sendable {
         return next
     }
 
+    /// The capabilities the server cannot give, each with the reason its chip shows. The screen works on Linux servers
+    /// only: a daemon that answered its info without the `screen` feature has none. Before the info comes nothing is
+    /// known, so nothing is marked.
+    public static func unavailable(infoKnown: Bool, supports: (String) -> Bool) -> [AgentCapability: String] {
+        guard infoKnown, !supports("screen") else { return [:] }
+        return [.screen: L10n.Screen.unsupported]
+    }
+
     public var title: String {
         switch self {
         case .terminal: L10n.Capability.terminal
@@ -54,6 +62,9 @@ public enum AgentCapability: String, CaseIterable, Identifiable, Sendable {
 /// as the daemon has it (all on), so the chips show that instead of the click.
 struct CapabilityChips: View {
     @Binding var enabled: Set<AgentCapability>
+    /// The chips the server cannot give, with the reason each shows as its help. Such a chip is disabled and does not
+    /// react to a click. Empty by default, so a caller without a server to ask keeps every chip live.
+    var unavailable: [AgentCapability: String] = [:]
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8, alignment: .leading)], alignment: .leading, spacing: 8) {
@@ -64,9 +75,11 @@ struct CapabilityChips: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    @ViewBuilder
     private func chip(_ capability: AgentCapability) -> some View {
         let on = enabled.contains(capability)
-        return Button {
+        let reason = unavailable[capability]
+        let button = Button {
             enabled = AgentCapability.toggled(enabled, capability)
         } label: {
             HStack(spacing: 7) {
@@ -93,6 +106,12 @@ struct CapabilityChips: View {
             .contentShape(Capsule())
         }
         .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.04))
+        .disabled(reason != nil)
         .accessibilityAddTraits(on ? .isSelected : [])
+        if let reason {
+            button.help(reason)
+        } else {
+            button
+        }
     }
 }

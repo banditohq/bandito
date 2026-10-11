@@ -233,8 +233,10 @@ struct Composer: View {
                             return .handled
                         }
 
+                    // The row is bottom-aligned: the 34 pt send disc, and the + and mic (30 pt plus 2) centre 17 pt
+                    // above the bottom. The 22 pt indicator sits 6 pt up from the bottom, so its centre matches them.
                     contextIndicator
-                        .padding(.bottom, 9)
+                        .padding(.bottom, 6)
 
                     sendOrStop
                 }
@@ -358,7 +360,11 @@ struct Composer: View {
             other = true
         }
         #endif
-        if ComposerFocus.shouldTakeFocus(reason: reason, otherFieldHasFocus: other) { focused = true }
+        if ComposerFocus.shouldTakeFocus(reason: reason, otherFieldHasFocus: other) {
+            focused = true
+            // A requested focus (a suggestion, Reply, quick open) leaves the caret after the text, not on a selection.
+            if reason == .requested { FieldCaret.place(draft.utf16.count) }
+        }
     }
 
     /// The bar above the field: whom the message answers, and the first words of the original.
@@ -897,11 +903,13 @@ struct Composer: View {
                         .lineLimit(2)
                 }
             }
-            Spacer(minLength: 8)
-            Button(L10n.Common.cancel) { mention.connectPrompt = nil }
-                .banditoButton(.quiet())
-            Button(L10n.Mention.connectAndSend) { connectService(item) }
-                .banditoButton(.signal())
+            ActionRow(hugging: true) {
+                Button(L10n.Common.cancel) { mention.connectPrompt = nil }
+                    .banditoButton(.quiet())
+                Button(L10n.Mention.connectAndSend) { connectService(item) }
+                    .banditoButton(.signal())
+            }
+            .layoutPriority(1)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
@@ -930,7 +938,7 @@ struct Composer: View {
         }
         let draft = NewIntegration(name: template.id, kind: .http, url: url)
         Task {
-            await app.oauth.begin(server: server, target: .draft(draft), name: template.name)
+            await app.oauth.begin(server: server, target: .draft(draft), name: template.name, catalogID: template.id)
             if case .waiting = app.oauth.phase {
                 mention.connecting = MentionMenuModel.Connecting(
                     agentID: agentID, name: template.name, template: templateID, known: known)

@@ -147,7 +147,7 @@ struct DevicesView: View {
 }
 
 /// Makes a one-time code for a new device and shows it with the QR code the device scans.
-private struct PairSheet: View {
+struct PairSheet: View {
     let server: ServerModel
     @Environment(\.dismiss) private var dismiss
     @State private var code: PairCode?

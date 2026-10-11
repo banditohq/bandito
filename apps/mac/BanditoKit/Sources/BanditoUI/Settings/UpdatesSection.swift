@@ -7,6 +7,7 @@ import SwiftUI
 struct UpdatesSection: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
+    @Environment(AppUpdateCenter.self) private var updateCenter: AppUpdateCenter?
     @State private var release = ReleaseStatus()
     // The app target reads these keys and configures Sparkle (AppUpdater).
     @AppStorage(AppUpdatePreferences.automaticChecksKey) private var autoCheckUpdates = true
@@ -64,6 +65,9 @@ struct UpdatesSection: View {
                         .frame(width: 220)
                 }
             }
+            SettingsGroup(title: nil) {
+                AppUpdateStatusRow()
+            }
             SettingsGroup(title: L10n.Settings.Group.versions) {
                 SettingsRow(
                     title: L10n.Settings.Updates.app, hint: nil,
@@ -116,6 +120,8 @@ struct UpdatesSection: View {
                 Spacer()
                 Button(L10n.Settings.Updates.check) {
                     Task { await release.load() }
+                    // Also asks the app itself, so the banner and the row above answer the same question.
+                    updateCenter?.check()
                 }
                 .banditoButton(.quiet())
                 .lineLimit(1)
@@ -123,5 +129,60 @@ struct UpdatesSection: View {
             }
         }
         .task { await release.load() }
+    }
+}
+
+/// The app's own update, as the sidebar banner shows it: at rest a button to look for a new version, otherwise the
+/// banner's words and the button that fits the phase. Both windows read the same `AppUpdateCenter`.
+private struct AppUpdateStatusRow: View {
+    @Environment(AppUpdateCenter.self) private var center: AppUpdateCenter?
+
+    var body: some View {
+        let phase = center?.phase ?? .idle
+        SettingsRow(
+            title: AppUpdateRules.title(for: phase) ?? L10n.AppUpdate.settingsTitle,
+            hint: AppUpdateRules.subtitle(for: phase) ?? (phase == .idle ? L10n.AppUpdate.settingsIdle : nil),
+            icon: SettingsIcon(symbol: AppUpdateRules.symbol(for: phase), tint: tint(phase)),
+            keepsControlBeside: true
+        ) {
+            control(phase)
+        }
+    }
+
+    private func tint(_ phase: AppUpdateCenter.Phase) -> Color {
+        switch phase {
+        case .upToDate: BanditoPalette.badgeGreen
+        case .failed: BanditoPalette.badgeRed
+        default: BanditoPalette.badgeOrange
+        }
+    }
+
+    @ViewBuilder
+    private func control(_ phase: AppUpdateCenter.Phase) -> some View {
+        switch phase {
+        case .idle:
+            Button(L10n.AppUpdate.checkNow) { center?.check() }
+                .banditoButton(.quiet())
+                .disabled(center == nil)
+        case .available:
+            Button(L10n.AppUpdate.install) { center?.install() }
+                .banditoButton(.signal())
+        case .failed:
+            Button(L10n.AppUpdate.retry) { center?.check() }
+                .banditoButton(.quiet())
+        case .downloading(let fraction):
+            if let text = AppUpdateRules.percentText(fraction) {
+                Text(text)
+                    .font(BanditoFont.text(size: 13, weight: 500))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.Bandito.text2)
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        case .checking, .preparing, .installing:
+            ProgressView().controlSize(.small)
+        case .upToDate:
+            EmptyView()
+        }
     }
 }

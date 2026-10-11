@@ -17,9 +17,21 @@ struct FirstServerStep: View {
 
     @Environment(AppModel.self) private var app
     @Environment(AccountHub.self) private var hub
-    @State private var model = FirstServerModel()
+    @State private var model: FirstServerModel
     @State private var showLog = false
     @State private var chooserWidth: CGFloat = 760
+
+    /// `model` is given only by the layout audit, put in a phase by hand.
+    init(
+        onFinished: @escaping () -> Void, onConnected: @escaping () -> Void = {}, placesNextInFooter: Bool = false,
+        initialAddress: String? = nil, model: FirstServerModel = FirstServerModel()
+    ) {
+        self.onFinished = onFinished
+        self.onConnected = onConnected
+        self.placesNextInFooter = placesNextInFooter
+        self.initialAddress = initialAddress
+        _model = State(initialValue: model)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -361,7 +373,7 @@ struct FirstServerStep: View {
                 .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
-            HStack(spacing: 10) {
+            ActionRow {
                 Button {
                     Task { await model.trustHost(preview, app: app) }
                 } label: {
@@ -458,7 +470,7 @@ struct FirstServerStep: View {
     /// Retry, back, and copy the journal, in one row. Retry is left out for a new host: its fingerprint review is the
     /// way on.
     private var failureButtons: some View {
-        HStack(spacing: 10) {
+        ActionRow {
             if model.failure != .sshFailed(.hostKeyUnknown) {
                 Button {
                     retryInstall()
@@ -514,7 +526,7 @@ struct FirstServerStep: View {
                 .font(BanditoFont.text(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
-            HStack(spacing: 10) {
+            ActionRow {
                 Button { model.retryConnection(app: app) } label: { Text(L10n.Onboarding.Server.connectRetry).oneLine() }
                     .banditoButton(.signal())
                 Button { model.backToChoice() } label: { Text(L10n.Onboarding.Server.back).oneLine() }

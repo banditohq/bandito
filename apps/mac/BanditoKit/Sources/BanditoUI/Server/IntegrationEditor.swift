@@ -98,8 +98,7 @@ struct IntegrationEditor: View {
             if let error {
                 UserFacingErrorView(message: error, onRetry: { save() })
             }
-            HStack(spacing: 10) {
-                Spacer(minLength: 8)
+            ActionRow {
                 Button(L10n.Common.cancel) { dismiss() }
                     .banditoButton(.quiet())
                     .fixedSize()
@@ -272,6 +271,9 @@ struct IntegrationEditor: View {
         defer { checking = false }
         do {
             let result = try await server.testIntegration(id)
+            if let catalogID = draft.catalogID, let counter = CatalogCounterID(catalogID) {
+                Telemetry.count(.integration(counter, ok: result.ok))
+            }
             test = result
             onChecked(id, result)
         } catch {

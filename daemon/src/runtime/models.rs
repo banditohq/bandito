@@ -8,7 +8,7 @@ use super::RuntimeKind;
 use super::process::{self, JsonProcess, LineSink, Router};
 use serde::Serialize;
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -61,16 +61,66 @@ pub struct RuntimeModel {
     pub context_window: Option<u32>,
 }
 
-/// The context window of a model, in tokens, from a fixed table: Claude 200K (1M when the id has `[1m]`),
-/// Codex 400K, Grok 256K. `None` for every other runtime.
+/// The context window of a model, in tokens. Claude: [`claude_context_window`] by the id. Codex and Grok: the
+/// fallback window of the runtime, used when the CLI's own cache does not give one (see [`parse_codex_models`]
+/// and [`parse_grok_cache`]). `None` for every other runtime.
 pub fn known_context_window(runtime: RuntimeKind, model_id: &str) -> Option<u32> {
     match runtime {
-        RuntimeKind::Claude if model_id.contains("[1m]") => Some(1_000_000),
-        RuntimeKind::Claude => Some(200_000),
-        RuntimeKind::Codex => Some(400_000),
-        RuntimeKind::Grok => Some(256_000),
+        RuntimeKind::Claude => Some(claude_context_window(model_id)),
+        RuntimeKind::Codex => Some(CODEX_CONTEXT_WINDOW),
+        RuntimeKind::Grok => Some(GROK_CONTEXT_WINDOW),
         RuntimeKind::Api => None,
     }
+}
+
+/// The window of a Codex model when its cache does not give one, and of a Grok model when neither the cache nor
+/// ACP gives one.
+const CODEX_CONTEXT_WINDOW: u32 = 272_000;
+const GROK_CONTEXT_WINDOW: u32 = 256_000;
+/// Claude's two windows, and the families that have the long one by default (or from a version on).
+const CLAUDE_STANDARD_WINDOW: u32 = 200_000;
+const CLAUDE_LONG_WINDOW: u32 = 1_000_000;
+const CLAUDE_FAMILIES: [&str; 5] = ["fable", "mythos", "opus", "sonnet", "haiku"];
+
+/// The context window of a Claude model id, in tokens.
+///
+/// The id is split at every non-letter, non-digit character. The family is the first part that is `fable`,
+/// `mythos`, `opus`, `sonnet` or `haiku`; the version is the numbers after it, leaving out numbers of 1000 or more
+/// (dates such as `20251001`): major, then minor (0 when absent). `fable` and `mythos` have 1M; `opus` and `sonnet`
+/// from 4.6 on; `haiku` from 5 on. Anything else, and an id with no version (`opus`, `default`), has 200K. An id
+/// with `[1m]` has 1M.
+pub fn claude_context_window(id: &str) -> u32 {
+    let id = id.to_ascii_lowercase();
+    if id.contains("[1m]") {
+        return CLAUDE_LONG_WINDOW;
+    }
+    let mut parts = id.split(|c: char| !c.is_ascii_alphanumeric()).filter(|p| !p.is_empty());
+    let Some(family) = parts.find(|p| CLAUDE_FAMILIES.contains(p)) else {
+        return CLAUDE_STANDARD_WINDOW;
+    };
+    let mut numbers = parts.filter_map(|p| p.parse::<u64>().ok()).filter(|n| *n < 1000);
+    let Some(major) = numbers.next() else {
+        return CLAUDE_STANDARD_WINDOW;
+    };
+    let minor = numbers.next().unwrap_or(0);
+    let long = match family {
+        "fable" | "mythos" => true,
+        "opus" | "sonnet" => (major, minor) >= (4, 6),
+        "haiku" => major >= 5,
+        _ => false,
+    };
+    if long {
+        CLAUDE_LONG_WINDOW
+    } else {
+        CLAUDE_STANDARD_WINDOW
+    }
+}
+
+/// A context window read from a CLI's cache: a number of tokens from 1 000 to 10 000 000, else `None`.
+fn window_from(v: Option<&Value>) -> Option<u32> {
+    v.and_then(Value::as_u64)
+        .filter(|n| (1_000..=10_000_000).contains(n))
+        .and_then(|n| u32::try_from(n).ok())
 }
 
 /// What `runtimes.models` answers for one runtime.
@@ -135,14 +185,21 @@ pub fn parse_claude_models(answer: &Value) -> Vec<RuntimeModel> {
         .filter(|m| !is_default_entry(m))
         .filter_map(|m| {
             let id = text(m, "value")?;
-            let is_default = !marked && default_model.is_some() && text(m, "resolvedModel") == default_model;
+            let resolved = text(m, "resolvedModel");
+            let is_default = !marked && default_model.is_some() && resolved == default_model;
             marked |= is_default;
+            // The window follows the model the alias resolves to (`haiku` → `claude-haiku-5-5`), else the id. An
+            // alias with `[1m]` keeps the long window even when the resolved id has no such mark.
+            let window_id = match resolved.as_deref() {
+                Some(r) if !id.contains("[1m]") => r,
+                _ => &id,
+            };
             Some(RuntimeModel {
                 name: text(m, "displayName").unwrap_or_else(|| id.clone()),
                 description: text(m, "description"),
                 is_default,
                 efforts: strings(m.get("supportedEffortLevels")),
-                context_window: known_context_window(RuntimeKind::Claude, &id),
+                context_window: known_context_window(RuntimeKind::Claude, window_id),
                 id,
             })
         })
@@ -168,8 +225,10 @@ fn settle_models(models: Vec<RuntimeModel>) -> Vec<RuntimeModel> {
 
 /// The models in Codex's `model/list` answer. `result` is the object that holds `data`.
 ///
-/// Hidden models are not listed. The id is `model`, or `id` when there is no `model`. See [`settle_models`].
-pub fn parse_codex_models(result: &Value) -> Vec<RuntimeModel> {
+/// Hidden models are not listed. The id is `model`, or `id` when there is no `model`. `windows` is the context
+/// window of each slug from Codex's cache ([`parse_codex_cache`]); a model not in it gets the fallback window.
+/// See [`settle_models`].
+pub fn parse_codex_models(result: &Value, windows: &HashMap<String, u32>) -> Vec<RuntimeModel> {
     let Some(items) = result.get("data").and_then(Value::as_array) else {
         return Vec::new();
     };
@@ -187,7 +246,10 @@ pub fn parse_codex_models(result: &Value) -> Vec<RuntimeModel> {
                     .and_then(Value::as_array)
                     .map(|levels| levels.iter().filter_map(|l| text(l, "reasoningEffort")).collect())
                     .unwrap_or_default(),
-                context_window: known_context_window(RuntimeKind::Codex, &id),
+                context_window: windows
+                    .get(&id)
+                    .copied()
+                    .or_else(|| known_context_window(RuntimeKind::Codex, &id)),
                 id,
             })
         })
@@ -195,10 +257,25 @@ pub fn parse_codex_models(result: &Value) -> Vec<RuntimeModel> {
     settle_models(listed)
 }
 
+/// The context windows in Codex's cache file (`~/.codex/models_cache.json`), by slug. `cache` is the root object
+/// with `models`, or the list itself. An entry needs a slug and a `context_window` in range (see [`window_from`]).
+/// The first entry of a slug is kept.
+pub fn parse_codex_cache(cache: &Value) -> HashMap<String, u32> {
+    let items = cache.get("models").unwrap_or(cache).as_array();
+    let mut windows = HashMap::new();
+    for item in items.into_iter().flatten() {
+        if let (Some(slug), Some(window)) = (text(item, "slug"), window_from(item.get("context_window"))) {
+            windows.entry(slug).or_insert(window);
+        }
+    }
+    windows
+}
+
 /// The models in Grok's cache file (`~/.grok/models_cache.json`). `cache` is the root object, with `models` as a map.
 ///
 /// The cache has no default flag: the model named `default_id` (from `~/.grok/settings_cache.json`) is the default,
 /// and without one, or when that model is not listed, the newest visible model (see [`newest`]). Hidden models are not listed.
+/// The window is `info.context_window` when it is in range, else the Grok fallback.
 pub fn parse_grok_cache(cache: &Value, default_id: Option<&str>) -> Vec<RuntimeModel> {
     let Some(models) = cache.get("models").and_then(Value::as_object) else {
         return Vec::new();
@@ -220,7 +297,8 @@ pub fn parse_grok_cache(cache: &Value, default_id: Option<&str>) -> Vec<RuntimeM
                     .and_then(Value::as_array)
                     .map(|levels| levels.iter().filter_map(|l| text(l, "value")).collect())
                     .unwrap_or_default(),
-                context_window: known_context_window(RuntimeKind::Grok, &id),
+                context_window: window_from(info.get("context_window"))
+                    .or_else(|| known_context_window(RuntimeKind::Grok, &id)),
                 id,
             })
         })
@@ -294,6 +372,13 @@ fn grok_from_cache_files(home: &Path) -> Option<Vec<RuntimeModel>> {
         read_json(&home.join(".grok/settings_cache.json")).and_then(|settings| text(&settings, "default_model"));
     let listed = parse_grok_cache(&cache, default_id.as_deref());
     (!listed.is_empty()).then_some(listed)
+}
+
+/// The context windows from Codex's cache file under `home`, by slug. Empty when the file is missing or broken.
+fn codex_windows_from_cache_file(home: &Path) -> HashMap<String, u32> {
+    read_json(&home.join(".codex/models_cache.json"))
+        .map(|cache| parse_codex_cache(&cache))
+        .unwrap_or_default()
 }
 
 /// Reply to one message from a CLI's stdout. `Some` when the exchange is over: the models, or why there are none.
@@ -415,7 +500,8 @@ fn claude_step() -> Step {
 }
 
 /// Codex: `initialize`, then `initialized`, then `model/list` page by page (at most [`CODEX_MAX_PAGES`]).
-fn codex_step() -> Step {
+/// `windows` is the context window of each slug, from the cache (see [`parse_codex_cache`]).
+fn codex_step(windows: HashMap<String, u32>) -> Step {
     let mut models: Vec<RuntimeModel> = Vec::new();
     let mut pages = 0usize;
     Box::new(move |msg: &Value, sink: &LineSink| {
@@ -438,7 +524,7 @@ fn codex_step() -> Step {
             return None;
         }
         let result = msg.get("result")?;
-        models.extend(parse_codex_models(result));
+        models.extend(parse_codex_models(result, &windows));
         pages += 1;
         let next = result
             .get("nextCursor")
@@ -513,8 +599,15 @@ pub async fn list_claude(cwd: &Path, path: &OsStr, limit: Duration) -> Result<Ve
 }
 
 /// Lists Codex's models with `codex app-server`.
+/// The context windows come from `~/.codex/models_cache.json` (the same home folder as Grok's cache).
 pub async fn list_codex(cwd: &Path, path: &OsStr, limit: Duration) -> Result<Vec<RuntimeModel>, ListError> {
     let program = find_program(RuntimeKind::Codex.as_str(), path).await?;
+    let windows = match dirs::home_dir() {
+        Some(home) => tokio::task::spawn_blocking(move || codex_windows_from_cache_file(&home))
+            .await
+            .unwrap_or_default(),
+        None => HashMap::new(),
+    };
     let first =
         json!({"jsonrpc": "2.0", "id": CODEX_INIT_ID, "method": "initialize", "params": super::codex::client_info()});
     exchange(
@@ -524,7 +617,7 @@ pub async fn list_codex(cwd: &Path, path: &OsStr, limit: Duration) -> Result<Vec
         cwd,
         vec![first],
         limit,
-        codex_step(),
+        codex_step(windows),
     )
     .await
 }
@@ -707,30 +800,91 @@ mod tests {
 
     #[test]
     fn known_context_window_follows_the_table() {
+        // A bare alias has no version: 200K.
         assert_eq!(known_context_window(RuntimeKind::Claude, "opus"), Some(200_000));
         assert_eq!(known_context_window(RuntimeKind::Claude, "opus[1m]"), Some(1_000_000));
         assert_eq!(
             known_context_window(RuntimeKind::Claude, "claude-opus-5-5[1m]"),
             Some(1_000_000)
         );
-        assert_eq!(known_context_window(RuntimeKind::Codex, "gpt-6.1-sol"), Some(400_000));
+        assert_eq!(known_context_window(RuntimeKind::Codex, "gpt-6.1-sol"), Some(272_000));
         assert_eq!(known_context_window(RuntimeKind::Grok, "grok-4.7"), Some(256_000));
         assert_eq!(known_context_window(RuntimeKind::Api, "anything"), None);
+    }
+
+    #[test]
+    fn claude_context_window_by_family_and_version() {
+        let long = [
+            "claude-haiku-5-5",
+            "claude-sonnet-4-6",
+            "claude-opus-4-6",
+            "claude-opus-4-8",
+            "claude-fable-5-1",
+            "claude-sonnet-5",
+            "claude-mythos-5-1",
+            "claude-opus-5-5",
+        ];
+        for id in long {
+            assert_eq!(claude_context_window(id), 1_000_000, "{id}");
+        }
+        let standard = [
+            "claude-haiku-4-5-20251001",
+            "claude-sonnet-4-5",
+            "claude-opus-4-5",
+            "claude-opus-4-1",
+            "claude-sonnet-4",
+            "claude-3-5-sonnet-20241022",
+            "default",
+            "opus",
+            "sonnet",
+            "haiku",
+        ];
+        for id in standard {
+            assert_eq!(claude_context_window(id), 200_000, "{id}");
+        }
+        assert_eq!(claude_context_window("opus[1m]"), 1_000_000);
+        assert_eq!(claude_context_window("claude-haiku-4-5[1m]"), 1_000_000);
+        assert_eq!(
+            claude_context_window("Claude-Sonnet-4-6"),
+            1_000_000,
+            "case does not matter"
+        );
+    }
+
+    #[test]
+    fn claude_context_window_reads_the_major_and_minor_only() {
+        // A date is not a version, and a model without a minor version is 4.0 / 5.0.
+        assert_eq!(claude_context_window("claude-haiku-5"), 1_000_000);
+        assert_eq!(claude_context_window("claude-haiku-4-20251001"), 200_000);
+        assert_eq!(claude_context_window("claude-sonnet-4-20250514"), 200_000);
+        assert_eq!(claude_context_window("claude-opus-4-6-20260101"), 1_000_000);
     }
 
     #[test]
     fn parsed_models_carry_their_context_window_and_unknown_is_left_out_of_json() {
         let answer: Value = serde_json::from_str(CLAUDE_INIT).unwrap();
         let models = parse_claude_models(&answer["response"]["response"]);
-        assert_eq!(models[0].context_window, Some(200_000));
+        // `opus` resolves to claude-opus-5-5, which has 1M.
+        assert_eq!(models[0].context_window, Some(1_000_000));
         let json = serde_json::to_value(&models[0]).unwrap();
-        assert_eq!(json["context_window"], 200_000);
+        assert_eq!(json["context_window"], 1_000_000);
         let unknown = RuntimeModel {
             context_window: None,
             ..models[0].clone()
         };
         let json = serde_json::to_value(&unknown).unwrap();
         assert!(json.get("context_window").is_none(), "None is not serialized");
+    }
+
+    #[test]
+    fn an_alias_with_1m_keeps_the_long_window_over_its_resolved_model() {
+        let answer = json!({"models": [
+            {"value": "sonnet[1m]", "resolvedModel": "claude-sonnet-4-5", "displayName": "Sonnet (1M)"},
+            {"value": "sonnet", "resolvedModel": "claude-sonnet-4-5", "displayName": "Sonnet"},
+        ]});
+        let models = parse_claude_models(&answer);
+        assert_eq!(models[0].context_window, Some(1_000_000));
+        assert_eq!(models[1].context_window, Some(200_000));
     }
 
     #[test]
@@ -746,7 +900,7 @@ mod tests {
             ],
             "nextCursor": "page-2"
         });
-        let models = parse_codex_models(&result);
+        let models = parse_codex_models(&result, &HashMap::new());
         assert_eq!(ids(&models), vec!["gpt-6.1-sol", "mini-2"]);
         assert!(models[0].is_default);
         assert_eq!(models[0].name, "GPT-6.1-Sol");
@@ -764,7 +918,7 @@ mod tests {
             {"model": "a", "displayName": "again", "isDefault": false},
             {"model": "c"},
         ]});
-        let models = parse_codex_models(&result);
+        let models = parse_codex_models(&result, &HashMap::new());
         assert_eq!(ids(&models), vec!["a", "b", "c"]);
         let defaults: Vec<&str> = models.iter().filter(|m| m.is_default).map(|m| m.id.as_str()).collect();
         assert_eq!(defaults, vec!["a"]);
@@ -775,7 +929,7 @@ mod tests {
     fn codex_pages_are_settled_together() {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let sink: LineSink = Arc::new(StdMutex::new(Some(tx)));
-        let mut step = codex_step();
+        let mut step = codex_step(HashMap::new());
         step(&json!({"jsonrpc": "2.0", "id": 1, "result": {}}), &sink);
         let page1 = json!({"jsonrpc": "2.0", "id": 2, "result": {"data": [{"model": "a", "isDefault": true}], "nextCursor": "c2"}});
         assert_eq!(step(&page1, &sink), None);
@@ -789,9 +943,12 @@ mod tests {
 
     #[test]
     fn codex_model_falls_back_to_id_and_missing_data_is_empty() {
-        let models = parse_codex_models(&json!({"data": [{"id": "only-id"}, {"displayName": "no id"}]}));
+        let models = parse_codex_models(
+            &json!({"data": [{"id": "only-id"}, {"displayName": "no id"}]}),
+            &HashMap::new(),
+        );
         assert_eq!(ids(&models), vec!["only-id"]);
-        assert!(parse_codex_models(&json!({})).is_empty());
+        assert!(parse_codex_models(&json!({}), &HashMap::new()).is_empty());
     }
 
     const GROK_CACHE: &str = r#"{"models": {
@@ -908,6 +1065,93 @@ mod tests {
         .unwrap();
         let models = grok_from_cache_files(home.path()).expect("cache read");
         assert!(models.iter().any(|m| m.id == "grok-4.6" && m.is_default));
+    }
+
+    #[test]
+    fn claude_window_follows_the_resolved_model_else_the_value() {
+        let answer = json!({"models": [
+            {"value": "haiku", "resolvedModel": "claude-haiku-5-5"},
+            {"value": "claude-haiku-4-5-20251001"},
+            {"value": "haiku-old", "resolvedModel": "claude-haiku-4-5-20251001"},
+        ]});
+        let windows: Vec<Option<u32>> = parse_claude_models(&answer).iter().map(|m| m.context_window).collect();
+        assert_eq!(windows, vec![Some(1_000_000), Some(200_000), Some(200_000)]);
+    }
+
+    #[test]
+    fn codex_cache_gives_the_window_and_other_values_fall_back() {
+        let cache = json!({"models": [
+            {"slug": "gpt-5.5", "context_window": 272000, "max_context_window": 272000},
+            {"slug": "gpt-zero", "context_window": 0},
+            {"slug": "gpt-huge", "context_window": 20000000},
+            {"slug": "gpt-big", "context_window": 400000},
+            {"context_window": 500000},
+            {"slug": "gpt-big", "context_window": 1000000},
+        ]});
+        let windows = parse_codex_cache(&cache);
+        assert_eq!(windows.get("gpt-5.5"), Some(&272_000));
+        assert_eq!(
+            windows.get("gpt-big"),
+            Some(&400_000),
+            "the first entry of a slug is kept"
+        );
+        assert!(!windows.contains_key("gpt-zero"));
+        assert!(!windows.contains_key("gpt-huge"));
+        let listed = parse_codex_models(
+            &json!({"data": [{"model": "gpt-5.5"}, {"model": "gpt-zero"}, {"model": "gpt-big"}, {"model": "unknown-1"}]}),
+            &windows,
+        );
+        let got: Vec<Option<u32>> = listed.iter().map(|m| m.context_window).collect();
+        assert_eq!(got, vec![Some(272_000), Some(272_000), Some(400_000), Some(272_000)]);
+    }
+
+    #[test]
+    fn codex_cache_may_be_a_bare_list() {
+        let windows = parse_codex_cache(&json!([{"slug": "gpt-5.5", "context_window": 272000}]));
+        assert_eq!(windows.get("gpt-5.5"), Some(&272_000));
+        assert!(parse_codex_cache(&json!({"other": 1})).is_empty());
+        assert!(parse_codex_cache(&json!("text")).is_empty());
+    }
+
+    #[test]
+    fn codex_cache_file_is_read_from_home_and_a_broken_one_gives_nothing() {
+        let home = tempfile::tempdir().unwrap();
+        assert!(codex_windows_from_cache_file(home.path()).is_empty(), "no cache file");
+        std::fs::create_dir_all(home.path().join(".codex")).unwrap();
+        std::fs::write(home.path().join(".codex/models_cache.json"), "not json").unwrap();
+        assert!(
+            codex_windows_from_cache_file(home.path()).is_empty(),
+            "broken cache file"
+        );
+        std::fs::write(
+            home.path().join(".codex/models_cache.json"),
+            r#"{"models": [{"slug": "gpt-5.5", "context_window": 272000}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            codex_windows_from_cache_file(home.path()).get("gpt-5.5"),
+            Some(&272_000)
+        );
+    }
+
+    #[test]
+    fn grok_cache_gives_the_window_and_falls_back_to_256k() {
+        let cache = json!({"models": {
+            "grok-big": {"info": {"id": "grok-big", "context_window": 500000}},
+            "grok-plain": {"info": {"id": "grok-plain"}},
+            "grok-zero": {"info": {"id": "grok-zero", "context_window": 0}},
+        }});
+        let models = parse_grok_cache(&cache, None);
+        let window = |id: &str| models.iter().find(|m| m.id == id).unwrap().context_window;
+        assert_eq!(window("grok-big"), Some(500_000));
+        assert_eq!(window("grok-plain"), Some(256_000));
+        assert_eq!(window("grok-zero"), Some(256_000));
+        let acp = parse_grok_acp(&json!({"availableModels": [{"modelId": "grok-4.7"}]}));
+        assert_eq!(
+            acp[0].context_window,
+            Some(256_000),
+            "ACP gives no window: the fallback"
+        );
     }
 
     #[test]
@@ -1089,7 +1333,7 @@ mod tests {
     fn codex_pages_are_requested_with_the_cursor_and_joined() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let sink: LineSink = Arc::new(StdMutex::new(Some(tx)));
-        let mut step = codex_step();
+        let mut step = codex_step(HashMap::new());
         let frame = |rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>| -> Value {
             serde_json::from_str(&rx.try_recv().expect("a frame")).unwrap()
         };
@@ -1118,7 +1362,7 @@ mod tests {
     fn codex_stops_after_the_page_limit() {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let sink: LineSink = Arc::new(StdMutex::new(Some(tx)));
-        let mut step = codex_step();
+        let mut step = codex_step(HashMap::new());
         let mut answer = None;
         for id in 2..(2 + CODEX_MAX_PAGES as i64) {
             let page = json!({"jsonrpc": "2.0", "id": id, "result": {"data": [{"model": format!("m{id}")}], "nextCursor": "more"}});

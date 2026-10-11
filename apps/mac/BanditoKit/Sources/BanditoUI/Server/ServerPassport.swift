@@ -19,8 +19,9 @@ struct ServerPassport: View {
                         Text(server.config.name)
                             .font(BanditoFont.display(size: 20, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                            // A long name takes a second line instead of ending in an ellipsis at the first word.
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                         if server.isThisMacServer {
                             Chip(text: L10n.Server.Add.thisMac, tone: .neutral)
                                 .fixedSize()
@@ -30,8 +31,9 @@ struct ServerPassport: View {
                         Text(Self.systemLine(stats: stats, daemonVersion: server.info?.version ?? ""))
                             .font(BanditoFont.text(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                            // Two lines: the daemon's version and the uptime at its end must not be cut away.
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

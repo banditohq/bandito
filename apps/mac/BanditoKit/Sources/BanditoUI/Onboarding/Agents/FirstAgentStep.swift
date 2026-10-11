@@ -156,6 +156,7 @@ final class FirstAgentModel {
                 systemPrompt: template.instructions.isEmpty ? nil : template.instructions,
                 effort: template.effort,
                 workspaceId: workspaceID))
+            Telemetry.count(.agentCreate(template == .scratch ? .plain : .template))
             return agent
         } catch {
             errorText = WorkspaceText.failure(error).map { UserFacingMessage(text: $0) } ?? SignInMessages.text(for: error)
@@ -323,7 +324,7 @@ struct FirstAgentStep: View {
                 .font(BanditoFont.text(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
-            HStack(spacing: 10) {
+            ActionRow {
                 Button(L10n.Onboarding.Agent.toSubscriptions, action: onNeedSubscription)
                     .banditoButton(.signal())
                 // The way out without an agent: the flow ends, the tour shows what is on screen.

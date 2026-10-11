@@ -90,7 +90,7 @@ import Testing
             UsageEntry.self,
             from: Data(
                 #"{"runtime":"claude","windows":[],"updated_at":5,"plan":{"id":"max_20x","label":"Max ×20"}}"#.utf8))
-        #expect(withPlan.plan == Plan(id: "max_20x", label: "Max ×20"))
+        #expect(withPlan.plan == Plan(id: "max", label: "Max"))
         let withoutPlan = try RPCClient.decoder.decode(
             UsageEntry.self, from: Data(#"{"runtime":"codex","windows":[],"updated_at":5}"#.utf8))
         #expect(withoutPlan.plan == nil)

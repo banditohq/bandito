@@ -34,8 +34,7 @@ struct FileNameSheet: View {
                     .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
             }
-            HStack {
-                Spacer()
+            ActionRow {
                 Button(L10n.Files.cancel) { dismiss() }
                     .banditoButton(.quiet())
                 Button(L10n.Files.Dialog.create, action: submit)

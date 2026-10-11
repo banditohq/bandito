@@ -1,5 +1,6 @@
 import BanditoDesign
 import BanditoKit
+import BanditoL10n
 import SwiftUI
 
 /// The app's root: the main window, or the first-run flow in front of it while `OnboardingModel` says so.
@@ -8,6 +9,7 @@ public struct RootView: View {
     @Environment(OnboardingModel.self) private var onboarding
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
+    @Environment(TelemetryCenter.self) private var telemetry
 
     public init() {}
 
@@ -17,9 +19,33 @@ public struct RootView: View {
                 OnboardingFlow()
             } else {
                 MainWindow()
+                    .overlay(alignment: .top) {
+                        if let banner = telemetry.banner {
+                            AnnouncementBanner(
+                                announcement: banner,
+                                onOpen: { telemetry.openBannerLink() },
+                                onClose: { telemetry.dismissBanner() })
+                        }
+                    }
             }
         }
         .background(Color.Bandito.bg)
+        // The first-run notice and the crash question wait until the first-run flow is over; they answer with a button.
+        .sheet(isPresented: .constant(telemetry.showsNotice && !onboarding.isActive)) {
+            TelemetryNoticeSheet(telemetry: telemetry)
+                .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: .constant(telemetry.showsCrashQuestion && !onboarding.isActive)) {
+            TelemetryConfirmSheet(
+                title: L10n.Telemetry.Crash.title,
+                message: L10n.Telemetry.Crash.body,
+                confirmTitle: L10n.Telemetry.Crash.send,
+                confirmIsDanger: false,
+                cancelTitle: L10n.Telemetry.Notice.decline,
+                onConfirm: { Task { await telemetry.answerCrashQuestion(send: true) } },
+                onCancel: { Task { await telemetry.answerCrashQuestion(send: false) } })
+                .interactiveDismissDisabled()
+        }
         // Every mode switch (mode bar, ⌘1…⌘6, back and forward, swipes) makes the tab sound.
         .onChange(of: router.mode) { _, _ in SoundPlayer.play(.tab) }
         // The system focus ring is off for the whole scene; Bandito draws its own (brandFocusRing).

@@ -86,7 +86,7 @@ struct DaemonUpdateBanner: View {
     @State private var confirming = false
 
     var body: some View {
-        let current = DaemonUpdateOffer.offer(for: server.info)
+        let current = server.daemonUpdateOffer
         if let offer = model.shownOffer(current: current, serverID: server.id) {
             let status = DaemonUpdateModel.statusText(for: model.phase)
             HStack(alignment: .center, spacing: 12) {

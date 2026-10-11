@@ -24,6 +24,9 @@ SwiftUI, macOS, dark theme. The app is a thin shell (`apps/mac/Bandito`); all co
 - Guide: a new control or screen gets a line in `guide/*.md`; `python3 scripts/check_guide.py` must pass.
 - Buttons: only the styles in `Components/Buttons.swift` — `.signal` (the cream primary, one per view), `.quiet`,
   `.lightPill`, `.icon(label:)`, `.row`, `.link`. No hand-made button looks.
+- Bottom action rows of sheets and dialogs use `ActionRow` (a row that turns into a column when it does not fit); check long languages (German) at the narrowest width.
+- A new sheet, dialog or settings section gets an entry in `LayoutAuditSnapshots`; run it with `LAYOUT_AUDIT_DIR=$(mktemp -d)` and look at German at the minimum width before calling the screen done.
+- Layout never breaks on a long text: no fixed-width columns that squeeze a text column below ~90 pt, no one-line titles that carry a user's name (allow two lines), no row of buttons outside `ActionRow`, no word that breaks letter by letter (give it `.lineLimit(1).fixedSize()` and let the neighbour give way).
 - Fonts: only `BanditoFont.display/text/mono(size:weight:)` (Unbounded, Onest, JetBrains Mono; bundled in `BanditoDesign/Fonts`). `.font(.system(...))` is for SF Symbols only. Roles: `docs/DESIGN_LANGUAGE.md`, Typography.
 - Look and motion: `docs/DESIGN_LANGUAGE.md`. Every animation honours `accessibilityReduceMotion`.
 - Logic lives in small pure types next to the view (`…Rules`, `…Layout`, `…Logic`) and has tests in

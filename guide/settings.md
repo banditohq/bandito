@@ -49,7 +49,7 @@ Starts Bandito when you sign in to this Mac. It uses the macOS login items; the 
 Bandito checks for a new version once a day and tells you when one is out. It never installs anything without your OK. The switch is on by default.
 Где: Settings (⌘,) → Updates (Обновления) → Check for updates automatically (Проверять обновления автоматически)
 1. Turn the switch off to stop the daily check. Check for Updates… (Проверить обновления…) in the Bandito menu still works.
-2. When a new version is found, the update window shows it. Click Install Update (Установить обновление), or pick Remind Me Later (Напоминать позже) or Skip This Version (Пропустить эту версию).
+2. When a new version is found, a card appears in the sidebar above your profile (see "Update card in the sidebar" below). Click Update (Обновить) there.
 
 ## Update channel (Канал обновлений)
 
@@ -58,6 +58,17 @@ Stable (Стабильный) gets the released versions. Beta (Бета) also g
 Где: Settings (⌘,) → Updates (Обновления) → Update channel (Канал обновлений)
 1. Pick Stable (Стабильный) for the released versions only, or Beta (Бета) for the preview builds too.
 2. Check for Updates… (Проверить обновления…) uses the channel that is picked now.
+
+## Update card in the sidebar (Плашка обновления)
+
+<!-- id: set-update-card; covers: -->
+When a new version of Bandito is out, a card appears in the sidebar above your profile: Version {version} is available (Доступна версия {version}). Update (Обновить) downloads it, installs it and restarts Bandito by itself; no other window opens. Nothing shows when the check at launch finds no new version or has no network.
+Где: Sidebar → above your profile → Update (Обновить)
+1. Click Update (Обновить). The card shows Downloading the update (Скачиваем обновление) with a bar and the percent, then Preparing the install… (Готовим установку…) and Restarting Bandito… (Перезапускаем Bandito…). Bandito closes and opens again on the new version.
+2. Click What's new (Что нового) to read the release notes on GitHub.
+3. Click the cross (Напомнить позже) to hide the card. Bandito shows it again at the next check.
+4. Check for Updates… (Проверить обновления…) in the Bandito menu, or Check now (Проверить сейчас) in Settings → Updates (Обновления), shows Checking for updates… (Проверяем обновления…) in the same card, then You have the latest version (У вас последняя версия), which goes away after a few seconds.
+5. If the update does not work, the card says Could not update (Не получилось обновить) and the reason. Click Try again (Повторить), or the cross to close it.
 
 ## Account (Аккаунт)
 
@@ -235,9 +246,9 @@ The main switch of all app sounds. Off by default.
 ## Sound pack (sound.kit)
 
 <!-- id: set-sound-kit; covers: setting:sound.kit -->
-Four packs made by the app itself: Soft (Мягкий), Mechanical (Механика), Glass (Стекло), Retro (Ретро).
+Seven packs made by the app itself: Soft (Мягкий), Mechanical (Механика), Glass (Стекло), Crystal (Кристалл), Marimba (Маримба), Retro (Ретро), Arcade (Аркада).
 Где: Settings (⌘,) → Sounds (Звуки) → Pack (Набор)
-1. Pick a pack; ▶ plays a sample.
+1. Pick a pack; ▶ plays a sample: a message sound, then a success sound.
 
 ## Volume (sound.volume)
 
@@ -273,5 +284,14 @@ The amount of motion in the app: Full (Полные), Less (Меньше), or Of
 The version of this app and of the daemon on the server. You can check for a new version of the app, and open the server's update page.
 Где: Settings (⌘,) → Updates (Обновления)
 1. Read App (Приложение) and Daemon on the server (Демон на сервере). Latest release (Последний релиз) shows the newest version, or unknown.
-2. Click Check now (Проверить сейчас) to check again.
+2. The first row is the app's own update: Check now (Проверить сейчас) looks for a new version, and the row then shows the same words as the sidebar card, with Update (Обновить) when a version is on offer. The Check now button at the bottom of the page does the same and also re-reads Latest release.
 3. Click Open Server → Updates (Обновления) to update the server's daemon (see [server.md](server.md)).
+
+## Privacy (Конфиденциальность)
+
+<!-- id: set-privacy; covers: settings:privacy -->
+What Bandito sends to its team: anonymous counts of the features you use, a daily check-in (version, system, number of servers and agents as ranges), and crash reports if you allow them. Nothing about your messages, code, files, server addresses or keys is sent. Anonymous statistics are on by default; turning them off stops sending and erases the counts. With them off, Bandito still asks the team for announcements every 6 hours, sending only the interface language and the app and system versions (no install id). "Delete my data" removes what this Mac sent from our servers. The first-run notice and the crash question each appear once; the strip at the top of the window shows a message from the team once.
+Где: Settings (⌘,) → Privacy (Конфиденциальность)
+1. Turn Anonymous statistics (Анонимная статистика) off to stop sending counts.
+2. Turn Crash reports (Отчёты о сбоях) on to send the error type and function names after a crash.
+3. Delete my data (Удалить мои данные) asks for confirmation, then deletes what was sent. The privacy policy link opens bandito.dev/privacy.

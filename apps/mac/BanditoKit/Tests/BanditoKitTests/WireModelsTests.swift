@@ -242,7 +242,7 @@ import Testing
         let e = try decode(
             UsageEntry.self,
             #"{"runtime":"claude","windows":[],"updated_at":1,"plan":{"id":"max_20x","label":"Max ×20"}}"#)
-        #expect(e.plan == Plan(id: "max_20x", label: "Max ×20"))
+        #expect(e.plan == Plan(id: "max", label: "Max"))
     }
 
     @Test func usageEntryWithoutPlanHasNilPlan() throws {

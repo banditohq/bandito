@@ -75,7 +75,9 @@ private struct TelegramServerPage: View {
                 load()
             },
             linkStart: {
-                try await server.telegramLinkStart()
+                let link = try await server.telegramLinkStart()
+                Telemetry.count(.telegramLink)
+                return link
             },
             unlink: { chatId in
                 try await server.telegramUnlink(chatId: chatId)
@@ -376,8 +378,7 @@ struct TelegramLinkSheet: View {
             if let failure {
                 UserFacingErrorView(message: failure.message)
             }
-            HStack(spacing: 10) {
-                Spacer(minLength: 0)
+            ActionRow {
                 Button(L10n.Common.close) { isPresented = false }
                     .banditoButton(.quiet())
                 if expired {

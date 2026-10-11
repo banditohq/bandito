@@ -161,7 +161,7 @@ struct SecretDraft: Identifiable {
     }
 }
 
-private struct SecretEditor: View {
+struct SecretEditor: View {
     @State var draft: SecretDraft
     let server: ServerModel
     var onSaved: () async -> Void
@@ -212,8 +212,7 @@ private struct SecretEditor: View {
             if let error {
                 UserFacingErrorView(message: error)
             }
-            HStack {
-                Spacer()
+            ActionRow {
                 Button(L10n.Common.cancel) { dismiss() }
                     .banditoButton(.quiet())
                 Button(L10n.Common.save) { save() }

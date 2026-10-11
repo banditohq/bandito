@@ -9,7 +9,7 @@ the agent is selected in the Team mode.
 The sheet has the fields on the left and the workplace, memory and approvals on the right. The default values are: runtime Claude Code, effort Medium, approvals Risky only, memory Smart, no fallback.
 Где: Sidebar → New agent (⌘N) (New agent (⌘N)); Menu Agent → New agent (Новый агент); composer → /new
 1. Press ⌘N (or click New agent (⌘N) in the sidebar, or type /new in a composer).
-2. Fill in the fields described below. The Create button is enabled when the name is filled and the project folder is chosen.
+2. Fill in the fields described below. The Create button is enabled when the agent folder is set: the agents folder for a New folder (Новая папка), or a chosen folder for an Existing folder (Существующая).
 3. Click Create {name} (Create Forge) to create the agent. Cancel (Отмена) closes the sheet without saving.
 
 ## Start from a template (From template…)
@@ -53,7 +53,7 @@ The CLI that runs the agent. Claude Code, Codex and Grok run on the server with 
 <!-- id: na-model-effort; covers: -->
 The model is the one the CLI runs; the default is the runtime's own. Effort sets how long the agent thinks.
 Где: New agent sheet → Model (Модель); Effort (Усилие) is under Advanced (Дополнительно)
-1. Leave Default (По умолчанию) to use the runtime's default model, or type any model name the CLI accepts.
+1. A new Claude Code agent starts on Haiku: the server's haiku model, or else the newest Haiku it lists. The other runtimes start on their own default model. Pick another model to change it, or Default (По умолчанию) to use the runtime's default. Once you pick, the sheet keeps your choice. You can also type any model name the CLI accepts.
 2. Choose the effort: Low (Низкое) is fast and cheap for small edits; Medium (Среднее) is enough for everyday work; High (Высокое) for hard tasks; Very high (Очень) for big rewrites; Max (Максимум) only when nothing else worked. The levels offered depend on the runtime.
 
 ## If the limit runs out (Если лимит кончится)
@@ -65,16 +65,19 @@ Sets a second runtime that takes over when the subscription limit of the first o
 2. If you pick one, type a model in the field that shows Default (По умолчанию), or leave it empty to use the runtime's default.
 3. The same setting is in Agent details → Details (see [team.md](team.md)).
 
-## Project folder (Project on the server)
+## Agent folder (Папка агента)
 
 <!-- id: na-folder; covers: -->
-The folder on the server where the agent works. Pick one that exists, create a new folder, or clone a repository from a link into a new folder on the server.
-Где: New agent sheet → Project on the server (Проект на сервере) → Choose… (Выбрать…)
-1. Click Choose… (Выбрать…). The folder picker opens.
-2. Type a folder name or paste a path into Find a folder or paste a path (Найти папку или вставить путь). The lists are RECENT (НЕДАВНИЕ) and REPOSITORIES FOUND (НАЙДЕНЫ РЕПОЗИТОРИИ). Hidden folders are marked hidden (hidden).
-3. To make a folder, click New folder (Новая папка), type the name, and press ↵.
-4. To clone a repository, click Clone from a link (Склонировать по ссылке), paste the Repository address (https:// or git@host:path), set Folder name (Имя папки), and click Clone (Клонировать). Cloning can take a few minutes.
-5. Click Choose {name} (Choose {name}) to select the folder.
+The folder where the agent works and keeps its files. By default the sheet makes a new folder for it inside the agents folder, named after the agent, and access to the other folders on the server stays. To work in a folder that already exists, such as a repository, choose Existing folder (Существующая). A server without this feature offers only Existing folder.
+Где: New agent sheet → Agent folder (Папка агента)
+1. Keep New folder (Новая папка). The path shows the agents folder and the agent's name; typing the name changes the path at once. If a folder with that name already has files in it, a number is added (Forge 2).
+2. To put agents somewhere else, click Change… (Изменить…) and choose the agents folder. The sheet remembers it for this server. The first agents folder is Bandito in your home folder, or the folder where your other agents already work.
+3. The folder is made when you press Create. If it cannot be made, the sheet says why under the path and no agent is created.
+4. To work in a folder that exists, choose Existing folder (Существующая), then click Choose… (Выбрать…). The folder picker opens.
+5. In the folder picker, type a folder name or paste a path into Find a folder or paste a path (Найти папку или вставить путь). The lists are RECENT (НЕДАВНИЕ) and REPOSITORIES FOUND (НАЙДЕНЫ РЕПОЗИТОРИИ). Hidden folders are marked hidden (hidden).
+6. To make a folder, click New folder (Новая папка), type the name, and press ↵.
+7. To clone a repository, click Clone from a link (Склонировать по ссылке), paste the Repository address (https:// or git@host:path), set Folder name (Имя папки), and click Clone (Клонировать). Cloning can take a few minutes.
+8. Click Choose {name} (Choose {name}) to select the folder.
 
 ## Workplace: Shared (Общее)
 
@@ -113,9 +116,9 @@ Sets when the agent asks you before it acts. Pushes, deploys, deletes and writes
 ## What it may do (Что ему можно)
 
 <!-- id: na-tools; covers: -->
-A summary of the tools the agent gets: Terminal (Терминал), Project files (Файлы проекта), Browser (Браузер) and Message the team (Писать команде) are on; Server screen (Экран сервера) is off. The row is informational in this build: the tools cannot be switched here.
+The tools the agent may use: Terminal (Терминал), Project files (Файлы проекта), Browser (Браузер), Message the team (Писать команде) and Server screen (Экран сервера). All are on at first. Server screen works on Linux servers only: on another server its chip is dimmed, and hovering it says so.
 Где: New agent sheet → What it may do (Что ему можно)
-1. Read the list. It only shows what the agent gets; the list does not switch anything in this build.
+1. Click a tool to switch it off or on. An on tool has a check; an off one has a dashed outline and a plus.
 
 ## Instructions (Инструкции)
 

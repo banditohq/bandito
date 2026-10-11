@@ -21,7 +21,8 @@ struct BotTile: View {
 
     var body: some View {
         MarketTileSurface(
-            color: MarketTileStyle.color(hex: template.accent, name: template.id), size: size, glow: glow
+            color: MarketTileStyle.color(hex: template.accent, name: template.id), size: size, glow: glow,
+            cacheKey: "bot|\(template.id)|\(MarketTileStyle.colorKey(hex: template.accent, name: template.id))|\(template.icon)"
         ) {
             Image(systemName: template.icon)
                 .font(.system(size: size * 0.44, weight: .semibold))
@@ -35,7 +36,11 @@ struct ServiceMiniLogo: View {
     var size: CGFloat = 22
 
     var body: some View {
-        MarketTileSurface(color: MarketTileStyle.color(hex: service.entry?.accent, name: service.id), size: size) {
+        MarketTileSurface(
+            color: MarketTileStyle.color(hex: service.entry?.accent, name: service.id), size: size,
+            cacheKey: "mini|\(service.id)|\(MarketTileStyle.colorKey(hex: service.entry?.accent, name: service.id))|"
+                + "\(service.entry?.icon ?? "")|\(service.entry?.kind == .http ? "h" : "s")|\(service.entry == nil ? String(service.name.prefix(1)) : "")"
+        ) {
             if let logo = ServiceLogo.image(for: service.id) {
                 Image(nsImage: logo)
                     .renderingMode(.template)
@@ -76,8 +81,6 @@ struct BotsPage: View {
 
     @Environment(Router.self) private var router
 
-    private let columns = [GridItem(.adaptive(minimum: 260), spacing: 14, alignment: .top)]
-
     var body: some View {
         if router.marketBotFilter == .myBots {
             myBots
@@ -92,12 +95,10 @@ struct BotsPage: View {
         return VStack(alignment: .leading, spacing: 14) {
             SectionLabel(L10n.Market.Filter.myBots)
             if !bots.isEmpty {
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                    ForEach(bots) { bot in
-                        MyBotCard(
-                            bot: bot, languageCode: languageCode, canShare: canShare,
-                            onOpen: { onOpen(bot.agent) })
-                    }
+                MarketRows(items: bots) { bot in
+                    MyBotCard(
+                        bot: bot, languageCode: languageCode, canShare: canShare,
+                        onOpen: { onOpen(bot.agent) })
                 }
             } else {
                 Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.Market.MyBots.empty : L10n.Market.noResults)
@@ -142,15 +143,13 @@ struct BotsPage: View {
         VStack(alignment: .leading, spacing: 14) {
             SectionLabel(L10n.Market.Bots.catalog)
             if !shown.isEmpty {
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                    ForEach(shown) { template in
-                        BotCard(
-                            template: template,
-                            services: BotLogic.services(of: template, catalog: catalog, integrations: integrations),
-                            languageCode: languageCode,
-                            onView: { onView(template) },
-                            onCreate: { onCreate(template) })
-                    }
+                MarketRows(items: shown) { template in
+                    BotCard(
+                        template: template,
+                        services: BotLogic.services(of: template, catalog: catalog, integrations: integrations),
+                        languageCode: languageCode,
+                        onView: { onView(template) },
+                        onCreate: { onCreate(template) })
                 }
             } else if let failure = model.failure {
                 UserFacingErrorView(message: failure, onRetry: onRetry)
@@ -197,20 +196,17 @@ struct BotCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 logos
                 Spacer(minLength: 0)
-                HStack(spacing: 8) {
-                    Button(L10n.Market.view, action: onView)
-                        .banditoButton(.quiet())
-                        .fixedSize()
-                    Spacer(minLength: 0)
+                HStack(spacing: 0) {
                     Button(L10n.Market.Bots.create, action: onCreate)
                         .banditoButton(.lightPill())
                         .fixedSize()
+                    Spacer(minLength: 0)
                 }
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
         }
-        .onTapGesture(perform: onView)
+        .marketCardOpens(template.name(languageCode: languageCode), perform: onView)
     }
 
     /// The services the bot uses, as small logos in a row; the rest as a count. Room is kept when there are none.
@@ -332,7 +328,6 @@ struct BotDetailPanel: View {
             .scrollIndicators(.never)
             .frame(maxHeight: 460)
             MarketPanelFooter {
-                Spacer(minLength: 8)
                 Button(L10n.Common.close, action: onClose)
                     .banditoButton(.quiet())
                     .fixedSize()
@@ -530,7 +525,6 @@ struct BotCreatePanel: View {
             .scrollIndicators(.never)
             .frame(maxHeight: 460)
             MarketPanelFooter {
-                Spacer(minLength: 8)
                 Button(L10n.Common.cancel, action: onClose)
                     .banditoButton(.quiet())
                     .disabled(creating)

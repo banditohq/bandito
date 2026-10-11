@@ -20,7 +20,9 @@ public final class DeviceSignIn {
         case failed(name: String, message: UserFacingMessage, canRetry: Bool)
     }
 
-    public private(set) var phase: Phase = .idle
+    public internal(set) var phase: Phase = .idle {
+        didSet { countOutcome(previous: oldValue) }
+    }
     /// The code was put on the pasteboard (by Copy, or by Open); shown as a short note.
     public private(set) var copied = false
 
@@ -29,7 +31,7 @@ public final class DeviceSignIn {
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let pollEvery: Duration
     /// What to start again for "Try again", and the server to tell when the owner gives up.
-    @ObservationIgnored private var attempt: (server: any DeviceServer, target: DeviceBeginTarget, name: String, connectRequestId: String?)?
+    @ObservationIgnored private var attempt: (server: any DeviceServer, target: DeviceBeginTarget, name: String, connectRequestId: String?, catalogID: String?)?
     @ObservationIgnored private var flowId: String?
     @ObservationIgnored private var poller: Task<Void, Never>?
     /// Changes with each start and each cancel, so an answer that arrives late knows it is out of date.
@@ -60,12 +62,13 @@ public final class DeviceSignIn {
     ///
     /// With `connectRequestId` the sign-in answers an agent's request: when it ends well the daemon tells the agent.
     public func begin(
-        server: any DeviceServer, target: DeviceBeginTarget, name: String, connectRequestId: String? = nil
+        server: any DeviceServer, target: DeviceBeginTarget, name: String, connectRequestId: String? = nil,
+        catalogID: String? = nil
     ) async {
         await discard()
         let id = UUID()
         run = id
-        attempt = (server, target, name, connectRequestId)
+        attempt = (server, target, name, connectRequestId, catalogID)
         copied = false
         phase = .starting(name: name)
         do {
@@ -97,7 +100,19 @@ public final class DeviceSignIn {
         guard case .failed = phase, let attempt else { return }
         await begin(
             server: attempt.server, target: attempt.target, name: attempt.name,
-            connectRequestId: attempt.connectRequestId)
+            connectRequestId: attempt.connectRequestId, catalogID: attempt.catalogID)
+    }
+
+    /// Counts the end of a sign-in that started from a catalog template, once: connected is `ok`, failed is `fail`.
+    private func countOutcome(previous: Phase) {
+        guard !previous.isSettled, let catalogID = attempt?.catalogID, let counter = CatalogCounterID(catalogID) else {
+            return
+        }
+        switch phase {
+        case .connected: Telemetry.count(.integration(counter, ok: true))
+        case .failed: Telemetry.count(.integration(counter, ok: false))
+        default: return
+        }
     }
 
     // MARK: - the code
@@ -204,5 +219,15 @@ public final class DeviceSignIn {
         // with what the daemon said under the details.
         guard message.technical != nil else { return message }
         return UserFacingMessage(text: L10n.Integrations.Oauth.failed, technical: message.technical, canRetry: true)
+    }
+}
+
+extension DeviceSignIn.Phase {
+    /// Connected or failed: the sign-in is over.
+    var isSettled: Bool {
+        switch self {
+        case .connected, .failed: true
+        default: false
+        }
     }
 }

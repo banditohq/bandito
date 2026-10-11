@@ -3528,7 +3528,7 @@ mod memory_tests {
         rts.insert(Arc::new(UsageProbe {
             kind: RuntimeKind::Claude,
             answer: Ok(None),
-            plan: Ok(Some(plan("max_20x", "Max ×20"))),
+            plan: Ok(Some(plan("max", "Max"))),
         }));
         rts.insert(Arc::new(UsageProbe {
             kind: RuntimeKind::Codex,
@@ -3544,7 +3544,7 @@ mod memory_tests {
         assert_eq!(limits.len(), 2);
         assert_eq!(limits[0]["runtime"], "claude");
         assert_eq!(limits[0]["windows"], json!([]));
-        assert_eq!(limits[0]["plan"], json!({"id": "max_20x", "label": "Max ×20"}));
+        assert_eq!(limits[0]["plan"], json!({"id": "max", "label": "Max"}));
         assert_eq!(limits[1]["runtime"], "codex");
         assert_eq!(limits[1]["windows"][0]["name"], "5h");
         assert_eq!(limits[1]["plan"], json!({"id": "pro", "label": "Pro"}));

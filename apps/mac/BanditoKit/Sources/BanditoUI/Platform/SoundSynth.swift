@@ -27,6 +27,25 @@ public enum SoundSynth {
         return out.map(Float.init)
     }
 
+    /// The Settings listen sound: `send`, then `done` a pause later, in one buffer. The first sound's tail rings on
+    /// under the second one, so nothing is cut off.
+    public static func previewSamples(_ kit: SoundKit, sampleRate: Double = sampleRate) -> [Float] {
+        let first = samples(.send, kit: kit, sampleRate: sampleRate)
+        let second = samples(.done, kit: kit, sampleRate: sampleRate)
+        let offset = Int((previewPause * sampleRate).rounded())
+        var out = [Float](repeating: 0, count: max(first.count, offset + second.count))
+        for (index, value) in first.enumerated() {
+            out[index] += value
+        }
+        for (index, value) in second.enumerated() {
+            out[offset + index] += value
+        }
+        return out
+    }
+
+    /// Seconds from the start of `send` to the start of `done` in the listen sound.
+    public static let previewPause: Double = 0.35
+
     // MARK: - Voices
 
     private enum Wave {
@@ -38,6 +57,12 @@ public enum SoundSynth {
         case square
         /// A noise burst through a resonant band-pass at the note's frequency: a keyboard click.
         case click
+        /// Bell higher and longer than `bell`, with a second voice 3 cents sharp: the two beat into a shimmer.
+        case crystal
+        /// Sine with a fast fourth partial and a 5 ms knock of noise: a wooden mallet.
+        case marimba
+        /// Triangle built from odd harmonics up to 8 kHz, so it is round and never harsh (8-bit).
+        case chiptune
     }
 
     private struct Voice {
@@ -53,6 +78,9 @@ public enum SoundSynth {
             case .mechanics: Voice(wave: .click, reverb: 0.1, peak: 0.5)
             case .glass: Voice(wave: .bell, reverb: 0.35, peak: 0.4)
             case .retro: Voice(wave: .square, reverb: 0, peak: 0.4)
+            case .crystal: Voice(wave: .crystal, reverb: 0.4, peak: 0.3)
+            case .marimba: Voice(wave: .marimba, reverb: 0.1, peak: 0.28)
+            case .arcade: Voice(wave: .chiptune, reverb: 0, peak: 0.22)
             }
         }
     }
@@ -116,10 +144,51 @@ public enum SoundSynth {
             case .needsYou: [note(784, 0, 0.04), note(784, 0.05, 0.04), note(988, 0.1, 0.06)]
             case .error: [note(330, 0, 0.08, 0.9), note(220, 0.085, 0.08, 0.9)]
             }
+        case .crystal:
+            switch event {
+            case .click: [note(2093, 0, 0.12, 0.6)]
+            case .type: [note(2637, 0, 0.08, 0.5)]
+            case .tab: [note(2349, 0, 0.14, 0.6)]
+            case .send: [note(1976, 0, 0.5, 0.6)]
+            // A rising G major triad: the third, then the fifth on top.
+            case .done: [note(1568, 0, 0.6, 0.55), note(1976, 0.09, 0.6, 0.5), note(2349, 0.18, 0.6, 0.35)]
+            case .needsYou: [note(2093, 0, 0.5, 0.9), note(2637, 0.12, 0.5, 0.9)]
+            // A falling minor second, lower than the rest of the set.
+            case .error: [note(1318.5, 0, 0.5, 0.8), note(1244.5, 0.12, 0.6, 0.7)]
+            }
+        case .marimba:
+            // Pentatonic (C D E G A): no clash between any two notes.
+            switch event {
+            case .click: [note(784, 0, 0.15, 0.7)]
+            case .type: [note(880, 0, 0.15, 0.5)]
+            case .tab: [note(659, 0, 0.16, 0.7)]
+            case .send: [note(523, 0, 0.2, 0.7)]
+            case .done: [note(392, 0, 0.16, 0.6), note(523, 0.08, 0.16, 0.6), note(659, 0.16, 0.14, 0.6)]
+            case .needsYou: [note(880, 0, 0.14, 0.9), note(659, 0.12, 0.16, 0.9)]
+            case .error: [note(523, 0, 0.14, 0.8), note(392, 0.1, 0.18, 0.8)]
+            }
+        case .arcade:
+            switch event {
+            case .click: [note(1047, 0, 0.035, 0.6)]
+            case .type: [note(1319, 0, 0.03, 0.5)]
+            case .tab: [note(784, 0, 0.05, 0.6)]
+            // A quick rising blip.
+            case .send: [note(988, 0, 0.06, 0.6), note(1319, 0.05, 0.07, 0.5)]
+            // A fast arpeggio up, C major.
+            case .done:
+                [note(523, 0, 0.05, 0.6), note(659, 0.045, 0.05, 0.6), note(784, 0.09, 0.05, 0.6),
+                 note(1047, 0.135, 0.08, 0.7)]
+            case .needsYou: [note(784, 0, 0.06, 0.9), note(784, 0.09, 0.06, 0.9), note(1047, 0.18, 0.09, 0.9)]
+            // A fast arpeggio down.
+            case .error: [note(784, 0, 0.06, 0.8), note(622, 0.06, 0.06, 0.8), note(440, 0.12, 0.1, 0.8)]
+            }
         }
     }
 
     // MARK: - Rendering
+
+    /// The frequency ratio of 3 cents sharp: the detuned voice of `crystal`.
+    private static let threeCents = pow(2.0, 3.0 / 1200.0)
 
     private static func render(
         _ note: Note, voice: Wave, pitch: Double, sampleRate: Double, noise: inout Noise
@@ -146,6 +215,29 @@ public enum SoundSynth {
             case .click:
                 let burst = noise.next() * exp(-t / 0.003)
                 value = filter.process(burst) * exp(-4 * t / note.length) * release(t, note.length)
+            case .crystal:
+                let decay = exp(-t / (note.length / 3))
+                let shimmer = sin(2 * .pi * frequency * threeCents * t) * 0.5
+                let body = (sin(2 * .pi * frequency * t) + shimmer) * decay
+                    + 0.35 * sin(2 * .pi * 2.76 * frequency * t) * exp(-t / (note.length / 6))
+                    + 0.15 * sin(2 * .pi * 5.4 * frequency * t) * exp(-t / (note.length / 10))
+                value = body * attack(t) * release(t, note.length)
+            case .marimba:
+                // The knock is noise for the first 5 ms only; `attack` keeps the first sample at zero.
+                let knock = t < 0.005 ? noise.next() * exp(-t / 0.0015) * 0.25 : 0
+                value = (sin(2 * .pi * frequency * t) * exp(-t / (note.length / 4))
+                    + 0.3 * sin(2 * .pi * 4 * frequency * t) * exp(-t / 0.02) + knock)
+                    * attack(t, length: 0.0008) * release(t, note.length)
+            case .chiptune:
+                // Odd harmonics of a triangle (amplitude 1/k², alternating sign), up to 8 kHz.
+                var sum = 0.0
+                var harmonic = 1
+                while Double(harmonic) * frequency <= 8_000 {
+                    let sign: Double = (harmonic / 2).isMultiple(of: 2) ? 1 : -1
+                    sum += sign * sin(2 * .pi * Double(harmonic) * frequency * t) / Double(harmonic * harmonic)
+                    harmonic += 2
+                }
+                value = sum * exp(-2.5 * t / note.length) * attack(t) * release(t, note.length)
             }
             tone[index] = value * note.gain
         }

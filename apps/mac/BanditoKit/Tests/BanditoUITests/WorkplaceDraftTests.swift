@@ -11,6 +11,7 @@ import Testing
     /// A draft that passes everything except the workplace.
     private func filled() -> NewAgentDraft {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.name = "Scout"
         draft.cwd = "/Users/me/projects/site"
         return draft

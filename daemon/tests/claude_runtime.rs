@@ -863,6 +863,6 @@ async fn account_plan_prefers_the_credentials_file_and_asks_no_cli() {
         &[("FAKE_OUT", r#"{"loggedIn": true, "subscriptionType": "pro"}"#)],
     )
     .with_config_dir(dir.path());
-    assert_eq!(rt.account_plan().await.unwrap().map(|p| p.id), Some("max_20x".into()));
+    assert_eq!(rt.account_plan().await.unwrap().map(|p| p.id), Some("max".into()));
     assert_eq!(probes(&calls), 0);
 }

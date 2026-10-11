@@ -103,12 +103,23 @@ public final class ServerModel: Identifiable {
     @ObservationIgnored public var onStateChange: (@MainActor (ConnectionState) -> Void)?
     public internal(set) var info: DaemonInfo? {
         didSet {
+            // A new version (the daemon was updated) makes the last update check stale: the next one is asked on the
+            // next connection, so nothing shows an offer for a release that is installed.
+            if oldValue?.version != info?.version {
+                daemonUpdateCheck = nil
+                daemonUpdateCheckedAt = nil
+            }
             // A listing asked for before the daemon's info was known is sent now that it is.
             if info != nil, runtimeModelsWanted {
                 Task { _ = try? await self.refreshRuntimeModels() }
             }
         }
     }
+    /// The daemon's answer to the last `daemon.update_check` (see `checkDaemonUpdate`). Nil when the last check failed,
+    /// and after the daemon's version changed. The offer is `daemonUpdateOffer`.
+    public internal(set) var daemonUpdateCheck: DaemonUpdateCheck?
+    /// When the last check was asked, answered or not. Nil until one was asked (and after a version change).
+    public internal(set) var daemonUpdateCheckedAt: Date?
     public private(set) var agents: [Agent] = []
     /// When `agents` was last read from the daemon (`agents.list`); nil until the first read.
     public private(set) var agentsReadAt: Date?
@@ -325,6 +336,8 @@ public final class ServerModel: Identifiable {
             lastError = decodeFailureCount > 0 ? Self.decodeWarning : nil
             // A daemon from before `last_message` sends no preview: read the newest messages once, in the background.
             Task { [weak self] in await self?.fillLegacyPreviews(c) }
+            // The daemon's own check, when its `daemon.info` carries no offer (in the background, the connect is done).
+            Task { [weak self] in await self?.refreshDaemonUpdateCheck() }
         } catch {
             if client === c {
                 client = nil
@@ -512,7 +525,11 @@ public final class ServerModel: Identifiable {
                 } else {
                     agents[i].pendingApprovals = max(0, agents[i].pendingApprovals - 1)
                 }
-            case .turnCompleted:
+            case .turnCompleted(_, let status, _, _):
+                Telemetry.count(.turnComplete)
+                if status != .ok {
+                    Telemetry.count(.turnFail(TelemetryEvent.TurnFailure(status: status)))
+                }
                 // The daemon stores the context the turn left when the turn ends; the ring and the memory tab read it
                 // from the list.
                 requestAgentsRefresh()
@@ -865,6 +882,7 @@ public final class ServerModel: Identifiable {
     public func resolve(_ approvalId: String, _ decision: Decision, remember: Bool = false) async throws {
         struct P: Encodable { var approvalId: String; var decision: Decision; var remember: Bool }
         try await rpc().call("approvals.resolve", P(approvalId: approvalId, decision: decision, remember: remember))
+        Telemetry.count(.approval(decision == .allow ? .allow : .deny))
     }
 
     @discardableResult

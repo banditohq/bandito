@@ -18,10 +18,11 @@ only when the server is new enough to have them; an older server shows Services 
 ## Marketplace mode
 
 <!-- id: market-mode; covers: mode:market -->
-The main area lists the services. The connected ones are in one row at the top; the catalog follows without them. Each
+The main area lists the services in blocks (see Filters and categories below). Each
 connected card shows its address and the result of the last check: the number of tools, the error, or Not checked yet.
-Each catalog card shows the icon, the name, the publisher, two lines about the service, View (Посмотреть) and Connect
-(Подключить).
+Each catalog card shows the icon, the name, the publisher, two lines about the service and one button, Connect
+(Подключить), at the bottom left; a connected service shows Connected (Подключено) and Configure (Настроить) there. The
+whole card is clickable and opens the page of the service.
 Где: sidebar footer → Marketplace button (Маркетплейс), or Menu View → Go to Marketplace (Маркетплейс)
 1. Press ⌘6, or click the Marketplace button at the bottom left of the sidebar, between your profile and the usage button.
 2. The button is lit while the Marketplace is on show. It is not in the mode bar at the top of the sidebar.
@@ -30,26 +31,31 @@ Each catalog card shows the icon, the name, the publisher, two lines about the s
 ## Filters and categories
 
 <!-- id: market-filters; covers: -->
-The sidebar lists All (Все), Connected (Подключённые), and the categories of the catalog: Development (Разработка),
-Productivity (Продуктивность), Data (Данные), Web (Веб), Design (Дизайн) and Other (Другое). A category shows its
-services whether or not they are connected. Only the categories the catalog has are listed.
+The Services page under All (Все) is one long list in blocks: Connected (Подключённые) first, when something is connected,
+then one block per category: Development (Разработка), Productivity (Продуктивность), Data (Данные), Web (Веб), Design
+(Дизайн) and Other (Другое). Each block has its header with a coloured bar, the name and the number of services; the
+header stays at the top while its block scrolls under it. A category block lists its services whether or not they are
+connected. A category with no services has no block and no row in the sidebar. The cards fill the width of the page
+with the same margin at both sides: two to four columns, by the width of the window.
 Где: Marketplace → sidebar → All (Все), Connected (Подключённые), a category
-1. Click Connected (Подключённые) to hide the services that are not connected.
-2. Click a category to see only its services.
-3. With no connected service, the page says Nothing is connected yet (Ничего ещё не подключено).
-4. Clicking a row in the sidebar also closes the page of a service.
+1. Click a category in the sidebar: the page scrolls to its block (without animation when Reduce Motion is on). Click All (Все) to go back to the top.
+2. While you scroll, the sidebar lights the row of the block in view; each category has a small dot in the colour of its block.
+3. Click Connected (Подключённые) to see only the connected services in one list. Click a category or All (Все) to return to the blocks.
+4. With no connected service, the Connected (Подключённые) list says Nothing is connected yet (Ничего ещё не подключено).
+5. Clicking a row in the sidebar also closes the page of a service.
+6. Bots and Skills keep their filters: the rows of the sidebar show only what they filter by.
 
 ## Search
 
 <!-- id: market-search; covers: -->
 The search field at the top right finds services by name and by description. It ignores case and spaces at the ends. Its focus shows as a cream ring around the field. Catalog services show their logo on the brand-colour tile.
 Где: Marketplace → search field (Поиск)
-1. Type part of the name or the description. A search with no match says Nothing found (Ничего не нашлось).
+1. Type part of the name or the description. The results are one plain list without blocks. A search with no match says Nothing found (Ничего не нашлось). Click a category in the sidebar to clear the search and jump to its block.
 
 ## A service's page
 
 <!-- id: market-detail; covers: -->
-Click a card, or View (Посмотреть) on it, to read about the service before you connect it. The page has the icon, the
+Click a card to read about the service before you connect it. The page has the icon, the
 name, the publisher with the Official (Официальный) badge when the service is the maker's own, and the category. On
 the right: Connect (Подключить), or the status and Configure (Настроить) when it is connected.
 Below: What it can do (Что умеет), About (Описание), What you need (Что понадобится), How to connect (Как подключить)
@@ -57,8 +63,8 @@ with one to three steps made from the service's fields (get the key, fill in the
 and the links Documentation (Документация) and Website (Сайт). A connected service also shows its status with the number of tools from the
 last check and To the list (К списку), which jumps to the Tools section below; then the switch Available to agents
 (Доступно агентам), Check (Проверить) and Remove (Удалить).
-Где: Marketplace → a card → View (Посмотреть)
-1. Click View (Посмотреть) on a card. The page opens in the same area.
+Где: Marketplace → a card
+1. Click a card. The page opens in the same area.
 2. Click Marketplace (Маркетплейс) at the top left, or press Esc, to go back to the list.
 3. Click Connect (Подключить) on the page to open the sheet with the service's settings.
 
@@ -95,7 +101,7 @@ as off until then. If the service is out of reach when Bandito renews the access
 GitHub connects with a code, the way `gh auth login` does, with no key to copy. Connect (Подключить) opens a sheet with a large code. Type that code on the service's page (github.com/login/device) and allow access there; Bandito's server waits for you and receives the access by itself, so you do not have to come back through the browser. The sheet says Waiting for you to confirm (Ждём подтверждения) and counts down how long the code works. Copy (Скопировать) puts the code on the pasteboard; the main button Open github.com/login/device (Открыть github.com/login/device) copies the code too and opens the page, so you can paste it. Nothing is copied or opened until you press one of them. When the access is given the sheet says Connected (Подключено) and the card shows the tools. If the code runs out, you refuse on the page, or the service cannot be reached, the sheet says why and offers Try again (Попробовать снова), which asks for a new code. Cancel (Отмена) gives the sign-in up. The access does not end by itself; if GitHub stops accepting it, the card says Needs sign-in again (Нужно войти снова) with Sign in again (Войти снова). Remove (Удалить) deletes the access from the server, but GitHub cannot be told from here: to take the access back, remove it at github.com/settings/applications.
 Где: Marketplace → a catalog card or a service's page → Connect (Подключить), then the sheet; Sign in again (Войти снова) on a card, in its menu (…), or on its page
 1. Click Connect (Подключить). A sheet shows the code.
-2. Click Open github.com/login/device (Открыть github.com/login/device), paste the code there and allow access.
+2. Click Open GitHub (Открыть GitHub), paste the code on the github.com/login/device page and allow access.
 3. Wait on the sheet until it says Connected (Подключено), then click Done (Готово).
 4. If the code expired, click Try again (Попробовать снова); you get a new code.
 
@@ -140,10 +146,10 @@ the text. The server is listed with the connected services.
 <!-- id: market-bots; covers: -->
 The Bots page lists ready-made bots: an agent with its role, instructions, scheduled runs, skills and the services it
 uses already set up. Each card has the icon on a coloured tile, the name, the category, a short description, small
-logos of the services the bot uses (the optional ones are dimmer), View (Посмотреть) and Create bot (Создать бота).
+logos of the services the bot uses (the optional ones are dimmer) and Create bot (Создать бота). The whole card opens the page of the bot.
 Где: Marketplace → Bots (Боты)
 1. Click a category in the sidebar to see only its bots.
-2. Click View (Посмотреть) on a card, or the card itself, to read about the bot.
+2. Click the card to read about the bot.
 3. Click Create bot (Создать бота) on a card to go straight to the create sheet.
 
 ## My bots
@@ -227,7 +233,7 @@ every agent on the server, On N agents (У N агентов) when only some agen
 folder of that name already exists that Bandito did not make.
 Где: Marketplace → Skills (Скиллы)
 1. Click Installed (Установленные) in the sidebar to see only the skills that are installed somewhere.
-2. Click Install (Установить) on a card to choose where, or View (Посмотреть) to read first.
+2. Click Install (Установить) on a card to choose where, or click the card itself to read first.
 
 ## A skill's page
 

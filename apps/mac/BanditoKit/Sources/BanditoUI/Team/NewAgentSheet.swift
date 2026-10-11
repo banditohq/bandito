@@ -18,6 +18,8 @@ struct NewAgentSheet: View {
     @State private var error: UserFacingMessage?
     /// The agent made by a create that then failed on its picture; the next press only saves the picture.
     @State private var createdAgent: Agent?
+    /// The draft started from a template (counted as `agent.create.template`, see `Telemetry`).
+    @State private var startedFromTemplate = false
     /// The draft's picture, decoded for the header and the editor.
     @State private var previewPicture: CGImage?
     @State private var editingAvatar = false
@@ -31,6 +33,10 @@ struct NewAgentSheet: View {
     @State private var runtimesAnswered = false
     /// The workplace made by an earlier attempt to create the agent, reused when the attempt is repeated.
     @State private var preparedWorkplace: PreparedWorkplace?
+    /// The folder picker of the agents folder ("Change…" under "New folder").
+    @State private var agentsRootPickerOpen = false
+    /// Why the agent's folder could not be made. Shown under the folder field, not in the footer.
+    @State private var folderError: UserFacingMessage?
     @Environment(\.openURL) private var openURL
 
     private var server: ServerModel? { app.currentServer }
@@ -39,6 +45,21 @@ struct NewAgentSheet: View {
     private var retryModels: (() -> Void)? {
         guard let server else { return nil }
         return { Task { try? await server.refreshRuntimeModels(refresh: true) } }
+    }
+
+    /// The capabilities this server cannot give, each with the reason its chip shows (see `AgentCapability.unavailable`).
+    private var unavailableCapabilities: [AgentCapability: String] {
+        AgentCapability.unavailable(infoKnown: server?.info != nil, supports: { server?.supports($0) ?? false })
+    }
+
+    /// Sets the model the runtime starts on, while the person has not chosen one and the field is empty.
+    private func applyStartingModel() {
+        let models = server?.runtimeModels[draft.runtime.rawValue]?.models ?? []
+        let next = NewAgentModelRules.startingModel(
+            current: draft.model, chosen: draft.modelChosen, runtime: draft.runtime, models: models)
+        if next != draft.model {
+            draft.model = next
+        }
     }
 
     /// Updates this Mac's server to the app's daemon (the model picker's "Обновить"). Only for this Mac's own server.
@@ -85,17 +106,33 @@ struct NewAgentSheet: View {
         .frame(minWidth: 640, idealWidth: 1080, maxWidth: .infinity, minHeight: 540, idealHeight: 820, maxHeight: .infinity)
         .background(Color.Bandito.surface2)
         .onAppear {
+            // A folder the sheet is opened for is the agent's project: it is picked, not made.
             if let cwd = router.takeAgentCwd() {
                 draft.cwd = cwd
+                draft.folderMode = .existing
             }
             if let template = router.takePendingTemplate() {
                 template.apply(to: &draft)
+                startedFromTemplate = true
             }
         }
         // A server that takes an agent without a folder lets the agent work in its own folder. Follows `server.info`,
         // so a daemon that answers late (or is updated while the sheet is open) is picked up.
         .onChange(of: server?.supports("agent_own_folder") ?? false, initial: true) { _, optional in
             draft.folderOptional = optional
+        }
+        // The model a runtime starts on, until the person picks one (see NewAgentModelRules). Asked again when the
+        // runtime changes and when its list comes, so a list that arrives late sets it too, once.
+        .onChange(of: draft.runtime, initial: true) { _, _ in applyStartingModel() }
+        .onChange(of: server?.runtimeModels[draft.runtime.rawValue]) { _, _ in applyStartingModel() }
+        // A server without the screen gets no screen capability in the draft, so none is sent for it.
+        .onChange(of: unavailableCapabilities, initial: true) { _, unavailable in
+            draft.capabilities.subtract(unavailable.keys)
+        }
+        // The agent's own folder is made with `fs.*`. A server without them only picks an existing folder, as before.
+        // A folder the sheet was opened with (`draft.cwd`) stays the one picked.
+        .onChange(of: server?.supports("files") ?? false, initial: true) { _, files in
+            draft.folderMode = files && draft.cwd.isEmpty ? .newFolder : .existing
         }
         // The containers are loaded once the sheet opens. A chosen container that is gone by then becomes a new one.
         // A failed load keeps the choice: an empty list is not proof that the container is gone.
@@ -107,6 +144,9 @@ struct NewAgentSheet: View {
             guard let server else { return }
             if server.supports("integrations") {
                 integrations = (try? await server.integrations()) ?? []
+            }
+            if server.supports("files") {
+                Task { await resolveAgentsRoot(on: server) }
             }
             let loaded = WorkspacesModel(server: server)
             workplaces = loaded
@@ -197,6 +237,7 @@ struct NewAgentSheet: View {
                         var next = draft
                         template.apply(to: &next)
                         draft = next
+                        startedFromTemplate = true
                     }
                 }
             } label: {
@@ -241,6 +282,8 @@ struct NewAgentSheet: View {
                     runtime: draft.runtime, selection: $draft.model,
                     models: server?.runtimeModels[draft.runtime.rawValue],
                     status: server?.runtimeModelsStatus ?? .unknown,
+                    // Picking (even "Default") is the person's choice: the starting model never replaces it.
+                    onCommit: { _ in draft.modelChosen = true },
                     onRetry: retryModels, onUpdate: updateThisMac)
             }
             advancedSection
@@ -257,7 +300,7 @@ struct NewAgentSheet: View {
             }
 
             labeled(L10n.Capability.title) {
-                CapabilityChips(enabled: $draft.capabilities)
+                CapabilityChips(enabled: $draft.capabilities, unavailable: unavailableCapabilities)
             }
 
             if !integrations.isEmpty {
@@ -548,7 +591,7 @@ struct NewAgentSheet: View {
     /// The project folder as one field: a click anywhere on it opens the folder picker. The clear icon shows only
     /// when a folder is chosen and the server takes an agent without one (the agent then works in its own folder).
     private var folderField: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 10) {
             Button {
                 pickerOpen.toggle()
             } label: {
@@ -604,17 +647,7 @@ struct NewAgentSheet: View {
 
     private var rightColumn: some View {
         VStack(alignment: .leading, spacing: 14) {
-            labeled(L10n.AgentSheet.folder, hint: L10n.AgentSheet.folderHint) {
-                folderField
-            }
-
-            if draft.folderOptional && draft.cwd.isEmpty {
-                Text(L10n.AgentSheet.ownFolderHint)
-                    .font(BanditoFont.text(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .offset(y: -8)
-            }
+            folderSection
 
             workplaceSection
 
@@ -641,16 +674,169 @@ struct NewAgentSheet: View {
                     selection: $draft.approval,
                     options: ApprovalChoice.allCases.map { ($0, $0.title) })
             }
-            Text(L10n.AgentSheet.approvalsHint(path: draft.cwd.isEmpty ? "~" : draft.cwd))
+            Text(L10n.AgentSheet.approvalsHint(path: approvalsPath))
                 .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
                 .offset(y: -8)
+        }
+    }
 
-            labeled(L10n.AgentSheet.tools, hint: nil) {
-                FlowTags(tags: toolTags)
+    // MARK: Agent folder
+
+    /// Where the agent works: a new folder in the agents folder (the default), or a folder that exists. The caption
+    /// under the choice says what the folder is for the agent.
+    private var folderSection: some View {
+        labeled(L10n.AgentSheet.folder, hint: nil) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Without `fs.*` on the server there is no folder to make: only the existing folder is offered.
+                if canMakeAgentFolder {
+                    SegmentedPicker(
+                        selection: $draft.folderMode,
+                        options: [
+                            (NewAgentFolderMode.newFolder, L10n.AgentSheet.folderNew),
+                            (NewAgentFolderMode.existing, L10n.AgentSheet.folderExisting),
+                        ])
+                }
+                if draft.folderMode == .newFolder && canMakeAgentFolder {
+                    newFolderFields
+                } else {
+                    folderField
+                    if draft.folderOptional && draft.cwd.isEmpty {
+                        Text(L10n.AgentSheet.ownFolderHint)
+                            .font(BanditoFont.text(size: 12, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Text(L10n.AgentSheet.folderHint)
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// The server can make the agent's folder (`fs.*`, feature `files`).
+    private var canMakeAgentFolder: Bool {
+        server?.supports("files") ?? false
+    }
+
+    /// "New folder": the agents folder with a "Change…" button, and the folder the agent gets, named from the Name field
+    /// as it is typed. What a failed creation said is shown under it.
+    private var newFolderFields: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 9) {
+                Image(systemName: "folder.badge.plus")
+                    .font(.system(size: 14))
+                    .foregroundStyle(BanditoPalette.peach)
+                Text(folderPreview ?? L10n.AgentSheet.folderRootNone)
+                    .font(BanditoFont.mono(size: 13, weight: 400))
+                    .foregroundStyle(folderPreview == nil ? Color.Bandito.text3 : Color.Bandito.text)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button(draft.agentsRoot.isEmpty ? L10n.AgentSheet.folderChoose : L10n.AgentSheet.folderChange) {
+                    agentsRootPickerOpen.toggle()
+                }
+                .banditoButton(.link)
+                .popover(isPresented: $agentsRootPickerOpen, arrowEdge: .top) {
+                    if let server {
+                        // The picker chooses the agents folder itself: it is not a project, so it stays out of "Recent".
+                        FolderPicker(
+                            server: server, selection: $draft.agentsRoot,
+                            onChoose: {
+                                agentsRootPickerOpen = false
+                                if !draft.agentsRoot.isEmpty {
+                                    AgentsRootStore.save(draft.agentsRoot, serverID: server.id.uuidString)
+                                }
+                            },
+                            remembersChoice: false)
+                    }
+                }
+            }
+            .modifier(FieldBox())
+            Text(L10n.AgentSheet.folderNewHint)
+                .font(BanditoFont.text(size: 12, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .fixedSize(horizontal: false, vertical: true)
+            if let folderError {
+                UserFacingErrorView(message: folderError)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    /// The folder the agent gets in "New folder", before a number is added when the name is taken: the agents folder
+    /// and the agent's name (the Name field, else the placeholder). Nil until the agents folder is known.
+    private var folderPreview: String? {
+        guard !draft.agentsRoot.isEmpty else { return nil }
+        return NewAgentFolderRules.folderPath(
+            root: draft.agentsRoot, name: NewAgentFolderRules.folderName(for: defaultName))
+    }
+
+    /// The folder the approvals text names: the folder the agent will work in.
+    private var approvalsPath: String {
+        let path = draft.folderMode == .newFolder ? (folderPreview ?? "") : draft.cwd
+        return path.isEmpty ? "~" : path
+    }
+
+    /// Sets the agents folder when the person has not chosen one on this server yet: the saved one, the parent of the
+    /// agents' project folders, or `Bandito` in the home folder (see `NewAgentFolderRules.defaultRoot`). A folder the
+    /// person picked meanwhile is kept.
+    private func resolveAgentsRoot(on server: ServerModel) async {
+        guard draft.agentsRoot.isEmpty else { return }
+        let home = (try? await server.stat("~"))?.path
+        guard draft.agentsRoot.isEmpty else { return }
+        let projects = server.agents.compactMap { NewAgentFolderRules.projectFolder(cwd: $0.cwd, homeDir: $0.homeDir) }
+        let saved = AgentsRootStore.load(serverID: server.id.uuidString)
+        draft.agentsRoot = NewAgentFolderRules.defaultRoot(saved: saved, projectFolders: projects, home: home) ?? ""
+    }
+
+    /// Makes the agent's folder on the server: `<agents folder>/<name>`, or the first free `<name> N` next to it when
+    /// the name is taken by something with things in it. An empty folder of that name is used as it is. Nil when no
+    /// free name turned up in `NewAgentFolderRules.attemptLimit` tries.
+    private func makeAgentFolder(on server: ServerModel) async throws -> String? {
+        let root = draft.agentsRoot
+        try await ensureAgentsRoot(root, on: server)
+        let base = NewAgentFolderRules.folderName(for: defaultName)
+        for attempt in 1...NewAgentFolderRules.attemptLimit {
+            let name = NewAgentFolderRules.candidate(base: base, attempt: attempt)
+            let path = NewAgentFolderRules.folderPath(root: root, name: name)
+            switch try await agentFolderSlot(path, on: server) {
+            case .missing:
+                _ = try await server.mkdir(path)
+                return path
+            case .empty:
+                return path
+            case .taken:
+                continue
+            }
+        }
+        return nil
+    }
+
+    /// The agents folder is made when it is not there yet; it is not checked further.
+    private func ensureAgentsRoot(_ root: String, on server: ServerModel) async throws {
+        do {
+            _ = try await server.stat(root)
+        } catch let failure as RPCError where failure.reason == "not_found" {
+            _ = try await server.mkdir(root)
+        }
+    }
+
+    /// What is at `path`: nothing, an empty folder, or something that is taken (a file, a link, a folder with things).
+    private func agentFolderSlot(_ path: String, on server: ServerModel) async throws -> AgentFolderSlot {
+        let entry: FsEntry
+        do {
+            entry = try await server.stat(path)
+        } catch let failure as RPCError where failure.reason == "not_found" {
+            return .missing
+        }
+        guard entry.kind == .dir else { return .taken }
+        // Hidden entries count too: a folder with only `.git` in it is not empty.
+        let listing = try await server.list(path, hidden: true)
+        return listing.entries.isEmpty ? .empty : .taken
     }
 
     // MARK: Workplace
@@ -770,16 +956,6 @@ struct NewAgentSheet: View {
         }
     }
 
-    private var toolTags: [FlowTags.Tag] {
-        [
-            .init(text: "✓ " + L10n.AgentSheet.toolTerminal, on: true),
-            .init(text: "✓ " + L10n.AgentSheet.toolFiles, on: true),
-            .init(text: "✓ " + L10n.AgentSheet.toolBrowser, on: true),
-            .init(text: "✓ " + L10n.AgentSheet.toolTeam, on: true),
-            .init(text: "+ " + L10n.AgentSheet.toolScreen, on: false),
-        ]
-    }
-
     // MARK: Footer
 
     private var footer: some View {
@@ -794,11 +970,14 @@ struct NewAgentSheet: View {
                     .foregroundStyle(blockerText == nil ? Color.Bandito.text3 : BanditoPalette.peach)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Button(L10n.AgentSheet.cancel) { router.sheet = nil }
-                    .banditoButton(.quiet(size: .regular))
-                Button(L10n.AgentSheet.create) { create() }
-                    .banditoButton(.signal(size: .regular))
-                    .disabled(blocker != nil || creating || server == nil)
+                ActionRow(hugging: true) {
+                    Button(L10n.AgentSheet.cancel) { router.sheet = nil }
+                        .banditoButton(.quiet(size: .regular))
+                    Button(L10n.AgentSheet.create) { create() }
+                        .banditoButton(.signal(size: .regular))
+                        .disabled(blocker != nil || creating || server == nil)
+                }
+                .layoutPriority(1)
             }
         }
         .padding(.horizontal, 28)
@@ -815,6 +994,7 @@ struct NewAgentSheet: View {
         guard let server, draft.canCreate else { return }
         creating = true
         error = nil
+        folderError = nil
         Task {
             do {
                 // A picture that failed to save on the first try retries alone: the agent exists already.
@@ -825,12 +1005,34 @@ struct NewAgentSheet: View {
                     let workspaceID = try await workplaceForCreate(on: server)
                     // Only integrations the server still has are sent with the new agent.
                     draft.integrations = draft.integrations.limited(to: Set(integrations.map(\.id)))
+                    var request = draft
+                    // In "New folder" the folder is made first: when that fails, no agent is created.
+                    if draft.folderMode == .newFolder {
+                        do {
+                            guard let folder = try await makeAgentFolder(on: server) else {
+                                folderError = UserFacingMessage(text: L10n.AgentSheet.folderNoFreeName)
+                                creating = false
+                                return
+                            }
+                            request.cwd = folder
+                        } catch {
+                            folderError = UserFacingError.message(for: error).wrapped {
+                                L10n.AgentSheet.folderCreateFailed(message: $0)
+                            }
+                            creating = false
+                            return
+                        }
+                    }
                     agent = try await server.createAgent(
-                        draft.makeNewAgent(
+                        request.makeNewAgent(
                             workspaceID: workspaceID, existingNames: agentNames, lists: server.runtimeModels))
                     createdAgent = agent
-                    // Only a folder the person chose is a recent project folder; an agent's own folder is not.
-                    if !draft.cwd.isEmpty {
+                    Telemetry.count(.agentCreate(startedFromTemplate ? .template : .plain))
+                    if draft.folderMode == .newFolder {
+                        // The agents folder the agent went into is the one the next agent offers.
+                        AgentsRootStore.save(draft.agentsRoot, serverID: server.id.uuidString)
+                    } else if !draft.cwd.isEmpty {
+                        // Only a folder the person chose is a recent project folder; an agent's own folder is not.
                         var recent = RecentFolders.load(serverID: server.id.uuidString)
                         recent.remember(agent.cwd)
                         recent.save(serverID: server.id.uuidString)
@@ -888,7 +1090,8 @@ struct NewAgentSheet: View {
         case .runtimeMissing(let kind): L10n.AgentSheet.runtimeMissing(runtime: runtimeName(kind), server: serverName)
         case .runtimeLogin(let kind, let command):
             L10n.AgentSheet.runtimeLogin(runtime: runtimeName(kind), server: serverName, command: command)
-        case .folder: L10n.AgentSheet.createBlockedFolder
+        case .folder:
+            draft.folderMode == .newFolder ? L10n.AgentSheet.createBlockedAgentsRoot : L10n.AgentSheet.createBlockedFolder
         case .workplace: L10n.AgentSheet.createBlockedWorkplace
         }
     }
@@ -1102,80 +1305,5 @@ struct FieldBox: ViewModifier {
             .frame(height: 40)
             .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line))
-    }
-}
-
-/// Wrapping row of informative tags ("What it may do"). Whole chips move to the next line; a chip's text never wraps.
-private struct FlowTags: View {
-    struct Tag: Identifiable {
-        let text: String
-        let on: Bool
-        var id: String { text }
-    }
-
-    let tags: [Tag]
-
-    var body: some View {
-        WrapLayout(spacing: 6, lineSpacing: 6) {
-            ForEach(tags) { tag in
-                Text(tag.text)
-                    .font(BanditoFont.text(size: 12, weight: 400))
-                    .foregroundStyle(tag.on ? Color.Bandito.text : Color.Bandito.text3)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        tag.on ? Color.Bandito.text.opacity(0.07) : Color.clear,
-                        in: Capsule())
-                    .overlay(
-                        Capsule().strokeBorder(
-                            tag.on ? Color.Bandito.text.opacity(0.12) : Color.Bandito.text.opacity(0.14),
-                            style: StrokeStyle(lineWidth: 1, dash: tag.on ? [] : [3, 2])))
-            }
-        }
-    }
-}
-
-/// Lays subviews out left to right and moves a whole subview to the next line when it does not fit.
-private struct WrapLayout: Layout {
-    var spacing: CGFloat
-    var lineSpacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var lineHeight: CGFloat = 0
-        var widest: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > maxWidth {
-                x = 0
-                y += lineHeight + lineSpacing
-                lineHeight = 0
-            }
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-            widest = max(widest, x - spacing)
-        }
-        return CGSize(width: min(widest, maxWidth), height: y + lineHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var lineHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX {
-                x = bounds.minX
-                y += lineHeight + lineSpacing
-                lineHeight = 0
-            }
-            view.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-        }
     }
 }

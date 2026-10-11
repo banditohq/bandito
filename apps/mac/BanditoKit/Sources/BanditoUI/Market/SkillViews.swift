@@ -19,7 +19,9 @@ struct SkillTile: View {
     }
 
     var body: some View {
-        MarketTileSurface(color: color, size: size, glow: glow) {
+        MarketTileSurface(
+            color: color, size: size, glow: glow, cacheKey: "skill|\(skill.id)|\(String(skill.name.prefix(1)))"
+        ) {
             Text(String(skill.name.prefix(1)).uppercased())
                 .font(BanditoFont.display(size: size * 0.42, weight: 700))
         }
@@ -67,31 +69,25 @@ struct SkillsPage: View {
 
     @Environment(Router.self) private var router
 
-    private let columns = [GridItem(.adaptive(minimum: 260), spacing: 14, alignment: .top)]
-
     var body: some View {
         let shown = SkillLogic.visible(
             model.skills, filter: router.marketSkillFilter, query: query, languageCode: languageCode)
         VStack(alignment: .leading, spacing: 14) {
             if OwnSkillsLogic.showsSection(model.own, query: query, filter: router.marketSkillFilter) {
                 SectionLabel(L10n.Share.Own.title)
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                    ForEach(OwnSkillsLogic.visible(model.own, query: query)) { skill in
-                        OwnSkillCard(skill: skill, onShare: { onShare(skill) })
-                    }
+                MarketRows(items: OwnSkillsLogic.visible(model.own, query: query)) { skill in
+                    OwnSkillCard(skill: skill, onShare: { onShare(skill) })
                 }
             }
             SectionLabel(L10n.Market.Skills.catalog)
             if !shown.isEmpty {
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                    ForEach(shown) { skill in
-                        SkillCard(
-                            skill: skill, languageCode: languageCode,
-                            canInstall: SkillLogic.canInstall(skill, agents: agents),
-                            updating: model.busy.contains { $0.hasPrefix(skill.id + "|") },
-                            onView: { onView(skill) }, onInstall: { onInstall(skill) },
-                            onRemove: { onRemoveEverywhere(skill) }, onUpdate: { onUpdate(skill) })
-                    }
+                MarketRows(items: shown) { skill in
+                    SkillCard(
+                        skill: skill, languageCode: languageCode,
+                        canInstall: SkillLogic.canInstall(skill, agents: agents),
+                        updating: model.busy.contains { $0.hasPrefix(skill.id + "|") },
+                        onView: { onView(skill) }, onInstall: { onInstall(skill) },
+                        onRemove: { onRemoveEverywhere(skill) }, onUpdate: { onUpdate(skill) })
                 }
             } else if let failure = model.failure {
                 UserFacingErrorView(message: failure, onRetry: onRetry)
@@ -220,18 +216,14 @@ struct SkillCard: View {
                     .foregroundStyle(BanditoPalette.peach)
                 }
                 Spacer(minLength: 0)
-                HStack(spacing: 8) {
-                    Button(L10n.Market.view, action: onView)
-                        .banditoButton(.quiet())
-                        .fixedSize()
-                    Spacer(minLength: 0)
+                MarketFootRow {
                     actions(state)
                 }
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 176, alignment: .topLeading)
         }
-        .onTapGesture(perform: onView)
+        .marketCardOpens(skill.name, perform: onView)
     }
 
     private var byLine: String {
@@ -343,7 +335,6 @@ struct SkillDetailPanel: View {
             .scrollIndicators(.never)
             .frame(maxHeight: 460)
             MarketPanelFooter {
-                Spacer(minLength: 8)
                 Button(L10n.Common.close, action: onClose)
                     .banditoButton(.quiet())
                     .fixedSize()
@@ -580,7 +571,6 @@ struct SkillInstallPanel: View {
             }
             .padding(24)
             MarketPanelFooter {
-                Spacer(minLength: 8)
                 Button(L10n.Common.cancel, action: onClose)
                     .banditoButton(.quiet())
                     .disabled(installing)

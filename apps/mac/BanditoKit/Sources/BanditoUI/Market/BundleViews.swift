@@ -16,7 +16,8 @@ struct BundleTile: View {
 
     var body: some View {
         MarketTileSurface(
-            color: MarketTileStyle.color(hex: bundle.accent, name: bundle.id), size: size, glow: glow
+            color: MarketTileStyle.color(hex: bundle.accent, name: bundle.id), size: size, glow: glow,
+            cacheKey: "bundle|\(bundle.id)|\(MarketTileStyle.colorKey(hex: bundle.accent, name: bundle.id))|\(bundle.icon)"
         ) {
             Image(systemName: bundle.icon)
                 .font(.system(size: size * 0.44, weight: .semibold))
@@ -33,7 +34,10 @@ struct MemberMiniTile: View {
 
     var body: some View {
         let name = template.name(languageCode: languageCode)
-        MarketTileSurface(color: MarketTileStyle.color(hex: template.accent, name: template.id), size: size) {
+        MarketTileSurface(
+            color: MarketTileStyle.color(hex: template.accent, name: template.id), size: size,
+            cacheKey: "member|\(template.id)|\(MarketTileStyle.colorKey(hex: template.accent, name: template.id))|\(template.icon)"
+        ) {
             Image(systemName: template.icon)
                 .font(.system(size: size * 0.46, weight: .semibold))
         }
@@ -51,19 +55,15 @@ struct BundlesRow: View {
     let languageCode: String
     var onView: (AgentBundle) -> Void
 
-    private let columns = [GridItem(.adaptive(minimum: 320), spacing: 14, alignment: .top)]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionLabel(L10n.Market.Bundles.title)
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                ForEach(bundles) { bundle in
-                    BundleCard(
-                        bundle: bundle,
-                        members: BundleLogic.members(of: bundle, templates: templates),
-                        languageCode: languageCode,
-                        onView: { onView(bundle) })
-                }
+            MarketRows(items: bundles) { bundle in
+                BundleCard(
+                    bundle: bundle,
+                    members: BundleLogic.members(of: bundle, templates: templates),
+                    languageCode: languageCode,
+                    onView: { onView(bundle) })
             }
         }
     }
@@ -112,7 +112,7 @@ struct BundleCard: View {
             .padding(16)
             .frame(maxWidth: .infinity, minHeight: 176, alignment: .topLeading)
         }
-        .onTapGesture(perform: onView)
+        .marketCardOpens(bundle.name(languageCode: languageCode), perform: onView)
     }
 }
 
@@ -170,7 +170,6 @@ struct BundlePanel: View {
             if let result {
                 resultBody(result)
                 MarketPanelFooter {
-                    Spacer(minLength: 8)
                     if let first = BundleLogic.firstAgent(result) {
                         Button(L10n.Common.close, action: onClose)
                             .banditoButton(.quiet())
@@ -187,7 +186,6 @@ struct BundlePanel: View {
             } else {
                 detailBody
                 MarketPanelFooter {
-                    Spacer(minLength: 8)
                     Button(L10n.Common.close, action: onClose)
                         .banditoButton(.quiet())
                         .disabled(creating)
@@ -403,6 +401,7 @@ struct BundlePanel: View {
                         return
                     }
                     made = try await server.createBundle(request)
+                    Telemetry.count(.agentCreate(.bundle))
                 }
                 let answer = retrying ? BundleLogic.combined(members: members, earlier: earlier, made: made) : made
                 for row in BundleLogic.rows(of: answer, templates: members, languageCode: languageCode) {

@@ -1,5 +1,6 @@
 import BanditoKit
 import Foundation
+import SwiftUI
 
 /// A tab of the workbench: the panel beside the chat in Team mode. The chat, a terminal, the browser, a file and
 /// the agent's changes can sit on one screen.
@@ -284,6 +285,16 @@ enum WorkbenchLayout {
     static func fittedWidth(stored: Double, modeWidth: Double) -> Double {
         let roomForPanel = max(minWidth, modeWidth - chatMinWidth)
         return min(clampWidth(stored, windowWidth: modeWidth), roomForPanel)
+    }
+
+    /// The panel's move in and out: a spring on its position. Light damping only, so the panel does not swing past
+    /// its place over the chat.
+    static let slide = Animation.spring(response: 0.36, dampingFraction: 0.9)
+
+    /// The room the chat gives the panel on its right edge: the whole panel when it sits beside the chat, nothing when
+    /// it is closed or lies over the chat. Set at once, never animated (see `TeamMode`).
+    static func chatInset(open: Bool, covers: Bool, panelWidth: Double) -> Double {
+        open && !covers ? panelWidth : 0
     }
 
     /// Whether the panel lies over the chat: beside it, the chat would be narrower than `chatMinWidth`.

@@ -9,7 +9,7 @@ struct ServerOverview: View {
     let server: ServerModel?
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
-    @State private var monitor = HostMonitor()
+    @State private var monitor: HostMonitor
     @State private var setup = SetupModel()
     @State private var release = ReleaseStatus()
     @State private var daemonUpdate = DaemonUpdateModel()
@@ -20,6 +20,12 @@ struct ServerOverview: View {
     @State private var detail: OverviewMetric?
     /// Two columns of cards or one. Starts narrow; changes only when the measured page width crosses the threshold.
     @State private var isWide = false
+
+    /// `monitor` is given only by the layout audit, with numbers already in it.
+    init(server: ServerModel?, monitor: HostMonitor = HostMonitor()) {
+        self.server = server
+        _monitor = State(initialValue: monitor)
+    }
 
     /// The daemon runs without a database after a restore (safe mode): the reason, and the way to the copies.
     private func safeModeCard(_ info: DaemonInfo) -> some View {
@@ -50,9 +56,10 @@ struct ServerOverview: View {
                 // This Mac's daemon is replaced by the bundled one: the release offers would be the same update, shown twice.
                 if !app.localUpgrade.replacesOffer(for: server) {
                     // The daemon's own check wins; the GitHub hint is only for a daemon that has not reported one yet.
-                    if daemonUpdate.shownOffer(current: DaemonUpdateOffer.offer(for: server.info), serverID: server.id) != nil {
+                    if daemonUpdate.shownOffer(current: server.daemonUpdateOffer, serverID: server.id) != nil {
                         DaemonUpdateBanner(server: server, model: daemonUpdate)
-                    } else if release.updateAvailable(current: server.info?.version) {
+                    } else if release.updateAvailable(current: server.info?.version), server.info?.supports("update") != true {
+                        // Only a daemon the app cannot update (no `update` feature) gets the terminal command.
                         updateBanner(server)
                     }
                 }
@@ -101,6 +108,7 @@ struct ServerOverview: View {
         .task(id: server?.id) {
             // Opening the Server screen re-reads the daemon's update check, so the offer is current.
             await server?.refreshInfo()
+            await server?.refreshDaemonUpdateCheck()
         }
         .task(id: server?.info != nil) {
             guard let server, server.info != nil else { return }

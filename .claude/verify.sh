@@ -14,4 +14,6 @@ if [ "${VERIFY_FULL:-0}" != 1 ] && [ -z "$(git status --porcelain -- . 2>/dev/nu
 fi
 cargo fmt --check
 cargo clippy -q --all-targets -- -D warnings
-cargo test -q 2>&1 | tail -n 3
+# On a failure the names of the failed tests and their panics are shown, not only the summary.
+out=$(cargo test -q 2>&1) || { printf '%s\n' "$out" | grep -E -A3 '^failures:|panicked at|^test .* FAILED|test result: FAILED' | tail -n 60; exit 1; }
+printf '%s\n' "$out" | tail -n 3

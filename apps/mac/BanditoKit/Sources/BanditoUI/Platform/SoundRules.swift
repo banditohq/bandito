@@ -10,6 +10,12 @@ public enum SoundKit: String, CaseIterable, Sendable {
     case glass
     /// 8-bit square waves.
     case retro
+    /// Higher, longer bells: a fifth above, and a second voice 3 cents sharp that makes a slow shimmer.
+    case crystal
+    /// A wooden tone in the pentatonic scale: short, with a knock at the start.
+    case marimba
+    /// 8-bit triangles with a soft band limit, quiet, with arpeggios.
+    case arcade
 }
 
 /// What makes a sound. The first four are the person's own actions, the last three come from agents.

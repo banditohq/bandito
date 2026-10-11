@@ -53,13 +53,18 @@ final class InstallSharedModel {
     /// A report is on its way: the menu is off until it answers.
     private(set) var reporting = false
 
+    /// Made with the item already in place (previews, the layout audit): nothing is read from the account.
+    private let isPreset: Bool
+
     init(load: Load = .loading) {
         self.load = load
+        isPreset = load != .loading
         if case .loaded(let item) = load { prepare(item) }
     }
 
     /// Reads the item (no sign-in needed). A hidden or removed item shows its own text.
     func fetch(shareID: String, client: () async throws -> AccountClient) async {
+        guard !isPreset else { return }
         guard ShareID.isValid(shareID) else {
             load = .failed(ShareLogic.fetchMessage(for: .notFound))
             return
@@ -128,6 +133,7 @@ final class InstallSharedModel {
                     problem = L10n.Share.Problem.generic
                     return
                 }
+                Telemetry.count(.agentCreate(.shared))
                 outcome = .bot(
                     BotResult(
                         agent: agent, scheduleCount: created.scheduleIds.count,
@@ -139,6 +145,7 @@ final class InstallSharedModel {
                     shareID: item.id, version: item.version, payload: item.payload, agentID: nil)
                 outcome = .skill
             }
+            Telemetry.count(.shareInstall)
             // The count is best effort: a failed count does not undo an install that worked.
             if let accountClient = try? await client() {
                 try? await accountClient.markInstalled(id: item.id)
