@@ -557,6 +557,33 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    /// Adds an integration to the agent's own list, in one transaction. An agent with no list (every enabled one)
+    /// has it already, and one that lists it too: nothing changes. Returns whether the list changed.
+    pub fn agent_integration_add(&self, id: &str, integration_id: &str) -> Result<bool> {
+        let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
+        let column: Option<Option<String>> = tx
+            .query_row("SELECT integrations FROM agents WHERE id = ?1", [id], |r| r.get(0))
+            .optional()?;
+        let Some(column) = column else {
+            bail!("no agent {id}");
+        };
+        let Some(json) = column else {
+            return Ok(false);
+        };
+        let mut ids: Vec<String> = serde_json::from_str(&json).unwrap_or_default();
+        if ids.iter().any(|i| i == integration_id) {
+            return Ok(false);
+        }
+        ids.push(integration_id.to_string());
+        tx.execute(
+            "UPDATE agents SET integrations = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, serde_json::to_string(&ids)?, now_ms()],
+        )?;
+        tx.commit()?;
+        Ok(true)
+    }
+
     pub fn agent_update(&self, id: &str, p: AgentPatch) -> Result<Agent> {
         let mut a = self.agent_get(id)?.ok_or_else(|| anyhow!("no agent {id}"))?;
         if let Some(n) = p.name {
@@ -845,6 +872,24 @@ mod tests {
             capabilities: None,
             integrations: None,
         }
+    }
+
+    #[test]
+    fn an_integration_is_added_to_a_list_once_and_never_to_no_list() {
+        let s = Store::open_in_memory().unwrap();
+        let mut n = new("Scout");
+        n.integrations = Some(vec!["i1".into()]);
+        let listed = s.agent_create(n).unwrap();
+        let open = s.agent_create(new("Open")).unwrap();
+        assert!(s.agent_integration_add(&listed.id, "i2").unwrap());
+        assert!(!s.agent_integration_add(&listed.id, "i2").unwrap());
+        assert_eq!(
+            s.agent_get(&listed.id).unwrap().unwrap().integrations,
+            Some(vec!["i1".to_string(), "i2".to_string()])
+        );
+        assert!(!s.agent_integration_add(&open.id, "i2").unwrap());
+        assert_eq!(s.agent_get(&open.id).unwrap().unwrap().integrations, None);
+        assert!(s.agent_integration_add("nobody", "i2").is_err());
     }
 
     #[test]

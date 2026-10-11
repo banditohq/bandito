@@ -55,10 +55,15 @@ pub async fn dispatch(app: &App, _peer: &Peer, method: &str, p: Value) -> RpcRes
                         forms::check_comment(a.comment.as_ref()).map_err(|e| RpcError::new(INVALID_PARAMS, e))?;
                     Outcome::Reject(comment)
                 }
+                "reply" => {
+                    let message =
+                        forms::check_reply(a.message.as_ref()).map_err(|e| RpcError::new(INVALID_PARAMS, e))?;
+                    Outcome::Reply(message)
+                }
                 other => {
                     return Err(RpcError::new(
                         INVALID_PARAMS,
-                        format!("action must be submit or reject, got {other}"),
+                        format!("action must be submit, reject or reply, got {other}"),
                     ));
                 }
             };
@@ -352,6 +357,8 @@ struct AnswerParams {
     values: Option<Value>,
     #[serde(default)]
     comment: Option<Value>,
+    #[serde(default)]
+    message: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -524,7 +531,7 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert!(e.message.contains("submit or reject"), "{}", e.message);
+        assert!(e.message.contains("submit, reject or reply"), "{}", e.message);
         call(
             &f,
             &Peer::Local,

@@ -6,6 +6,7 @@
 #   apps/mac/scripts/release-app.sh <version> [--dry-run] [--appcast-out <file>]
 #
 # <version> is X.Y.Z, or X.Y.Z-beta.N for the beta channel. The build number is the commit count of HEAD.
+# The disk image is built by make-dmg.sh with dmgbuild: python3 -m pip install --user -r apps/mac/scripts/dmg-requirements.txt
 # --dry-run does everything up to Apple's notary service: no submission, no stapling, no Gatekeeper check.
 # --appcast-out writes the updated appcast to <file> instead of the platform checkout (CI). The existing items are
 # still read from the platform checkout's public/appcast.xml, so that checkout must hold the current feed.
@@ -72,6 +73,10 @@ step() { printf '\n==> %s\n' "$*"; }
 for tool in xcodegen xcodebuild codesign ditto hdiutil xcrun python3 git; do
     command -v "$tool" >/dev/null 2>&1 || { echo "error: $tool not found" >&2; exit 1; }
 done
+python3 -c 'import dmgbuild' >/dev/null 2>&1 || {
+    echo "error: dmgbuild not installed: python3 -m pip install --user -r $here/scripts/dmg-requirements.txt" >&2
+    exit 1
+}
 [ -x "$sparkle_bin/sign_update" ] || {
     echo "error: $sparkle_bin/sign_update not found; unpack Sparkle 2.10.0 there (see docs/ARCHITECTURE.md#mac-app-updates)" >&2
     exit 1
@@ -220,12 +225,8 @@ rm -f "$zip_path"
 dmg_name="Bandito-$version.dmg"
 dmg_path="$release/$dmg_name"
 step "Disk image"
-stage="$work/dmg-stage"
-rm -rf "$stage" "$dmg_path"
-mkdir -p "$stage"
-ditto "$app" "$stage/$app_name"
-ln -s /Applications "$stage/Applications"
-hdiutil create -volname "Bandito $version" -srcfolder "$stage" -ov -format UDZO "$dmg_path" > "$work/hdiutil.log"
+rm -f "$dmg_path"
+"$here/scripts/make-dmg.sh" "$app" "$dmg_path"
 codesign --force --timestamp --sign "$IDENTITY" "$dmg_path"
 if [ "$dry_run" -eq 0 ]; then
     notarize "$dmg_path"

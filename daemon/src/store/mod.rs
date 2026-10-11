@@ -66,6 +66,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0021_tool_calls.sql"),
     include_str!("../../migrations/0022_agent_template_id.sql"),
     include_str!("../../migrations/0023_telegram.sql"),
+    include_str!("../../migrations/0024_integration_auth_device.sql"),
 ];
 
 pub struct Store {
@@ -158,6 +159,23 @@ impl Store {
              ORDER BY e.seq",
         )?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Connect requests (`integration_requested`) that no `integration_request_ended` has closed, as
+    /// `(agent_id, request_id)`. After a daemon restart no call waits for them any more.
+    pub fn connect_requests_unresolved(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT e.agent_id, json_extract(e.payload, '$.request_id') FROM events e
+             WHERE e.kind = 'integration_requested'
+               AND NOT EXISTS (
+                 SELECT 1 FROM events t WHERE t.agent_id = e.agent_id AND t.seq > e.seq
+                   AND t.kind = 'integration_request_ended'
+                   AND json_extract(t.payload, '$.request_id') = json_extract(e.payload, '$.request_id'))
+             ORDER BY e.seq",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
@@ -594,6 +612,53 @@ mod tests {
         let old = s.agent_view("old").unwrap().unwrap();
         assert_eq!((old.avatar, old.capabilities), (None, None));
         assert_eq!(s.agent_get("old").unwrap().unwrap().name, "Old");
+    }
+
+    #[test]
+    fn the_device_sign_in_migration_keeps_every_integration_and_accepts_the_new_value() {
+        // A database as the previous release left it: every migration but the newest, with a browser sign-in row.
+        let before = MIGRATIONS.len() - 1;
+        let conn = Connection::open_in_memory().unwrap();
+        for sql in &MIGRATIONS[..before] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", before as i64).unwrap();
+        conn.execute(
+            "INSERT INTO integrations (id, name, kind, url, headers, enabled, created_at, auth, tool_mode, tool_overrides)
+             VALUES ('i1', 'linear', 'http', 'https://mcp.linear.app/mcp', '{\"X\":\"y\"}', 0, 5, 'oauth', 'confirm_writes', '{\"a\":\"deny\"}')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO integration_tools (integration_id, name, seen_at) VALUES ('i1', 'search', 9)",
+            [],
+        )
+        .unwrap();
+
+        let s = Store::init(conn).unwrap();
+        let row = s.integration_get("i1").unwrap().unwrap();
+        assert_eq!(
+            (row.name.as_str(), row.auth, row.enabled, row.created_at),
+            ("linear", IntegrationAuth::Oauth, false, 5)
+        );
+        assert_eq!(row.tool_mode, ToolMode::ConfirmWrites);
+        assert_eq!(row.headers.get("X").map(String::as_str), Some("y"));
+        assert_eq!(s.integration_tools("i1").unwrap().len(), 1);
+        assert!(s.integration_set_auth("i1", IntegrationAuth::Device).unwrap());
+        assert_eq!(s.integration_get("i1").unwrap().unwrap().auth, IntegrationAuth::Device);
+        // The name stays unique, as it was.
+        let dup = NewIntegration {
+            name: "linear".into(),
+            kind: IntegrationKind::Http,
+            command: None,
+            args: vec![],
+            url: Some("https://x.example/mcp".into()),
+            env: Default::default(),
+            headers: Default::default(),
+            enabled: true,
+            auth: IntegrationAuth::None,
+        };
+        assert!(s.integration_create(dup).is_err());
     }
 
     #[test]

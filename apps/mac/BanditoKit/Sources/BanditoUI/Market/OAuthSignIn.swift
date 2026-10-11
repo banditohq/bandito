@@ -7,7 +7,8 @@ import AppKit
 #endif
 
 /// A sign-in to a service in the browser (docs/ARCHITECTURE.md#integrations). The daemon does the sign-in; this
-/// only starts it, opens the address, takes `bandito://oauth/callback` back and hands the code over. One sign-in is
+/// only starts it, opens the address, takes the answer back (`bandito://oauth/callback`, or a request on the loopback
+/// listener `127.0.0.1:45819` when the daemon registered that address) and hands the code over. One sign-in is
 /// in progress at a time. The app remembers which server began it, and keeps that on disk for ten minutes, so a
 /// callback that finds the app restarted still reaches the right server.
 @MainActor
@@ -33,6 +34,8 @@ public final class OAuthSignIn {
         var serverID: UUID
         var name: String
         var startedAt: Date
+        /// Answered on the loopback listener, which a restart does not bring back: never kept on disk.
+        var loopback: Bool?
     }
 
     /// The daemon forgets a sign-in after ten minutes; so does the app.
@@ -45,17 +48,25 @@ public final class OAuthSignIn {
     @ObservationIgnored private var pending: Pending?
     @ObservationIgnored private var authorizeURL: URL?
     /// What to start again for "Try again", and the server to tell when the owner gives up.
-    @ObservationIgnored private var attempt: (server: any OAuthServer, target: OAuthBeginTarget, name: String)?
+    @ObservationIgnored private var attempt: (server: any OAuthServer, target: OAuthBeginTarget, name: String, connectRequestId: String?)?
     /// Changes with each start and each cancel, so an answer that arrives late knows it is out of date.
     @ObservationIgnored private var run = UUID()
+    @ObservationIgnored private let makeListener:
+        @MainActor (String, @escaping @Sendable (OAuthCallback) -> Void) -> any OAuthLoopbackListening
+    /// The loopback listener of the sign-in in progress, and the task that ends the wait when the daemon would.
+    @ObservationIgnored private var listener: (any OAuthLoopbackListening)?
+    @ObservationIgnored private var deadline: Task<Void, Never>?
 
     public init(
         defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init,
-        opener: @escaping @MainActor (URL) -> Void = OAuthSignIn.openInBrowser
+        opener: @escaping @MainActor (URL) -> Void = OAuthSignIn.openInBrowser,
+        makeListener: @escaping @MainActor (String, @escaping @Sendable (OAuthCallback) -> Void)
+            -> any OAuthLoopbackListening = { OAuthLoopbackListener(state: $0, onCallback: $1) }
     ) {
         self.defaults = defaults
         self.now = now
         self.opener = opener
+        self.makeListener = makeListener
         pending = Self.load(defaults)
     }
 
@@ -71,14 +82,18 @@ public final class OAuthSignIn {
     // MARK: - start
 
     /// Starts a sign-in: asks the server for the address and opens it. A sign-in that was waiting is dropped first.
-    public func begin(server: any OAuthServer, target: OAuthBeginTarget, name: String) async {
+    ///
+    /// With `connectRequestId` the sign-in answers an agent's request: when it ends well the daemon tells the agent.
+    public func begin(
+        server: any OAuthServer, target: OAuthBeginTarget, name: String, connectRequestId: String? = nil
+    ) async {
         await discard()
         let id = UUID()
         run = id
-        attempt = (server, target, name)
+        attempt = (server, target, name, connectRequestId)
         phase = .starting(name: name)
         do {
-            let begun = try await server.oauthBegin(target)
+            let begun = try await server.oauthBegin(target, connectRequestId: connectRequestId)
             guard run == id else {
                 // Cancelled while the server was answering.
                 await server.oauthCancel(state: begun.state)
@@ -89,10 +104,26 @@ public final class OAuthSignIn {
                 phase = .failed(name: name, message: Self.failure(nil), canRetry: true)
                 return
             }
-            let record = Pending(state: begun.state, serverID: server.oauthServerID, name: name, startedAt: now())
+            if begun.usesLoopback {
+                // The listener is up before the browser opens, or the answer could arrive to nobody.
+                let ready = await startListener(state: begun.state, run: id)
+                guard run == id else {
+                    listener?.stop()
+                    listener = nil
+                    await server.oauthCancel(state: begun.state)
+                    return
+                }
+                if let failure = ready {
+                    await server.oauthCancel(state: begun.state)
+                    phase = .failed(name: name, message: failure, canRetry: true)
+                    return
+                }
+            }
+            let record = Pending(state: begun.state, serverID: server.oauthServerID, name: name, startedAt: now(), loopback: begun.usesLoopback)
             remember(record)
             authorizeURL = url
             phase = .waiting(name: name)
+            if begun.usesLoopback { watchDeadline(expiresAt: begun.expiresAt, run: id, name: name) }
             opener(url)
         } catch {
             guard run == id else { return }
@@ -109,7 +140,9 @@ public final class OAuthSignIn {
     /// "Try again" after a failure: the same sign-in from the start.
     public func retry() async {
         guard case .failed = phase, let attempt else { return }
-        await begin(server: attempt.server, target: attempt.target, name: attempt.name)
+        await begin(
+            server: attempt.server, target: attempt.target, name: attempt.name,
+            connectRequestId: attempt.connectRequestId)
     }
 
     // MARK: - end
@@ -131,6 +164,7 @@ public final class OAuthSignIn {
     /// Gives up a sign-in that is starting or waiting. The server is told so the state is spent at once.
     private func discard() async {
         run = UUID()
+        stopListening()
         let record = pending
         forget()
         authorizeURL = nil
@@ -151,6 +185,17 @@ public final class OAuthSignIn {
     @discardableResult
     public func handle(_ url: URL, server lookup: (UUID) -> (any OAuthServer)?) async -> UUID? {
         guard let callback = OAuthCallback.parse(url) else { return nil }
+        return await deliver(callback, server: lookup)
+    }
+
+    /// The answer the loopback listener took (its state was checked there already, and is checked again here).
+    private func loopbackArrived(_ callback: OAuthCallback, run id: UUID) async {
+        guard run == id, let server = attempt?.server else { return }
+        await deliver(callback) { $0 == server.oauthServerID ? server : nil }
+    }
+
+    @discardableResult
+    private func deliver(_ callback: OAuthCallback, server lookup: (UUID) -> (any OAuthServer)?) async -> UUID? {
         guard let record = pending, let state = callback.state, state == record.state else { return nil }
         guard now().timeIntervalSince(record.startedAt) <= Self.lifetime else {
             // The right state, too late: the daemon has forgotten it, the owner starts again.
@@ -191,17 +236,70 @@ public final class OAuthSignIn {
 
     private func remember(_ record: Pending) {
         pending = record
+        // A loopback sign-in has no listener after a restart; a stored one would only wait for nobody.
+        guard record.loopback != true else { return }
         if let data = try? JSONEncoder().encode(record) { defaults.set(data, forKey: Self.storeKey) }
     }
 
+    // MARK: - loopback
+
+    /// Starts the listener for `state`. Returns nil when it listens, else the words for the sheet.
+    private func startListener(state: String, run id: UUID) async -> UserFacingMessage? {
+        let made = makeListener(state) { [weak self] callback in
+            Task { @MainActor in await self?.loopbackArrived(callback, run: id) }
+        }
+        listener = made
+        do {
+            try await made.start()
+            return nil
+        } catch {
+            made.stop()
+            if listener === made { listener = nil }
+            if let failure = error as? OAuthLoopbackError, failure == .portBusy {
+                return UserFacingMessage(text: L10n.Integrations.Oauth.portBusy)
+            }
+            return Self.failure(nil)
+        }
+    }
+
+    /// Ends the wait when the daemon stops waiting: the listener closes and the sheet says the sign-in is gone.
+    private func watchDeadline(expiresAt: Int64?, run id: UUID, name: String) {
+        let seconds: TimeInterval
+        if let expiresAt {
+            seconds = max(1, Double(expiresAt) / 1000 - Date().timeIntervalSince1970)
+        } else {
+            seconds = Self.lifetime
+        }
+        deadline?.cancel()
+        deadline = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled, let self, self.run == id, case .waiting = self.phase else { return }
+            self.forget()
+            self.phase = .failed(name: name, message: Self.lost, canRetry: false)
+        }
+    }
+
+    private func stopListening() {
+        listener?.stop()
+        listener = nil
+        deadline?.cancel()
+        deadline = nil
+    }
+
     private func forget() {
+        stopListening()
         pending = nil
         defaults.removeObject(forKey: Self.storeKey)
     }
 
     private static func load(_ defaults: UserDefaults) -> Pending? {
         guard let data = defaults.data(forKey: storeKey) else { return nil }
-        return try? JSONDecoder().decode(Pending.self, from: data)
+        guard let record = try? JSONDecoder().decode(Pending.self, from: data), record.loopback != true else {
+            // Unreadable, or a loopback sign-in whose listener died with the last run.
+            defaults.removeObject(forKey: storeKey)
+            return nil
+        }
+        return record
     }
 
     /// The address to open: https (plain http only for this Mac), nothing else, so a bad answer cannot make the

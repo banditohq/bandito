@@ -180,6 +180,16 @@ When an agent wants to run a risky command, an approval card appears in the thre
 3. Tick Always allow this here (Всегда разрешать здесь) before you approve to keep the exact command allowed for this agent. Another command still asks.
 4. The answered card shrinks to a line: Allowed by you · just now (Allowed by you · just now), Denied by you (Denied by you · just now), Allowed by a rule (Разрешено правилом), or Denied by a rule (Запрещено правилом).
 
+## An agent asks you to connect a service
+
+<!-- id: team-connect-request; covers: -->
+When an agent needs a service from the catalog (GitHub, Notion, Composio and so on), it does not ask you for ids and keys: a card appears in the thread, "Forge needs GitHub" (Агенту Forge нужен GitHub), with the service's logo and the agent's reason in quotes, signed "— Forge writes" (— пишет Forge): the words are the agent's. A line above the field says the agent waits for it: "Forge is waiting for you to connect GitHub" (Forge ждёт, когда вы подключите GitHub), with a link Go to the card (К карточке).
+Где: Team → agent thread → card "needs …"
+1. Click Connect (Подключить). A service that signs in with a code (GitHub) shows the code sheet; one that signs in in the browser opens the sign-in there; a service with keys opens the sheet of keys. It is the same connection as in the Marketplace, and only a connection started from this card closes it: connecting the same service from the Marketplace does not.
+2. When the service is connected, the card folds to a line: "GitHub connected, Forge continues" (GitHub подключён, Forge продолжает). The agent gets the service itself, even if it had its own list of services, and goes on with its work. If you keep a service that is there already off this agent, it says so to the agent and shows no card.
+3. Click Not now (Не сейчас) to refuse: the line says "You did not connect GitHub" (Вы не стали подключать GitHub), and the agent is told so.
+4. A request that nobody answered for a day, or that was open when the server restarted, ends as "The request for GitHub timed out" (Запрос на GitHub истёк). A server older than this build shows no card.
+
 ## Go to who needs you (К тому, кто ждёт вас)
 
 <!-- id: team-needs-you; covers: -->

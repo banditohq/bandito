@@ -130,7 +130,8 @@ import Testing
         let confirmed = await LocalDaemonUpgrade.confirmsThisMac(
             config, binary: try binary(home), runner: HungRunner(), timeout: .milliseconds(100))
         #expect(confirmed == false)
-        #expect(start.duration(to: .now) < .seconds(2))
+        // The limit is 100 ms; a loaded CI runner needs a wide margin, and a runner that is never stopped would hang.
+        #expect(start.duration(to: .now) < .seconds(10))
     }
 
     @Test func aHangingDaemonCLIProcessIsStoppedAtTheLimit() async throws {

@@ -37,6 +37,7 @@ pub mod browser;
 pub mod changes;
 pub mod chat;
 pub mod commands;
+pub mod connect;
 pub mod files;
 pub mod host;
 pub mod integrations;
@@ -87,11 +88,15 @@ pub fn features() -> Vec<&'static str> {
         "agent_own_folder",
         "runtime_models",
         "forms",
+        "form_reply",
         "reactions",
         "attachments",
         "integrations",
         "integrations_probe",
         "integrations_oauth",
+        "integrations_oauth_probe",
+        "oauth_loopback",
+        "integrations_device",
         "integrations_call_tool",
         "template_updates",
         "tool_permissions",
@@ -104,6 +109,7 @@ pub fn features() -> Vec<&'static str> {
         "agent_bundles",
         "sharing",
         "telegram",
+        "agent_connect",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -148,8 +154,12 @@ pub struct App {
     safe_mode: std::sync::OnceLock<String>,
     /// Browser sign-ins to MCP servers that wait for their answer (see docs/ARCHITECTURE.md#integrations).
     pub oauth: crate::mcp_oauth::Flows,
+    /// Sign-ins with a code that wait for the person to confirm them on the provider's page.
+    pub device: crate::mcp_oauth::device::DeviceFlows,
     /// The Telegram bot (see docs/ARCHITECTURE.md#telegram). Started by `main` unless the daemon is in safe mode.
     pub telegram: Arc<crate::telegram::Telegram>,
+    /// The agents' requests to connect a catalog service that wait for the person (see docs/ARCHITECTURE.md#connect-requests).
+    pub connects: connect::Requests,
 }
 
 impl App {
@@ -192,7 +202,9 @@ impl App {
             models: crate::runtime::models::ModelCache::default(),
             safe_mode: std::sync::OnceLock::new(),
             oauth: crate::mcp_oauth::Flows::default(),
+            device: crate::mcp_oauth::device::DeviceFlows::default(),
             telegram,
+            connects: connect::Requests::default(),
         })
     }
 
@@ -258,6 +270,7 @@ const AGENT_METHODS: &[&str] = &[
     "team.assign",
     "team.status",
     "forms.agent.ask",
+    "integrations.agent.request",
     "messages.agent.react",
     "history.day",
     "history.search",
@@ -289,6 +302,7 @@ pub fn is_agent_only(method: &str) -> bool {
     method == "crew.send"
         || method.starts_with("team.")
         || method.starts_with("forms.agent.")
+        || method.starts_with("integrations.agent.")
         || method.starts_with("messages.agent.")
         || method.starts_with("history.")
         || method.starts_with("browser.agent.")
@@ -1236,11 +1250,15 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         | "integrations.oauth_cancel"
         | "integrations.oauth_status"
         | "integrations.oauth_disconnect"
+        | "integrations.device_begin"
+        | "integrations.device_status"
+        | "integrations.device_cancel"
         | "integrations.tools"
         | "integrations.call_tool"
         | "integrations.recommend"
         | "integrations.calls"
         | "integrations.call_stats" => integrations::dispatch(app, peer, method, p).await,
+        "integrations.agent.request" | "integrations.request_decline" => connect::dispatch(app, peer, method, p).await,
         "agents.avatar_image_set" | "agents.avatar_image_get" | "agents.avatar_image_clear" => {
             avatar::dispatch(app, method, p).await
         }
@@ -2090,6 +2108,7 @@ mod crew_tests {
     #[test]
     fn only_a_waiting_team_assign_and_a_form_hold_the_connection() {
         assert!(waits_long("forms.agent.ask", &json!({})));
+        assert!(waits_long("integrations.agent.request", &json!({})));
         assert!(waits_long("team.assign", &json!({ "wait": true })));
         assert!(!waits_long("team.assign", &json!({ "wait": false })));
         assert!(!waits_long("team.assign", &json!({})));
@@ -2528,6 +2547,7 @@ async fn recv_event(rx: &mut Option<broadcast::Receiver<Event>>) -> Result<Event
 /// for the person, and `team.assign` with `wait` for the other agent's turn.
 fn waits_long(method: &str, params: &Value) -> bool {
     method == "forms.agent.ask"
+        || method == "integrations.agent.request"
         || (method == "team.assign" && params.get("wait").and_then(Value::as_bool) == Some(true))
 }
 

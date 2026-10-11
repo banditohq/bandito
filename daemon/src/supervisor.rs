@@ -265,6 +265,7 @@ const PRIVATE_DRAFTS: &str = " files/ in your memory folder is only for your pri
 
 /// Put in the system prompt of every agent: when to ask with a form, and how to react to messages.
 const CHAT_GUIDE: &str = "Когда вам нужно несколько ответов от человека или подтверждение действия наружу (письмо, публикация, оплата, удаление), используйте инструмент ask_form вместо вопросов текстом. В форме — короткий заголовок и понятные подписи полей.
+Если для задачи нужен сервис из каталога Bandito (почта, Slack, GitHub, Notion и т. п.), не просите человека искать идентификаторы и ключи: вызовите инструмент request_connection — человек увидит в чате карточку с кнопкой «Подключить».
 Можно ставить реакции на сообщения человека инструментом react (например 👍 — принял, 👀 — смотрю), вместо коротких ответов.";
 
 /// Put in the system prompt of the main agent of the crew (see docs/ARCHITECTURE.md#lead-agent).
@@ -451,6 +452,17 @@ impl Supervisor {
         for f in self.hub.store.form_expire_all()? {
             self.hub
                 .emit(&f.agent_id, form_answered_event(&f.id, &Outcome::Expired));
+        }
+        // A request to connect a service waited in a call that is gone now.
+        for (agent_id, request_id) in self.hub.store.connect_requests_unresolved()? {
+            self.hub.emit(
+                &agent_id,
+                EventBody::IntegrationRequestEnded {
+                    request_id,
+                    status: crate::event::ConnectEnd::Expired,
+                    integration: None,
+                },
+            );
         }
         // The queue lives in memory: a message that was shown as waiting will not get its turn now.
         for (agent_id, seq) in self.hub.store.queued_messages_unresolved()? {
@@ -1291,7 +1303,7 @@ impl Actor {
         // The sign-in tokens this session starts with, to know later whether a renewal concerns it.
         let oauth_tokens: HashMap<String, String> = chosen
             .iter()
-            .filter(|i| i.auth == crate::store::IntegrationAuth::Oauth)
+            .filter(|i| i.auth.holds_token())
             .filter_map(|i| {
                 secret_map
                     .get(&crate::integrations::oauth_access_name(&i.id))
@@ -1790,6 +1802,7 @@ impl Actor {
         let status = match outcome {
             Outcome::Submit(_) => crate::store::FormStatus::Submitted,
             Outcome::Reject(_) => crate::store::FormStatus::Rejected,
+            Outcome::Reply(_) => crate::store::FormStatus::Replied,
             Outcome::Expired => crate::store::FormStatus::Expired,
         };
         if self
@@ -2479,16 +2492,18 @@ impl Actor {
 
 /// The `form_answered` event of a form that ended with `outcome`.
 fn form_answered_event(form_id: &str, outcome: &Outcome) -> EventBody {
-    let (values, comment) = match outcome {
-        Outcome::Submit(values) => (Some(values.clone()), None),
-        Outcome::Reject(comment) => (None, comment.clone()),
-        Outcome::Expired => (None, None),
+    let (values, comment, message) = match outcome {
+        Outcome::Submit(values) => (Some(values.clone()), None, None),
+        Outcome::Reject(comment) => (None, comment.clone(), None),
+        Outcome::Reply(message) => (None, None, Some(message.clone())),
+        Outcome::Expired => (None, None, None),
     };
     EventBody::FormAnswered {
         form_id: form_id.to_string(),
         action: outcome.action(),
         values,
         comment,
+        message,
     }
 }
 
@@ -5575,6 +5590,33 @@ mod tests {
             EventBody::FormRequested { form_id, .. } => Some(form_id.clone()),
             _ => None,
         }
+    }
+
+    #[tokio::test]
+    async fn a_reply_wakes_the_agent_with_the_message_and_is_announced() {
+        let mut w = world(ApprovalMode::Risky);
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking = tokio::spawn(async move { sup.ask_form(&agent, question(), Duration::from_secs(30)).await });
+        let asked = w.wait(|b| form_requested_id(b).is_some()).await;
+        let form_id = form_requested_id(&asked.body).unwrap();
+        w.sup
+            .answer_form(&form_id, Outcome::Reply("where is it?".into()))
+            .await
+            .unwrap();
+        let got = asking.await.unwrap().unwrap();
+        assert_eq!(got.to_json(), json!({ "action": "reply", "message": "where is it?" }));
+        let closed = w.wait(|b| matches!(b, EventBody::FormAnswered { .. })).await;
+        match closed.body {
+            EventBody::FormAnswered { action, message, .. } => {
+                assert_eq!(action, crate::forms::FormAction::Reply);
+                assert_eq!(message.as_deref(), Some("where is it?"));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(
+            w.store.form_get(&form_id).unwrap().unwrap().status,
+            crate::store::FormStatus::Replied
+        );
     }
 
     #[tokio::test]

@@ -142,6 +142,18 @@ public enum L10n {
         }
     }
 
+    public enum AgentConnect {
+        public static func connected(service: String, agent: String) -> String { L10n.tr("agentConnect.connected", service, agent) }
+        public static func declined(service: String) -> String { L10n.tr("agentConnect.declined", service) }
+        public static func expired(service: String) -> String { L10n.tr("agentConnect.expired", service) }
+        public static func hintBrowser(agent: String) -> String { L10n.tr("agentConnect.hintBrowser", agent) }
+        public static func hintKeys(agent: String) -> String { L10n.tr("agentConnect.hintKeys", agent) }
+        public static var notNow: String { L10n.tr("agentConnect.notNow") }
+        public static func reasonBy(agent: String) -> String { L10n.tr("agentConnect.reasonBy", agent) }
+        public static func title(agent: String, service: String) -> String { L10n.tr("agentConnect.title", agent, service) }
+        public static func unknown(service: String) -> String { L10n.tr("agentConnect.unknown", service) }
+    }
+
     public enum AgentSheet {
         public static var advanced: String { L10n.tr("agentSheet.advanced") }
         public static var advancedCollapsed: String { L10n.tr("agentSheet.advancedCollapsed") }
@@ -570,9 +582,12 @@ public enum L10n {
     }
 
     public enum Composer {
+        public static var connectGo: String { L10n.tr("composer.connectGo") }
+        public static func connectWaiting(name: String, service: String) -> String { L10n.tr("composer.connectWaiting", name, service) }
         public static var contextHint: String { L10n.tr("composer.contextHint") }
         public static func contextPopover(percent: String) -> String { L10n.tr("composer.contextPopover", percent) }
         public static var formGo: String { L10n.tr("composer.formGo") }
+        public static var formReplyHint: String { L10n.tr("composer.formReplyHint") }
         public static func formWaiting(name: String) -> String { L10n.tr("composer.formWaiting", name) }
 
         public enum Attach {
@@ -973,6 +988,7 @@ public enum L10n {
         public static var reject: String { L10n.tr("form.reject") }
         public static var rejected: String { L10n.tr("form.rejected") }
         public static func rejectedWhy(comment: String) -> String { L10n.tr("form.rejectedWhy", comment) }
+        public static var replied: String { L10n.tr("form.replied") }
         public static var requiredHelp: String { L10n.tr("form.requiredHelp") }
         public static var sent: String { L10n.tr("form.sent") }
         public static var showAnswers: String { L10n.tr("form.showAnswers") }
@@ -1118,6 +1134,9 @@ public enum L10n {
             public static func recognizedProgram(command: String) -> String { L10n.tr("integrations.custom.recognizedProgram", command) }
             public static func recognizedWeb(url: String) -> String { L10n.tr("integrations.custom.recognizedWeb", url) }
             public static func remaining(count: Int) -> String { L10n.tr("integrations.custom.remaining", count) }
+            public static var signIn: String { L10n.tr("integrations.custom.signIn") }
+            public static var signInHint: String { L10n.tr("integrations.custom.signInHint") }
+            public static var signInTitle: String { L10n.tr("integrations.custom.signInTitle") }
             public static var titleLabel: String { L10n.tr("integrations.custom.titleLabel") }
             public static var titlePlaceholder: String { L10n.tr("integrations.custom.titlePlaceholder") }
             public static var trialNote: String { L10n.tr("integrations.custom.trialNote") }
@@ -1131,6 +1150,21 @@ public enum L10n {
                 public static var noServers: String { L10n.tr("integrations.custom.reason.noServers") }
                 public static var quote: String { L10n.tr("integrations.custom.reason.quote") }
             }
+        }
+
+        public enum Device {
+            public static func codeHint(site: String) -> String { L10n.tr("integrations.device.codeHint", site) }
+            public static var copied: String { L10n.tr("integrations.device.copied") }
+            public static var copy: String { L10n.tr("integrations.device.copy") }
+            public static var expired: String { L10n.tr("integrations.device.expired") }
+            public static func expiresIn(time: String) -> String { L10n.tr("integrations.device.expiresIn", time) }
+            public static func needsUpdate(name: String) -> String { L10n.tr("integrations.device.needsUpdate", name) }
+            public static var network: String { L10n.tr("integrations.device.network") }
+            public static func `open`(address: String) -> String { L10n.tr("integrations.device.open", address) }
+            public static var refused: String { L10n.tr("integrations.device.refused") }
+            public static var revokeHint: String { L10n.tr("integrations.device.revokeHint") }
+            public static var starting: String { L10n.tr("integrations.device.starting") }
+            public static func waiting(site: String) -> String { L10n.tr("integrations.device.waiting", site) }
         }
 
         public enum Failure {
@@ -1150,12 +1184,18 @@ public enum L10n {
             public static var lost: String { L10n.tr("integrations.oauth.lost") }
             public static func needsUpdate(name: String) -> String { L10n.tr("integrations.oauth.needsUpdate", name) }
             public static var openAgain: String { L10n.tr("integrations.oauth.openAgain") }
+            public static var portBusy: String { L10n.tr("integrations.oauth.portBusy") }
             public static var retry: String { L10n.tr("integrations.oauth.retry") }
             public static var signInAgain: String { L10n.tr("integrations.oauth.signInAgain") }
             public static var starting: String { L10n.tr("integrations.oauth.starting") }
             public static func title(name: String) -> String { L10n.tr("integrations.oauth.title", name) }
             public static var waiting: String { L10n.tr("integrations.oauth.waiting") }
             public static var waitingHint: String { L10n.tr("integrations.oauth.waitingHint") }
+
+            public enum Loopback {
+                public static var done: String { L10n.tr("integrations.oauth.loopback.done") }
+                public static var failed: String { L10n.tr("integrations.oauth.loopback.failed") }
+            }
         }
 
         public enum Problem {
@@ -1493,6 +1533,7 @@ public enum L10n {
             public static var fillPath: String { L10n.tr("market.step.fillPath") }
             public static var getKey: String { L10n.tr("market.step.getKey") }
             public static var signIn: String { L10n.tr("market.step.signIn") }
+            public static var signInCode: String { L10n.tr("market.step.signInCode") }
         }
 
         public enum Tab {

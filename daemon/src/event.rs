@@ -43,6 +43,15 @@ pub enum Decision {
     Deny,
 }
 
+/// How a connect request ended (see `EventBody::IntegrationRequestEnded`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConnectEnd {
+    Connected,
+    Declined,
+    Expired,
+}
+
 /// What happened to an agent's record (see `EventBody::AgentChanged`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -226,7 +235,7 @@ pub enum EventBody {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reject_label: Option<String>,
     },
-    /// The form ended: submitted, rejected, or expired (never answered in time, or the turn was cancelled).
+    /// The form ended: submitted, rejected, answered with a message, or expired (never answered in time, or the turn was cancelled).
     #[serde(rename = "form_answered")]
     FormAnswered {
         form_id: String,
@@ -235,6 +244,27 @@ pub enum EventBody {
         values: Option<Map<String, Value>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         comment: Option<String>,
+        /// The person's message, on `reply`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+    },
+    /// The agent asked the person to connect a catalog service (see docs/ARCHITECTURE.md#connect-requests).
+    #[serde(rename = "integration_requested")]
+    IntegrationRequested {
+        request_id: String,
+        /// The catalog id of the service.
+        service: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
+    /// The request ended: connected, declined, or expired (no answer in time, the call went away, or a restart).
+    #[serde(rename = "integration_request_ended")]
+    IntegrationRequestEnded {
+        request_id: String,
+        status: ConnectEnd,
+        /// The name of the integration, on `connected`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        integration: Option<String>,
     },
     /// A reaction on a message, by seq. No `emoji` means the reaction was taken off.
     #[serde(rename = "reaction")]

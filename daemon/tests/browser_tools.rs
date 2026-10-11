@@ -234,6 +234,7 @@ async fn crew_lists_the_browser_tools_after_the_crew_tools() {
             "history_search",
             "history_day",
             "ask_form",
+            "request_connection",
             "react",
             "screen_screenshot",
             "screen_click",

@@ -56,10 +56,24 @@ pub struct CatalogEntry {
     pub url_hint: Option<String>,
     pub headers_keys: Option<Vec<CatalogKey>>,
     /// `oauth` for a service that signs in in the browser (see docs/ARCHITECTURE.md#integrations): Connect starts the
-    /// sign-in, and the entry holds no header keys.
+    /// sign-in, and the entry holds no header keys. `device` for one that signs in with a code (then `device` names
+    /// the provider).
     pub auth: Option<String>,
+    /// For `auth: "device"`: how the code sign-in runs (see `mcp_oauth/device.rs`, which holds the same values).
+    pub device: Option<CatalogDevice>,
     /// The texts for the other app languages, by language code (see [`CATALOG_LANGUAGES`]).
     pub l10n: Option<BTreeMap<String, CatalogTranslation>>,
+}
+
+/// The `device` field of a catalog entry: which provider's code sign-in it uses. The daemon takes its addresses and
+/// client from its own list of providers, never from the catalog or from a request.
+#[cfg(test)]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogDevice {
+    pub provider: String,
+    pub client_id: String,
+    pub scope: String,
 }
 
 /// One language of a catalog entry's `l10n`: the texts the app shows in that language. `labels` maps the `key` of
@@ -276,6 +290,11 @@ fn bare_url(url: &str) -> &str {
     url.trim_end_matches('/')
 }
 
+/// The id of the catalog template an integration was made from (see [`template_of`]).
+pub fn template_id_of<'a>(row: &Integration, templates: &'a [Template]) -> Option<&'a str> {
+    template_of(row, templates).map(|t| t.id.as_str())
+}
+
 /// The template an integration was made from: the one whose id is its name, else the one with the same url.
 fn template_of<'a>(row: &Integration, templates: &'a [Template]) -> Option<&'a Template> {
     templates.iter().find(|t| t.id == row.name).or_else(|| {
@@ -322,7 +341,7 @@ fn args_differ_by_version(ours: &[String], theirs: &[String]) -> Option<Option<(
 /// get one: their address cannot change. `None` when nothing differs, and when another part of the command or the
 /// arguments differs (then the owner changed it, and an update would overwrite that).
 pub fn template_update<'a>(row: &Integration, templates: &'a [Template]) -> Option<TemplateUpdate<'a>> {
-    if row.auth == IntegrationAuth::Oauth {
+    if row.auth.holds_token() {
         return None;
     }
     let template = template_of(row, templates)?;
@@ -358,7 +377,7 @@ pub fn secret_names(list: &[&Integration]) -> Vec<String> {
         .map(str::to_string)
         .chain(
             list.iter()
-                .filter(|i| i.auth == IntegrationAuth::Oauth)
+                .filter(|i| i.auth.holds_token())
                 .map(|i| oauth_access_name(&i.id)),
         )
         .collect();
@@ -391,7 +410,17 @@ pub fn resolve(list: &[&Integration], secrets: &HashMap<String, String>) -> Vec<
                 },
                 IntegrationKind::Http => {
                     let mut headers = pairs(&i.headers)?;
-                    if i.auth == IntegrationAuth::Oauth {
+                    if i.auth == IntegrationAuth::Device
+                        && !crate::mcp_oauth::device::server_allowed(i.url.as_deref().unwrap_or_default())
+                    {
+                        // The token of a code sign-in is for the provider's server only: at any other address it stays here.
+                        tracing::warn!(
+                            integration = i.name,
+                            "integration skipped: its address is not the sign-in's service"
+                        );
+                        return None;
+                    }
+                    if i.auth.holds_token() {
                         // The token is the daemon's, not a header the owner wrote: it replaces any `Authorization`.
                         let Some(token) = secrets.get(&oauth_access_name(&i.id)) else {
                             tracing::warn!(integration = i.name, "integration skipped: not signed in");
@@ -652,6 +681,7 @@ fn pairs_list(pairs: &[Pair], name: &str, value: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::IntegrationAuth;
 
     fn stdio(name: &str, env: &[(&str, &str)]) -> Integration {
         Integration {
@@ -900,6 +930,22 @@ mod tests {
     }
 
     #[test]
+    fn a_code_sign_in_token_goes_only_to_the_providers_server() {
+        let mut row = http("gh", &[]);
+        row.auth = IntegrationAuth::Device;
+        let mut map = secrets();
+        map.insert(oauth_access_name(&row.id), "at-device-token".into());
+        // The address is not the provider's MCP server: the token would leave for another host, so none is sent.
+        assert!(resolve(&[&row], &map).is_empty());
+        row.url = Some("https://api.githubcopilot.com/mcp/".into());
+        let servers = resolve(&[&row], &map);
+        match &servers[0].transport {
+            Transport::Http { headers, .. } => assert_eq!(headers[0].value, "Bearer at-device-token"),
+            _ => panic!(),
+        }
+    }
+
+    #[test]
     fn an_oauth_integration_gets_the_daemons_token_as_its_authorization_header() {
         let mut row = http("notion", &[("Authorization", "secret:GITHUB_TOKEN"), ("X-Team", "one")]);
         row.auth = IntegrationAuth::Oauth;
@@ -985,22 +1031,16 @@ mod update_tests {
 
     #[test]
     fn a_uvx_pin_and_an_npx_pin_are_version_changes() {
-        let grafana = row(
-            "grafana",
-            IntegrationKind::Stdio,
-            Some("uvx"),
-            &["mcp-grafana==1.0.0"],
-            None,
-        );
-        assert_eq!(versions(&grafana), ver("1.0.0", "2.0.2"));
-        let deepl = row(
-            "deepl",
+        let kagi = row("kagi", IntegrationKind::Stdio, Some("uvx"), &["kagimcp==1.0.0"], None);
+        assert_eq!(versions(&kagi), ver("1.0.0", "1.0.2"));
+        let snyk = row(
+            "snyk",
             IntegrationKind::Stdio,
             Some("npx"),
-            &["-y", "deepl-mcp-server@1.3.0"],
+            &["-y", "snyk@1.1300.0", "mcp", "-t", "stdio"],
             None,
         );
-        assert_eq!(versions(&deepl), ver("1.3.0", "1.3.13"));
+        assert_eq!(versions(&snyk), ver("1.1300.0", "1.1308.0"));
         // A scoped package keeps its own `@`: the version is what follows the last one.
         let toolbox = row(
             "toolbox-postgres",
@@ -1015,10 +1055,10 @@ mod update_tests {
     #[test]
     fn the_same_version_or_no_pin_at_all_is_no_update() {
         let same = row(
-            "deepl",
+            "toolbox-postgres",
             IntegrationKind::Stdio,
             Some("npx"),
-            &["-y", "deepl-mcp-server@1.3.13"],
+            &["-y", "@toolbox-sdk/server@1.14.0", "--prebuilt=postgres", "--stdio"],
             None,
         );
         assert_eq!(versions(&same), None);
@@ -1045,32 +1085,20 @@ mod update_tests {
         );
         assert_eq!(versions(&git), None);
         // Another package behind the pin, another command, another number of arguments, another kind.
-        let other_package = row(
-            "grafana",
-            IntegrationKind::Stdio,
-            Some("uvx"),
-            &["mcp-grafana-x==1.0.0"],
-            None,
-        );
+        let other_package = row("kagi", IntegrationKind::Stdio, Some("uvx"), &["kagimcp-x==1.0.0"], None);
         assert_eq!(versions(&other_package), None);
-        let other_command = row(
-            "grafana",
-            IntegrationKind::Stdio,
-            Some("npx"),
-            &["mcp-grafana==1.0.0"],
-            None,
-        );
+        let other_command = row("kagi", IntegrationKind::Stdio, Some("npx"), &["kagimcp==1.0.0"], None);
         assert_eq!(versions(&other_command), None);
         let extra_arg = row(
-            "grafana",
+            "kagi",
             IntegrationKind::Stdio,
             Some("uvx"),
-            &["mcp-grafana==1.0.0", "--x"],
+            &["kagimcp==1.0.0", "--x"],
             None,
         );
         assert_eq!(versions(&extra_arg), None);
         let other_kind = row(
-            "deepl",
+            "kagi",
             IntegrationKind::Http,
             None,
             &[],
@@ -1140,15 +1168,9 @@ mod update_tests {
     #[test]
     fn the_update_points_at_the_template_it_takes_its_pieces_from() {
         let all = templates();
-        let grafana = row(
-            "grafana",
-            IntegrationKind::Stdio,
-            Some("uvx"),
-            &["mcp-grafana==1.0.0"],
-            None,
-        );
-        let update = template_update(&grafana, &all).unwrap();
-        assert_eq!(update.template.id, "grafana");
-        assert_eq!(update.template.args, vec!["mcp-grafana==2.0.2".to_string()]);
+        let kagi = row("kagi", IntegrationKind::Stdio, Some("uvx"), &["kagimcp==1.0.0"], None);
+        let update = template_update(&kagi, &all).unwrap();
+        assert_eq!(update.template.id, "kagi");
+        assert_eq!(update.template.args, vec!["kagimcp==1.0.2".to_string()]);
     }
 }

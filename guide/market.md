@@ -89,6 +89,16 @@ as off until then. If the service is out of reach when Bandito renews the access
 4. A sign-in waits ten minutes. If it expired, or you pressed Cancel, click Connect (Подключить) again.
 5. Click Sign in again (Войти снова) when the card asks for it. The same service page opens.
 
+## Connect with a code
+
+<!-- id: market-device; covers: -->
+GitHub connects with a code, the way `gh auth login` does, with no key to copy. Connect (Подключить) opens a sheet with a large code. Type that code on the service's page (github.com/login/device) and allow access there; Bandito's server waits for you and receives the access by itself, so you do not have to come back through the browser. The sheet says Waiting for you to confirm (Ждём подтверждения) and counts down how long the code works. Copy (Скопировать) puts the code on the pasteboard; the main button Open github.com/login/device (Открыть github.com/login/device) copies the code too and opens the page, so you can paste it. Nothing is copied or opened until you press one of them. When the access is given the sheet says Connected (Подключено) and the card shows the tools. If the code runs out, you refuse on the page, or the service cannot be reached, the sheet says why and offers Try again (Попробовать снова), which asks for a new code. Cancel (Отмена) gives the sign-in up. The access does not end by itself; if GitHub stops accepting it, the card says Needs sign-in again (Нужно войти снова) with Sign in again (Войти снова). Remove (Удалить) deletes the access from the server, but GitHub cannot be told from here: to take the access back, remove it at github.com/settings/applications.
+Где: Marketplace → a catalog card or a service's page → Connect (Подключить), then the sheet; Sign in again (Войти снова) on a card, in its menu (…), or on its page
+1. Click Connect (Подключить). A sheet shows the code.
+2. Click Open github.com/login/device (Открыть github.com/login/device), paste the code there and allow access.
+3. Wait on the sheet until it says Connected (Подключено), then click Done (Готово).
+4. If the code expired, click Try again (Попробовать снова); you get a new code.
+
 ## Configure, turn off, remove
 
 <!-- id: market-configure; covers: -->
@@ -115,7 +125,10 @@ the text. The server is listed with the connected services.
    for an HTTP or SSE server. A program has one field, the Full command (Команда целиком), with quotes for a word that
    holds a space.
 4. Add the Environment variables (Переменные окружения) or the Headers (Заголовки). Turn on Secret (Секрет) for a
-   key: its value is kept on the server and the integration holds only a reference.
+   key: its value is kept on the server and the integration holds only a reference. If the address signs in in the
+   browser, the Headers are replaced by the line "This server signs in through the browser" (Этот сервер входит через
+   браузер) and the button Sign in in the browser (Войти в браузере): no key is needed, the browser opens the service's
+   page, and the server is connected when you allow access there.
 5. Click Check (Проверить) to try the connection: the sheet lists the tools it found, or says what went wrong. A check
    adds the server turned off; leaving the sheet without Add (Добавить) removes it again, with the secrets the
    sheet wrote.

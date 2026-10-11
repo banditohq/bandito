@@ -6,7 +6,8 @@ import SwiftUI
 /// "Своя интеграция": adds an MCP server that is not in the catalog. The owner pastes what the server's documentation
 /// shows (a Claude Desktop or Cursor config, one server's object, a command, or a URL) and the fields fill themselves;
 /// or fills them by hand. "Check" tries the connection before the owner commits. A daemon with `integrations_probe`
-/// tries the draft and saves nothing. An older daemon adds the server turned off, and leaving the sheet without "Add"
+/// tries the draft and saves nothing. A service that signs in in the browser gets a sign-in button instead of the header
+/// fields (`CustomAuthChoice`). An older daemon adds the server turned off, and leaving the sheet without "Add"
 /// takes it away again, with the secrets the sheet wrote.
 struct CustomIntegrationSheet: View {
     let server: ServerModel
@@ -15,6 +16,7 @@ struct CustomIntegrationSheet: View {
     var onSaved: () async -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var app
     @State private var draft = IntegrationDraft.custom(kind: .stdio)
     @State private var pasted = ""
     @State private var recognition: Recognition = .none
@@ -68,7 +70,7 @@ struct CustomIntegrationSheet: View {
 
             feedback
             buttons
-            if let test {
+            if let test, authChoice == .headers {
                 IntegrationTestResult(result: test)
             }
             if checkAsked, !probes {
@@ -305,11 +307,16 @@ struct CustomIntegrationSheet: View {
                 TextField("https://…", text: $draft.url)
                     .banditoField()
                     .font(BanditoFont.mono(size: 12.5, weight: 400))
+                    .onChange(of: draft.url) { _, _ in test = nil }
                 Text(L10n.Integrations.Sheet.urlHint)
                     .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
-            pairs(L10n.Integrations.Sheet.headers, items: $draft.headers)
+            if authChoice == .browserSignIn {
+                browserSignInNote
+            } else {
+                pairs(L10n.Integrations.Sheet.headers, items: $draft.headers)
+            }
         }
     }
 
@@ -330,6 +337,23 @@ struct CustomIntegrationSheet: View {
             .fixedSize()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Shown instead of the header fields when the service signs in in the browser: no key is needed.
+    private var browserSignInNote: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L10n.Integrations.Custom.signInTitle)
+                .font(BanditoFont.text(size: 13, weight: 600))
+                .foregroundStyle(Color.Bandito.text)
+            Text(L10n.Integrations.Custom.signInHint)
+                .font(BanditoFont.text(size: 12, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.Bandito.surface1))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.Bandito.line))
     }
 
     private func label(_ text: String) -> some View {
@@ -368,6 +392,20 @@ struct CustomIntegrationSheet: View {
                 .banditoButton(.quiet())
                 .disabled(busy || checking)
                 .fixedSize()
+            primaryButton
+        }
+    }
+
+    /// The one primary button: "Добавить", or the browser sign-in for a service that signs in there.
+    @ViewBuilder
+    private var primaryButton: some View {
+        if authChoice == .browserSignIn {
+            Button(L10n.Integrations.Custom.signIn) { signIn() }
+                .banditoButton(.signal())
+                .keyboardShortcut(.defaultAction)
+                .disabled(busy || checking)
+                .fixedSize()
+        } else {
             Button(L10n.Integrations.Custom.add) { add() }
                 .banditoButton(.signal())
                 .keyboardShortcut(.defaultAction)
@@ -449,6 +487,15 @@ struct CustomIntegrationSheet: View {
     /// Whether the daemon can try a draft without saving it (`integrations_probe`). Older daemons get the trial below.
     private var probes: Bool { server.supports("integrations_probe") }
 
+    /// The daemon finds a browser sign-in (`integrations_oauth_probe`) and can start one (`integrations_oauth`).
+    private var canSignIn: Bool {
+        server.supports("integrations_oauth_probe") && server.supports("integrations_oauth")
+    }
+
+    private var authChoice: CustomAuthChoice {
+        .of(kind: draft.kind, test: test, canSignIn: canSignIn)
+    }
+
     /// "Check": with the daemon's probe, tries the draft as it stands and saves nothing. An older daemon has no probe:
     /// the server is added turned off (once), then tried.
     private func check() {
@@ -481,11 +528,35 @@ struct CustomIntegrationSheet: View {
         }
     }
 
-    /// "Add": the server stays, turned on. With ticked servers waiting, the next one goes into the form.
+    /// "Add": the server stays, turned on. An address nobody has checked is checked first, so a service that signs in
+    /// in the browser is not saved with empty fields. With ticked servers waiting, the next one goes into the form.
     private func add() {
         attempted = true
         error = nil
         guard currentProblem == nil else { return }
+        if CustomAuthChoice.checksBeforeAdd(kind: draft.kind, test: test, canSignIn: canSignIn) {
+            checkThenAdd()
+        } else {
+            save()
+        }
+    }
+
+    /// The check "Add" runs first: a browser sign-in stops here; any other answer saves as "Add" always did.
+    private func checkThenAdd() {
+        checking = true
+        Task {
+            defer { checking = false }
+            do {
+                test = try await server.probeIntegration(draft.probeDraft())
+            } catch {
+                self.error = UserFacingError.message(for: error)
+                return
+            }
+            if authChoice == .headers { save() }
+        }
+    }
+
+    private func save() {
         busy = true
         Task {
             defer { busy = false }
@@ -498,6 +569,21 @@ struct CustomIntegrationSheet: View {
                 next()
             }
         }
+    }
+
+    /// "Войти в браузере": the sign-in starts as a catalog card starts one (the name and the address, no fields), and
+    /// this sheet gives way to it. The list reloads when the sign-in connects (`MarketView`).
+    private func signIn() {
+        attempted = true
+        error = nil
+        guard currentProblem == nil else { return }
+        let probe = draft.probeDraft()
+        guard let url = probe.url else { return }
+        let target = NewIntegration(name: probe.name, kind: .http, url: url)
+        let name = draft.title.isEmpty ? draft.name : draft.title
+        let oauth = app.oauth
+        dismiss()
+        Task { await oauth.begin(server: server, target: .draft(target), name: name) }
     }
 
     /// The form again, for the next ticked server.

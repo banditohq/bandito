@@ -17,14 +17,33 @@ final class DictationEngine {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var stopping = false
+    private var callbacks: Callbacks?
 
     /// Asks for the microphone, then for speech recognition. Nil when both are allowed.
     static func permissions() async -> DictationDenial? {
         guard await AVCaptureDevice.requestAccess(for: .audio) else { return .microphone }
-        let status = await withCheckedContinuation { (continuation: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
+        return await speechAuthorization() == .authorized ? nil : .speech
+    }
+
+    // The system calls the handlers below on its own queues. A closure written inside this @MainActor class would be
+    // main-actor isolated and trap when it runs there (`dispatch_assert_queue`), so each is made in a nonisolated function.
+
+    nonisolated private static func speechAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
+        await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
         }
-        return status == .authorized ? nil : .speech
+    }
+
+    nonisolated private static func tap(into request: SFSpeechAudioBufferRecognitionRequest) -> AVAudioNodeTapBlock {
+        { buffer, _ in request.append(buffer) }
+    }
+
+    nonisolated private static func resultHandler(
+        _ deliver: @escaping @Sendable (String?, Bool, Bool) -> Void
+    ) -> (SFSpeechRecognitionResult?, (any Error)?) -> Void {
+        { result, error in
+            deliver(result?.bestTranscription.formattedString, result?.isFinal == true, error != nil)
+        }
     }
 
     /// Starts listening in `tag`'s language. Returns the failure when it cannot start.
@@ -40,9 +59,7 @@ final class DictationEngine {
         let input = audio.inputNode
         // A tap left from an earlier run would make installTap raise; remove it before installing ours.
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
-            request.append(buffer)
-        }
+        input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0), block: Self.tap(into: request))
         do {
             audio.prepare()
             try audio.start()
@@ -52,16 +69,22 @@ final class DictationEngine {
         }
         self.request = request
         stopping = false
-        task = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            DispatchQueue.main.async {
-                if let result { callbacks.onText(result.bestTranscription.formattedString) }
-                guard result?.isFinal == true || error != nil else { return }
-                self?.tearDown()
-                let failed = error != nil && self?.stopping != true
-                callbacks.onEnd(failed ? .engine : nil)
-            }
+        self.callbacks = callbacks
+        let handler = Self.resultHandler { [weak self] text, isFinal, failed in
+            Task { @MainActor in self?.deliver(text: text, isFinal: isFinal, failed: failed) }
         }
+        task = recognizer.recognitionTask(with: request, resultHandler: handler)
         return nil
+    }
+
+    private func deliver(text: String?, isFinal: Bool, failed: Bool) {
+        guard let callbacks else { return }
+        if let text { callbacks.onText(text) }
+        guard isFinal || failed else { return }
+        let failure: DictationFailure? = failed && !stopping ? .engine : nil
+        tearDown()
+        self.callbacks = nil
+        callbacks.onEnd(failure)
     }
 
     /// Ends the audio; the recogniser then delivers its last text and `onEnd`.

@@ -1,0 +1,2 @@
+# Pinned for apps/mac/scripts/make-dmg.sh (release-app.sh and the release workflow install it).
+dmgbuild==1.6.7

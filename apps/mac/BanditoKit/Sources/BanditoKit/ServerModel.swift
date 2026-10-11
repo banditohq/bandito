@@ -824,15 +824,29 @@ public final class ServerModel: Identifiable {
     /// daemon says is over (`expired`) is closed in the thread at once; the error is still thrown for the card to show.
     public func answerForm(
         _ formId: String, in agentId: String, action: FormAction, values: [String: JSONValue]? = nil,
-        comment: String? = nil
+        comment: String? = nil, message: String? = nil
     ) async throws {
         try requireFeature("forms")
-        let params = try FormAnswer.answerParams(formId: formId, action: action, values: values, comment: comment)
+        if action == .reply { try requireFeature("form_reply") }
+        let params = try FormAnswer.answerParams(
+            formId: formId, action: action, values: values, comment: comment, message: message)
         do {
             try await rpc().call("forms.answer", jsonParams: params)
         } catch let error as RPCError where error.message == "expired" {
             threads[agentId]?.close(form: formId, with: .expired)
             throw error
+        }
+    }
+
+    /// The person does not want the service an agent asked for (`integrations.request_decline`). The thread closes the
+    /// card when the daemon's `integration_request_ended` arrives. A request that is over already is not an error.
+    public func declineConnect(_ requestId: String) async throws {
+        try requireFeature("agent_connect")
+        struct P: Encodable { var requestId: String }
+        do {
+            try await rpc().call("integrations.request_decline", P(requestId: requestId))
+        } catch let error as RPCError where error.message == "already_answered" {
+            return
         }
     }
 

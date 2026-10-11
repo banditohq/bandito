@@ -59,13 +59,21 @@ pub enum IntegrationAuth {
     None,
     /// Signed in through the service's own page in the browser.
     Oauth,
+    /// Signed in with a code the person types on the service's page (OAuth Device Flow, `mcp_oauth/device.rs`).
+    Device,
 }
 
 impl IntegrationAuth {
+    /// Whether the daemon keeps the token of this sign-in in its secrets and sends it as `Authorization: Bearer`.
+    pub fn holds_token(self) -> bool {
+        matches!(self, Self::Oauth | Self::Device)
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
             Self::Oauth => "oauth",
+            Self::Device => "device",
         }
     }
 
@@ -73,6 +81,7 @@ impl IntegrationAuth {
         match s {
             "none" => Some(Self::None),
             "oauth" => Some(Self::Oauth),
+            "device" => Some(Self::Device),
             _ => None,
         }
     }
@@ -359,6 +368,16 @@ impl Store {
         Ok(n > 0)
     }
 
+    /// Set how the row signs in, only while it still has the address `url`: one statement, so an address changed
+    /// meanwhile is never signed in. `false` if there is no such row or its address is another.
+    pub fn integration_set_auth_if_url(&self, id: &str, url: &str, auth: IntegrationAuth) -> Result<bool> {
+        let n = self.conn().execute(
+            "UPDATE integrations SET auth = ?3 WHERE id = ?1 AND url = ?2",
+            params![id, url, auth.as_str()],
+        )?;
+        Ok(n > 0)
+    }
+
     /// Delete the row and drop its id from every agent's list. `false` if there was no such row.
     pub fn integration_delete(&self, id: &str) -> Result<bool> {
         let conn = self.conn();
@@ -613,6 +632,28 @@ mod tests {
         assert_eq!(s.integration_get(&a.id).unwrap(), Some(a.clone()));
         assert_eq!(s.integration_list().unwrap(), vec![a.clone()]);
         assert_eq!(a.env.get("TOKEN").map(String::as_str), Some("secret:github"));
+    }
+
+    #[test]
+    fn a_sign_in_is_set_only_at_the_address_it_was_asked_for() {
+        let s = Store::open_in_memory().unwrap();
+        let mut n = new("gh");
+        n.url = Some("https://api.githubcopilot.com/mcp/".into());
+        let a = s.integration_create(n).unwrap();
+        let url = a.url.clone().unwrap();
+        assert!(
+            !s.integration_set_auth_if_url(&a.id, "https://evil.example/mcp/", IntegrationAuth::Device)
+                .unwrap()
+        );
+        assert!(
+            s.integration_set_auth_if_url(&a.id, &url, IntegrationAuth::Device)
+                .unwrap()
+        );
+        assert_eq!(s.integration_get(&a.id).unwrap().unwrap().auth, IntegrationAuth::Device);
+        assert!(
+            !s.integration_set_auth_if_url("no-such-id", &url, IntegrationAuth::Oauth)
+                .unwrap()
+        );
     }
 
     #[test]

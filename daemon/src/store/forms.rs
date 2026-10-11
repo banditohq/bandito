@@ -9,6 +9,7 @@ pub enum FormStatus {
     Pending,
     Submitted,
     Rejected,
+    Replied,
     Expired,
 }
 
@@ -18,6 +19,7 @@ impl FormStatus {
             FormStatus::Pending => "pending",
             FormStatus::Submitted => "submitted",
             FormStatus::Rejected => "rejected",
+            FormStatus::Replied => "replied",
             FormStatus::Expired => "expired",
         }
     }
@@ -27,6 +29,7 @@ impl FormStatus {
             "pending" => Some(FormStatus::Pending),
             "submitted" => Some(FormStatus::Submitted),
             "rejected" => Some(FormStatus::Rejected),
+            "replied" => Some(FormStatus::Replied),
             "expired" => Some(FormStatus::Expired),
             _ => None,
         }

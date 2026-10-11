@@ -30,6 +30,13 @@ struct Composer: View {
     /// A form the agent waits on: the hint above the field, with a link that scrolls to the form (given its id).
     var waitingForm: FormRow?
     var onGoToForm: (String) -> Void = { _ in }
+    /// A service the agent waits on the person to connect: the hint above the field, with a link to its card.
+    var waitingConnect: ConnectWait?
+    var onGoToConnect: (String) -> Void = { _ in }
+    /// The form a typed message answers while the agent waits on it; `nil` when the daemon cannot take a reply.
+    var replyFormId: String?
+    /// Sends the draft as the answer of the form with this id (`forms.answer`, action `reply`).
+    var onReplyToForm: (String) -> Void = { _ in }
     var onSend: () -> Void
     var onStop: () -> Void
     /// Starts the agent's next chapter now (see `ServerModel.startNewChapter`). Shown only when the server supports it.
@@ -50,6 +57,14 @@ struct Composer: View {
     @State private var dictation = DictationController()
     private var canSend: Bool {
         AttachmentTray.canSend(text: draft, files: files)
+    }
+
+    /// What the round button does now: send, stop, or answer the waiting form with the typed message.
+    private var sendMode: ComposerSendMode {
+        let typed = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let isCommand = SlashInvocationParser.parse(draft) != nil
+        return ComposerSendMode.resolve(
+            running: running, hasText: typed && !isCommand, hasFiles: !files.isEmpty, waitingFormId: replyFormId)
     }
 
     /// The files waiting in this agent's composer.
@@ -146,6 +161,10 @@ struct Composer: View {
                 formHint(waitingForm)
                     .transition(.opacity.combined(with: .offset(y: 6)))
             }
+            if let waitingConnect {
+                connectHint(waitingConnect)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
+            }
             if let reply {
                 replyBar(reply)
                     .transition(.opacity.combined(with: .offset(y: 6)))
@@ -182,11 +201,8 @@ struct Composer: View {
                             handleBackspace(press)
                         }
                         .onKeyPress(keys: [KeyEquivalent("v")]) { press in
-                            // ⌘V of a picture (and no text) attaches it. Text paste is left to the field.
-                            guard canAttach, press.modifiers == .command, PictureSource.clipboardHoldsOnlyPicture,
-                                let data = PictureSource.clipboardPNG(), let agent, let server
-                            else { return .ignored }
-                            AttachmentTrays.shared.addPicture(data, name: Self.pictureName("Clipboard"), agentID: agent.id, server: server)
+                            // ⌘V of pictures or files (and no text) attaches them. Text paste is left to the field.
+                            guard canAttach, press.modifiers == .command, attachFromPasteboard() else { return .ignored }
                             return .handled
                         }
                         .onKeyPress(keys: [.return]) { press in
@@ -209,7 +225,11 @@ struct Composer: View {
                                 pickMention(picked)
                                 return .handled
                             }
-                            if canSend && !running { submit() }
+                            if case .replyToForm(let formId) = sendMode {
+                                submitReply(formId)
+                            } else if canSend && !running {
+                                submit()
+                            }
                             return .handled
                         }
 
@@ -245,6 +265,7 @@ struct Composer: View {
         .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: reply)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingForm?.formId)
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingConnect?.requestId)
         .onAppear { takeFocus(.agentOpened) }
         .onDisappear {
             dictation.cancel()
@@ -377,16 +398,50 @@ struct Composer: View {
     private func formHint(_ form: FormRow) -> some View {
         HStack(spacing: 10) {
             StatusDot(status: .needsYou, size: 7, ringColor: Color.Bandito.signal.opacity(0.15))
-            Text(L10n.Composer.formWaiting(name: agentName))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.Composer.formWaiting(name: agentName))
+                    .font(BanditoFont.text(size: 12.5, weight: 500))
+                    .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if replyFormId != nil {
+                    Text(L10n.Composer.formReplyHint)
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            Button {
+                onGoToForm(form.formId)
+            } label: {
+                Text(L10n.Composer.formGo)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .banditoButton(.link)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.signal.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.signal.opacity(0.3), lineWidth: 1))
+    }
+
+    /// The agent is waiting for a service to be connected: what it waits for, and a way to its card.
+    private func connectHint(_ wait: ConnectWait) -> some View {
+        HStack(spacing: 10) {
+            StatusDot(status: .needsYou, size: 7, ringColor: Color.Bandito.signal.opacity(0.15))
+            Text(L10n.Composer.connectWaiting(name: agentName, service: wait.serviceName))
                 .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
             Spacer(minLength: 8)
             Button {
-                onGoToForm(form.formId)
+                onGoToConnect(wait.requestId)
             } label: {
-                Text(L10n.Composer.formGo)
+                Text(L10n.Composer.connectGo)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
@@ -479,7 +534,17 @@ struct Composer: View {
 
     @ViewBuilder
     private var sendOrStop: some View {
-        if running {
+        if case .replyToForm(let formId) = sendMode {
+            Button { submitReply(formId) } label: {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color.Bandito.bg)
+                    .frame(width: 34, height: 34)
+                    .background(Color.Bandito.text, in: Circle())
+            }
+            .banditoButton(.brighten)
+            .help(L10n.Thread.send)
+        } else if running {
             Button(action: onStop) {
                 Image(systemName: "stop.fill")
                     .font(.system(size: 11, weight: .bold))
@@ -662,6 +727,12 @@ struct Composer: View {
 
     /// Enter or the send button. Built-in commands run here; a Mac command that the server lacks waits for
     /// the install prompt; everything else is sent as typed.
+    /// Sends the draft as the answer of the waiting form.
+    private func submitReply(_ formId: String) {
+        SoundPlayer.play(.send)
+        onReplyToForm(formId)
+    }
+
     private func submit() {
         guard let agent, let server else {
             SoundPlayer.play(.send)
@@ -1067,6 +1138,21 @@ struct Composer: View {
         guard !urls.isEmpty else { return }
         AttachmentTrays.shared.add(urls: urls, agentID: agent.id, server: server)
         focused = true
+    }
+
+    /// Attaches what ⌘V found on the clipboard, the way a drop of files or the "+" menu's clipboard item does. False
+    /// when the clipboard holds text or nothing to attach, so the field pastes as usual.
+    private func attachFromPasteboard() -> Bool {
+        guard let agent, let server else { return false }
+        switch PasteboardAttachments.read(.general) {
+        case .files(let urls):
+            AttachmentTrays.shared.add(urls: urls, agentID: agent.id, server: server)
+        case .picture(let png):
+            AttachmentTrays.shared.addPicture(png, name: Self.pictureName("Clipboard"), agentID: agent.id, server: server)
+        case .none:
+            return false
+        }
+        return true
     }
 
     private func attachClipboard() {

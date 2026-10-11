@@ -41,8 +41,12 @@ extension ServerModel {
     }
 
     @discardableResult
-    public func updateIntegration(_ id: String, patch: IntegrationPatch) async throws -> Integration {
-        try await rpc().call("integrations.update", IntegrationUpdateParams(id: id, patch: patch), as: Integration.self)
+    public func updateIntegration(
+        _ id: String, patch: IntegrationPatch, connectRequestId: String? = nil
+    ) async throws -> Integration {
+        try await rpc().call(
+            "integrations.update", IntegrationUpdateParams(id: id, patch: patch, connectRequestId: connectRequestId),
+            as: Integration.self)
     }
 
     /// Returns true when the integration existed.
@@ -89,17 +93,27 @@ public struct IntegrationRecommendation: Decodable, Sendable, Hashable, Identifi
 extension ServerModel: OAuthServer {
     public var oauthServerID: UUID { id }
 
-    public func oauthBegin(_ target: OAuthBeginTarget) async throws -> OAuthBegun {
+    public func oauthBegin(_ target: OAuthBeginTarget, connectRequestId: String?) async throws -> OAuthBegun {
         struct P: Encodable {
             var integration: String?
             var draft: NewIntegration?
+            var connectRequestId: String?
+            var redirectSupported: [String]?
         }
+        // A daemon with `oauth_loopback` may register the loopback address, which the app then listens on.
+        let redirects = supports("oauth_loopback") ? ["loopback", "scheme"] : nil
         let params: P
         switch target {
-        case .existing(let id): params = P(integration: id)
-        case .draft(let draft): params = P(draft: draft)
+        case .existing(let id):
+            params = P(integration: id, connectRequestId: connectRequestId, redirectSupported: redirects)
+        case .draft(let draft):
+            params = P(draft: draft, connectRequestId: connectRequestId, redirectSupported: redirects)
         }
         return try await rpc().call("integrations.oauth_begin", params, as: OAuthBegun.self, timeout: .seconds(30))
+    }
+
+    public func oauthBegin(_ target: OAuthBeginTarget) async throws -> OAuthBegun {
+        try await oauthBegin(target, connectRequestId: nil)
     }
 
     public func oauthComplete(state: String, code: String, iss: String?) async throws -> OAuthCompleted {
@@ -127,14 +141,52 @@ extension ServerModel: OAuthServer {
     }
 }
 
+// MARK: - sign-in with a code (feature `integrations_device`)
+
+extension ServerModel: DeviceServer {
+    public var deviceServerID: UUID { id }
+
+    public func deviceBegin(_ target: DeviceBeginTarget, connectRequestId: String?) async throws -> DeviceBegun {
+        struct P: Encodable {
+            var integration: String?
+            var draft: NewIntegration?
+            var connectRequestId: String?
+        }
+        let params: P
+        switch target {
+        case .existing(let id): params = P(integration: id, connectRequestId: connectRequestId)
+        case .draft(let draft): params = P(draft: draft, connectRequestId: connectRequestId)
+        }
+        return try await rpc().call("integrations.device_begin", params, as: DeviceBegun.self, timeout: .seconds(30))
+    }
+
+    public func deviceBegin(_ target: DeviceBeginTarget) async throws -> DeviceBegun {
+        try await deviceBegin(target, connectRequestId: nil)
+    }
+
+    public func deviceStatus(flowId: String) async throws -> DeviceStatus {
+        struct P: Encodable { var flowId: String }
+        return try await rpc().call("integrations.device_status", P(flowId: flowId), as: DeviceStatus.self)
+    }
+
+    public func deviceCancel(flowId: String) async {
+        struct P: Encodable { var flowId: String }
+        struct Reply: Decodable { var cancelled: Bool }
+        _ = try? await rpc().call("integrations.device_cancel", P(flowId: flowId), as: Reply.self)
+    }
+}
+
 /// `integrations.update` params: the id and the patch fields in one object.
 struct IntegrationUpdateParams: Encodable, Sendable {
     var id: String
     var patch: IntegrationPatch
+    /// The request of an agent this update answers (see `NewIntegration.connectRequestId`).
+    var connectRequestId: String?
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: IntegrationPatch.Key.self)
         try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(connectRequestId, forKey: .connectRequestId)
         try patch.encodeFields(into: &c)
     }
 }

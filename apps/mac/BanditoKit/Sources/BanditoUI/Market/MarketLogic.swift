@@ -45,6 +45,8 @@ enum MarketStep: Equatable {
     case connect
     /// Press Connect and allow access on the service's page in the browser.
     case signIn
+    /// Press Connect and type the code Bandito shows on the service's page.
+    case signInCode
 }
 
 /// Why the page has nothing to show.
@@ -155,8 +157,9 @@ enum MarketLogic {
 
     /// The steps of "How to connect" for a catalog entry, from its fields. Pure data, so the view only translates it.
     static func steps(for template: IntegrationCatalogEntry) -> [MarketStep] {
-        // A browser sign-in has no key to get and no field to fill.
+        // A sign-in (in the browser, or with a code) has no key to get and no field to fill.
         if template.usesOAuth { return [.signIn] }
+        if template.usesDevice { return [.signInCode] }
         var steps: [MarketStep] = []
         let keys = template.kind == .http ? template.headersKeys : template.envKeys
         if keys.contains(where: \.secret) { steps.append(.getKey) }

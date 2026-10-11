@@ -47,6 +47,7 @@ struct ThreadRowKey: Equatable {
     var reactionsOn: Bool
     var repliesOn: Bool
     var formsOn: Bool
+    var connectOn: Bool
     var accent: Color
     /// The parts of the chat state that belong to this row only.
     var reactions: MessageReactions?
@@ -69,6 +70,7 @@ struct ThreadRowKey: Equatable {
         reactionsOn = chat.reactionsOn
         repliesOn = chat.repliesOn
         formsOn = chat.formsOn
+        connectOn = chat.connectOn
         accent = chat.accent
         if case .item(let item) = row {
             let seq = item.messageSeq
@@ -220,6 +222,14 @@ private struct ItemView: View {
                 FormCard(row: row, agentName: agentName) { action, values, comment in
                     try await chat.onAnswerForm(row, action, values, comment)
                 }
+            }
+        case .connect(let row):
+            if chat.connectOn {
+                ConnectCard(
+                    row: row, agentName: agentName,
+                    onConnect: { chat.onConnectService(row) },
+                    onDecline: { try await chat.onDeclineConnect(row) },
+                    catalog: MentionServices.shared.snapshot(for: server)?.catalog ?? [])
             }
         case .note(_, let text, let kind, _):
             NoteLine(text: text, isError: kind == .error)

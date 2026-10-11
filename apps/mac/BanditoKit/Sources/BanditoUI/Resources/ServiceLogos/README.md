@@ -4,15 +4,16 @@ The logos on the Marketplace tiles of the Mac app. Each file is named after the 
 (`daemon/src/integrations_catalog.json`), so `brave-search.svg` is the logo of the `brave-search` template.
 
 - Source: [Simple Icons](https://simpleicons.org), npm package `simple-icons`, version **13.21.0**
-  (`icons/<slug>.svg`, copied unchanged).
+  (`icons/<slug>.svg`, copied unchanged). The logos added in 0.1.9 come from the current release of the same set, with the root `fill` attribute removed, as in the others.
 - Slugs used: `github`, `linear`, `notion`, `sentry`, `atlassian`, `stripe`, `supabase`, `cloudflare`, `brave`
   (file `brave-search.svg`), `gitlab`, `vercel`, `netlify`, `grafana`, `posthog`, `huggingface`, `mongodb`, `railway`,
   `render`, `snyk`, `prisma`, and `google` (file `toolbox-postgres.svg`: Google's logo for Google MCP Toolbox for PostgreSQL),
   `todoist`, `airtable`, `clickup`, `zapier`, `intercom`, `wix`, and `shopify` (file `shopify-dev.svg`: the Shopify logo for Shopify Dev MCP),
-  `deepl`, `perplexity`, and `kagi`.
+  `deepl`, `perplexity`, and `kagi`; and, added in 0.1.9, `canva`, `miro`, `webflow`, `square`, and `paypal` (slugs `canva`, `miro`, `webflow`, `square`, `paypal`).
 - License of the icon set: **CC0 1.0 Universal** (public domain dedication; `LICENSE.md` of the package).
 - Not included, because the catalog has no template that uses them, or Simple Icons 13.21.0 has no such logo:
   `playwright`, `exa`, `context7`, `firecrawl`, `composio`, `neon` (no logo in this version; their tiles keep the symbol),
+  `monday` (no logo: Simple Icons has no such slug in 13.21.0 or in the current release; its tile keeps the symbol),
   `bitrix24-docs` and `yandex-metrika` (no Bitrix24, Yandex or МойСклад logo in Simple Icons 13.21.0; `yandexcloud` is a different product),
   and `tavily`, `fal`, `stability-ai`, `apify`, `browserbase`, `brightdata`, `serpapi`, `alpha-vantage`, `openweather` (no logo under
   these slugs in Simple Icons 13.21.0; their tiles keep the symbol).

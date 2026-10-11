@@ -1,13 +1,15 @@
 //! `integrations.*` JSON-RPC methods: the owner's MCP servers for the agents, the template catalog, and a test
 //! that starts a server and lists its tools. Owner and apps only. See docs/ARCHITECTURE.md#integrations.
 
+use super::connect;
 use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, Peer, RpcError, RpcResult, SERVER_ERROR, ok, params};
 use crate::integrations::{self, Pair, Server, Transport};
-use crate::mcp_oauth::{self, Outcome, Target, Why};
+use crate::mcp_oauth::{self, Outcome, Target, Why, device};
 use crate::recommend;
 use crate::redact::Redactor;
 use crate::store::{
-    CallFilter, Integration, IntegrationAuth, IntegrationPatch, IntegrationTool, NewIntegration, Store, now_ms,
+    CallFilter, Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, IntegrationTool, NewIntegration,
+    Store, now_ms,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -41,6 +43,9 @@ struct Id {
 #[derive(Deserialize)]
 struct UpdateParams {
     id: String,
+    /// The request of an agent this update answers (see `connect.rs`): a row that works afterwards closes it.
+    #[serde(default)]
+    connect_request_id: Option<String>,
     #[serde(flatten)]
     patch: IntegrationPatch,
 }
@@ -54,6 +59,19 @@ struct BeginParams {
     /// A client registered with the service beforehand, for one without dynamic registration.
     #[serde(default)]
     client_id: Option<String>,
+    /// The request of an agent this connection answers (see `connect.rs`): when it succeeds, the agent is told.
+    #[serde(default)]
+    connect_request_id: Option<String>,
+    /// The ways the app can receive the answer: `"loopback"` and/or `"scheme"`. Absent: the scheme only (an older app).
+    #[serde(default)]
+    redirect_supported: Option<Vec<String>>,
+}
+
+/// `integrations.add` may say it answers an agent's request too.
+#[derive(Deserialize)]
+struct ConnectWords {
+    #[serde(default)]
+    connect_request_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -158,7 +176,7 @@ pub(crate) async fn reload_sessions(app: &App, only: Option<&str>) {
     };
     for row in rows
         .iter()
-        .filter(|r| r.auth == IntegrationAuth::Oauth && only.is_none_or(|id| id == r.id))
+        .filter(|r| r.auth.holds_token() && only.is_none_or(|id| id == r.id))
     {
         for agent in users_of(store, &row.id) {
             app.sup.reload_for_tokens(&agent, vec![row.id.clone()]).await;
@@ -175,7 +193,10 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 integration,
                 draft,
                 client_id,
+                connect_request_id,
+                redirect_supported,
             } = params(p)?;
+            let loopback = redirect_supported.is_some_and(|r| r.iter().any(|x| x == "loopback"));
             let target = match (integration, draft) {
                 (Some(id), None) => Target::Existing(store.integration_get(&id)?.ok_or_else(|| no_integration(&id))?),
                 (None, Some(draft)) => {
@@ -190,14 +211,32 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 }
                 _ => return Err(RpcError::new(INVALID_PARAMS, "give either integration or draft")),
             };
+            // A connection for an agent's request is for that request's service.
+            let bound = match connect_request_id {
+                Some(rid) => {
+                    let (row, created) = match &target {
+                        Target::Existing(row) => (row.clone(), false),
+                        Target::Draft(draft) => (draft_row(draft), true),
+                    };
+                    connect::check_bind(app, &rid, &row)?.then_some(connect::Bound {
+                        request_id: rid,
+                        created,
+                    })
+                }
+                None => None,
+            };
             let now = now_ms();
-            let begun = mcp_oauth::begin(store, &app.oauth, &device, target, client_id, now)
+            let begun = mcp_oauth::begin_with(store, &app.oauth, &device, target, client_id, loopback, now)
                 .await
                 .map_err(invalid)?;
+            if let Some(bound) = bound {
+                app.connects.bind_oauth(&begun.state, bound);
+            }
             ok(json!({
                 "authorize_url": begun.authorize_url,
                 "state": begun.state,
                 "expires_at": now + mcp_oauth::FLOW_TTL_MS,
+                "redirect": begun.redirect,
             }))
         }
         "integrations.oauth_complete" => {
@@ -208,6 +247,17 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 .map_err(invalid)?;
             let id = done.integration.id.clone();
             reload_agents(app, users_of(store, &id)).await;
+            // The sign-in was started from an agent's card: the agent gets the service (and only this one does).
+            if let Some(bound) = app.connects.take_oauth(&state) {
+                connect::complete(
+                    &app.sup,
+                    &app.connects,
+                    &bound.request_id,
+                    &done.integration,
+                    bound.created,
+                )
+                .await;
+            }
             let status = mcp_oauth::status(store, &id, now)?;
             ok(json!({
                 "id": id,
@@ -220,17 +270,25 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
         }
         "integrations.oauth_cancel" => {
             let StateParams { state } = params(p)?;
-            ok(json!({ "cancelled": app.oauth.cancel(&state, &device) }))
+            let cancelled = app.oauth.cancel(&state, &device);
+            if cancelled {
+                app.connects.forget_oauth(&state);
+            }
+            ok(json!({ "cancelled": cancelled }))
         }
         "integrations.oauth_status" => {
             let StatusParams { id } = params(p)?;
             let now = now_ms();
             let mut items = Vec::new();
             for row in store.integration_list()? {
-                if row.auth != IntegrationAuth::Oauth || id.as_ref().is_some_and(|id| *id != row.id) {
+                if !row.auth.holds_token() || id.as_ref().is_some_and(|id| *id != row.id) {
                     continue;
                 }
-                let s = mcp_oauth::status(store, &row.id, now)?;
+                let s = if row.auth == IntegrationAuth::Device {
+                    device::status(store, &row.id)?
+                } else {
+                    mcp_oauth::status(store, &row.id, now)?
+                };
                 items.push(json!({
                     "id": row.id,
                     "name": row.name,
@@ -245,14 +303,19 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
         "integrations.oauth_disconnect" => {
             let DisconnectParams { id, remove } = params(p)?;
             let row = store.integration_get(&id)?.ok_or_else(|| no_integration(&id))?;
-            if row.auth != IntegrationAuth::Oauth {
+            if !row.auth.holds_token() {
                 return Err(RpcError::new(
                     INVALID_PARAMS,
                     "that integration does not sign in in the browser",
                 ));
             }
             let users = users_of(store, &id);
-            let revoked = mcp_oauth::disconnect(store, &row, remove).await?;
+            let revoked = if row.auth == IntegrationAuth::Device {
+                app.device.cancel_target(&id);
+                device::disconnect(store, &id).await?
+            } else {
+                mcp_oauth::disconnect(store, &row, remove).await?
+            };
             if remove {
                 store.integration_delete(&id)?;
             }
@@ -263,9 +326,100 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
     }
 }
 
+#[derive(Deserialize)]
+struct FlowParams {
+    flow_id: String,
+}
+
+/// The sign-in with a code (`mcp_oauth/device.rs`): `device_begin` hands the app the code to show, a task of the
+/// daemon polls the provider, and the app reads `device_status` until it is `done` or `failed`.
+async fn device_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
+    let store = &app.sup.hub().store;
+    let who = super::redeem_source(peer);
+    match method {
+        "integrations.device_begin" => {
+            let BeginParams {
+                integration,
+                draft,
+                connect_request_id,
+                ..
+            } = params(p)?;
+            let target = match (integration, draft) {
+                (Some(id), None) => {
+                    device::DeviceTarget::Existing(store.integration_get(&id)?.ok_or_else(|| no_integration(&id))?)
+                }
+                (None, Some(draft)) => {
+                    check_new(&draft)?;
+                    if store.integration_list()?.iter().any(|i| i.name == draft.name) {
+                        return Err(RpcError::new(
+                            INVALID_PARAMS,
+                            format!("an integration named '{}' already exists", draft.name),
+                        ));
+                    }
+                    device::DeviceTarget::Draft(draft)
+                }
+                _ => return Err(RpcError::new(INVALID_PARAMS, "give either integration or draft")),
+            };
+            // A connection for an agent's request is for that request's service.
+            let created = matches!(target, device::DeviceTarget::Draft(_));
+            let bound = match connect_request_id {
+                Some(rid) => {
+                    let row = match &target {
+                        device::DeviceTarget::Existing(row) => row.clone(),
+                        device::DeviceTarget::Draft(draft) => draft_row(draft),
+                    };
+                    connect::check_bind(app, &rid, &row)?.then_some(rid)
+                }
+                None => None,
+            };
+            // When the token is stored, the sessions of the agents that have the service start again with it, and
+            // the agent whose card started the sign-in gets the service.
+            let sup = app.sup.clone();
+            let connects = app.connects.clone();
+            let after: device::After = Arc::new(move |id: String| {
+                let sup = sup.clone();
+                let connects = connects.clone();
+                let bound = bound.clone();
+                Box::pin(async move {
+                    for agent in users_of(&sup.hub().store, &id) {
+                        sup.reload(&agent, None).await;
+                    }
+                    if let Some(rid) = bound
+                        && let Ok(Some(row)) = sup.hub().store.integration_get(&id)
+                    {
+                        connect::complete(&sup, &connects, &rid, &row, created).await;
+                    }
+                })
+            });
+            let begun = device::begin(store, &app.device, &who, target, after)
+                .await
+                .map_err(invalid)?;
+            ok(json!({
+                "flow_id": begun.flow_id,
+                "user_code": begun.user_code,
+                "verification_uri": begun.verification_uri,
+                "expires_at": begun.expires_at,
+                "interval": begun.interval,
+            }))
+        }
+        "integrations.device_status" => {
+            let FlowParams { flow_id } = params(p)?;
+            ok(app.device.view(&flow_id, &who).map_err(invalid)?)
+        }
+        "integrations.device_cancel" => {
+            let FlowParams { flow_id } = params(p)?;
+            ok(json!({ "cancelled": app.device.cancel(&flow_id, &who) }))
+        }
+        _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
+    }
+}
+
 pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
     if method.starts_with("integrations.oauth_") {
         return oauth_dispatch(app, peer, method, p).await;
+    }
+    if method.starts_with("integrations.device_") {
+        return device_dispatch(app, peer, method, p).await;
     }
     let store = &app.sup.hub().store;
     match method {
@@ -315,8 +469,14 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     "a browser sign-in is started with integrations.oauth_begin",
                 ));
             }
+            if n.auth == IntegrationAuth::Device {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    "a sign-in with a code is started with integrations.device_begin",
+                ));
+            }
             // What the tools may do can be named when the row is added; without it the row starts as the catalog says.
-            let tools: ToolWords = params(p)?;
+            let tools: ToolWords = params(p.clone())?;
             check_tool_overrides(tools.tool_overrides.as_ref())?;
             check_new(&n)?;
             if store.integration_list()?.iter().any(|i| i.name == n.name) {
@@ -325,8 +485,13 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     format!("an integration named '{}' already exists", n.name),
                 ));
             }
+            let words: ConnectWords = params(p)?;
+            let bound = match words.connect_request_id {
+                Some(rid) => connect::check_bind(app, &rid, &draft_row(&n))?.then_some(rid),
+                None => None,
+            };
             let made = store.integration_create(n)?;
-            if tools.tool_mode.is_some() || tools.tool_overrides.is_some() {
+            let made = if tools.tool_mode.is_some() || tools.tool_overrides.is_some() {
                 let patch = IntegrationPatch {
                     tool_mode: tools.tool_mode,
                     tool_overrides: tools.tool_overrides,
@@ -336,12 +501,21 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 // A new service whose tools are limited from the start: the sessions that would get it are
                 // started again, so Claude is told to send its calls to the daemon.
                 reload_agents(app, users_of(store, &done.id)).await;
-                return ok(done);
+                done
+            } else {
+                made
+            };
+            if let Some(rid) = bound {
+                connect::complete(&app.sup, &app.connects, &rid, &made, true).await;
             }
             ok(made)
         }
         "integrations.update" => {
-            let UpdateParams { id, patch } = params(p)?;
+            let UpdateParams {
+                id,
+                connect_request_id,
+                patch,
+            } = params(p)?;
             check_tool_overrides(patch.tool_overrides.as_ref())?;
             let cur = store
                 .integration_get(&id)?
@@ -349,7 +523,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             // Check the row as it will be after the patch.
             let after = apply(&cur, &patch);
             check_definition(&after)?;
-            if cur.auth == IntegrationAuth::Oauth && (after.url != cur.url || after.kind != cur.kind) {
+            if cur.auth.holds_token() && (after.url != cur.url || after.kind != cur.kind) {
                 // The tokens are for that server: another address needs another sign-in.
                 return Err(RpcError::new(
                     INVALID_PARAMS,
@@ -368,19 +542,35 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 return Err(RpcError::new(INVALID_PARAMS, "that name is taken"));
             }
             let changes_tool_rules = changes_tool_rules(&cur, &patch);
+            let bound = match connect_request_id {
+                Some(rid) => connect::check_bind(app, &rid, &cur)?.then_some(rid),
+                None => None,
+            };
             let updated = store.integration_update(&id, patch)?;
             if changes_tool_rules {
                 // The agents that have the service start their sessions again, with the new rules: Claude lists
                 // the service's calls as `permissions.ask` when the session starts.
                 reload_agents(app, users_of(store, &id)).await;
             }
+            // Repaired from an agent's card (turned on, keys changed): when the row works, the agent gets it.
+            if let Some(rid) = bound
+                && connect::works(app, &updated)?
+            {
+                connect::complete(&app.sup, &app.connects, &rid, &updated, false).await;
+            }
             ok(updated)
         }
         "integrations.remove" => {
             let Id { id } = params(p)?;
-            if let Some(row) = store.integration_get(&id)?.filter(|r| r.auth == IntegrationAuth::Oauth) {
-                // Its tokens go with it, and the service is told (a refusal there does not stop the removal).
-                mcp_oauth::disconnect(store, &row, true).await?;
+            if let Some(row) = store.integration_get(&id)?.filter(|r| r.auth.holds_token()) {
+                if row.auth == IntegrationAuth::Device {
+                    // The token goes with it; the provider cannot be told without a client secret.
+                    app.device.cancel_target(&id);
+                    device::disconnect(store, &id).await?;
+                } else {
+                    // Its tokens go with it, and the service is told (a refusal there does not stop the removal).
+                    mcp_oauth::disconnect(store, &row, true).await?;
+                }
             }
             ok(json!({ "deleted": store.integration_delete(&id)? }))
         }
@@ -532,6 +722,10 @@ async fn reach(
     limit: Duration,
 ) -> Result<Reply, Refused> {
     let oauth = row.auth == IntegrationAuth::Oauth;
+    let by_code = row.auth == IntegrationAuth::Device;
+    if by_code && device::needs_sign_in(store, &row.id) {
+        return Err(Refused::SignIn);
+    }
     if oauth {
         // A token that is about to end is renewed first.
         match mcp_oauth::refresh(store, &row.id, Why::Expiring(mcp_oauth::SESSION_SKEW_MS), now_ms()).await {
@@ -554,6 +748,14 @@ async fn reach(
             Ok(Outcome::NeedsLogin) => return Err(Refused::SignIn),
             Err(e) => tracing::warn!(integration = row.name, "{e:#}"),
         }
+    }
+    if by_code
+        && let Err(e) = &result
+        && e.downcast_ref::<HttpStatus>().is_some_and(|s| s.0 == 401)
+    {
+        // A token of a sign-in with a code cannot be renewed: the person signs in again.
+        device::mark_rejected(store, &row.id).await;
+        return Err(Refused::SignIn);
     }
     result.map_err(Refused::Failed)
 }
@@ -578,7 +780,7 @@ async fn run_once(
     if draft {
         server = all_secret(server);
     }
-    let public_only = row.auth == IntegrationAuth::Oauth;
+    let public_only = row.auth.holds_token();
     let secrets = server_secrets(&server);
     match exchange(&server, limit, public_only, request).await {
         Ok(result) => Ok(Reply { result, secrets }),
@@ -593,7 +795,7 @@ async fn run_once(
 /// What `integrations.test` and `integrations.probe` answer for `row`: the server starts (or is reached) and its
 /// tools come back, or the error. A draft saves nothing; a successful test keeps the tools for `integrations.tools`.
 async fn probe_row(store: &Store, row: &Integration, draft: bool) -> RpcResult {
-    if draft && row.auth == IntegrationAuth::Oauth {
+    if draft && row.auth.holds_token() {
         return ok(json!({ "ok": false, "tools": [], "error": "a browser sign-in cannot be tried before it is done" }));
     }
     match reach(store, row, draft, &list_request(), TEST_TIMEOUT).await {
@@ -607,7 +809,19 @@ async fn probe_row(store: &Store, row: &Integration, draft: bool) -> RpcResult {
         Err(Refused::SignIn) => {
             ok(json!({ "ok": false, "tools": [], "error": "sign in to this service again", "needs_login": true }))
         }
-        Err(Refused::Failed(e)) => ok(json!({ "ok": false, "tools": [], "error": format!("{e:#}") })),
+        Err(Refused::Failed(e)) => {
+            // A draft the service refuses with 401 may sign in in the browser: the app offers that, not a failure.
+            let refused = e.downcast_ref::<HttpStatus>().is_some_and(|s| s.0 == 401);
+            if draft
+                && refused
+                && row.kind == IntegrationKind::Http
+                && let Some(url) = &row.url
+                && mcp_oauth::offers_sign_in(url).await
+            {
+                return ok(json!({ "ok": false, "tools": [], "oauth": true }));
+            }
+            ok(json!({ "ok": false, "tools": [], "error": format!("{e:#}") }))
+        }
     }
 }
 
@@ -735,7 +949,7 @@ fn check_new(n: &NewIntegration) -> Result<(), RpcError> {
 }
 
 /// The row a new integration would be stored as, before it has an id.
-fn draft_row(n: &NewIntegration) -> Integration {
+pub(super) fn draft_row(n: &NewIntegration) -> Integration {
     Integration {
         id: String::new(),
         name: n.name.clone(),
@@ -1374,8 +1588,39 @@ mod tests {
                     "{}: a browser sign-in needs an http entry with a fixed url and no header keys",
                     e.id
                 ),
+                Some("device") => {
+                    assert!(
+                        e.kind == IntegrationKind::Http && e.url.is_some() && e.headers_keys.is_none(),
+                        "{}: a sign-in with a code needs an http entry with a fixed url and no header keys",
+                        e.id
+                    );
+                    // The daemon holds the real values (`mcp_oauth/device.rs`); the catalog only has to agree.
+                    let device = e.device.as_ref().unwrap_or_else(|| panic!("{}: no device", e.id));
+                    let provider = crate::mcp_oauth::device::builtin_provider(&device.provider)
+                        .unwrap_or_else(|| panic!("{}: unknown provider {}", e.id, device.provider));
+                    assert_eq!(
+                        (provider.client_id.as_str(), provider.scope.as_str()),
+                        (device.client_id.as_str(), device.scope.as_str()),
+                        "{}",
+                        e.id
+                    );
+                    assert!(
+                        provider
+                            .servers
+                            .iter()
+                            .any(|s| Some(s.trim_end_matches('/')) == e.url.as_deref().map(|u| u.trim_end_matches('/'))),
+                        "{}: the provider may not send its token to this url",
+                        e.id
+                    );
+                }
                 Some(other) => panic!("{}: unknown auth {other}", e.id),
             }
+            assert_eq!(
+                e.auth.as_deref() == Some("device"),
+                e.device.is_some(),
+                "{}: device",
+                e.id
+            );
             for key in e.headers_keys.iter().flatten().chain(e.env_keys.iter().flatten()) {
                 assert!(key.value_template.contains("{secret}"), "{}", e.id);
             }
@@ -1813,8 +2058,8 @@ mod tests {
             &app,
             "integrations.add",
             json!({
-                "name": "grafana", "kind": "stdio", "command": "uvx", "args": ["mcp-grafana==1.0.0"],
-                "env": { "GRAFANA_TOKEN": "secret:GRAFANA_TOKEN" }, "enabled": false
+                "name": "kagi", "kind": "stdio", "command": "uvx", "args": ["kagimcp==1.0.0"],
+                "env": { "KAGI_API_KEY": "secret:KAGI_API_KEY" }, "enabled": false
             }),
         )
         .await
@@ -1822,20 +2067,20 @@ mod tests {
         let id = made["id"].as_str().unwrap().to_string();
         let list = owner(&app, "integrations.list", json!({})).await.unwrap();
         assert_eq!(
-            listed(&list, "grafana")["template_update"],
-            json!({"from": "1.0.0", "to": "2.0.2"})
+            listed(&list, "kagi")["template_update"],
+            json!({"from": "1.0.0", "to": "1.0.2"})
         );
 
         let done = owner(&app, "integrations.update_from_template", json!({ "id": id }))
             .await
             .unwrap();
-        assert_eq!(done["args"], json!(["mcp-grafana==2.0.2"]));
+        assert_eq!(done["args"], json!(["kagimcp==1.0.2"]));
         assert_eq!(done["command"], "uvx");
-        assert_eq!(done["env"], json!({"GRAFANA_TOKEN": "secret:GRAFANA_TOKEN"}));
+        assert_eq!(done["env"], json!({"KAGI_API_KEY": "secret:KAGI_API_KEY"}));
         assert_eq!(done["enabled"], false);
         let list = owner(&app, "integrations.list", json!({})).await.unwrap();
         assert!(
-            listed(&list, "grafana").get("template_update").is_none(),
+            listed(&list, "kagi").get("template_update").is_none(),
             "up to date: no field"
         );
         let again = owner(&app, "integrations.update_from_template", json!({ "id": id }))
@@ -2900,6 +3145,26 @@ mod tests {
             }
             let err = call(&app, "integrations.oauth_begin", json!({})).await.unwrap_err();
             assert_eq!(err.code, crate::rpc::INVALID_PARAMS);
+        }
+
+        #[tokio::test]
+        async fn a_draft_the_service_answers_with_a_browser_sign_in_is_offered_it_and_saves_nothing() {
+            let app = app();
+            let fake = Fake::start().await;
+            let draft = json!({ "name": "notion", "kind": "http", "url": fake.url() });
+            let probed = call(&app, "integrations.probe", json!({ "draft": draft }))
+                .await
+                .unwrap();
+            assert_eq!(probed, json!({ "ok": false, "tools": [], "oauth": true }));
+            assert_eq!(call(&app, "integrations.list", json!({})).await.unwrap(), json!([]));
+            // An address that is not there is a failure as before, not a sign-in.
+            let other = json!({ "name": "notion", "kind": "http", "url": format!("{}/elsewhere/mcp", fake.base) });
+            let failed = call(&app, "integrations.probe", json!({ "draft": other }))
+                .await
+                .unwrap();
+            assert_eq!(failed["ok"], false);
+            assert!(failed["error"].is_string(), "{failed}");
+            assert!(failed.get("oauth").is_none(), "{failed}");
         }
     }
 }
