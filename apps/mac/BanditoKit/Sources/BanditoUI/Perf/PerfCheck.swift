@@ -285,7 +285,7 @@ struct PerfCheckRow {
         worst = L10n.PerfCheck.ms(value: Self.number(stats.worstFrameMs))
         freezes = "\(stats.stretchesOver100Ms)"
         failed = report.error != nil
-        meets = report.meetsTarget
+        meets = report.meetsTarget && report.error == nil
         verdict = failed ? L10n.PerfCheck.failed : (meets ? L10n.PerfCheck.met : L10n.PerfCheck.missed)
     }
 
@@ -474,7 +474,7 @@ private struct PerfCheckProgress: View {
 }
 
 /// The table of the results, the verdict and the buttons.
-private struct PerfCheckResults: View {
+struct PerfCheckResults: View {
     @Bindable var state: PerfCheckRun
     var onAgain: () -> Void
 
@@ -491,10 +491,13 @@ private struct PerfCheckResults: View {
                         .font(BanditoFont.text(size: 13))
                         .foregroundStyle(Color.Bandito.text2)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(L10n.PerfCheck.screen(fps: "\(state.screenFPS)") + " · " + L10n.PerfCheck.target)
-                        .font(BanditoFont.text(size: 12))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Group {
+                        Text(L10n.PerfCheck.screen(fps: "\(state.screenFPS)"))
+                        Text(L10n.PerfCheck.target)
+                    }
+                    .font(BanditoFont.text(size: 12))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 table
                     .banditoCard()
@@ -546,7 +549,7 @@ private struct PerfCheckResults: View {
                     cell(row.freezes)
                     Text(row.verdict)
                         .font(BanditoFont.text(size: 13, weight: 600))
-                        .foregroundStyle(row.meets ? Color.Bandito.ok : Color.Bandito.danger)
+                        .foregroundStyle(row.meets && !row.failed ? Color.Bandito.ok : Color.Bandito.danger)
                         .lineLimit(1)
                         .fixedSize()
                 }

@@ -279,3 +279,12 @@ Two commands in the same context cannot use the same keys.
 The shortcuts Take / give back control and Send the key combination to the server are listed in Settings, but changing them does nothing yet: the screen keeps its fixed keys (⇧⌘C and ⌃⌥⌫).
 Где: Settings (⌘,) → Keys and gestures (Клавиши и жесты) → Keys (Клавиши) → Server screen (Экран сервера)
 1. Use the fixed keys in the Server screen mode.
+
+## Smoothness check… (Проверка плавности…)
+
+<!-- id: ts-smoothness-check; covers: -->
+Measures how smoothly every page of the app draws on this Mac. A window of its own opens and goes through the pages by itself (Team, the chat, Files, Terminals, Browser, Screen, Server, Marketplace, Settings, switching modes and servers, menus and sheets) on demo data, for about two to three minutes. Your servers, files and settings are not touched, and no statistics or sounds go out while it runs. At the end a table shows, for each page, the frame time most frames stay within (p95), the share of frames over 8.3 ms and over 16.7 ms, the worst frame, the freezes over 100 ms and whether the page meets the target (95% of frames within 8.3 ms, under 1% over 16.7 ms, no freeze over 100 ms). The screen's highest frame rate is shown above the table.
+Где: Help (Справка) → hold ⌥ → Smoothness check… (Проверка плавности…)
+1. Leave the window alone while it runs: it drives the pages itself and ignores clicks.
+2. Click Copy result (Скопировать результат) to paste the table into a message or a report; Run again (Проверить ещё раз) repeats it.
+3. Close the window to end it.

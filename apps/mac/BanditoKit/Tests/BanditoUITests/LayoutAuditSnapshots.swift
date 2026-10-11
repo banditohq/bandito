@@ -21,8 +21,33 @@ import Testing
 
     static var cases: [AuditCase] {
         settings + sheets + dataSheets + serverScreens + marketScreens + onboardingScreens + flowSheets + browserScreens
-            + approvalViews + messageTimeRows
+            + approvalViews + messageTimeRows + perfCheckViews
     }
+
+    /// The results of the smoothness check (Help → ⌥ Smoothness check…) in the narrowest window.
+    static let perfCheckViews: [AuditCase] = [
+        AuditCase(name: "perf-check-results", width: 900, scrolls: true) { _ in
+            let state = PerfCheckRun()
+            state.screenFPS = 120
+            state.phase = .done
+            state.results = PerfScenario.allCases.enumerated().map { index, scenario in
+                let frame = 1.0 / 120
+                var intervals = Array(repeating: frame, count: 200)
+                if index % 3 == 0 { intervals[10] = 0.04 }
+                var report = PerfReport(
+                    scenario: scenario.rawValue, startedAt: "", durationSec: 5,
+                    frames: FrameStats.compute(
+                        intervals: intervals, work: Array(repeating: index % 3 == 0 ? 0.011 : 0.004, count: 200),
+                        longStretches: index % 5 == 0 ? 1 : 0, frameDuration: frame),
+                    hangs: 0, longestHangMs: 0, memoryStartMB: 0, memoryPeakMB: 0, memoryEndMB: 0, segments: [],
+                    silentFrames: 0, bodies: [:], note: "")
+                report.meetsTarget = report.frames.meetsTarget(displayFrameMs: frame * 1000)
+                if index == 4 { report.error = "no scroll view" }
+                return report
+            }
+            return AnyView(PerfCheckResults(state: state, onAgain: {}))
+        }
+    ]
 
     static let settings: [AuditCase] = [
         AuditCase(name: "settings-general", width: settingsColumn, scrolls: true) { _ in AnyView(GeneralSection()) },
