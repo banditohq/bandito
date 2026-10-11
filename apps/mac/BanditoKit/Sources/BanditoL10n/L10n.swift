@@ -142,6 +142,18 @@ public enum L10n {
         }
     }
 
+    public enum AgentConnect {
+        public static func connected(service: String, agent: String) -> String { L10n.tr("agentConnect.connected", service, agent) }
+        public static func declined(service: String) -> String { L10n.tr("agentConnect.declined", service) }
+        public static func expired(service: String) -> String { L10n.tr("agentConnect.expired", service) }
+        public static func hintBrowser(agent: String) -> String { L10n.tr("agentConnect.hintBrowser", agent) }
+        public static func hintKeys(agent: String) -> String { L10n.tr("agentConnect.hintKeys", agent) }
+        public static var notNow: String { L10n.tr("agentConnect.notNow") }
+        public static func reasonBy(agent: String) -> String { L10n.tr("agentConnect.reasonBy", agent) }
+        public static func title(agent: String, service: String) -> String { L10n.tr("agentConnect.title", agent, service) }
+        public static func unknown(service: String) -> String { L10n.tr("agentConnect.unknown", service) }
+    }
+
     public enum AgentSheet {
         public static var advanced: String { L10n.tr("agentSheet.advanced") }
         public static var advancedCollapsed: String { L10n.tr("agentSheet.advancedCollapsed") }
@@ -570,6 +582,8 @@ public enum L10n {
     }
 
     public enum Composer {
+        public static var connectGo: String { L10n.tr("composer.connectGo") }
+        public static func connectWaiting(name: String, service: String) -> String { L10n.tr("composer.connectWaiting", name, service) }
         public static var contextHint: String { L10n.tr("composer.contextHint") }
         public static func contextPopover(percent: String) -> String { L10n.tr("composer.contextPopover", percent) }
         public static var formGo: String { L10n.tr("composer.formGo") }

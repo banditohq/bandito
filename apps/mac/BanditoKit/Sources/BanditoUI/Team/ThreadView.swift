@@ -20,6 +20,8 @@ struct ThreadView: View {
     @State private var sendError: UserFacingMessage?
     /// Failures of interrupt, approval and history loading.
     @State private var actionError: UserFacingMessage?
+    /// The sheet of keys a connect card opened (see `connectService`).
+    @State private var connectSheet: AgentConnectRules.SheetItem?
     @State private var loadingOlder = false
     /// Files changed since the last checkpoint; `nil` until loaded or when the server lacks `changes`.
     @State private var changes: ChangesDiff?
@@ -436,6 +438,8 @@ struct ThreadView: View {
                 onCancelReply: { replyDrafts.set(nil, for: agent.id) },
                 waitingForm: server.supports("forms") ? thread.pendingForms.last : nil,
                 onGoToForm: { scrollTo(id: "form-\($0)") },
+                waitingConnect: connectWait,
+                onGoToConnect: { scrollTo(id: "connect-\($0)") },
                 replyFormId: ComposerSendMode.formToAnswer(
                     in: thread.pendingForms, supportsReply: server.supports("form_reply")),
                 onReplyToForm: replyToForm,
@@ -468,6 +472,17 @@ struct ThreadView: View {
         // the inspector. The daemon caches the answer, so a repeat of this request is cheap.
         .task(id: server.id) {
             _ = try? await server.refreshRuntimeModels()
+        }
+        // A card that asks for a service names it from the catalog: read once there is one (it is kept per server).
+        .task(id: connectCardCount) {
+            if connectCardCount > 0, server.supports("agent_connect") { await MentionServices.shared.ensure(server) }
+        }
+        .banditoSheet(item: $connectSheet, dismissOnOutsideClick: false) { item in
+            IntegrationEditor(
+                server: server, target: item.target,
+                existingNames: MentionServices.shared.snapshot(for: server)?.integrations.map(\.name) ?? [],
+                onChecked: { _, _ in }, onSaved: { await MentionServices.shared.ensure(server, force: true) },
+                connectRequestId: item.requestId)
         }
         // Text put here by another screen ("Ask about this place") goes into the composer, once.
         .onChange(of: router.pendingComposerText, initial: true) { _, _ in
@@ -604,6 +619,51 @@ struct ThreadView: View {
 
     // MARK: Messages: replies, reactions, forms
 
+    /// How many connect cards the thread holds; a change of it reads the catalog.
+    private var connectCardCount: Int {
+        thread.items.reduce(0) { count, item in
+            if case .connect = item { return count + 1 }
+            return count
+        }
+    }
+
+    /// The service an agent waits on the person to connect, for the hint above the field.
+    private var connectWait: ConnectWait? {
+        guard server.supports("agent_connect") else { return nil }
+        return AgentConnectRules.waiting(
+            in: thread.pendingConnects, catalog: MentionServices.shared.snapshot(for: server)?.catalog ?? [])
+    }
+
+    /// Pressing Connect on a card: the same connection as the Marketplace (see `AgentConnectRules`). The daemon sees
+    /// the service come up by itself and answers the agent.
+    private func connectService(_ row: ConnectRow) {
+        Task {
+            await MentionServices.shared.ensure(server, force: true)
+            let snapshot = MentionServices.shared.snapshot(for: server)
+            guard let entry = snapshot?.catalog.first(where: { $0.id == row.service }) else {
+                actionError = UserFacingMessage(text: L10n.AgentConnect.unknown(service: row.service))
+                return
+            }
+            let existing = AgentConnectRules.existing(for: entry, in: snapshot?.integrations ?? [])
+            switch AgentConnectRules.start(
+                entry: entry, existing: existing, supportsOAuth: server.supports("integrations_oauth"),
+                supportsDevice: server.supports("integrations_device"))
+            {
+            case .signIn(let target):
+                await app.oauth.begin(server: server, target: target, name: entry.name, connectRequestId: row.requestId)
+            case .deviceSignIn(let target):
+                await app.device.begin(server: server, target: target, name: entry.name, connectRequestId: row.requestId)
+            case .sheet(let target):
+                connectSheet = AgentConnectRules.SheetItem(target: target, requestId: row.requestId)
+            case .needsUpdate(let device):
+                actionError = UserFacingMessage(
+                    text: device
+                        ? L10n.Integrations.Device.needsUpdate(name: entry.name)
+                        : L10n.Integrations.Oauth.needsUpdate(name: entry.name))
+            }
+        }
+    }
+
     /// The agent's colour, for the bar of a quote.
     private var accent: Color {
         AvatarResolver.resolve(
@@ -619,6 +679,7 @@ struct ThreadView: View {
             reactionsOn: server.supports("reactions"),
             repliesOn: server.supports("attachments"),
             formsOn: server.supports("forms"),
+            connectOn: server.supports("agent_connect"),
             agentName: agent.name,
             accent: accent,
             reactions: current.reactions,
@@ -638,7 +699,9 @@ struct ThreadView: View {
             onJump: { seq in jump(toMessage: seq) },
             onAnswerForm: { row, action, values, comment in
                 try await server.answerForm(row.formId, in: agentID, action: action, values: values, comment: comment)
-            })
+            },
+            onConnectService: { row in connectService(row) },
+            onDeclineConnect: { row in try await server.declineConnect(row.requestId) })
     }
 
     /// A message of the loaded history by its `seq`, as something to reply to.

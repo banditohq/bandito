@@ -50,6 +50,15 @@
 "agent.menu.resume" = "再開";
 "agent.menu.schedules" = "スケジュール…";
 "agent.menu.unpin" = "ピン留めを解除";
+"agentConnect.connected" = "%1$@ を接続しました。%2$@ は作業を続けます";
+"agentConnect.declined" = "%1$@ は接続しませんでした";
+"agentConnect.expired" = "%1$@ のリクエストは期限切れです";
+"agentConnect.hintBrowser" = "ブラウザでサインインします。%1$@ へのアクセスは Bandito が自動で渡します。";
+"agentConnect.hintKeys" = "フォームにキーを入力します。%1$@ へのアクセスは Bandito が自動で渡します。";
+"agentConnect.notNow" = "今はしない";
+"agentConnect.reasonBy" = "— %1$@ より";
+"agentConnect.title" = "%1$@ は %2$@ を必要としています";
+"agentConnect.unknown" = "%1$@ はこのサーバーのカタログにありません";
 "agentSheet.advanced" = "詳細設定";
 "agentSheet.advancedCollapsed" = "折りたたみ中";
 "agentSheet.advancedEffort" = "作業量: %1$@";
@@ -404,6 +413,8 @@
 "composer.attach.screenshot" = "スクリーンショット";
 "composer.attach.tooLarge" = "20 MB を超えています";
 "composer.attach.uploading" = "アップロード中…";
+"composer.connectGo" = "カードへ移動";
+"composer.connectWaiting" = "%1$@ は %2$@ の接続を待っています";
 "composer.contextHint" = "現在のチャプターがどれだけ埋まっているか";
 "composer.contextPopover" = "コンテキスト: %1$@%% — この会話がモデルのメモリをどれだけ使っているかです。80%%に達するとエージェントはメモリを保存して新しいチャプターを始めます。";
 "composer.formGo" = "フォームへ";

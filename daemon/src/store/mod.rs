@@ -162,6 +162,23 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// Connect requests (`integration_requested`) that no `integration_request_ended` has closed, as
+    /// `(agent_id, request_id)`. After a daemon restart no call waits for them any more.
+    pub fn connect_requests_unresolved(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT e.agent_id, json_extract(e.payload, '$.request_id') FROM events e
+             WHERE e.kind = 'integration_requested'
+               AND NOT EXISTS (
+                 SELECT 1 FROM events t WHERE t.agent_id = e.agent_id AND t.seq > e.seq
+                   AND t.kind = 'integration_request_ended'
+                   AND json_extract(t.payload, '$.request_id') = json_extract(e.payload, '$.request_id'))
+             ORDER BY e.seq",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     /// Events with `seq > after`, oldest first.
     pub fn events_since(&self, after: i64, limit: u32, agent_id: Option<&str>) -> Result<Vec<Event>> {
         let conn = self.conn();

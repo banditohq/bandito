@@ -45,7 +45,7 @@ public final class OAuthSignIn {
     @ObservationIgnored private var pending: Pending?
     @ObservationIgnored private var authorizeURL: URL?
     /// What to start again for "Try again", and the server to tell when the owner gives up.
-    @ObservationIgnored private var attempt: (server: any OAuthServer, target: OAuthBeginTarget, name: String)?
+    @ObservationIgnored private var attempt: (server: any OAuthServer, target: OAuthBeginTarget, name: String, connectRequestId: String?)?
     /// Changes with each start and each cancel, so an answer that arrives late knows it is out of date.
     @ObservationIgnored private var run = UUID()
 
@@ -71,14 +71,18 @@ public final class OAuthSignIn {
     // MARK: - start
 
     /// Starts a sign-in: asks the server for the address and opens it. A sign-in that was waiting is dropped first.
-    public func begin(server: any OAuthServer, target: OAuthBeginTarget, name: String) async {
+    ///
+    /// With `connectRequestId` the sign-in answers an agent's request: when it ends well the daemon tells the agent.
+    public func begin(
+        server: any OAuthServer, target: OAuthBeginTarget, name: String, connectRequestId: String? = nil
+    ) async {
         await discard()
         let id = UUID()
         run = id
-        attempt = (server, target, name)
+        attempt = (server, target, name, connectRequestId)
         phase = .starting(name: name)
         do {
-            let begun = try await server.oauthBegin(target)
+            let begun = try await server.oauthBegin(target, connectRequestId: connectRequestId)
             guard run == id else {
                 // Cancelled while the server was answering.
                 await server.oauthCancel(state: begun.state)
@@ -109,7 +113,9 @@ public final class OAuthSignIn {
     /// "Try again" after a failure: the same sign-in from the start.
     public func retry() async {
         guard case .failed = phase, let attempt else { return }
-        await begin(server: attempt.server, target: attempt.target, name: attempt.name)
+        await begin(
+            server: attempt.server, target: attempt.target, name: attempt.name,
+            connectRequestId: attempt.connectRequestId)
     }
 
     // MARK: - end

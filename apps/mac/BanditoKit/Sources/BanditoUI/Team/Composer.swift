@@ -30,6 +30,9 @@ struct Composer: View {
     /// A form the agent waits on: the hint above the field, with a link that scrolls to the form (given its id).
     var waitingForm: FormRow?
     var onGoToForm: (String) -> Void = { _ in }
+    /// A service the agent waits on the person to connect: the hint above the field, with a link to its card.
+    var waitingConnect: ConnectWait?
+    var onGoToConnect: (String) -> Void = { _ in }
     /// The form a typed message answers while the agent waits on it; `nil` when the daemon cannot take a reply.
     var replyFormId: String?
     /// Sends the draft as the answer of the form with this id (`forms.answer`, action `reply`).
@@ -158,6 +161,10 @@ struct Composer: View {
                 formHint(waitingForm)
                     .transition(.opacity.combined(with: .offset(y: 6)))
             }
+            if let waitingConnect {
+                connectHint(waitingConnect)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
+            }
             if let reply {
                 replyBar(reply)
                     .transition(.opacity.combined(with: .offset(y: 6)))
@@ -258,6 +265,7 @@ struct Composer: View {
         .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: reply)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingForm?.formId)
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingConnect?.requestId)
         .onAppear { takeFocus(.agentOpened) }
         .onDisappear {
             dictation.cancel()
@@ -408,6 +416,32 @@ struct Composer: View {
                 onGoToForm(form.formId)
             } label: {
                 Text(L10n.Composer.formGo)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .banditoButton(.link)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.signal.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.signal.opacity(0.3), lineWidth: 1))
+    }
+
+    /// The agent is waiting for a service to be connected: what it waits for, and a way to its card.
+    private func connectHint(_ wait: ConnectWait) -> some View {
+        HStack(spacing: 10) {
+            StatusDot(status: .needsYou, size: 7, ringColor: Color.Bandito.signal.opacity(0.15))
+            Text(L10n.Composer.connectWaiting(name: agentName, service: wait.serviceName))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
+                .foregroundStyle(Color.Bandito.text)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 8)
+            Button {
+                onGoToConnect(wait.requestId)
+            } label: {
+                Text(L10n.Composer.connectGo)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }

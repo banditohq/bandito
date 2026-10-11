@@ -50,6 +50,15 @@
 "agent.menu.resume" = "Fortsetzen";
 "agent.menu.schedules" = "Zeitpläne…";
 "agent.menu.unpin" = "Loslösen";
+"agentConnect.connected" = "%1$@ verbunden, %2$@ macht weiter";
+"agentConnect.declined" = "Du hast %1$@ nicht verbunden";
+"agentConnect.expired" = "Die Anfrage für %1$@ ist abgelaufen";
+"agentConnect.hintBrowser" = "Du meldest dich im Browser an. Bandito gibt %1$@ den Zugriff selbst.";
+"agentConnect.hintKeys" = "Du füllst die Schlüssel in einem Formular aus. Bandito gibt %1$@ den Zugriff selbst.";
+"agentConnect.notNow" = "Nicht jetzt";
+"agentConnect.reasonBy" = "— schreibt %1$@";
+"agentConnect.title" = "%1$@ braucht %2$@";
+"agentConnect.unknown" = "%1$@ ist nicht im Katalog dieses Servers";
 "agentSheet.advanced" = "Erweitert";
 "agentSheet.advancedCollapsed" = "Zugeklappt";
 "agentSheet.advancedEffort" = "Aufwand: %1$@";
@@ -404,6 +413,8 @@
 "composer.attach.screenshot" = "Bildschirmfoto";
 "composer.attach.tooLarge" = "Über 20 MB";
 "composer.attach.uploading" = "Wird hochgeladen…";
+"composer.connectGo" = "Zur Karte";
+"composer.connectWaiting" = "%1$@ wartet darauf, dass du %2$@ verbindest";
 "composer.contextHint" = "Wie voll das aktuelle Kapitel ist";
 "composer.contextPopover" = "Kontext: %1$@ %% — so viel Modellspeicher belegt dieses Gespräch. Bei 80 %% speichert der Agent seinen Speicher und beginnt ein neues Kapitel.";
 "composer.formGo" = "Zum Formular";

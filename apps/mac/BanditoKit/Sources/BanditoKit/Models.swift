@@ -445,6 +445,10 @@ public enum EventBody: Sendable, Hashable {
     case formRequested(formId: String, spec: FormSpec)
     /// The form ended. `values` are keyed by field id.
     case formAnswered(formId: String, action: FormAction, values: [String: JSONValue]?, comment: String?, message: String? = nil)
+    /// The agent asked the person to connect a catalog service (`integration_requested`).
+    case integrationRequested(requestId: String, service: String, reason: String?)
+    /// The request ended: connected, declined or expired (`integration_request_ended`).
+    case integrationRequestEnded(requestId: String, status: ConnectStatus, integration: String?)
     /// A reaction on the message with that `seq`; no `emoji` means it was taken off.
     case reaction(seq: Int64, emoji: String?, by: ReactionBy)
     /// The Telegram bot or its linked chats changed (`telegram.changed`, no data). Read `telegram.status` again.
@@ -492,6 +496,10 @@ extension Event: Decodable {
     }
     private struct FormAnsweredP: Decodable {
         var formId: String; var action: FormAction; var values: [String: JSONValue]?; var comment: String?; var message: String?
+    }
+    private struct IntegrationRequestedP: Decodable { var requestId: String; var service: String; var reason: String? }
+    private struct IntegrationRequestEndedP: Decodable {
+        var requestId: String; var status: ConnectStatus; var integration: String?
     }
     private struct ReactionP: Decodable { var seq: Int64; var emoji: String?; var by: ReactionBy }
     private struct TextP: Decodable { var text: String }
@@ -576,6 +584,12 @@ extension Event: Decodable {
         case "form_answered":
             let x = try p(FormAnsweredP.self)
             body = .formAnswered(formId: x.formId, action: x.action, values: x.values, comment: x.comment, message: x.message)
+        case "integration_requested":
+            let x = try p(IntegrationRequestedP.self)
+            body = .integrationRequested(requestId: x.requestId, service: x.service, reason: x.reason)
+        case "integration_request_ended":
+            let x = try p(IntegrationRequestEndedP.self)
+            body = .integrationRequestEnded(requestId: x.requestId, status: x.status, integration: x.integration)
         case "reaction":
             let x = try p(ReactionP.self); body = .reaction(seq: x.seq, emoji: x.emoji, by: x.by)
         case "telegram.changed": body = .telegramChanged

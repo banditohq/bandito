@@ -56,6 +56,11 @@ pub trait CrewBackend: Send + Sync {
         let _ = form;
         bail!("ask_form is not available here")
     }
+    /// Asks the person to connect a catalog service (`integrations.agent.request`) and waits. Returns `{status, ...}`.
+    async fn request_connection(&self, params: Value) -> Result<Value> {
+        let _ = params;
+        bail!("request_connection is not available here")
+    }
     /// Puts a reaction on a message (`messages.agent.react`). Returns the daemon's result.
     async fn react(&self, params: Value) -> Result<Value> {
         let _ = params;
@@ -135,6 +140,12 @@ impl CrewBackend for DaemonBackend {
             limit,
         )
         .await
+    }
+
+    async fn request_connection(&self, params: Value) -> Result<Value> {
+        // The person may take as long as for a form (see `rpc::connect::WAIT`), plus a margin.
+        let limit = crate::rpc::connect::WAIT + Duration::from_secs(60);
+        call_agent_waiting(&self.sock, &self.token, "integrations.agent.request", params, limit).await
     }
 
     async fn react(&self, params: Value) -> Result<Value> {
@@ -311,6 +322,7 @@ fn tools_list(on: &[Capability], lead: bool) -> Vec<Value> {
         history_search_tool(),
         history_day_tool(),
         ask_form_tool(),
+        request_connection_tool(),
         react_tool(),
     ];
     tools.extend(screen_tools());
@@ -422,6 +434,21 @@ fn ask_form_tool() -> Value {
     })
 }
 
+fn request_connection_tool() -> Value {
+    json!({
+        "name": "request_connection",
+        "description": "Ask the person to connect a catalog service you need (e.g. composio for Gmail/Slack/1000+ apps, github, notion). Prefer this over asking for ids or API keys in a form. The person sees a card in the chat with a Connect button and signs in or fills in the keys themselves. Blocks until they answer (up to 24 hours). Returns JSON: {\"status\": \"connected\" | \"declined\" | \"expired\" | \"not_allowed\", \"integration\"?}. After connected, the service's tools load in your next turn: finish this turn with a one-line status and Bandito will message you to continue.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "service": { "type": "string", "description": "The catalog id of the service, e.g. github, notion, composio" },
+                "reason": { "type": "string", "description": "One short sentence for the person: what you need it for" },
+            },
+            "required": ["service", "reason"],
+        },
+    })
+}
+
 fn react_tool() -> Value {
     json!({
         "name": "react",
@@ -464,6 +491,7 @@ async fn call_tool(params: &Value, backend: &dyn CrewBackend, on: &[Capability],
         "history_search" => Ok(tool_result(history_search(&args, backend).await)),
         "history_day" => Ok(tool_result(history_day(&args, backend).await)),
         "ask_form" => Ok(tool_result(ask_form(&args, backend).await)),
+        "request_connection" => Ok(tool_result(request_connection(&args, backend).await)),
         "react" => Ok(tool_result(react(&args, backend).await)),
         "team_list" => Ok(tool_result(team_list(backend).await)),
         "team_assign" => Ok(tool_result(team_assign(&args, backend).await)),
@@ -509,6 +537,26 @@ async fn crew_list(backend: &dyn CrewBackend) -> Result<String, String> {
 async fn ask_form(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
     forms::parse_spec(args)?;
     let answer = backend.ask_form(args.clone()).await.map_err(|e| format!("{e:#}"))?;
+    Ok(answer.to_string())
+}
+
+/// `request_connection`: the card waits in the person's chat until they connect the service or decline.
+async fn request_connection(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    let service = args
+        .get("service")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or("request_connection needs \"service\", a catalog id")?;
+    let reason = args
+        .get("reason")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    let answer = backend
+        .request_connection(json!({ "service": service, "reason": reason }))
+        .await
+        .map_err(|e| format!("{e:#}"))?;
     Ok(answer.to_string())
 }
 
@@ -1422,6 +1470,7 @@ mod tests {
                 "history_search",
                 "history_day",
                 "ask_form",
+                "request_connection",
                 "react",
                 "screen_screenshot",
                 "screen_click",
@@ -1897,6 +1946,7 @@ mod tests {
                 "history_search",
                 "history_day",
                 "ask_form",
+                "request_connection",
                 "react",
                 "schedule_list",
                 "schedule_create",
@@ -1910,6 +1960,7 @@ mod tests {
                 "history_search",
                 "history_day",
                 "ask_form",
+                "request_connection",
                 "react",
                 "schedule_list",
                 "schedule_create",

@@ -419,10 +419,14 @@ public struct NewIntegration: Encodable, Sendable, Equatable {
     public var env: [String: String]
     public var headers: [String: String]
     public var enabled: Bool
+    /// The request of an agent this connection answers (`connect_request_id`): the daemon tells the agent when it
+    /// is saved. Nil for a connection nobody asked for.
+    public var connectRequestId: String?
 
     public init(
         name: String, kind: IntegrationKind, command: String? = nil, args: [String] = [], url: String? = nil,
-        env: [String: String] = [:], headers: [String: String] = [:], enabled: Bool = true
+        env: [String: String] = [:], headers: [String: String] = [:], enabled: Bool = true,
+        connectRequestId: String? = nil
     ) {
         self.name = name
         self.kind = kind
@@ -432,9 +436,10 @@ public struct NewIntegration: Encodable, Sendable, Equatable {
         self.env = env
         self.headers = headers
         self.enabled = enabled
+        self.connectRequestId = connectRequestId
     }
 
-    enum CodingKeys: String, CodingKey { case name, kind, command, args, url, env, headers, enabled }
+    enum CodingKeys: String, CodingKey { case name, kind, command, args, url, env, headers, enabled, connectRequestId }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -446,6 +451,7 @@ public struct NewIntegration: Encodable, Sendable, Equatable {
         if !env.isEmpty { try c.encode(env, forKey: .env) }
         if !headers.isEmpty { try c.encode(headers, forKey: .headers) }
         try c.encode(enabled, forKey: .enabled)
+        try c.encodeIfPresent(connectRequestId, forKey: .connectRequestId)
     }
 }
 
@@ -484,7 +490,7 @@ public struct IntegrationPatch: Encodable, Sendable {
 
     /// Keys on the wire. `id` is not a patch field: the request that carries a patch adds it.
     public enum Key: String, CodingKey {
-        case id, name, kind, command, args, url, env, headers, enabled, toolMode, toolOverrides
+        case id, name, kind, command, args, url, env, headers, enabled, toolMode, toolOverrides, connectRequestId
     }
 
     /// Writes the set fields into an object that may also hold `id`.

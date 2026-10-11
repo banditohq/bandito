@@ -50,6 +50,15 @@
 "agent.menu.resume" = "재개";
 "agent.menu.schedules" = "일정…";
 "agent.menu.unpin" = "고정 해제";
+"agentConnect.connected" = "%1$@ 연결됨, %2$@이(가) 작업을 이어갑니다";
+"agentConnect.declined" = "%1$@을(를) 연결하지 않았습니다";
+"agentConnect.expired" = "%1$@ 요청이 만료되었습니다";
+"agentConnect.hintBrowser" = "브라우저에서 로그인합니다. %1$@에게 접근 권한은 Bandito가 알아서 넘겨 줍니다.";
+"agentConnect.hintKeys" = "양식에 키를 입력합니다. %1$@에게 접근 권한은 Bandito가 알아서 넘겨 줍니다.";
+"agentConnect.notNow" = "나중에";
+"agentConnect.reasonBy" = "— %1$@의 말";
+"agentConnect.title" = "%1$@에게 %2$@이(가) 필요합니다";
+"agentConnect.unknown" = "%1$@은(는) 이 서버의 카탈로그에 없습니다";
 "agentSheet.advanced" = "고급";
 "agentSheet.advancedCollapsed" = "접힘";
 "agentSheet.advancedEffort" = "노력 수준: %1$@";
@@ -404,6 +413,8 @@
 "composer.attach.screenshot" = "스크린샷";
 "composer.attach.tooLarge" = "20MB 초과";
 "composer.attach.uploading" = "업로드 중…";
+"composer.connectGo" = "카드로 이동";
+"composer.connectWaiting" = "%1$@이(가) %2$@ 연결을 기다리고 있습니다";
 "composer.contextHint" = "현재 챕터가 얼마나 찼는지";
 "composer.contextPopover" = "컨텍스트: %1$@%% — 이 대화가 모델 메모리를 차지하는 비율이에요. 80%%가 되면 에이전트가 메모리를 저장하고 새 챕터를 시작해요.";
 "composer.formGo" = "양식으로 이동";

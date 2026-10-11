@@ -265,6 +265,7 @@ const PRIVATE_DRAFTS: &str = " files/ in your memory folder is only for your pri
 
 /// Put in the system prompt of every agent: when to ask with a form, and how to react to messages.
 const CHAT_GUIDE: &str = "Когда вам нужно несколько ответов от человека или подтверждение действия наружу (письмо, публикация, оплата, удаление), используйте инструмент ask_form вместо вопросов текстом. В форме — короткий заголовок и понятные подписи полей.
+Если для задачи нужен сервис из каталога Bandito (почта, Slack, GitHub, Notion и т. п.), не просите человека искать идентификаторы и ключи: вызовите инструмент request_connection — человек увидит в чате карточку с кнопкой «Подключить».
 Можно ставить реакции на сообщения человека инструментом react (например 👍 — принял, 👀 — смотрю), вместо коротких ответов.";
 
 /// Put in the system prompt of the main agent of the crew (see docs/ARCHITECTURE.md#lead-agent).
@@ -451,6 +452,17 @@ impl Supervisor {
         for f in self.hub.store.form_expire_all()? {
             self.hub
                 .emit(&f.agent_id, form_answered_event(&f.id, &Outcome::Expired));
+        }
+        // A request to connect a service waited in a call that is gone now.
+        for (agent_id, request_id) in self.hub.store.connect_requests_unresolved()? {
+            self.hub.emit(
+                &agent_id,
+                EventBody::IntegrationRequestEnded {
+                    request_id,
+                    status: crate::event::ConnectEnd::Expired,
+                    integration: None,
+                },
+            );
         }
         // The queue lives in memory: a message that was shown as waiting will not get its turn now.
         for (agent_id, seq) in self.hub.store.queued_messages_unresolved()? {
