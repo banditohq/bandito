@@ -74,7 +74,7 @@ final class MySharesModel {
                 guard let name = source.skillName else { throw ShareFailure.notFound }
                 let license = try await client().getShare(id: item.id).payload["license"]?.string
                     ?? ShareLogic.defaultLicense
-                payload = try await server.exportSkill(name: name, license: license)
+                payload = try await server.exportSkill(name: name, license: license).payload
             }
             try await client().updateShare(id: item.id, ShareUpdate(payload: payload))
         }

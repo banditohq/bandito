@@ -2665,5 +2665,8 @@
   "share.mine.delete": "Supprimer",
   "share.mine.deleteTitle": "Supprimer « {title} » ?",
   "share.mine.deleteText": "Le lien ne fonctionnera plus. Les copies déjà installées restent chez ceux qui les ont installées.",
-  "share.mine.noSource": "La mise à jour se fait depuis le bot ou le skill partagé, sur ce Mac."
+  "share.mine.noSource": "La mise à jour se fait depuis le bot ou le skill partagé, sur ce Mac.",
+  "share.own.title": "Mes skills",
+  "share.own.sharedBadge": "par lien",
+  "share.skipped": "Ces fichiers ne seront pas envoyés : {files}"
 }

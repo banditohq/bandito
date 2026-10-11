@@ -2633,5 +2633,8 @@
   "share.mine.delete": "删除",
   "share.mine.deleteTitle": "删除“{title}”？",
   "share.mine.deleteText": "链接将失效。已安装的副本会保留在对方那里。",
-  "share.mine.noSource": "更新需要在这台 Mac 上通过分享来源的机器人或技能进行。"
+  "share.mine.noSource": "更新需要在这台 Mac 上通过分享来源的机器人或技能进行。",
+  "share.own.title": "我的技能",
+  "share.own.sharedBadge": "通过链接",
+  "share.skipped": "以下文件不会被发送：{files}"
 }

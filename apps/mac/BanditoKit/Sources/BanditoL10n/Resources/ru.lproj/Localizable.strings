@@ -2087,6 +2087,8 @@
 "share.mine.signIn" = "Войдите, чтобы увидеть, чем вы делились.";
 "share.mine.title" = "Мои публикации";
 "share.mine.update" = "Обновить до текущей версии";
+"share.own.sharedBadge" = "по ссылке";
+"share.own.title" = "Мои скиллы";
 "share.preview.collapse" = "Свернуть";
 "share.preview.expand" = "Показать всё";
 "share.preview.title" = "Что уйдёт";
@@ -2113,6 +2115,7 @@
 "share.signIn.button" = "Открыть аккаунт";
 "share.signIn.hint" = "Войдите, чтобы делиться";
 "share.signIn.text" = "У опубликованных ботов и скиллов появится ссылка. Имя аккаунта будет указано как автор.";
+"share.skipped" = "Эти файлы не войдут: %1$@";
 "share.visibility.everyone" = "Публично";
 "share.visibility.everyoneHint" = "Видно всем и поисковикам";
 "share.visibility.link" = "Только по ссылке";

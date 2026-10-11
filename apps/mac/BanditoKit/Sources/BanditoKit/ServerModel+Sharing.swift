@@ -61,10 +61,61 @@ public struct SharedBotCreation: Decodable, Sendable {
     }
 }
 
-/// The `{payload}` answer of `agents.export` and `skills.export`.
+/// The `{payload}` answer of `agents.export`.
 private struct ExportedPayload: Decodable {
     var payload: JSONValue
 }
+
+/// What `skills.export` answers: the skill as it is shared, and the dot files of its folder that were left out, by
+/// name, so the owner sees them before publishing. Decoded with a plain `JSONDecoder`: the keys of the payload are data.
+public struct SkillExport: Decodable, Sendable, Equatable {
+    public var payload: JSONValue
+    public var skipped: [String]
+
+    public init(payload: JSONValue, skipped: [String]) {
+        self.payload = payload
+        self.skipped = skipped
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case payload, skipped
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        payload = try c.decode(JSONValue.self, forKey: .payload)
+        skipped = try c.decodeIfPresent([String].self, forKey: .skipped) ?? []
+    }
+}
+
+/// One skill of the owner's folder, as `skills.own` lists it. `source` is `own`, or `shared:<share id>` for a copy
+/// installed from a link. `version` is the shared install's version (nil for the owner's own skill).
+public struct OwnSkill: Decodable, Sendable, Hashable, Identifiable {
+    public var name: String
+    public var description: String
+    public var source: String
+    public var version: Int?
+    public var hasScripts: Bool
+    /// The number of files `skills.export` would send.
+    public var files: Int
+
+    public var id: String { name }
+
+    public init(name: String, description: String, source: String, version: Int?, hasScripts: Bool, files: Int) {
+        self.name = name
+        self.description = description
+        self.source = source
+        self.version = version
+        self.hasScripts = hasScripts
+        self.files = files
+    }
+}
+
+private struct OwnSkillsReply: Decodable {
+    var skills: [OwnSkill]
+}
+
+private struct NoOwnParams: Encodable {}
 
 private struct ExportAgentParams: Encodable {
     var agentID: String
@@ -116,9 +167,15 @@ extension ServerModel {
 
     /// A skill folder of the daemon user as it is shared (`skills.export`). Bundled catalog skills are refused
     /// (`catalog_skill`); a binary or big file is an error that names its path.
-    public func exportSkill(name: String, license: String) async throws -> JSONValue {
+    public func exportSkill(name: String, license: String) async throws -> SkillExport {
         let bytes = try await sharingCall("skills.export", ExportSkillParams(name: name, license: license))
-        return try JSONDecoder().decode(ExportedPayload.self, from: bytes).payload
+        return try JSONDecoder().decode(SkillExport.self, from: bytes)
+    }
+
+    /// The owner's skills in the daemon user's folder (`skills.own`): the own ones and the copies of shared links.
+    /// Catalog installs are not in it. Needs the `sharing` feature.
+    public func ownSkills() async throws -> [OwnSkill] {
+        try await rpc().call("skills.own", NoOwnParams(), as: OwnSkillsReply.self).skills
     }
 
     /// Makes an agent from a shared bot (`agents.create_from_shared`), marked `shared:<share id>`. The new agent joins

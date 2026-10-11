@@ -2665,5 +2665,8 @@
   "share.mine.delete": "Delete",
   "share.mine.deleteTitle": "Delete “{title}”?",
   "share.mine.deleteText": "The link stops working. Copies that people already installed stay with them.",
-  "share.mine.noSource": "Update works from the bot or skill it was shared from, on this Mac."
+  "share.mine.noSource": "Update works from the bot or skill it was shared from, on this Mac.",
+  "share.own.title": "My skills",
+  "share.own.sharedBadge": "by link",
+  "share.skipped": "These files will not be sent: {files}"
 }

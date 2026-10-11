@@ -2768,6 +2768,7 @@ public enum L10n {
 
     public enum Share {
         public static var menu: String { L10n.tr("share.menu") }
+        public static func skipped(files: String) -> String { L10n.tr("share.skipped", files) }
 
         public enum Capability {
             public static var browser: String { L10n.tr("share.capability.browser") }
@@ -2853,6 +2854,11 @@ public enum L10n {
             public static var signIn: String { L10n.tr("share.mine.signIn") }
             public static var title: String { L10n.tr("share.mine.title") }
             public static var update: String { L10n.tr("share.mine.update") }
+        }
+
+        public enum Own {
+            public static var sharedBadge: String { L10n.tr("share.own.sharedBadge") }
+            public static var title: String { L10n.tr("share.own.title") }
         }
 
         public enum Preview {

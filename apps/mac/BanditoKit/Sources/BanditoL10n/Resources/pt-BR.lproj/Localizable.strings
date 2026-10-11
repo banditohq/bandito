@@ -2087,6 +2087,8 @@
 "share.mine.signIn" = "Entre para ver os bots e skills que você compartilhou.";
 "share.mine.title" = "Minhas publicações";
 "share.mine.update" = "Atualizar para a versão atual";
+"share.own.sharedBadge" = "por link";
+"share.own.title" = "Meus skills";
 "share.preview.collapse" = "Recolher";
 "share.preview.expand" = "Mostrar tudo";
 "share.preview.title" = "O que será compartilhado";
@@ -2113,6 +2115,7 @@
 "share.signIn.button" = "Abrir conta";
 "share.signIn.hint" = "Entre para compartilhar";
 "share.signIn.text" = "Bots e skills compartilhados ganham um link. O nome da conta aparece como autor.";
+"share.skipped" = "Estes arquivos não serão enviados: %1$@";
 "share.visibility.everyone" = "Público";
 "share.visibility.everyoneHint" = "Visível para todos e para os buscadores";
 "share.visibility.link" = "Somente por link";

@@ -390,3 +390,10 @@ My shares (Мои публикации) lists what your account published, with 
 1. Change the visibility with the switch in a row.
 2. Click Update to current version (Обновить до текущей версии) after you change the bot or skill.
 3. Click Delete (Удалить) and confirm.
+
+## My skills
+
+<!-- id: market-own-skills; covers: -->
+Above the catalog on the Skills page, when you have any: My skills (Мои скиллы), the skills in your own folder for Claude Code on this server, and the copies you installed from a shared link, marked by link (по ссылке). Share... (Поделиться...) on your own skill opens the publish sheet for it; the sheet lists the dot files that will not be sent. A copy from a link cannot be shared again from here. The section is hidden on the other filters and when it is empty.
+Где: Marketplace → Skills (Скиллы) → My skills (Мои скиллы), above the catalog
+1. Click Share... (Поделиться...) on your skill, choose a license, and publish it.
