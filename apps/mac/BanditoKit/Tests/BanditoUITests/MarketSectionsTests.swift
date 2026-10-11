@@ -189,55 +189,102 @@ private func entries(_ catalog: [IntegrationCatalogEntry], _ integrations: [Inte
 @Suite struct MarketSectionMetricsTests {
     private typealias Metrics = MarketSectionMetrics
 
-    private let shapes = [
-        Metrics.Shape(id: "connected", cards: 2, measuredContent: 300),
-        Metrics.Shape(id: "category:dev", cards: 5),
-        Metrics.Shape(id: "category:web", cards: 3),
-    ]
-
-    @Test func startsAreSumsOfHeaderRowsAndGaps() {
-        let starts = Metrics.starts(shapes, columns: 2)
-        let connected = Metrics.headerHeight + 300 + Metrics.sectionGap
-        let dev = Metrics.headerHeight + 3 * (Metrics.cardHeight + Metrics.rowGap) + Metrics.sectionGap
-        #expect(starts == [Metrics.topInset, Metrics.topInset + connected, Metrics.topInset + connected + dev])
-    }
-
-    @Test func moreColumnsMeanFewerRowsAndEarlierStarts() {
-        let two = Metrics.starts(shapes, columns: 2)
-        let four = Metrics.starts(shapes, columns: 4)
-        #expect(four[2] < two[2])
-        #expect(Metrics.starts(shapes, columns: 4, leading: 100)[0] == Metrics.topInset + 100)
-    }
-
-    @Test func theActiveBlockIsTheOneWhoseHeaderIsPinned() {
-        let starts: [CGFloat] = [6, 400, 900]
-        #expect(Metrics.activeIndex(offset: 0, starts: starts) == 0)
-        #expect(Metrics.activeIndex(offset: 300, starts: starts) == 0)
-        // The next header reaches the bottom of the pinned one.
-        #expect(Metrics.activeIndex(offset: 400 - Metrics.headerHeight, starts: starts) == 1)
-        #expect(Metrics.activeIndex(offset: 400, starts: starts) == 1)
-        #expect(Metrics.activeIndex(offset: 5000, starts: starts) == 2)
-        #expect(Metrics.activeIndex(offset: 0, starts: []) == nil)
-    }
-
-    @Test func aBlockIsActiveAtTheOffsetThatJumpsToIt() {
-        let starts = Metrics.starts(shapes, columns: 3)
-        for (index, start) in starts.enumerated() {
-            #expect(Metrics.activeIndex(offset: start, starts: starts) == index)
-        }
-    }
-
-    @Test func nothingIsActiveAboveTheFirstBlock() {
-        // The suggestions row sits above the first category block.
-        let starts: [CGFloat] = [260, 800]
-        #expect(Metrics.activeIndex(offset: 0, starts: starts) == nil)
-        #expect(Metrics.activeIndex(offset: 260 - Metrics.headerHeight, starts: starts) == 0)
+    @Test func aBlockIsItsHeaderItsRowsAndAGap() {
+        let rows = CGFloat(MarketGridLayout.rowCount(items: 5, columns: 2))
+        #expect(Metrics.height(cards: 5, columns: 2) == Metrics.headerHeight + rows * (Metrics.cardHeight + Metrics.rowGap) + Metrics.sectionGap)
+        #expect(Metrics.height(cards: 5, columns: 4) < Metrics.height(cards: 5, columns: 2))
     }
 
     @Test func theLastBlockCanReachTheTop() {
-        let last = Metrics.height(of: shapes[2], columns: 2)
+        let last = Metrics.height(cards: 3, columns: 2)
         #expect(Metrics.bottomPadding(viewport: 700, last: last) == 700 - last)
         #expect(Metrics.bottomPadding(viewport: 100, last: 900) == 24)
+    }
+}
+
+@MainActor
+@Suite struct MarketSectionTrackerTests {
+    private func tracker(_ ids: [String] = ["a", "b", "c"]) -> MarketSectionTracker {
+        let tracker = MarketSectionTracker()
+        tracker.configure(ids: ids)
+        return tracker
+    }
+
+    @Test func nothingIsActiveBeforeAnAnchorPasses() {
+        let t = tracker()
+        #expect(t.active == nil)
+        #expect(!t.report(index: 0, minY: 300))
+        #expect(t.active == nil)
+    }
+
+    @Test func theLastAnchorThatHasPassedIsActive() {
+        let t = tracker()
+        #expect(t.report(index: 0, minY: 0))
+        #expect(t.active == 0)
+        #expect(t.report(index: 1, minY: 20))
+        #expect(t.active == 1)
+        // The next header reaches the bottom of the pinned one: it takes over there, not before.
+        #expect(!t.report(index: 2, minY: Int(MarketSectionTracker.threshold) + 1))
+        #expect(t.report(index: 2, minY: Int(MarketSectionTracker.threshold)))
+        #expect(t.active == 2)
+    }
+
+    @Test func scrollingBackUpGivesTheBlockBack() {
+        let t = tracker()
+        _ = t.report(index: 0, minY: -400)
+        _ = t.report(index: 1, minY: 0)
+        #expect(t.active == 1)
+        #expect(t.report(index: 1, minY: 120))
+        #expect(t.active == 0)
+    }
+
+    @Test func aMoveThatChangesNothingIsNotReported() {
+        let t = tracker()
+        _ = t.report(index: 0, minY: -10)
+        #expect(!t.report(index: 0, minY: -20))
+        #expect(!t.report(index: 1, minY: 500))
+    }
+
+    @Test func aChangeInsideAJumpIsNotReported() {
+        let t = tracker()
+        t.quietUntil = 100
+        #expect(!t.report(index: 0, minY: 0, now: 50))
+        #expect(t.active == 0)
+        // The state is kept: the same block is not reported again later.
+        #expect(!t.report(index: 0, minY: -5, now: 150))
+    }
+
+    @Test func aJumpSetsTheFlagsOfAnchorsThatWereNeverBuilt() {
+        let t = tracker(["a", "b", "c", "d"])
+        _ = t.report(index: 3, minY: 0)
+        #expect(t.active == 3)
+        t.jump(to: 1)
+        #expect(t.active == 1)
+        t.jump(to: nil)
+        #expect(t.active == nil)
+    }
+
+    @Test func positionsAreRememberedAndForgottenOnReset() {
+        let t = tracker()
+        _ = t.report(index: 1, minY: 12)
+        #expect(t.minY(of: "b") == 12)
+        #expect(t.minY(of: "c") == nil)
+        t.reportTop(3)
+        #expect(t.topY == 3)
+        t.reset()
+        #expect(t.minY(of: "b") == nil)
+        #expect(t.topY == nil)
+        #expect(t.active == nil)
+    }
+
+    @Test func aNewListOfBlocksStartsOver() {
+        let t = tracker()
+        _ = t.report(index: 2, minY: 0)
+        t.configure(ids: ["a", "b", "c"])
+        #expect(t.active == 2)
+        t.configure(ids: ["a", "b"])
+        #expect(t.active == nil)
+        #expect(!t.report(index: 5, minY: 0))
     }
 }
 
@@ -262,14 +309,14 @@ private func entries(_ catalog: [IntegrationCatalogEntry], _ integrations: [Inte
         #expect(MarketSidebarLogic.highlighted(tab: .bots, filter: .category("ops"), section: "web") == .category("ops"))
     }
 
-    @Test func offsetsOfTargets() {
-        let list = entries([template("a", "dev"), template("b", "web")])
-        let sections = MarketSections.sections(list)
-        let starts: [CGFloat] = [6, 500]
-        #expect(MarketSidebarLogic.offset(of: .top, sections: sections, starts: starts) == 0)
-        #expect(MarketSidebarLogic.offset(of: .category("web"), sections: sections, starts: starts) == 500)
+    @Test func aTargetLandsOnTheTopOrOnItsBlock() {
+        let sections = MarketSections.sections(entries([template("a", "dev"), template("b", "web")]))
+        #expect(MarketSidebarLogic.landing(of: .top, sections: sections) == .top)
+        #expect(MarketSidebarLogic.landing(of: .category("web"), sections: sections) == .section(1))
         // A category with no block (empty, or gone) has no place.
-        #expect(MarketSidebarLogic.offset(of: .category("design"), sections: sections, starts: starts) == nil)
+        #expect(MarketSidebarLogic.landing(of: .category("design"), sections: sections) == nil)
+        #expect(MarketLanding.section(1).index == 1)
+        #expect(MarketLanding.top.index == nil)
     }
 
     @Test func aRequestExpires() {

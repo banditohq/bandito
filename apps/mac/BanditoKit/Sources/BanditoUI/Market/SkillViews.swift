@@ -216,18 +216,14 @@ struct SkillCard: View {
                     .foregroundStyle(BanditoPalette.peach)
                 }
                 Spacer(minLength: 0)
-                MarketActionRow {
-                    Button(L10n.Market.view, action: onView)
-                        .banditoButton(.quiet())
-                        .fixedSize()
-                } trailing: {
+                MarketFootRow {
                     actions(state)
                 }
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 176, alignment: .topLeading)
         }
-        .onTapGesture(perform: onView)
+        .marketCardOpens(skill.name, perform: onView)
     }
 
     private var byLine: String {

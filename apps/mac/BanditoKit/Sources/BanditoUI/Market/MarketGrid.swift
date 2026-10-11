@@ -82,29 +82,30 @@ struct MarketRows<Item: Identifiable, Card: View>: View {
     }
 }
 
-// MARK: - actions
+// MARK: - card foot
 
-/// The actions at the foot of a card: `leading` at the left and `trailing` at the right on one line when they fit, else
-/// `trailing` under `leading`. Nothing runs out of the card in a narrow column or with a long translation.
-struct MarketActionRow<Leading: View, Trailing: View>: View {
-    @ViewBuilder var leading: Leading
-    @ViewBuilder var trailing: Trailing
+/// The foot of a card: its controls on one line when they fit, else one under another. Nothing runs out of the card in a
+/// narrow column or with a long translation.
+struct MarketFootRow<Content: View>: View {
+    @ViewBuilder var content: Content
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
-                leading
-                Spacer(minLength: 8)
-                trailing
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                leading
-                HStack(spacing: 8) {
-                    trailing
-                    Spacer(minLength: 0)
-                }
-            }
+            HStack(spacing: 8) { content }
+            VStack(alignment: .leading, spacing: 6) { content }
         }
+    }
+}
+
+extension View {
+    /// A card that opens its page when clicked: the whole surface is the target, and VoiceOver gets the same action.
+    func marketCardOpens(_ label: String, perform action: @escaping () -> Void) -> some View {
+        contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .onTapGesture(perform: action)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(.default, action)
     }
 }
 
@@ -169,14 +170,15 @@ struct MarketSectionHeader: View {
     }
 }
 
-// MARK: - measuring
+// MARK: - anchors
 
 extension View {
-    /// Reports the height of the view in whole points, only when it changes.
-    func marketMeasuredHeight(_ height: Binding<CGFloat>) -> some View {
-        onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { new in
-            if height.wrappedValue != new { height.wrappedValue = new }
-        }
+    /// Reports where a zero-height anchor is, in the coordinates of the scroll view (whole points; the action runs when
+    /// the number changes). The report goes to the tracker, a plain object: nothing is written to view state here.
+    func marketAnchor(_ report: @escaping (Int) -> Void) -> some View {
+        onGeometryChange(for: Int.self) {
+            Int($0.frame(in: .named(MarketScrollDriver.space)).minY.rounded())
+        } action: { report($0) }
     }
 }
 
@@ -210,8 +212,8 @@ final class MarketTileImages {
 /// What the driver needs from the page.
 struct MarketScrollContext {
     let sections: [MarketSection]
-    let starts: [CGFloat]
-    /// The page has been measured and laid out in blocks: a request can be carried out.
+    let tracker: MarketSectionTracker
+    /// The page is laid out in blocks: a request can be carried out.
     let ready: Bool
     let request: MarketScrollRequest?
     /// The request was taken (carried out or dropped).
@@ -220,120 +222,73 @@ struct MarketScrollContext {
     let onActive: (Int?) -> Void
 }
 
-/// Carries out the sidebar's jumps and reports which block is in view. From macOS 15 it scrolls to an exact offset (the
-/// layout of the page is fixed, so the offsets are sums) and watches the offset; before that it asks the proxy to
-/// scroll to the block's anchor and cannot follow the scroll.
+/// Carries out the sidebar's jumps: the scroll view is asked to put the anchor of the block at its top, the same way on
+/// every system. Where the lazy stack only estimated the place, the anchor is looked at afterwards and the jump repeated
+/// until it is there.
 struct MarketScrollDriver: ViewModifier {
     let context: MarketScrollContext
     let proxy: ScrollViewProxy
 
-    func body(content: Content) -> some View {
-        if #available(macOS 15.0, *) {
-            content.modifier(MarketExactScroll(context: context))
-        } else {
-            content.modifier(MarketProxyScroll(context: context, proxy: proxy))
-        }
-    }
-
-    /// The id of the zero-height anchor in front of a block; `top` for the very top.
-    static func anchorID(_ section: MarketSection) -> String { "market-anchor:\(section.id)" }
-    static let topAnchorID = "market-anchor:top"
-}
-
-/// What the key of the task that carries out a jump is made of: a new request, or the page becoming ready.
-private struct MarketJumpKey: Hashable {
-    let requestID: Int?
-    let ready: Bool
-}
-
-/// The index of the block a jump ends on, nil for the top.
-private func marketJumpIndex(_ target: MarketScrollTarget, in sections: [MarketSection]) -> Int? {
-    if case .category(let name) = target { return sections.firstIndex { $0.categoryName == name } }
-    return nil
-}
-
-@available(macOS 15.0, *)
-private struct MarketExactScroll: ViewModifier {
-    let context: MarketScrollContext
-
-    @State private var position = ScrollPosition()
-    /// While a jump animates the blocks it passes are not reported; this is when reporting starts again.
-    @State private var quietUntil: TimeInterval = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
 
+    /// The coordinate space of the scroll view, for the anchors.
+    static let space = "market.scroll"
+    /// The id of the zero-height anchor in front of a block; `top` for the very top.
+    static func anchorID(_ section: MarketSection) -> String { "market-anchor:\(section.id)" }
+    static let topAnchorID = "market-anchor:top"
+
+    private struct Key: Hashable {
+        let requestID: Int?
+        let ready: Bool
+    }
+
     func body(content: Content) -> some View {
-        let starts = context.starts
         content
-            .scrollPosition($position)
-            // One Int per scroll step, and the action runs only when it changes: a few times in a long scroll.
-            .onScrollGeometryChange(for: Int.self) { geometry in
-                MarketSectionMetrics.activeIndex(offset: geometry.contentOffset.y, starts: starts) ?? -1
-            } action: { _, active in
-                guard ProcessInfo.processInfo.systemUptime >= quietUntil else { return }
-                context.onActive(active >= 0 ? active : nil)
-            }
-            .task(id: MarketJumpKey(requestID: context.request?.id, ready: context.ready)) {
-                await jump()
-            }
+            .coordinateSpace(name: Self.space)
+            .task(id: Key(requestID: context.request?.id, ready: context.ready)) { await jump() }
     }
 
     private func jump() async {
         guard context.ready, let request = context.request else { return }
         defer { context.onHandled() }
         guard request.isFresh,
-            let offset = MarketSidebarLogic.offset(of: request.target, sections: context.sections, starts: context.starts)
+            let landing = MarketSidebarLogic.landing(of: request.target, sections: context.sections)
         else { return }
         // The page may have just appeared: let it lay out before moving.
         await Task.yield()
         guard !Task.isCancelled else { return }
+
         let level = MotionLevel(stored: motionLevel)
         let reduced = level.reducesMotion(systemReduceMotion: reduceMotion)
-        context.onActive(marketJumpIndex(request.target, in: context.sections))
-        if reduced {
-            quietUntil = ProcessInfo.processInfo.systemUptime + 0.15
-            position.scrollTo(y: offset)
-        } else {
-            quietUntil = ProcessInfo.processInfo.systemUptime + level.scaled(0.6)
-            withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: level.scaled(0.45))) {
-                position.scrollTo(y: offset)
-            }
-        }
-    }
-}
-
-private struct MarketProxyScroll: ViewModifier {
-    let context: MarketScrollContext
-    let proxy: ScrollViewProxy
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
-
-    func body(content: Content) -> some View {
-        content.task(id: MarketJumpKey(requestID: context.request?.id, ready: context.ready)) {
-            await jump()
-        }
-    }
-
-    private func jump() async {
-        guard context.ready, let request = context.request else { return }
-        defer { context.onHandled() }
-        guard request.isFresh,
-            MarketSidebarLogic.offset(of: request.target, sections: context.sections, starts: context.starts) != nil
-        else { return }
-        await Task.yield()
-        guard !Task.isCancelled else { return }
         let id: String
-        let index = marketJumpIndex(request.target, in: context.sections)
-        if let index { id = MarketScrollDriver.anchorID(context.sections[index]) } else { id = MarketScrollDriver.topAnchorID }
-        context.onActive(index)
-        let level = MotionLevel(stored: motionLevel)
-        if level.reducesMotion(systemReduceMotion: reduceMotion) {
+        switch landing {
+        case .top: id = Self.topAnchorID
+        case .section(let index): id = Self.anchorID(context.sections[index])
+        }
+        let tracker = context.tracker
+        let settle: TimeInterval = reduced ? 0.1 : level.scaled(0.5)
+        tracker.quietUntil = ProcessInfo.processInfo.systemUptime + settle + 0.3
+        tracker.jump(to: landing.index)
+        context.onActive(landing.index)
+
+        if reduced {
             proxy.scrollTo(id, anchor: .top)
         } else {
             withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: level.scaled(0.45))) {
                 proxy.scrollTo(id, anchor: .top)
             }
         }
+        // Check the place when the move is over, and correct it without animation if the estimate was off.
+        for _ in 0..<4 {
+            try? await Task.sleep(for: .milliseconds(Int(settle * 1000) + 60))
+            guard !Task.isCancelled else { return }
+            let sectionID: String? = landing.index.map { context.sections[$0].id }
+            let y = sectionID.flatMap { tracker.minY(of: $0) } ?? (landing == .top ? tracker.topY : nil)
+            if let y, abs(y) <= 2 { break }
+            proxy.scrollTo(id, anchor: .top)
+        }
+        tracker.jump(to: landing.index)
+        context.onActive(landing.index)
     }
 }
