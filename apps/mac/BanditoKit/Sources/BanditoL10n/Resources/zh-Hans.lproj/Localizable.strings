@@ -1972,9 +1972,9 @@
 "settings.telegram.linkHint" = "添加一个与机器人的聊天，用于审批和回复。";
 "settings.telegram.linkedAt" = "绑定于 %1$@";
 "settings.telegram.noChats" = "还没有绑定的聊天。";
-"settings.telegram.removeConfirmMessage" = "令牌将从此 Mac 删除，所有已绑定的聊天都会解除绑定。之后可以重新连接机器人。";
+"settings.telegram.removeConfirmMessage" = "令牌将从服务器删除，所有已绑定的聊天都会解除绑定。之后可以重新连接机器人。";
 "settings.telegram.removeConfirmTitle" = "要断开机器人吗？";
-"settings.telegram.removeHint" = "从此 Mac 删除令牌，并解除所有聊天的绑定。";
+"settings.telegram.removeHint" = "从服务器删除令牌，并解除所有聊天的绑定。";
 "settings.telegram.removeToken" = "断开机器人";
 "settings.telegram.stateRunning" = "正在运行";
 "settings.telegram.stateStopped" = "已停止";

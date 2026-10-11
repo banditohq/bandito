@@ -1972,9 +1972,9 @@
 "settings.telegram.linkHint" = "Fügt einen Chat mit dem Bot für Freigaben und Antworten hinzu.";
 "settings.telegram.linkedAt" = "Verknüpft am %1$@";
 "settings.telegram.noChats" = "Noch keine Chats verknüpft.";
-"settings.telegram.removeConfirmMessage" = "Das Token wird von diesem Mac gelöscht, und alle verknüpften Chats werden getrennt. Sie können den Bot später erneut verbinden.";
+"settings.telegram.removeConfirmMessage" = "Das Token wird vom Server gelöscht, und alle verknüpften Chats werden getrennt. Sie können den Bot später erneut verbinden.";
 "settings.telegram.removeConfirmTitle" = "Bot wirklich trennen?";
-"settings.telegram.removeHint" = "Entfernt das Token von diesem Mac und trennt alle Chats.";
+"settings.telegram.removeHint" = "Entfernt das Token vom Server und trennt alle Chats.";
 "settings.telegram.removeToken" = "Bot trennen";
 "settings.telegram.stateRunning" = "Läuft";
 "settings.telegram.stateStopped" = "Angehalten";

@@ -1972,9 +1972,9 @@
 "settings.telegram.linkHint" = "Adiciona um chat com o bot para aprovações e respostas.";
 "settings.telegram.linkedAt" = "Vinculado em %1$@";
 "settings.telegram.noChats" = "Nenhum chat vinculado ainda.";
-"settings.telegram.removeConfirmMessage" = "O token será apagado deste Mac e todos os chats vinculados serão desvinculados. Você pode conectar o bot de novo depois.";
+"settings.telegram.removeConfirmMessage" = "O token será apagado do servidor e todos os chats vinculados serão desvinculados. Você pode conectar o bot de novo depois.";
 "settings.telegram.removeConfirmTitle" = "Desconectar o bot?";
-"settings.telegram.removeHint" = "Remove o token deste Mac e desvincula todos os chats.";
+"settings.telegram.removeHint" = "Remove o token do servidor e desvincula todos os chats.";
 "settings.telegram.removeToken" = "Desconectar bot";
 "settings.telegram.stateRunning" = "Funcionando";
 "settings.telegram.stateStopped" = "Parado";

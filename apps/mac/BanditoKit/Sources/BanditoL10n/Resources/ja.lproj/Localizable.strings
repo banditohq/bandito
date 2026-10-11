@@ -1972,9 +1972,9 @@
 "settings.telegram.linkHint" = "承認と返信のためのボットとのチャットを追加します。";
 "settings.telegram.linkedAt" = "%1$@ にリンク";
 "settings.telegram.noChats" = "まだリンクされたチャットはありません。";
-"settings.telegram.removeConfirmMessage" = "トークンはこのMacから削除され、リンクされたすべてのチャットの接続が解除されます。後で再度接続できます。";
+"settings.telegram.removeConfirmMessage" = "トークンはサーバーから削除され、リンクされたすべてのチャットの接続が解除されます。後で再度接続できます。";
 "settings.telegram.removeConfirmTitle" = "ボットを切断しますか？";
-"settings.telegram.removeHint" = "このMacからトークンを削除し、すべてのチャットの接続を解除します。";
+"settings.telegram.removeHint" = "サーバーからトークンを削除し、すべてのチャットの接続を解除します。";
 "settings.telegram.removeToken" = "ボットを切断";
 "settings.telegram.stateRunning" = "動作中";
 "settings.telegram.stateStopped" = "停止中";

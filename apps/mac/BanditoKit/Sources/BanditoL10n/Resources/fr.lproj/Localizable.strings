@@ -1972,9 +1972,9 @@
 "settings.telegram.linkHint" = "Ajoute un chat avec le bot pour les approbations et les réponses.";
 "settings.telegram.linkedAt" = "Lié le %1$@";
 "settings.telegram.noChats" = "Aucun chat lié pour le moment.";
-"settings.telegram.removeConfirmMessage" = "Le jeton sera supprimé de ce Mac et tous les chats liés seront déliés. Vous pourrez reconnecter le bot plus tard.";
+"settings.telegram.removeConfirmMessage" = "Le jeton sera supprimé du serveur et tous les chats liés seront déliés. Vous pourrez reconnecter le bot plus tard.";
 "settings.telegram.removeConfirmTitle" = "Déconnecter le bot ?";
-"settings.telegram.removeHint" = "Supprime le jeton de ce Mac et délie tous les chats.";
+"settings.telegram.removeHint" = "Supprime le jeton du serveur et délie tous les chats.";
 "settings.telegram.removeToken" = "Déconnecter le bot";
 "settings.telegram.stateRunning" = "En service";
 "settings.telegram.stateStopped" = "Arrêté";
