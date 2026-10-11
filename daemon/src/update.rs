@@ -13,9 +13,9 @@ use std::fmt;
 use std::future::Future;
 use std::io::Read;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-use std::os::unix::process::CommandExt;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -445,8 +445,10 @@ fn replace_exe(new_bin: &Path, exe: &Path) -> Result<()> {
 /// manager runs, is restarted. Anything else is `Manual`, and the user restarts it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Restart {
-    /// systemd user unit: `systemctl --user restart`.
-    Systemd,
+    /// systemd user unit: `systemd-run --user … systemctl --user restart`, for the user `uid`.
+    Systemd {
+        uid: u32,
+    },
     /// launchd agent: `launchctl kickstart -k`.
     Launchd {
         uid: u32,
@@ -461,6 +463,49 @@ pub enum Restart {
     },
     Manual,
 }
+
+impl Restart {
+    /// The service manager the restart goes through, for the log.
+    pub fn manager(&self) -> &'static str {
+        match self {
+            Restart::Manual => "nothing",
+            Restart::Systemd { .. } => "systemd",
+            Restart::Launchd { .. } => "launchd",
+            Restart::Background { .. } => "a background process",
+        }
+    }
+}
+
+/// How a restart command ended. The service manager stops the old daemon, and it may stop the command that
+/// asked for the restart with it. That is a handover, not a failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Handover {
+    /// Exit status 0, or there was nothing to restart.
+    Accepted,
+    /// Stopped by `signal` (see `STOP_SIGNALS`) while the service manager restarted the daemon.
+    Stopped { signal: i32 },
+}
+
+/// Where systemd keeps the user bus of user `uid`: `<base>/<uid>/bus`, under `/run/user` on Linux.
+const RUNTIME_BASE: &str = "/run/user";
+/// Signals a service manager sends to the processes of a unit it stops or restarts.
+const STOP_SIGNALS: [i32; 4] = [libc::SIGTERM, libc::SIGINT, libc::SIGHUP, libc::SIGKILL];
+/// The restart of this unit, run from a transient unit of its own. The daemon runs in the cgroup of
+/// `bandito.service`, and systemd kills that whole cgroup when it stops the unit: a `systemctl` started
+/// inside it would be killed with the daemon, and it could not report the restart. `systemd-run` starts
+/// `systemctl` in a unit of its own, so the restart survives the daemon; `--collect` removes that unit
+/// when it has finished, so no failed unit is left behind.
+const SYSTEMD_RESTART: &[&str] = &[
+    "systemd-run",
+    "--user",
+    "--no-block",
+    "--collect",
+    "--quiet",
+    "systemctl",
+    "--user",
+    "restart",
+    service::UNIT_NAME,
+];
 
 /// The restart for the daemon that reported `daemon_pid` on its socket (`None`: it did not answer).
 /// `mode` is how the service is installed, from its files. `manager_pid` is the pid the service manager
@@ -482,7 +527,7 @@ pub fn restart_plan(
         return Restart::Manual;
     }
     match mode {
-        Mode::Systemd => Restart::Systemd,
+        Mode::Systemd => Restart::Systemd { uid },
         Mode::Launchd => Restart::Launchd { uid },
         Mode::Background => Restart::Background {
             pid,
@@ -494,17 +539,20 @@ pub fn restart_plan(
 }
 
 /// The pid the service manager gives for this service (for a background daemon, its pid file).
-fn manager_pid(paths: &Paths, mode: Mode) -> Option<u32> {
+fn manager_pid(paths: &Paths, mode: Mode, uid: u32) -> Option<u32> {
     match mode {
-        Mode::Systemd => stdout_of(&[
-            "systemctl",
-            "--user",
-            "show",
-            "-p",
-            "MainPID",
-            "--value",
-            service::UNIT_NAME,
-        ])
+        Mode::Systemd => stdout_with_env(
+            &[
+                "systemctl",
+                "--user",
+                "show",
+                "-p",
+                "MainPID",
+                "--value",
+                service::UNIT_NAME,
+            ],
+            &user_manager_env(uid),
+        )
         .and_then(|s| service::parse_main_pid(&s)),
         Mode::Launchd => {
             stdout_of(&["launchctl", "list", service::LABEL]).and_then(|s| service::parse_launchctl_pid(&s))
@@ -517,8 +565,14 @@ fn manager_pid(paths: &Paths, mode: Mode) -> Option<u32> {
 
 /// Trimmed stdout of a command, or `None` when it fails.
 fn stdout_of(argv: &[&str]) -> Option<String> {
+    stdout_with_env(argv, &[])
+}
+
+/// Like `stdout_of`, with `env` added to this process's environment.
+fn stdout_with_env(argv: &[&str], env: &[(&'static str, String)]) -> Option<String> {
     let out = Command::new(argv[0])
         .args(&argv[1..])
+        .envs(env.iter().map(|(k, v)| (*k, v.as_str())))
         .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()
@@ -526,6 +580,41 @@ fn stdout_of(argv: &[&str]) -> Option<String> {
     out.status
         .success()
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// The variables that let `systemctl --user` and `systemd-run --user` reach the user manager of `uid`, from
+/// `<runtime base>/<uid>/bus`. A daemon started from ssh, cron or a sparse unit environment may lack them.
+/// Only the missing ones are returned, and only when the bus socket exists; a variable that is set is kept.
+pub fn user_bus_env(
+    uid: u32,
+    runtime_base: &Path,
+    get: impl Fn(&str) -> Option<String>,
+) -> Vec<(&'static str, String)> {
+    let set = |name: &str| get(name).filter(|v| !v.is_empty());
+    let mut vars = Vec::new();
+    let runtime = match set("XDG_RUNTIME_DIR") {
+        Some(dir) => PathBuf::from(dir),
+        None => {
+            let dir = runtime_base.join(uid.to_string());
+            if !dir.join("bus").exists() {
+                return vars;
+            }
+            vars.push(("XDG_RUNTIME_DIR", dir.display().to_string()));
+            dir
+        }
+    };
+    if set("DBUS_SESSION_BUS_ADDRESS").is_none() && runtime.join("bus").exists() {
+        vars.push((
+            "DBUS_SESSION_BUS_ADDRESS",
+            format!("unix:path={}/bus", runtime.display()),
+        ));
+    }
+    vars
+}
+
+/// The user-manager variables for `uid` as this process sees them (see `user_bus_env`).
+fn user_manager_env(uid: u32) -> Vec<(&'static str, String)> {
+    user_bus_env(uid, Path::new(RUNTIME_BASE), |name| std::env::var(name).ok())
 }
 
 /// The pid the daemon on `socket` reports for itself (`daemon.info`), or `None` when nothing answers.
@@ -541,8 +630,8 @@ pub async fn restart_for(home: PathBuf, exe: PathBuf, daemon_pid: Option<u32>) -
         let user_home = dirs::home_dir().context("no home directory")?;
         let paths = Paths::new(&home, &user_home);
         let mode = service::installed_mode(&paths);
-        let manager = mode.and_then(|m| manager_pid(&paths, m));
         let (_, uid) = service::current_user()?;
+        let manager = mode.and_then(|m| manager_pid(&paths, m, uid));
         let argv = daemon_argv(&home, &user_home, &exe);
         Ok(restart_plan(mode, manager, daemon_pid, uid, &paths, argv))
     })
@@ -566,12 +655,13 @@ pub fn daemon_argv(home: &Path, user_home: &Path, exe: &Path) -> Vec<String> {
 
 /// Starts the restart. For systemd and launchd the service manager stops the old daemon, so the caller
 /// may be that daemon and must answer first. For background it stops the old daemon with SIGTERM.
-pub fn run_restart(restart: &Restart) -> Result<()> {
+pub fn run_restart(restart: &Restart) -> Result<Handover> {
     match restart {
-        Restart::Manual => Ok(()),
-        Restart::Systemd => run_quiet(&["systemctl", "--user", "--no-block", "restart", service::UNIT_NAME]),
+        Restart::Manual => Ok(Handover::Accepted),
+        Restart::Systemd { uid } => run_restart_command(SYSTEMD_RESTART, &user_manager_env(*uid)),
         Restart::Launchd { uid } => {
-            run_quiet(&["launchctl", "kickstart", "-k", &format!("gui/{uid}/{}", service::LABEL)])
+            let target = format!("gui/{uid}/{}", service::LABEL);
+            run_restart_command(&["launchctl", "kickstart", "-k", &target], &[])
         }
         Restart::Background {
             pid,
@@ -581,25 +671,44 @@ pub fn run_restart(restart: &Restart) -> Result<()> {
         } => {
             start_after_exit(*pid, argv, log, pid_file)?;
             terminate(*pid);
-            Ok(())
+            Ok(Handover::Accepted)
         }
     }
 }
 
-fn run_quiet(argv: &[&str]) -> Result<()> {
+/// Runs a restart command and judges how it ended (see `judge_restart`). `env` is added to this process's.
+fn run_restart_command(argv: &[&str], env: &[(&'static str, String)]) -> Result<Handover> {
     let out = Command::new(argv[0])
         .args(&argv[1..])
+        .envs(env.iter().map(|(k, v)| (*k, v.as_str())))
         .stdin(Stdio::null())
+        // Own process group: launchd stops the whole process group of a job it kills, and this command
+        // must outlive the daemon that starts it.
+        .process_group(0)
         .output()
         .with_context(|| format!("cannot run {}", argv[0]))?;
-    if !out.status.success() {
-        bail!(
-            "`{}` failed: {}",
-            argv.join(" "),
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
+    judge_restart(argv, out.status, String::from_utf8_lossy(&out.stderr).trim())
+}
+
+/// Reads how a restart command ended. Exit status 0 is accepted. A stop signal means the service manager
+/// stopped the command together with the old daemon: the restart went on in the manager, so it is a handover
+/// and not an error. Any other exit is a failure, reported with the command's own message.
+pub fn judge_restart(argv: &[&str], status: ExitStatus, stderr: &str) -> Result<Handover> {
+    if status.success() {
+        return Ok(Handover::Accepted);
     }
-    Ok(())
+    if let Some(signal) = status.signal() {
+        if STOP_SIGNALS.contains(&signal) {
+            return Ok(Handover::Stopped { signal });
+        }
+        bail!("`{}` was killed by signal {signal}", argv.join(" "));
+    }
+    let detail = match (stderr.is_empty(), status.code()) {
+        (false, _) => stderr.to_string(),
+        (true, Some(code)) => format!("exit status {code}, no message"),
+        (true, None) => "no exit status".to_string(),
+    };
+    bail!("`{}` failed: {detail}", argv.join(" "))
 }
 
 /// Starts `argv` after process `pid` exits (up to 30 s), in its own process group, with output appended to
@@ -784,8 +893,12 @@ pub async fn rpc_apply(version: &str) -> Result<bool> {
     }
     tokio::spawn(async move {
         tokio::time::sleep(RESTART_AFTER_REPLY).await;
+        let manager = restart.manager();
         match tokio::task::spawn_blocking(move || run_restart(&restart)).await {
-            Ok(Ok(())) => {}
+            Ok(Ok(Handover::Accepted)) => tracing::info!("restart requested from {manager}"),
+            Ok(Ok(Handover::Stopped { signal })) => {
+                tracing::info!(signal, "restart handed to {manager}");
+            }
             Ok(Err(e)) => tracing::error!("restart after update failed: {e:#}"),
             Err(e) => tracing::error!("restart after update stopped: {e}"),
         }
@@ -1345,7 +1458,10 @@ mod tests {
         let paths = Paths::new(Path::new("/h/.bandito"), Path::new("/h"));
         let argv = vec!["/bin/bandito".to_string(), "daemon".to_string()];
         let plan = |mode, manager, daemon| restart_plan(mode, manager, daemon, 501, &paths, argv.clone());
-        assert_eq!(plan(Some(Mode::Systemd), Some(42), Some(42)), Restart::Systemd);
+        assert_eq!(
+            plan(Some(Mode::Systemd), Some(42), Some(42)),
+            Restart::Systemd { uid: 501 }
+        );
         assert_eq!(
             plan(Some(Mode::Launchd), Some(42), Some(42)),
             Restart::Launchd { uid: 501 }
@@ -1393,6 +1509,129 @@ mod tests {
             Restart::Background { pid, .. } => assert_eq!(pid, 42),
             other => panic!("expected background, got {other:?}"),
         }
+    }
+
+    /// A runtime base with a user bus socket for `uid` (a plain file stands in for the socket: only its
+    /// existence is checked).
+    fn runtime_base_with_bus(uid: u32) -> (tempfile::TempDir, PathBuf) {
+        let base = tempfile::tempdir().unwrap();
+        let dir = base.path().join(uid.to_string());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("bus"), "").unwrap();
+        (base, dir)
+    }
+
+    #[test]
+    fn a_missing_runtime_dir_and_bus_are_filled_in_from_the_user_socket() {
+        let (base, dir) = runtime_base_with_bus(501);
+        let vars = user_bus_env(501, base.path(), |_| None);
+        assert_eq!(
+            vars,
+            vec![
+                ("XDG_RUNTIME_DIR", dir.display().to_string()),
+                ("DBUS_SESSION_BUS_ADDRESS", format!("unix:path={}/bus", dir.display())),
+            ]
+        );
+    }
+
+    #[test]
+    fn variables_that_are_set_are_kept() {
+        let (base, _dir) = runtime_base_with_bus(501);
+        let env = |name: &str| match name {
+            "XDG_RUNTIME_DIR" => Some("/elsewhere".to_string()),
+            "DBUS_SESSION_BUS_ADDRESS" => Some("unix:path=/elsewhere/bus".to_string()),
+            _ => None,
+        };
+        assert!(user_bus_env(501, base.path(), env).is_empty());
+    }
+
+    #[test]
+    fn only_the_missing_bus_address_is_added_when_the_runtime_dir_is_set() {
+        let (base, dir) = runtime_base_with_bus(501);
+        let env = |name: &str| (name == "XDG_RUNTIME_DIR").then(|| dir.display().to_string());
+        assert_eq!(
+            user_bus_env(501, base.path(), env),
+            vec![("DBUS_SESSION_BUS_ADDRESS", format!("unix:path={}/bus", dir.display()))]
+        );
+    }
+
+    #[test]
+    fn empty_variables_count_as_missing() {
+        let (base, dir) = runtime_base_with_bus(501);
+        let env = |name: &str| (name == "XDG_RUNTIME_DIR" || name == "DBUS_SESSION_BUS_ADDRESS").then(String::new);
+        let vars = user_bus_env(501, base.path(), env);
+        assert_eq!(vars[0], ("XDG_RUNTIME_DIR", dir.display().to_string()));
+        assert_eq!(vars.len(), 2);
+    }
+
+    #[test]
+    fn nothing_is_added_without_a_user_bus_socket() {
+        let base = tempfile::tempdir().unwrap();
+        // The runtime dir of user 501 exists, but it has no bus: the environment stays as it is.
+        std::fs::create_dir_all(base.path().join("501")).unwrap();
+        assert!(user_bus_env(501, base.path(), |_| None).is_empty());
+        assert!(user_bus_env(502, base.path(), |_| None).is_empty());
+    }
+
+    #[test]
+    fn the_systemd_restart_runs_in_a_transient_unit_outside_the_daemon() {
+        assert_eq!(
+            SYSTEMD_RESTART,
+            [
+                "systemd-run",
+                "--user",
+                "--no-block",
+                "--collect",
+                "--quiet",
+                "systemctl",
+                "--user",
+                "restart",
+                "bandito.service",
+            ]
+        );
+    }
+
+    fn status_of(raw: i32) -> ExitStatus {
+        ExitStatus::from_raw(raw)
+    }
+
+    #[test]
+    fn a_restart_that_exits_zero_is_accepted() {
+        let got = judge_restart(&["systemctl"], status_of(0), "").unwrap();
+        assert_eq!(got, Handover::Accepted);
+    }
+
+    #[test]
+    fn a_restart_that_exits_non_zero_is_a_failure_with_its_message() {
+        let err = judge_restart(&["systemd-run"], status_of(1 << 8), "Failed to connect to bus").unwrap_err();
+        assert!(format!("{err:#}").contains("Failed to connect to bus"), "{err:#}");
+        let err = judge_restart(&["systemd-run"], status_of(1 << 8), "").unwrap_err();
+        assert!(format!("{err:#}").contains("exit status 1"), "{err:#}");
+    }
+
+    #[test]
+    fn a_restart_stopped_by_a_stop_signal_is_handed_over_not_failed() {
+        for signal in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP, libc::SIGKILL] {
+            let got = judge_restart(&["systemctl"], status_of(signal), "").unwrap();
+            assert_eq!(got, Handover::Stopped { signal });
+        }
+    }
+
+    #[test]
+    fn a_restart_killed_by_another_signal_is_a_failure() {
+        let err = judge_restart(&["systemctl"], status_of(libc::SIGSEGV), "").unwrap_err();
+        assert!(format!("{err:#}").contains("killed by signal"), "{err:#}");
+    }
+
+    #[test]
+    fn a_real_command_is_judged_by_how_it_ended() {
+        let fail = run_restart_command(&["sh", "-c", "echo no bus >&2; exit 3"], &[]).unwrap_err();
+        assert!(format!("{fail:#}").contains("no bus"), "{fail:#}");
+        let stopped = run_restart_command(&["sh", "-c", "kill -TERM $$"], &[]).unwrap();
+        assert_eq!(stopped, Handover::Stopped { signal: libc::SIGTERM });
+        let env = [("BANDITO_RESTART_TEST", "yes".to_string())];
+        let accepted = run_restart_command(&["sh", "-c", "test \"$BANDITO_RESTART_TEST\" = yes"], &env).unwrap();
+        assert_eq!(accepted, Handover::Accepted);
     }
 
     #[test]
