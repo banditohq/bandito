@@ -2723,6 +2723,83 @@ public enum L10n {
             public static var working: String { L10n.tr("serverSettings.backupNow.working") }
         }
 
+        public enum Connection {
+            public static var title: String { L10n.tr("serverSettings.connection.title") }
+
+            public enum Address {
+                public static var hint: String { L10n.tr("serverSettings.connection.Address.hint") }
+                public static var placeholder: String { L10n.tr("serverSettings.connection.Address.placeholder") }
+                public static var title: String { L10n.tr("serverSettings.connection.Address.title") }
+            }
+
+            public enum Check {
+                public static func answered(milliseconds: String) -> String { L10n.tr("serverSettings.connection.Check.answered", milliseconds) }
+                public static var button: String { L10n.tr("serverSettings.connection.Check.button") }
+                public static var hint: String { L10n.tr("serverSettings.connection.Check.hint") }
+                public static var title: String { L10n.tr("serverSettings.connection.Check.title") }
+                public static var working: String { L10n.tr("serverSettings.connection.Check.working") }
+            }
+
+            public enum Host {
+                public static var hint: String { L10n.tr("serverSettings.connection.Host.hint") }
+                public static var placeholder: String { L10n.tr("serverSettings.connection.Host.placeholder") }
+                public static var title: String { L10n.tr("serverSettings.connection.Host.title") }
+            }
+
+            public enum Key {
+                public static var choose: String { L10n.tr("serverSettings.connection.Key.choose") }
+                public static var clear: String { L10n.tr("serverSettings.connection.Key.clear") }
+                public static var message: String { L10n.tr("serverSettings.connection.Key.message") }
+                public static var none: String { L10n.tr("serverSettings.connection.Key.none") }
+                public static var title: String { L10n.tr("serverSettings.connection.Key.title") }
+            }
+
+            public enum Off {
+                public static var badge: String { L10n.tr("serverSettings.connection.Off.badge") }
+                public static var hint: String { L10n.tr("serverSettings.connection.Off.hint") }
+                public static var title: String { L10n.tr("serverSettings.connection.Off.title") }
+            }
+
+            public enum Port {
+                public static var hint: String { L10n.tr("serverSettings.connection.Port.hint") }
+                public static var placeholder: String { L10n.tr("serverSettings.connection.Port.placeholder") }
+                public static var title: String { L10n.tr("serverSettings.connection.Port.title") }
+            }
+
+            public enum Problem {
+                public static var host: String { L10n.tr("serverSettings.connection.Problem.host") }
+                public static var identityFile: String { L10n.tr("serverSettings.connection.Problem.identityFile") }
+                public static var port: String { L10n.tr("serverSettings.connection.Problem.port") }
+                public static var url: String { L10n.tr("serverSettings.connection.Problem.url") }
+                public static var user: String { L10n.tr("serverSettings.connection.Problem.user") }
+            }
+
+            public enum Reconnect {
+                public static var button: String { L10n.tr("serverSettings.connection.Reconnect.button") }
+                public static var hint: String { L10n.tr("serverSettings.connection.Reconnect.hint") }
+                public static var title: String { L10n.tr("serverSettings.connection.Reconnect.title") }
+            }
+
+            public enum Remove {
+                public static var button: String { L10n.tr("serverSettings.connection.Remove.button") }
+                public static func confirmTitle(name: String) -> String { L10n.tr("serverSettings.connection.Remove.confirmTitle", name) }
+                public static var hint: String { L10n.tr("serverSettings.connection.Remove.hint") }
+                public static var message: String { L10n.tr("serverSettings.connection.Remove.message") }
+                public static var title: String { L10n.tr("serverSettings.connection.Remove.title") }
+            }
+
+            public enum ThisMac {
+                public static var hint: String { L10n.tr("serverSettings.connection.ThisMac.hint") }
+                public static var title: String { L10n.tr("serverSettings.connection.ThisMac.title") }
+            }
+
+            public enum User {
+                public static var hint: String { L10n.tr("serverSettings.connection.User.hint") }
+                public static var placeholder: String { L10n.tr("serverSettings.connection.User.placeholder") }
+                public static var title: String { L10n.tr("serverSettings.connection.User.title") }
+            }
+        }
+
         public enum Folder {
             public static var choose: String { L10n.tr("serverSettings.folder.choose") }
             public static var message: String { L10n.tr("serverSettings.folder.message") }

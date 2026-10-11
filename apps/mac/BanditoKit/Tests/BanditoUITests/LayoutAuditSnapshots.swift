@@ -38,6 +38,12 @@ import Testing
             env.serverInfo(version: "0.1.4", features: ["host"])
             return AnyView(ServerSettingsPage(server: env.server, onBack: {}, previewStats: serverHostPreview))
         },
+        AuditCase(name: "settings-server-detail-ssh", width: settingsColumn, scrolls: true) { _ in
+            AnyView(
+                ServerSettingsPage(
+                    server: sshServerForAudit(), onBack: {}, preview: serverSettingsPreview,
+                    previewStats: serverHostPreview))
+        },
         AuditCase(name: "settings-approvals", width: settingsColumn, scrolls: true) { _ in AnyView(ApprovalsSection()) },
         AuditCase(name: "settings-usage", width: settingsColumn, scrolls: true) { _ in AnyView(UsageSection()) },
         AuditCase(name: "settings-terminal-files", width: settingsColumn, scrolls: true) { _ in AnyView(TerminalFilesSection()) },
@@ -107,6 +113,22 @@ import Testing
         defaults: ServerSettingValues(
             screenIdleMinutes: 30, maxRunningAgents: 0, backupEveryHours: 24, backupKeep: 14, autoUpdate: .notify,
             updateChannel: "stable", defaultApprovalMode: .risky))
+
+    /// A server reached over ssh with a key file, that answers the features of the settings page (never connected).
+    static func sshServerForAudit() -> ServerModel {
+        let server = ServerModel(
+            config: ServerConfig(
+                name: "Build machine in the Frankfurt datacenter",
+                endpoint: .ssh(
+                    server: SSHServerAddress(
+                        host: "build-frankfurt-01.example.internal", user: "deploy", port: 2222,
+                        identityFile: "/Users/anna/.ssh/id_ed25519_build"),
+                    remotePort: 7878)))
+        server.info = decode(
+            DaemonInfo.self,
+            #"{"version":"0.1.11","hostname":"audit","os":"linux","arch":"x86_64","started_at":1,"last_seq":0,"features":["server_settings","backups","host","logs"]}"#)
+        return server
+    }
 
     static let serverHostPreview = decode(
         HostStats.self,

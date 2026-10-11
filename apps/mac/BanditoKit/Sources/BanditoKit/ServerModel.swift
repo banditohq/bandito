@@ -3,17 +3,85 @@ import os
 import Observation
 
 /// How the app reaches a server. See docs/ARCHITECTURE.md#transports.
-public enum ServerEndpoint: Codable, Sendable, Hashable {
+public enum ServerEndpoint: Sendable, Hashable, Codable {
     /// The daemon on this Mac (unix socket, no token).
     case local(socketPath: String)
     /// A WebSocket URL (`ws://127.0.0.1:7878/v1/rpc`, a tailnet address, `wss://…`).
     case webSocket(url: URL)
-    /// The daemon on a server reached over ssh. `target` is `[user@]host[:port]` or an alias; `remotePort`
-    /// is the daemon's listen port on the server's loopback. See `SSHTransport`.
-    case ssh(target: String, remotePort: Int)
+    /// The daemon on a server reached over ssh: the server's address (host, user, port, key file), and `remotePort`,
+    /// the daemon's listen port on the server's loopback. See `SSHTransport`.
+    case ssh(server: SSHServerAddress, remotePort: Int)
 
     public static var defaultLocal: ServerEndpoint {
         .local(socketPath: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".bandito/bandito.sock").path)
+    }
+
+    /// An ssh endpoint from one text, `[user@]host[:port]` or an alias, as the add-server sheet takes it. Text that
+    /// `SSHTarget` refuses keeps as the host, so the connection reports why it fails.
+    public static func ssh(target: String, remotePort: Int) -> ServerEndpoint {
+        .ssh(server: SSHServerAddress(parsing: target) ?? SSHServerAddress(host: target), remotePort: remotePort)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case local, webSocket, ssh
+    }
+
+    private enum LocalKeys: String, CodingKey {
+        case socketPath
+    }
+
+    private enum WebSocketKeys: String, CodingKey {
+        case url
+    }
+
+    private enum SSHKeys: String, CodingKey {
+        case server, remotePort
+        /// The address as one text, `[user@]host[:port]`. It is written with `server` (for an app that predates the
+        /// fields) and it is what a record saved before `server` existed holds.
+        case target
+    }
+
+    /// Reads every shape the app has saved. A record from before the address fields keeps its `target` text, which
+    /// becomes the fields here, so an old `servers.v1` keeps its servers.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.local) {
+            let nested = try container.nestedContainer(keyedBy: LocalKeys.self, forKey: .local)
+            self = .local(socketPath: try nested.decode(String.self, forKey: .socketPath))
+        } else if container.contains(.webSocket) {
+            let nested = try container.nestedContainer(keyedBy: WebSocketKeys.self, forKey: .webSocket)
+            self = .webSocket(url: try nested.decode(URL.self, forKey: .url))
+        } else if container.contains(.ssh) {
+            let nested = try container.nestedContainer(keyedBy: SSHKeys.self, forKey: .ssh)
+            let remotePort = try nested.decode(Int.self, forKey: .remotePort)
+            if let server = try nested.decodeIfPresent(SSHServerAddress.self, forKey: .server) {
+                self = .ssh(server: server, remotePort: remotePort)
+            } else {
+                self = .ssh(target: try nested.decode(String.self, forKey: .target), remotePort: remotePort)
+            }
+        } else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "unknown server endpoint"))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .local(let socketPath):
+            var nested = container.nestedContainer(keyedBy: LocalKeys.self, forKey: .local)
+            try nested.encode(socketPath, forKey: .socketPath)
+        case .webSocket(let url):
+            var nested = container.nestedContainer(keyedBy: WebSocketKeys.self, forKey: .webSocket)
+            try nested.encode(url, forKey: .url)
+        case .ssh(let server, let remotePort):
+            var nested = container.nestedContainer(keyedBy: SSHKeys.self, forKey: .ssh)
+            try nested.encode(server, forKey: .server)
+            try nested.encode(remotePort, forKey: .remotePort)
+            // The one-text form too, so an app that predates the fields (0.1.10) reads the same server after a
+            // downgrade. It has no key file, which that app never had.
+            try nested.encode(server.targetText, forKey: .target)
+        }
     }
 }
 
@@ -35,6 +103,8 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
     public var tintName: String?
     /// Which of this server's notifications reach the person (`NotificationScope`).
     public var notifications: NotificationScope
+    /// Switched off by the person: the app does not connect to it until it is switched on again (`ServerModel.connect`).
+    public var disabled: Bool
 
     /// The icon the person chose, when the name is one this app knows.
     public var icon: ServerIcon? { iconName.flatMap(ServerIcon.init(rawValue:)) }
@@ -42,13 +112,13 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
     public var tint: ServerTint? { tintName.flatMap(ServerTint.init(rawValue:)) }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, endpoint, isThisMac, isPrimary, iconName, tintName, notifications
+        case id, name, endpoint, isThisMac, isPrimary, iconName, tintName, notifications, disabled
     }
 
     public init(
         id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil, isThisMac: Bool = false,
         isPrimary: Bool = false, iconName: String? = nil, tintName: String? = nil,
-        notifications: NotificationScope = .all
+        notifications: NotificationScope = .all, disabled: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -59,6 +129,7 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
         self.iconName = iconName
         self.tintName = tintName
         self.notifications = notifications
+        self.disabled = disabled
     }
 
     /// A record saved before a field existed reads the default of that field, so an old `servers.v1` keeps its
@@ -74,6 +145,7 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
         tintName = try container.decodeIfPresent(String.self, forKey: .tintName)
         notifications = try container.decodeIfPresent(String.self, forKey: .notifications)
             .flatMap(NotificationScope.init(rawValue:)) ?? .all
+        disabled = try container.decodeIfPresent(Bool.self, forKey: .disabled) ?? false
     }
 
     /// For logs and debugging: the name and the kind of connection only. The id, the address and the token
@@ -86,6 +158,12 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
         }
         return "ServerConfig(name: \(name), connection: \(kind))"
     }
+}
+
+/// The result of "Check the connection": the server answered in this many milliseconds, or the reason it did not.
+public enum ConnectionCheck: Sendable, Equatable {
+    case answered(milliseconds: Int)
+    case failed(FailureKind)
 }
 
 public enum ConnectionState: Sendable, Hashable {
@@ -235,9 +313,9 @@ public final class ServerModel: Identifiable {
                 switch cfg.endpoint {
                 case .local(let path): return UnixSocketTransport(path: path)
                 case .webSocket(let url): return WebSocketTransport(url: url, token: cfg.token)
-                case .ssh(let target, let remotePort):
+                case .ssh(let server, let remotePort):
                     #if os(macOS)
-                    return SSHTransport(target: target, remotePort: remotePort, token: cfg.token)
+                    return SSHTransport(target: server.target, remotePort: remotePort, token: cfg.token)
                     #else
                     return UnavailableTransport(reason: "ssh servers are not available on this platform yet")
                     #endif
@@ -292,6 +370,8 @@ public final class ServerModel: Identifiable {
 
     /// Connects unless already connecting or connected. A pending reconnect is cancelled in favour of this attempt.
     public func connect() async {
+        // A server the person switched off stays unconnected until it is switched on (`AppModel.setServerDisabled`).
+        guard !config.disabled else { return }
         switch state {
         case .connecting, .connected: return
         case .disconnected, .reconnecting, .failed: break
@@ -308,6 +388,32 @@ public final class ServerModel: Identifiable {
             guard attempt == generation else { return }
             // A connection lost during this attempt has already scheduled a reconnect: keep retrying instead of giving up.
             if reconnectTask == nil { state = .failed(FailureKind.classify(error)) }
+        }
+    }
+
+    /// Asks the server for `daemon.info` and times the answer. A connected server is asked over the link it has. Any
+    /// other one is reached with a link of its own, closed again at once, so checking does not change the state.
+    public func checkConnection() async -> ConnectionCheck {
+        let started = ContinuousClock.now
+        func elapsed() -> Int { Int((ContinuousClock.now - started) / .milliseconds(1)) }
+        if state == .connected, let link = client {
+            do {
+                _ = try await link.call("daemon.info", NoParams(), as: DaemonInfo.self)
+                return .answered(milliseconds: elapsed())
+            } catch {
+                return .failed(FailureKind.classify(error))
+            }
+        }
+        let probe = RPCClient(transport: makeTransport(config), onDecodeFailure: nil)
+        do {
+            try await probe.start()
+            _ = try await probe.call("daemon.info", NoParams(), as: DaemonInfo.self)
+            let answered = ConnectionCheck.answered(milliseconds: elapsed())
+            await probe.close()
+            return answered
+        } catch {
+            await probe.close()
+            return .failed(FailureKind.classify(error))
         }
     }
 

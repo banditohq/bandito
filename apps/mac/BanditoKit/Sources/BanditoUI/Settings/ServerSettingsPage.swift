@@ -34,6 +34,7 @@ struct ServerSettingsPage: View {
             saveStatus
             notice
             ServerMainSection(server: server)
+            ServerConnectionSection(server: server, onBack: onBack)
             ServerAgentDefaultsSection(server: server, model: model)
             ServerMaintenanceSection(server: server, model: model)
             ServerInfoSection(server: server, model: model)

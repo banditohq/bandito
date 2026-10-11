@@ -27,21 +27,21 @@ import Testing
         let target = SSHTarget.parse("  prod-1:2200 ")
         #expect(target == SSHTarget(user: nil, host: "prod-1", port: 2200))
         #expect(target?.description == "prod-1:2200")
-        #expect(target?.sshArguments == ["-p", "2200", "prod-1"])
+        #expect(target?.sshArguments == ["-p", "2200", "--", "prod-1"])
     }
 
     @Test func portIsOnlyAnOptionSoScpUsesCapitalP() {
         let target = SSHTarget.parse("user@host:2222")
-        #expect(target?.sshArguments == ["-p", "2222", "user@host"])
+        #expect(target?.sshArguments == ["-p", "2222", "--", "user@host"])
         #expect(
             target?.scpArguments(local: "/tmp/bandito", remotePath: ".local/bin/bandito")
-                == ["-P", "2222", "/tmp/bandito", "user@host:.local/bin/bandito"])
+                == ["-P", "2222", "--", "/tmp/bandito", "user@host:.local/bin/bandito"])
     }
 
     @Test func noPortMeansNoPortOptionForEitherTool() {
         let target = SSHTarget.parse("user@host")
-        #expect(target?.sshArguments == ["user@host"])
-        #expect(target?.scpArguments(local: "/tmp/bandito", remotePath: "x") == ["/tmp/bandito", "user@host:x"])
+        #expect(target?.sshArguments == ["--", "user@host"])
+        #expect(target?.scpArguments(local: "/tmp/bandito", remotePath: "x") == ["--", "/tmp/bandito", "user@host:x"])
     }
 
     /// IPv6 literals are not supported yet (see `SSHTarget`): the bracket forms are refused, not guessed at.

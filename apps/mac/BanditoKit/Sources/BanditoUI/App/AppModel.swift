@@ -343,9 +343,28 @@ public final class AppModel {
     /// servers, which are the owner's unix socket, are left alone.
     private var reachableServers: [ServerModel] {
         servers.filter { server in
+            if server.config.disabled { return false }
             if QABuild.isRunningQA, case .local = server.config.endpoint { return false }
             return true
         }
+    }
+
+    /// Switches a server off (it disconnects and stays so until it is switched on) or on (it connects now).
+    public func setServerDisabled(_ id: UUID, _ disabled: Bool) async {
+        guard let server = servers.first(where: { $0.id == id }) else { return }
+        changeServer(id) { $0.disabled = disabled }
+        if disabled {
+            await server.disconnect()
+        } else {
+            await server.connect()
+        }
+    }
+
+    /// Drops the link and opens a new one, with the server's current address.
+    public func reconnectServer(_ id: UUID) async {
+        guard let server = servers.first(where: { $0.id == id }) else { return }
+        await server.disconnect()
+        await server.connect()
     }
 
     /// Re-reads every connected server's `daemon.info` once an hour, so the update offer follows the daemon's own

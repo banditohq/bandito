@@ -8,6 +8,7 @@ import SwiftUI
 struct ServerMainSection: View {
     let server: ServerModel
     @Environment(AppModel.self) private var app
+    @FocusState private var nameFocused: Bool
     @State private var nameDraft = ""
 
     var body: some View {
@@ -17,6 +18,7 @@ struct ServerMainSection: View {
                     .banditoField()
                     .font(BanditoFont.text(size: 13, weight: 400))
                     .frame(minWidth: 160, maxWidth: 260)
+                    .focused($nameFocused)
                     .onSubmit(commitName)
             }
             Divider().padding(.horizontal, 16)
@@ -74,6 +76,10 @@ struct ServerMainSection: View {
         }
         .onAppear { nameDraft = server.config.name }
         .onChange(of: server.config.name) { _, name in nameDraft = name }
+        // Leaving the field saves the name too, as Enter does.
+        .onChange(of: nameFocused) { _, focused in
+            if !focused { commitName() }
+        }
     }
 
     /// Saves the typed name. An empty name is not saved: the field goes back to the name the server has.

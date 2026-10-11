@@ -38,18 +38,18 @@ import Testing
     }
 
     @Test func sshArgumentsCarryThePortAsOption() {
-        #expect(SSHTarget.parse("deploy@example.com:2222")?.sshArguments == ["-p", "2222", "deploy@example.com"])
-        #expect(SSHTarget.parse("prod-1")?.sshArguments == ["prod-1"])
+        #expect(SSHTarget.parse("deploy@example.com:2222")?.sshArguments == ["-p", "2222", "--", "deploy@example.com"])
+        #expect(SSHTarget.parse("prod-1")?.sshArguments == ["--", "prod-1"])
     }
 
     @Test func scpArgumentsUseCapitalPAndRemotePath() {
         let target = SSHTarget.parse("deploy@example.com:2222")
         #expect(
             target?.scpArguments(local: "/tmp/bandito", remotePath: ".local/bin/bandito")
-                == ["-P", "2222", "/tmp/bandito", "deploy@example.com:.local/bin/bandito"])
+                == ["-P", "2222", "--", "/tmp/bandito", "deploy@example.com:.local/bin/bandito"])
         #expect(
             SSHTarget.parse("prod-1")?.scpArguments(local: "/tmp/bandito", remotePath: ".local/bin/bandito")
-                == ["/tmp/bandito", "prod-1:.local/bin/bandito"])
+                == ["--", "/tmp/bandito", "prod-1:.local/bin/bandito"])
     }
 }
 
