@@ -33,6 +33,7 @@ struct ServerSettingsPage: View {
             backRow
             saveStatus
             notice
+            ServerMainSection(server: server)
             ServerAgentDefaultsSection(server: server, model: model)
             ServerMaintenanceSection(server: server, model: model)
             ServerInfoSection(server: server, model: model)

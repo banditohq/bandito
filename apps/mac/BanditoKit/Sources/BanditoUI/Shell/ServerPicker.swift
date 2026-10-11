@@ -89,10 +89,17 @@ struct ServerPicker: View {
         isThisMac(server) ? L10n.Server.Add.thisMac : L10n.Server.Picker.kindRemote
     }
 
-    /// The symbol of the server's device: a laptop or a desktop for this Mac (by its model), a server rack otherwise.
+    /// The symbol of the server: the icon the person chose, else a laptop or a desktop for this Mac (by its model),
+    /// else a server rack.
     static func symbol(_ server: ServerModel) -> String {
+        if let icon = server.config.icon { return icon.rawValue }
         guard isThisMac(server) else { return "server.rack" }
         return DeviceIcon.symbol(platform: nil, name: MacModel.current() ?? "")
+    }
+
+    /// The color of the server's icon: the one the person chose, or nil for the default.
+    static func tint(_ server: ServerModel) -> Color? {
+        server.config.tint?.color
     }
 
     /// The servers to switch to, built by `SelectChoices.servers` from each server's name, address and state.
@@ -101,7 +108,8 @@ struct ServerPicker: View {
             servers.map { candidate in
                 SelectChoices.ServerRow(
                     id: candidate.id, name: name(candidate), address: address(candidate),
-                    isOnline: isOnline(candidate), hasUpdate: hasUpdate(candidate), icon: symbol(candidate))
+                    isOnline: isOnline(candidate), hasUpdate: hasUpdate(candidate), icon: symbol(candidate),
+                    tint: tint(candidate))
             },
             updateText: L10n.Updates.available)
     }
@@ -123,7 +131,7 @@ struct ServerPicker: View {
                 .shadow(color: Self.statusColor(server).opacity(0.6), radius: 4)
             Image(systemName: Self.symbol(server))
                 .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(Color.Bandito.text2)
+                .foregroundStyle(Self.tint(server) ?? Color.Bandito.text2)
                 .frame(width: 18)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {

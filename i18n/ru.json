@@ -2977,5 +2977,24 @@
     "few": "{count} ядра",
     "many": "{count} ядер",
     "other": "{count} ядра"
-  }
+  },
+  "serverSettings.main.title": "Основное",
+  "serverSettings.main.primaryBadge": "Основной",
+  "serverSettings.main.name.title": "Название",
+  "serverSettings.main.name.hint": "Так сервер называется в приложении.",
+  "serverSettings.main.name.placeholder": "Название сервера",
+  "serverSettings.main.icon.title": "Значок",
+  "serverSettings.main.icon.hint": "Значок сервера в меню серверов и в боковой панели.",
+  "serverSettings.main.icon.option": "Значок",
+  "serverSettings.main.tint.title": "Цвет",
+  "serverSettings.main.tint.hint": "Цвет этого значка.",
+  "serverSettings.main.tint.option": "Цвет",
+  "serverSettings.main.primary.title": "Основной сервер",
+  "serverSettings.main.primary.hint": "Открывается при запуске. Основным может быть только один сервер.",
+  "serverSettings.main.notify.title": "Уведомления с этого сервера",
+  "serverSettings.main.notify.hint": "Какие его уведомления до вас доходят. Общие настройки уведомлений тоже действуют.",
+  "serverSettings.main.notify.all": "Все",
+  "serverSettings.main.notify.needsYou": "Ждёт вас",
+  "serverSettings.main.notify.off": "Выключены",
+  "settings.servers.reorderHint": "Перетащите сервер, чтобы изменить порядок. Так же он стоит в меню серверов."
 }

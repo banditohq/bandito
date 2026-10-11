@@ -2904,5 +2904,24 @@
   "serverSettings.info.cores": {
     "one": "{count} núcleo",
     "other": "{count} núcleos"
-  }
+  },
+  "serverSettings.main.title": "General",
+  "serverSettings.main.primaryBadge": "Principal",
+  "serverSettings.main.name.title": "Nombre",
+  "serverSettings.main.name.hint": "Cómo se llama el servidor en la app.",
+  "serverSettings.main.name.placeholder": "Nombre del servidor",
+  "serverSettings.main.icon.title": "Icono",
+  "serverSettings.main.icon.hint": "El icono del servidor en el menú de servidores y en la barra lateral.",
+  "serverSettings.main.icon.option": "Icono",
+  "serverSettings.main.tint.title": "Color",
+  "serverSettings.main.tint.hint": "El color de ese icono.",
+  "serverSettings.main.tint.option": "Color",
+  "serverSettings.main.primary.title": "Servidor principal",
+  "serverSettings.main.primary.hint": "Se abre al iniciar. Solo un servidor puede ser el principal.",
+  "serverSettings.main.notify.title": "Notificaciones de este servidor",
+  "serverSettings.main.notify.hint": "Qué avisos suyos le llegan. Siguen aplicándose los ajustes generales de notificaciones.",
+  "serverSettings.main.notify.all": "Todas",
+  "serverSettings.main.notify.needsYou": "Esperan por usted",
+  "serverSettings.main.notify.off": "Desactivadas",
+  "settings.servers.reorderHint": "Arrastre un servidor para cambiar el orden. El mismo orden se usa en el menú de servidores."
 }

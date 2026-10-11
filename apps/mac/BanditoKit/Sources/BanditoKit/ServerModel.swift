@@ -27,27 +27,53 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
     /// True for the daemon this app installed on this Mac (`LocalDaemonPairing` sets it). Configs saved before this
     /// flag existed decode as false; `LocalDaemonUpgrade.confirmsThisMac` checks them at launch.
     public var isThisMac: Bool
+    /// The main server: it opens at launch. At most one server has it (`ServerConfigRules.settingPrimary`).
+    public var isPrimary: Bool
+    /// The icon the person chose: an SF Symbol name from `ServerIcon`. nil means the automatic icon of the kind.
+    public var iconName: String?
+    /// The color the person chose: a `ServerTint` name. nil means the default color.
+    public var tintName: String?
+    /// Which of this server's notifications reach the person (`NotificationScope`).
+    public var notifications: NotificationScope
+
+    /// The icon the person chose, when the name is one this app knows.
+    public var icon: ServerIcon? { iconName.flatMap(ServerIcon.init(rawValue:)) }
+    /// The color the person chose, when the name is one this app knows.
+    public var tint: ServerTint? { tintName.flatMap(ServerTint.init(rawValue:)) }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, endpoint, isThisMac
+        case id, name, endpoint, isThisMac, isPrimary, iconName, tintName, notifications
     }
 
     public init(
-        id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil, isThisMac: Bool = false
+        id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil, isThisMac: Bool = false,
+        isPrimary: Bool = false, iconName: String? = nil, tintName: String? = nil,
+        notifications: NotificationScope = .all
     ) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.token = token
         self.isThisMac = isThisMac
+        self.isPrimary = isPrimary
+        self.iconName = iconName
+        self.tintName = tintName
+        self.notifications = notifications
     }
 
+    /// A record saved before a field existed reads the default of that field, so an old `servers.v1` keeps its
+    /// servers as they were. An unknown notification scope reads as `all`, the default.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         endpoint = try container.decode(ServerEndpoint.self, forKey: .endpoint)
         isThisMac = try container.decodeIfPresent(Bool.self, forKey: .isThisMac) ?? false
+        isPrimary = try container.decodeIfPresent(Bool.self, forKey: .isPrimary) ?? false
+        iconName = try container.decodeIfPresent(String.self, forKey: .iconName)
+        tintName = try container.decodeIfPresent(String.self, forKey: .tintName)
+        notifications = try container.decodeIfPresent(String.self, forKey: .notifications)
+            .flatMap(NotificationScope.init(rawValue:)) ?? .all
     }
 
     /// For logs and debugging: the name and the kind of connection only. The id, the address and the token
@@ -84,8 +110,17 @@ public final class ServerModel: Identifiable {
     /// Some events were skipped because this app does not know their shape: update the app.
     public nonisolated static let decodeWarning = FailureKind.reason("decode_failed")
 
-    public let config: ServerConfig
-    public nonisolated var id: UUID { config.id }
+    /// What the app keeps about this server. Only the app's own choices change through `changeConfig`; the connection
+    /// (endpoint, token) is fixed for the life of the model.
+    public private(set) var config: ServerConfig
+    /// The server's id never changes, so it can be read from any thread.
+    public nonisolated let id: UUID
+
+    /// Changes the app's own record of this server: its name, icon, color, main flag or notifications. The endpoint and
+    /// the token are not touched by the callers that use this (see `AppModel.changeServer`).
+    public func changeConfig(_ change: (inout ServerConfig) -> Void) {
+        change(&config)
+    }
 
     public private(set) var state: ConnectionState = .disconnected {
         didSet {
@@ -194,6 +229,7 @@ public final class ServerModel: Identifiable {
         reconnectDelay: (@Sendable (Int) -> Duration)? = nil
     ) {
         self.config = config
+        self.id = config.id
         self.makeTransport =
             makeTransport ?? { cfg in
                 switch cfg.endpoint {

@@ -103,6 +103,9 @@ public final class AppModel {
                     throw AgentNotFoundError()
                 }
                 try await server.resolve(approvalID, decision, remember: false)
+            },
+            scope: { [weak self] serverID in
+                self?.servers.first { $0.id == serverID }?.config.notifications ?? .all
             })
         sink.service = service
         sink.start()
@@ -127,7 +130,7 @@ public final class AppModel {
                 SoundPlayer.play(sound)
             }
             guard let notice = Self.notice(for: event, in: server) else { return }
-            self.notifications?.handle(notice)
+            self.notifications?.handle(notice, serverID: server.id)
         }
     }
 
@@ -451,6 +454,30 @@ public final class AppModel {
         save()
     }
 
+    /// Changes what the app keeps about one server: its name, icon, color, main flag or notifications. The connection
+    /// is not touched. Saved at once.
+    public func changeServer(_ id: UUID, _ change: (inout ServerConfig) -> Void) {
+        guard let server = servers.first(where: { $0.id == id }) else { return }
+        server.changeConfig(change)
+        save()
+    }
+
+    /// Makes `id` the main server (nil: none). Only one server is main, and the choice is saved at once.
+    public func setPrimaryServer(_ id: UUID?) {
+        let updated = ServerConfigRules.settingPrimary(id, in: servers.map(\.config))
+        for (server, config) in zip(servers, updated) {
+            server.changeConfig { $0.isPrimary = config.isPrimary }
+        }
+        save()
+    }
+
+    /// Puts a server at `index` in the list (the order of Settings → Servers and of the server menu), and saves it.
+    public func moveServer(_ id: UUID, to index: Int) {
+        let order = ServerConfigRules.moved(servers.map(\.config), id: id, to: index).map(\.id)
+        servers = order.compactMap { serverID in servers.first { $0.id == serverID } }
+        save()
+    }
+
     #if os(macOS)
     /// The terminals of `server`, created on first use.
     /// ⌘R: reconnects to the server in front and re-reads what the screen on show displays. The thread and the folder
@@ -485,7 +512,7 @@ public final class AppModel {
         if let data = defaults.data(forKey: Self.storeKey),
             let saved = try? JSONDecoder().decode([ServerConfig].self, from: data)
         {
-            configs = saved
+            configs = ServerConfigRules.normalizedPrimary(saved)
         }
         servers = configs.map { c in
             var c = c
@@ -494,7 +521,8 @@ public final class AppModel {
             attachNotifications(model)
             return model
         }
-        selectedServerID = servers.first?.id
+        // The main server opens at launch; without one, the first server.
+        selectedServerID = ServerConfigRules.startupServerID(configs)
         #if DEBUG && os(macOS)
         // QA copies (scripts/qa): the server named by the launch arguments is added once. Not in release builds.
         QAHooks.addLaunchServer(to: self)

@@ -2869,5 +2869,24 @@
   },
   "serverSettings.info.cores": {
     "other": "{count} 核心"
-  }
+  },
+  "serverSettings.main.title": "基本信息",
+  "serverSettings.main.primaryBadge": "主要",
+  "serverSettings.main.name.title": "名称",
+  "serverSettings.main.name.hint": "服务器在应用中显示的名称。",
+  "serverSettings.main.name.placeholder": "服务器名称",
+  "serverSettings.main.icon.title": "图标",
+  "serverSettings.main.icon.hint": "服务器菜单和侧边栏中的图标。",
+  "serverSettings.main.icon.option": "图标",
+  "serverSettings.main.tint.title": "颜色",
+  "serverSettings.main.tint.hint": "该图标的颜色。",
+  "serverSettings.main.tint.option": "颜色",
+  "serverSettings.main.primary.title": "主服务器",
+  "serverSettings.main.primary.hint": "启动时打开。只能有一台主服务器。",
+  "serverSettings.main.notify.title": "此服务器的通知",
+  "serverSettings.main.notify.hint": "这台服务器的哪些通知会提醒您。应用的通用通知设置仍然生效。",
+  "serverSettings.main.notify.all": "全部",
+  "serverSettings.main.notify.needsYou": "等待您处理",
+  "serverSettings.main.notify.off": "关闭",
+  "settings.servers.reorderHint": "拖动服务器可调整顺序。服务器菜单中的顺序也随之变化。"
 }

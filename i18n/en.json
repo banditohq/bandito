@@ -2904,5 +2904,24 @@
   "serverSettings.info.cores": {
     "one": "{count} core",
     "other": "{count} cores"
-  }
+  },
+  "serverSettings.main.title": "Main",
+  "serverSettings.main.primaryBadge": "Main",
+  "serverSettings.main.name.title": "Name",
+  "serverSettings.main.name.hint": "How the server is called in the app.",
+  "serverSettings.main.name.placeholder": "Server name",
+  "serverSettings.main.icon.title": "Icon",
+  "serverSettings.main.icon.hint": "The mark of the server in the server menu and the sidebar.",
+  "serverSettings.main.icon.option": "Icon",
+  "serverSettings.main.tint.title": "Color",
+  "serverSettings.main.tint.hint": "The color of that mark.",
+  "serverSettings.main.tint.option": "Color",
+  "serverSettings.main.primary.title": "Main server",
+  "serverSettings.main.primary.hint": "It opens at launch. Only one server can be the main one.",
+  "serverSettings.main.notify.title": "Notifications from this server",
+  "serverSettings.main.notify.hint": "Which of its notices reach you. The app's notification settings still apply.",
+  "serverSettings.main.notify.all": "All",
+  "serverSettings.main.notify.needsYou": "Waiting for you",
+  "serverSettings.main.notify.off": "Off",
+  "settings.servers.reorderHint": "Drag a server to change the order. The same order is in the server menu."
 }

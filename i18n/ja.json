@@ -2869,5 +2869,24 @@
   },
   "serverSettings.info.cores": {
     "other": "{count} コア"
-  }
+  },
+  "serverSettings.main.title": "基本",
+  "serverSettings.main.primaryBadge": "メイン",
+  "serverSettings.main.name.title": "名前",
+  "serverSettings.main.name.hint": "アプリでのサーバーの名前です。",
+  "serverSettings.main.name.placeholder": "サーバー名",
+  "serverSettings.main.icon.title": "アイコン",
+  "serverSettings.main.icon.hint": "サーバーメニューとサイドバーに表示されるアイコンです。",
+  "serverSettings.main.icon.option": "アイコン",
+  "serverSettings.main.tint.title": "色",
+  "serverSettings.main.tint.hint": "そのアイコンの色です。",
+  "serverSettings.main.tint.option": "色",
+  "serverSettings.main.primary.title": "メインのサーバー",
+  "serverSettings.main.primary.hint": "起動時に開きます。メインにできるのは1台だけです。",
+  "serverSettings.main.notify.title": "このサーバーからの通知",
+  "serverSettings.main.notify.hint": "このサーバーからどの通知を受け取るかです。アプリ全体の通知設定も引き続き適用されます。",
+  "serverSettings.main.notify.all": "すべて",
+  "serverSettings.main.notify.needsYou": "確認待ち",
+  "serverSettings.main.notify.off": "オフ",
+  "settings.servers.reorderHint": "サーバーをドラッグして順番を変えます。サーバーメニューも同じ順番になります。"
 }

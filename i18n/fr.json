@@ -2904,5 +2904,24 @@
   "serverSettings.info.cores": {
     "one": "{count} cœur",
     "other": "{count} cœurs"
-  }
+  },
+  "serverSettings.main.title": "Général",
+  "serverSettings.main.primaryBadge": "Principal",
+  "serverSettings.main.name.title": "Nom",
+  "serverSettings.main.name.hint": "Nom du serveur dans l'application.",
+  "serverSettings.main.name.placeholder": "Nom du serveur",
+  "serverSettings.main.icon.title": "Icône",
+  "serverSettings.main.icon.hint": "Le symbole du serveur dans le menu des serveurs et la barre latérale.",
+  "serverSettings.main.icon.option": "Icône",
+  "serverSettings.main.tint.title": "Couleur",
+  "serverSettings.main.tint.hint": "La couleur de ce symbole.",
+  "serverSettings.main.tint.option": "Couleur",
+  "serverSettings.main.primary.title": "Serveur principal",
+  "serverSettings.main.primary.hint": "Il s'ouvre au lancement. Un seul serveur peut être le principal.",
+  "serverSettings.main.notify.title": "Notifications de ce serveur",
+  "serverSettings.main.notify.hint": "Lesquelles de ses notifications vous parviennent. Les réglages généraux restent appliqués.",
+  "serverSettings.main.notify.all": "Toutes",
+  "serverSettings.main.notify.needsYou": "En attente de vous",
+  "serverSettings.main.notify.off": "Désactivées",
+  "settings.servers.reorderHint": "Faites glisser un serveur pour changer l'ordre. Le menu des serveurs suit le même ordre."
 }

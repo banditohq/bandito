@@ -2903,5 +2903,24 @@
   "serverSettings.info.cores": {
     "one": "{count} Kern",
     "other": "{count} Kerne"
-  }
+  },
+  "serverSettings.main.title": "Allgemein",
+  "serverSettings.main.primaryBadge": "Haupt",
+  "serverSettings.main.name.title": "Name",
+  "serverSettings.main.name.hint": "So heißt der Server in der App.",
+  "serverSettings.main.name.placeholder": "Servername",
+  "serverSettings.main.icon.title": "Symbol",
+  "serverSettings.main.icon.hint": "Das Symbol des Servers im Servermenü und in der Seitenleiste.",
+  "serverSettings.main.icon.option": "Symbol",
+  "serverSettings.main.tint.title": "Farbe",
+  "serverSettings.main.tint.hint": "Die Farbe dieses Symbols.",
+  "serverSettings.main.tint.option": "Farbe",
+  "serverSettings.main.primary.title": "Hauptserver",
+  "serverSettings.main.primary.hint": "Er öffnet sich beim Start. Nur ein Server kann der Hauptserver sein.",
+  "serverSettings.main.notify.title": "Benachrichtigungen von diesem Server",
+  "serverSettings.main.notify.hint": "Welche seiner Mitteilungen Sie erreichen. Die allgemeinen Benachrichtigungseinstellungen gelten weiterhin.",
+  "serverSettings.main.notify.all": "Alle",
+  "serverSettings.main.notify.needsYou": "Wartet auf Sie",
+  "serverSettings.main.notify.off": "Aus",
+  "settings.servers.reorderHint": "Ziehen Sie einen Server, um die Reihenfolge zu ändern. Dieselbe Reihenfolge gilt im Servermenü."
 }

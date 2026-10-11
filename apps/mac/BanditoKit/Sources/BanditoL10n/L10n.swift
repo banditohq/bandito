@@ -2750,6 +2750,42 @@ public enum L10n {
             public static var title: String { L10n.tr("serverSettings.logs.title") }
         }
 
+        public enum Main {
+            public static var primaryBadge: String { L10n.tr("serverSettings.main.primaryBadge") }
+            public static var title: String { L10n.tr("serverSettings.main.title") }
+
+            public enum Icon {
+                public static var hint: String { L10n.tr("serverSettings.main.icon.hint") }
+                public static var option: String { L10n.tr("serverSettings.main.icon.option") }
+                public static var title: String { L10n.tr("serverSettings.main.icon.title") }
+            }
+
+            public enum Name {
+                public static var hint: String { L10n.tr("serverSettings.main.name.hint") }
+                public static var placeholder: String { L10n.tr("serverSettings.main.name.placeholder") }
+                public static var title: String { L10n.tr("serverSettings.main.name.title") }
+            }
+
+            public enum Notify {
+                public static var all: String { L10n.tr("serverSettings.main.notify.all") }
+                public static var hint: String { L10n.tr("serverSettings.main.notify.hint") }
+                public static var needsYou: String { L10n.tr("serverSettings.main.notify.needsYou") }
+                public static var off: String { L10n.tr("serverSettings.main.notify.off") }
+                public static var title: String { L10n.tr("serverSettings.main.notify.title") }
+            }
+
+            public enum Primary {
+                public static var hint: String { L10n.tr("serverSettings.main.primary.hint") }
+                public static var title: String { L10n.tr("serverSettings.main.primary.title") }
+            }
+
+            public enum Tint {
+                public static var hint: String { L10n.tr("serverSettings.main.tint.hint") }
+                public static var option: String { L10n.tr("serverSettings.main.tint.option") }
+                public static var title: String { L10n.tr("serverSettings.main.tint.title") }
+            }
+        }
+
         public enum Maintenance {
             public static var title: String { L10n.tr("serverSettings.maintenance.title") }
         }
@@ -2942,6 +2978,7 @@ public enum L10n {
             public static var deleteMessage: String { L10n.tr("settings.servers.deleteMessage") }
             public static func deleteTitle(name: String) -> String { L10n.tr("settings.servers.deleteTitle", name) }
             public static var intro: String { L10n.tr("settings.servers.intro") }
+            public static var reorderHint: String { L10n.tr("settings.servers.reorderHint") }
         }
 
         public enum Sounds {

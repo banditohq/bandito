@@ -17,14 +17,20 @@ public enum SelectChoices {
         public var hasUpdate: Bool
         /// An SF Symbol for the kind of device: a laptop or desktop for this Mac, a server rack otherwise.
         public var icon: String
+        /// The color of the icon the person chose; nil for the default. An update is shown in the signal color first.
+        public var tint: Color?
 
-        public init(id: UUID, name: String, address: String, isOnline: Bool, hasUpdate: Bool, icon: String = "server.rack") {
+        public init(
+            id: UUID, name: String, address: String, isOnline: Bool, hasUpdate: Bool, icon: String = "server.rack",
+            tint: Color? = nil
+        ) {
             self.id = id
             self.name = name
             self.address = address
             self.isOnline = isOnline
             self.hasUpdate = hasUpdate
             self.icon = icon
+            self.tint = tint
         }
     }
 
@@ -36,7 +42,7 @@ public enum SelectChoices {
                 value: row.id, title: row.name,
                 subtitle: row.hasUpdate ? "\(row.address) · \(updateText)" : row.address,
                 icon: row.icon,
-                tint: row.hasUpdate ? Color.Bandito.signal : nil,
+                tint: row.hasUpdate ? Color.Bandito.signal : row.tint,
                 help: row.hasUpdate ? updateText : nil)
         }
     }

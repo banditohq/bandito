@@ -95,15 +95,17 @@ The servers this app connects to. Each keeps its own agents and settings. You ca
 1. Read the state chip of each server: Online (В сети), Offline (Не в сети), or Connecting (Подключение).
 2. To remove a server, click Delete (Удалить) in its row and confirm Delete (Удалить) in Remove {name}?. The app forgets the server and its token. Nothing on the server is deleted.
 3. Add server (Добавить сервер) opens the add-server sheet: the server step of the introduction, without its steps (see [getting-started.md](getting-started.md)).
+4. Drag a server up or down to change the order. The same order is in the server menu at the top of the sidebar.
 
 ## Server settings (Настройки сервера)
 
 <!-- id: set-server-settings; covers: settings:servers -->
-Click a server in Servers (Серверы) to open its settings. A change is saved at once to the server. The server's own settings need a server that is up to date; an older one says so. The same page opens from the Settings link on the Server screen.
+Click a server in Servers (Серверы) to open its settings. The app keeps the choices in Main (Основное) on this Mac; the server's own settings are saved on the server at once. The server's own settings need a server that is up to date; an older one says so. The same page opens from the Settings link on the Server screen.
 Где: Settings (⌘,) → Servers (Серверы) → a server; or Server → Настройки сервера
-1. Agents by default (Агенты по умолчанию): Agents folder (Папка агентов) is where the new-agent sheet starts for this server (Choose… (Выбрать…) picks it). Permission mode for new agents (Режим разрешений новых агентов) is the mode an agent gets when its creation does not set one. Agents working at once (Агентов работает одновременно) limits how many agents run a turn; the others wait in their queue. No limit (Без ограничения) is 0.
-2. Maintenance (Обслуживание): Server updates (Обновления сервера) is Off (Выкл), Notify (Уведомлять), or At night (Ночью), when a newer version is installed while no agent works. Screen stops after (Экран останавливается через) sets the idle time of a server screen. How often a copy is made and Copies kept (Хранить копий) set the database copies; Make copy (Сделать копию) makes one now. Open logs (Открыть логи) opens the Server journal. Copy report (Скопировать отчёт) copies versions and the system for support, with no addresses, tokens or paths.
-3. About the server (О сервере): the daemon version, the system, the processor, the memory, the disk and the uptime.
+1. Main (Основное): Name (Название) is how the app shows the server; Enter saves it. Icon (Значок) and Color (Цвет) mark the server in the server menu and the sidebar. Main server (Основной сервер) opens at launch; only one server can be it, and choosing another one moves it. Notifications from this server (Уведомления с этого сервера) are All (Все), Waiting for you (Ждёт вас), or Off (Выключены); the global notification settings still apply.
+2. Agents by default (Агенты по умолчанию): Agents folder (Папка агентов) is where the new-agent sheet starts for this server (Choose… (Выбрать…) picks it). Permission mode for new agents (Режим разрешений новых агентов) is the mode an agent gets when its creation does not set one. Agents working at once (Агентов работает одновременно) limits how many agents run a turn; the others wait in their queue. No limit (Без ограничения) is 0.
+3. Maintenance (Обслуживание): Server updates (Обновления сервера) is Off (Выкл), Notify (Уведомлять), or At night (Ночью), when a newer version is installed while no agent works. Screen stops after (Экран останавливается через) sets the idle time of a server screen. How often a copy is made and Copies kept (Хранить копий) set the database copies; Make copy (Сделать копию) makes one now. Open logs (Открыть логи) opens the Server journal. Copy report (Скопировать отчёт) copies versions and the system for support, with no addresses, tokens or paths.
+4. About the server (О сервере): the daemon version, the system, the processor, the memory, the disk and the uptime.
 
 ## Approvals (Одобрения)
 
