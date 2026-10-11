@@ -311,21 +311,44 @@ const EXCLUDED_NAMES: &[&str] = &[
     ".idea",
     ".mcp.json",
     ".envrc",
+    ".cargo",
+    ".yarnrc.yml",
+    ".yarnrc",
+    ".npmrc",
+    ".zed",
+    ".opencode",
+    ".windsurf",
+    ".devcontainer",
+    ".husky",
+    ".pre-commit-config.yaml",
 ];
 
+/// Names that are not carried when they start with one of these (the aider tool keeps several files).
+const EXCLUDED_PREFIXES: &[&str] = &[".aider"];
+
 /// A name as a file system that folds case and ignores some characters would see it: without zero-width and
-/// direction marks, ASCII lowercase, and the Kelvin sign (the one letter of the list with a canonical equivalent:
-/// NFC composes it to K) as k.
+/// direction marks and without combining marks (U+0300 to U+036F), the letters that fold to ASCII ones (long s,
+/// Kelvin sign, dotted and dotless i) turned into them, then ASCII lowercase.
 fn fold_name(part: &str) -> String {
     part.chars()
         .filter(|c| {
             !matches!(
                 *c as u32,
-                0x200B..=0x200F | 0x202A..=0x202E | 0x2060..=0x2064 | 0x206A..=0x206F | 0xFEFF | 0xAD
+                0x0300..=0x036F | 0x200B..=0x200F | 0x202A..=0x202E | 0x2060..=0x2064 | 0x206A..=0x206F | 0xFEFF | 0xAD
             )
         })
-        .map(|c| if c == '\u{212A}' { 'k' } else { c.to_ascii_lowercase() })
+        .map(|c| match c {
+            '\u{017F}' => 's',
+            '\u{212A}' => 'k',
+            '\u{0130}' | '\u{0131}' => 'i',
+            other => other.to_ascii_lowercase(),
+        })
         .collect()
+}
+
+/// Whether a folded name is one that is not carried.
+fn excluded_name(folded: &str) -> bool {
+    EXCLUDED_NAMES.contains(&folded) || EXCLUDED_PREFIXES.iter().any(|p| folded.starts_with(p))
 }
 
 /// Why a path below `memory/` is not carried, or `None`: a part that is one of [`EXCLUDED_NAMES`] (any depth, any
@@ -335,7 +358,7 @@ pub fn excluded(rel: &str) -> Option<&'static str> {
     if parts.clone().count() == 1 && fold_name(parts.clone().next()?) == MARKER {
         return Some("the agent marker is not carried");
     }
-    if parts.any(|p| EXCLUDED_NAMES.contains(&fold_name(p).as_str())) {
+    if parts.any(|p| excluded_name(&fold_name(p))) {
         return Some("a tool configuration name is not carried");
     }
     None
@@ -474,10 +497,18 @@ fn list_names(dir: &OwnedFd) -> std::io::Result<Vec<std::ffi::OsString>> {
     }
     let mut names = Vec::new();
     loop {
+        clear_errno();
         // SAFETY: `stream` is open; the entry is read before the next call.
         let entry = unsafe { libc::readdir(stream) };
         if entry.is_null() {
-            break;
+            // The end of the folder leaves errno as it was; a read error sets it. A short list is not an answer.
+            let e = std::io::Error::last_os_error();
+            // SAFETY: `stream` is open and closed once.
+            unsafe { libc::closedir(stream) };
+            return match e.raw_os_error() {
+                Some(code) if code != 0 => Err(e),
+                _ => Ok(names),
+            };
         }
         // SAFETY: `d_name` is a NUL-terminated name.
         let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
@@ -485,9 +516,19 @@ fn list_names(dir: &OwnedFd) -> std::io::Result<Vec<std::ffi::OsString>> {
             names.push(std::ffi::OsString::from_vec(name.to_vec()));
         }
     }
-    // SAFETY: `stream` is open and closed once.
-    unsafe { libc::closedir(stream) };
-    Ok(names)
+}
+
+fn clear_errno() {
+    // SAFETY: the errno location of this thread is always valid to write.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    unsafe {
+        *libc::__errno_location() = 0;
+    }
+    // SAFETY: as above.
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    unsafe {
+        *libc::__error() = 0;
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -704,10 +745,16 @@ fn export_inner(input: &ExportInput<'_>, archive: &Path, events_tmp: &Path, limi
     let events_size = std::fs::metadata(events_tmp)
         .map_err(|e| MigrateError::io("read the history file", &e))?
         .len();
-    let root = agent
-        .home_dir
-        .as_deref()
-        .and_then(|home| open_root(Path::new(home)).ok());
+    // No folder recorded, or one that is gone, means no memory files. Any other failure (no permission, not a
+    // folder) is an error: the export must not go out silently without the memory.
+    let root = match agent.home_dir.as_deref() {
+        None => None,
+        Some(home) => match open_root(Path::new(home)) {
+            Ok(fd) => Some(fd),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(MigrateError::io("open the agent's folder", &e)),
+        },
+    };
     let walked = match &root {
         Some(root) => walk_memory(root, limits)?,
         None => Walked::default(),
@@ -1072,19 +1119,29 @@ fn unpack_into(archive: &Path, dest: &Path, limits: &Limits) -> Result<Unpacked>
     let mut dirs: usize = 0;
     let mut total: u64 = 0;
     let mut dropped: Vec<String> = Vec::new();
+    let mut dropped_bytes: u64 = 0;
     for_each_entry(GzDecoder::new(BufReader::new(file)), limits, |entry, data| {
         let rel = check_path(&entry.path, limits)?;
-        if !seen.insert(rel.clone()) {
-            return Err(bad_archive(format!("{rel} is in the archive twice")));
-        }
         if let Some(sub) = rel.strip_prefix("memory/")
             && let Some(why) = excluded(sub)
         {
-            // Not unpacked; its data is read past and thrown away.
+            // Not unpacked, and counted nowhere: not in the file, folder or byte limits. Its data is read past
+            // (a few KiB at a time) and thrown away.
             if dropped.len() < SKIPPED_LISTED {
                 dropped.push(format!("{sub}: {why}"));
             }
+            // Only a budget of its own, so a compressed bomb behind such a name cannot keep the daemon reading.
+            dropped_bytes = dropped_bytes.saturating_add(entry.size);
+            if dropped_bytes > limits.max_total_bytes {
+                return Err(MigrateError::new(
+                    "too_large",
+                    "the dropped files are over the size limit",
+                ));
+            }
             return Ok(());
+        }
+        if !seen.insert(rel.clone()) {
+            return Err(bad_archive(format!("{rel} is in the archive twice")));
         }
         let target = dest.join(&rel);
         if entry.kind == EntryKind::Dir {

@@ -286,8 +286,14 @@ async fn done(app: &App, req: DoneParams) -> RpcResult {
         return ok(json!({ "ok": true, "agent": Value::Null }));
     };
     // The archive must hold everything the agent has: after a new message or turn it is stale, and moving would lose it.
-    if store.agent_get(&export.agent_id)?.is_some()
-        && store.events_count_after(&export.agent_id, export.upto, migrate::EVENT_KINDS)? > 0
+    // An agent that is working again has a turn the archive does not hold, whatever it has written so far.
+    let working = store
+        .agent_view(&export.agent_id)?
+        .and_then(|a| a.status)
+        .is_some_and(|s| matches!(s, AgentStatus::Working | AgentStatus::NeedsYou));
+    if working
+        || (store.agent_get(&export.agent_id)?.is_some()
+            && store.events_count_after(&export.agent_id, export.upto, migrate::EVENT_KINDS)? > 0)
     {
         return Err(refuse(
             "changed_since_export",

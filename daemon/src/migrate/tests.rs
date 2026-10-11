@@ -1710,3 +1710,103 @@ fn excluded_folds_case_and_look_alike_characters() {
         assert!(excluded(name).is_none(), "{name:?}");
     }
 }
+
+#[test]
+fn look_alike_letters_and_marks_fold_to_the_excluded_names() {
+    for name in [
+        ".mcp.j\u{17f}on",
+        ".v\u{17f}code",
+        ".cur\u{17f}or",
+        ".gitmodule\u{17f}",
+        ".claude\u{307}",
+        ".cl\u{307}aude",
+        ".\u{130}dea",
+        ".\u{131}dea",
+        ".cargo",
+        ".Cargo/config.toml",
+        ".yarnrc.yml",
+        ".YARNRC",
+        ".npmrc",
+        ".zed/settings.json",
+        ".opencode",
+        ".aider.conf.yml",
+        ".AIDER.chat.history.md",
+        ".aider",
+        ".windsurf/rules",
+        ".devcontainer/devcontainer.json",
+        ".husky/pre-commit",
+        ".pre-commit-config.yaml",
+        "deep/er/.husky/x",
+    ] {
+        assert!(excluded(name).is_some(), "{name:?}");
+    }
+    for name in [
+        "aider.md",
+        ".aide",
+        "cargo",
+        "npmrc",
+        ".husky.md",
+        "zed",
+        "notes/.pre-commit.md",
+    ] {
+        assert!(excluded(name).is_none(), "{name:?}");
+    }
+}
+
+#[test]
+fn dropped_entries_do_not_count_against_the_file_and_byte_limits_but_have_a_budget() {
+    let tight = Limits {
+        max_files: 4,
+        max_total_bytes: 6000,
+        ..Limits::default()
+    };
+    // Ten files of 500 bytes under tool names: more files than the limit and more bytes than the real files have.
+    let mut tar = good_tar(&[("a.md", b"x")]);
+    for i in 0..10 {
+        tar = tar.file(&format!("memory/.claude/f{i}"), &[7u8; 500]);
+    }
+    let fx = Fixture::new();
+    let un = fx.unpack(tar.finish(), &tight).unwrap();
+    assert_eq!(un.skipped.len(), 10);
+    assert!(un.memory.join("a.md").is_file());
+    // But a mountain of them is refused: they have a byte budget of their own.
+    let mut tar = good_tar(&[("a.md", b"x")]);
+    for i in 0..14 {
+        tar = tar.file(&format!("memory/.claude/f{i}"), &[7u8; 500]);
+    }
+    let fx = Fixture::new();
+    assert_eq!(reason(fx.unpack(tar.finish(), &tight)), "too_large");
+    fx.assert_contained();
+}
+
+#[test]
+fn an_export_fails_when_the_agents_folder_cannot_be_opened_and_is_empty_when_it_is_gone() {
+    let fx = Fixture::new();
+    let store = Store::open_in_memory().unwrap();
+    let agent = new_agent(&store, "Forge");
+    let run = fx.dir.path().join("run");
+    std::fs::create_dir_all(&run).unwrap();
+    let export = |home: &Path| {
+        store.agent_set_home(&agent.id, &home.display().to_string()).unwrap();
+        let agent = store.agent_get(&agent.id).unwrap().unwrap();
+        export_archive(
+            ExportInput {
+                store: &store,
+                agent: &agent,
+                services: vec![],
+                schedules: vec![],
+                avatar: None,
+            },
+            &run,
+            "tok",
+            &Limits::default(),
+        )
+    };
+    // A path that is a file, not a folder: not "no memory", an error, and no archive left.
+    let file = fx.dir.path().join("a file");
+    std::fs::write(&file, "x").unwrap();
+    assert_eq!(export(&file).unwrap_err().reason, "io");
+    assert_eq!(std::fs::read_dir(&run).unwrap().count(), 0);
+    // A folder that is not there: an agent with no memory files.
+    assert!(export(&fx.dir.path().join("gone")).is_ok());
+}

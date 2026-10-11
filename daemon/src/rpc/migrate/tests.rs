@@ -1523,3 +1523,42 @@ async fn the_periodic_cleanup_removes_what_is_old() {
     cleanup_now(&fresh.app);
     assert!(!fresh.run_dir().exists());
 }
+
+#[tokio::test]
+async fn an_agent_that_is_working_again_is_not_marked_as_moved() {
+    use crate::event::{AgentStatus, EventBody};
+    let src = server();
+    let id = make_source_named(&src, "Forge").await;
+    let ex = export(&src, &id).await;
+    for status in [AgentStatus::Working, AgentStatus::NeedsYou] {
+        src.store
+            .append_event(&id, EventBody::AgentStatus { status, detail: None })
+            .unwrap();
+        let e = src
+            .call("agents.migrate_done", json!({"token": ex["token"], "moved_to": "vps"}))
+            .await
+            .unwrap_err();
+        assert_eq!(e.code, MIGRATE_ERROR);
+        assert_eq!(e.data.as_ref().unwrap()["reason"], "changed_since_export");
+    }
+    let got = src.call("agents.get", json!({"id": id})).await.unwrap();
+    assert_eq!(
+        (got["migrated_to"].clone(), got["paused"].as_bool()),
+        (Value::Null, Some(false))
+    );
+    // Idle again: the archive is still whole.
+    src.store
+        .append_event(
+            &id,
+            EventBody::AgentStatus {
+                status: AgentStatus::Idle,
+                detail: None,
+            },
+        )
+        .unwrap();
+    let done = src
+        .call("agents.migrate_done", json!({"token": ex["token"], "moved_to": "vps"}))
+        .await
+        .unwrap();
+    assert_eq!(done["agent"]["migrated_to"], "vps");
+}
