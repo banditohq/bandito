@@ -125,6 +125,14 @@ Hear an agent's answer. The voice follows the language of the text. Markdown is 
 1. Point at an agent's message, press ⋯ and choose Read aloud. Choose Stop reading (Остановить) to stop.
 2. To hear every new finished reply of one agent, turn on Read replies aloud in its Details. It is off by default and kept on this Mac, per agent. A reply is read once, when its turn has ended. It is read only while Bandito is the active app; opening a thread reads nothing from its history.
 
+## Links in a message (Ссылки в сообщениях)
+
+<!-- id: team-message-links; covers: -->
+Web addresses and file paths in a message are links. A file opens in the workbench panel beside the chat, a folder in Files, and ⌥-click shows a file in Files. A web address opens in the built-in browser in the panel, unless Settings say otherwise (see Open links from chat in). ⌘-click opens it in the browser of the Mac; sign-in pages (Google, Microsoft, Apple, GitHub login, Composio, Auth0, any login or OAuth page) open in the browser of the Mac by default. ⌘ reverses every link, sign-in pages included. When the pointer is over a message with a web address, a hint under the message says where a click opens the link and where ⌘ takes it: hold ⌘ and the hint turns round. The first web link you click on this Mac shows a note with the same explanation; it goes away by itself and does not come back.
+Где: Team → agent thread → a message with a link. Hover over the message to see the hint
+1. Click a web address: it opens in the built-in browser. Hold ⌘ and click: it opens in the browser of the Mac.
+2. To change which one a click uses, open Settings (⌘,) → General (Общие) → Open links from chat in (Ссылки из чата открывать).
+
 ## Attach a file to a message
 
 <!-- id: team-attach; covers: -->

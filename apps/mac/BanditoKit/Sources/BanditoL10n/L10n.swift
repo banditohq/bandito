@@ -520,6 +520,25 @@ public enum L10n {
         public static var usageHint: String { L10n.tr("chapter.usageHint") }
     }
 
+    public enum ChatLinks {
+
+        public enum Browser {
+            public static var fallback: String { L10n.tr("chatLinks.browser.fallback") }
+        }
+
+        public enum Hint {
+            public static var builtInOnly: String { L10n.tr("chatLinks.hint.builtInOnly") }
+            public static func builtInWithCommand(browser: String) -> String { L10n.tr("chatLinks.hint.builtInWithCommand", browser) }
+            public static func macOnly(browser: String) -> String { L10n.tr("chatLinks.hint.macOnly", browser) }
+            public static func macWithCommand(browser: String) -> String { L10n.tr("chatLinks.hint.macWithCommand", browser) }
+        }
+
+        public enum Toast {
+            public static func builtIn(browser: String) -> String { L10n.tr("chatLinks.toast.builtIn", browser) }
+            public static func mac(browser: String) -> String { L10n.tr("chatLinks.toast.mac", browser) }
+        }
+    }
+
     public enum ClaudeImport {
         public static var addFolder: String { L10n.tr("claudeImport.addFolder") }
         public static var clearAll: String { L10n.tr("claudeImport.clearAll") }
@@ -2732,6 +2751,15 @@ public enum L10n {
             public static var qualitySharper: String { L10n.tr("settings.browserScreen.qualitySharper") }
         }
 
+        public enum ChatLinks {
+            public static var builtIn: String { L10n.tr("settings.chatLinks.builtIn") }
+            public static var macBrowser: String { L10n.tr("settings.chatLinks.macBrowser") }
+            public static var `open`: String { L10n.tr("settings.chatLinks.open") }
+            public static var openHint: String { L10n.tr("settings.chatLinks.openHint") }
+            public static var signIn: String { L10n.tr("settings.chatLinks.signIn") }
+            public static var signInHint: String { L10n.tr("settings.chatLinks.signInHint") }
+        }
+
         public enum Group {
             public static var background: String { L10n.tr("settings.group.background") }
             public static var motion: String { L10n.tr("settings.group.motion") }
@@ -3428,11 +3456,6 @@ public enum L10n {
                 public static var meetTeam: String { L10n.tr("thread.empty.suggest.meetTeam") }
                 public static var news: String { L10n.tr("thread.empty.suggest.news") }
             }
-        }
-
-        public enum Link {
-            public static var fileHelp: String { L10n.tr("thread.link.fileHelp") }
-            public static var urlHelp: String { L10n.tr("thread.link.urlHelp") }
         }
     }
 

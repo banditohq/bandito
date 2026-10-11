@@ -78,6 +78,15 @@ struct MainWindow: View {
             }
         }
         .banditoAnimation(BanditoMotion.ease, value: router.botNotice?.id)
+        .overlay(alignment: .bottom) {
+            if let notice = router.chatLinkNotice {
+                ChatLinkNoticeToast(notice: notice) { router.chatLinkNotice = nil }
+                    .padding(.bottom, 18)
+                    .padding(.horizontal, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .banditoAnimation(BanditoMotion.ease, value: router.chatLinkNotice?.id)
         .overlayPreferenceValue(TourAnchorKey.self) { anchors in
             if onboarding.tourRequested {
                 TourLayer(anchors: anchors)
@@ -187,6 +196,8 @@ private struct ModeArea: View {
                 .id(router.mode)
                 .transition(.opacity)
         }
+        // The top band zooms on a double-click and drags the window; the mode's controls in it keep their clicks.
+        .titleBarBand()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { ContentBackdrop().ignoresSafeArea() }
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: router.mode)

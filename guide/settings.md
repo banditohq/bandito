@@ -28,6 +28,15 @@ Sets the language of the interface. It applies after you restart Bandito.
 2. Quit and open Bandito again: the language changes after the restart (Applies after you restart Bandito).
 3. The label on the first screen shows the language the interface uses now, written in that language (Русский, English, 日本語). Picking a language there works the same way: it applies after a restart, and the app says so.
 
+## Open links from chat in (Ссылки из чата открывать)
+
+<!-- id: set-chat-links; covers: setting:chatLinks.openTarget, setting:chatLinks.signInInMacBrowser -->
+Sets where a web address from a chat opens on a click: in the built-in browser in the workbench panel (the default), or in the browser of the Mac. ⌘-click always opens it the other way. Sign-in pages (Google, Microsoft, Apple, GitHub login, Composio, Auth0, and any login or OAuth page) open in the browser of the Mac when Sign-in links open in the Mac browser (Ссылки входа в сервисы — в браузере Mac) is on, which is the default. ⌘ reverses this for sign-in pages too.
+Где: Settings (⌘,) → General (Общие) → Open links from chat in (Ссылки из чата открывать), and Sign-in links open in the Mac browser (Ссылки входа в сервисы — в браузере Mac)
+1. Choose Built-in browser (Во встроенном браузере) or Mac browser (В браузере Mac).
+2. Keep Sign-in links open in the Mac browser on, so that a login page opens where you are already signed in. Turn it off to open sign-in pages by the rule above.
+3. A click on a link in a message follows the choice; ⌘-click takes the other browser, for sign-in pages as well. The first web link you click shows a note with the same explanation, once.
+
 ## Show examples (Показывать примеры)
 
 <!-- id: set-show-examples; covers: setting:demo.enabled -->
