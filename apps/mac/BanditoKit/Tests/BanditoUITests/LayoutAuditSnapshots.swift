@@ -1,9 +1,9 @@
 import BanditoDesign
 @testable import BanditoKit
-import BanditoL10n
 import SwiftUI
 import Testing
 
+@testable import BanditoL10n
 @testable import BanditoUI
 
 /// The layout audit: every sheet, dialog and Settings section at its narrowest width, in the two languages with the
@@ -378,12 +378,12 @@ import Testing
     /// Text that is cut inside a box, or hidden behind another element, is not found by numbers: look at the pictures.
     @Test(.enabled(if: LayoutAudit.outputDirectory != nil)) func gallery() throws {
         let directory = try #require(LayoutAudit.outputDirectory)
-        defer { LayoutAudit.finish() }
         var findings: [AuditFinding] = []
         for language in Self.languages {
-            LayoutAudit.use(language: language)
-            for item in Self.cases {
-                findings.append(LayoutAudit.audit(item, language: language, into: directory))
+            L10n.withLanguageForTests(language) {
+                for item in Self.cases {
+                    findings.append(LayoutAudit.audit(item, language: language, into: directory))
+                }
             }
         }
         print("AUDIT \(findings.count) pictures in \(directory.path)")

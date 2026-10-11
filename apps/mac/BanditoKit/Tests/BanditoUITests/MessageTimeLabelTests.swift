@@ -6,7 +6,7 @@ import Testing
 
 /// The time under a message: the word for the last two days, the date for the older ones, the clock with seconds.
 /// The calendar is Vladivostok (the owner's zone), so the midnight cases are the owner's midnight.
-@Suite(.serialized) struct MessageTimeLabelTests {
+@Suite struct MessageTimeLabelTests {
     static let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Asia/Vladivostok")!
@@ -18,19 +18,19 @@ import Testing
         return calendar.date(from: parts)!
     }
 
-    /// The label in one app language. The language is process-wide, so the suite runs serialized.
+    /// The label in one app language (task-local, so other suites running in parallel keep the system language).
     private func label(_ date: Date, now: Date, language: String) -> String {
-        L10n.useLanguageForTests(language)
-        defer { L10n.useLanguageForTests(nil) }
-        return MessageTimeLabel.text(
-            date: date, now: now, calendar: Self.calendar, locale: Locale(identifier: language == "ru" ? "ru_RU" : "en_US"))
+        L10n.withLanguageForTests(language) {
+            MessageTimeLabel.text(
+                date: date, now: now, calendar: Self.calendar, locale: Locale(identifier: language == "ru" ? "ru_RU" : "en_US"))
+        }
     }
 
     private func fullText(_ date: Date, language: String) -> String {
-        L10n.useLanguageForTests(language)
-        defer { L10n.useLanguageForTests(nil) }
-        return MessageTimeLabel.fullText(
-            date: date, calendar: Self.calendar, locale: Locale(identifier: language == "ru" ? "ru_RU" : "en_US"))
+        L10n.withLanguageForTests(language) {
+            MessageTimeLabel.fullText(
+                date: date, calendar: Self.calendar, locale: Locale(identifier: language == "ru" ? "ru_RU" : "en_US"))
+        }
     }
 
     @Test func aMessageFromToday() {
