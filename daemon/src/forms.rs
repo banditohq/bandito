@@ -13,6 +13,8 @@ pub const MAX_OPTIONS: usize = 20;
 const MAX_ID_BYTES: usize = 64;
 /// Longest comment with a rejection, in bytes.
 pub const MAX_COMMENT_BYTES: usize = 4 * 1024;
+/// Longest message a person sends instead of filling a form, in bytes.
+pub const MAX_REPLY_BYTES: usize = 16 * 1024;
 /// Longest answer of a text or textarea field, in bytes.
 pub const MAX_TEXT_BYTES: usize = 8 * 1024;
 
@@ -77,6 +79,8 @@ pub struct FormSpec {
 pub enum FormAction {
     Submit,
     Reject,
+    /// The person wrote a message instead of filling the form.
+    Reply,
     Expired,
 }
 
@@ -85,6 +89,8 @@ pub enum Outcome {
     /// The checked values, by field id.
     Submit(Map<String, Value>),
     Reject(Option<String>),
+    /// A message from the person instead of the form's values.
+    Reply(String),
     /// Nobody answered in time, or the turn was cancelled, paused or deleted first.
     Expired,
 }
@@ -94,16 +100,19 @@ impl Outcome {
         match self {
             Outcome::Submit(_) => FormAction::Submit,
             Outcome::Reject(_) => FormAction::Reject,
+            Outcome::Reply(_) => FormAction::Reply,
             Outcome::Expired => FormAction::Expired,
         }
     }
 
-    /// `{action, values?, comment?}`: `values` only on submit, `comment` only when given on reject.
+    /// `{action, values?, comment?, message?}`: `values` only on submit, `comment` only when given on reject,
+    /// `message` on reply.
     pub fn to_json(&self) -> Value {
         match self {
             Outcome::Submit(values) => json!({ "action": "submit", "values": values }),
             Outcome::Reject(Some(comment)) => json!({ "action": "reject", "comment": comment }),
             Outcome::Reject(None) => json!({ "action": "reject" }),
+            Outcome::Reply(message) => json!({ "action": "reply", "message": message }),
             Outcome::Expired => json!({ "action": "expired" }),
         }
     }
@@ -309,6 +318,19 @@ pub fn check_comment(comment: Option<&Value>) -> Result<Option<String>, String> 
     }
 }
 
+/// The message a person sends instead of filling a form: required text of a sane size.
+pub fn check_reply(message: Option<&Value>) -> Result<String, String> {
+    match message {
+        Some(Value::String(s)) if s.trim().is_empty() => Err("message is empty".into()),
+        Some(Value::String(s)) if s.len() > MAX_REPLY_BYTES => {
+            Err(format!("message is longer than {MAX_REPLY_BYTES} bytes"))
+        }
+        Some(Value::String(s)) => Ok(s.trim().to_string()),
+        None | Some(Value::Null) => Err("message is required for a reply".into()),
+        Some(_) => Err("message must be text".into()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,6 +341,18 @@ mod tests {
 
     fn one(field: Value) -> Value {
         spec(json!([field]))
+    }
+
+    #[test]
+    fn a_reply_needs_a_message_and_goes_to_the_agent_as_it_is() {
+        assert_eq!(check_reply(Some(&json!(" where is it? "))).unwrap(), "where is it?");
+        assert!(check_reply(None).is_err());
+        assert!(check_reply(Some(&json!("  "))).is_err());
+        assert!(check_reply(Some(&json!(5))).is_err());
+        assert!(check_reply(Some(&json!("x".repeat(MAX_REPLY_BYTES + 1)))).is_err());
+        let o = Outcome::Reply("hi".into());
+        assert_eq!(o.to_json(), json!({ "action": "reply", "message": "hi" }));
+        assert_eq!(o.action(), FormAction::Reply);
     }
 
     #[test]
