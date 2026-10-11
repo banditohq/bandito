@@ -2002,7 +2002,10 @@
 "settings.sounds.intro" = "클릭, 입력, 에이전트 이벤트에 짧은 소리를 냅니다. 기본값은 꺼짐입니다.";
 "settings.sounds.listen" = "미리 듣기";
 "settings.sounds.set" = "사운드 세트";
+"settings.sounds.sets.arcade" = "아케이드";
+"settings.sounds.sets.crystal" = "크리스털";
 "settings.sounds.sets.glass" = "유리";
+"settings.sounds.sets.marimba" = "마림바";
 "settings.sounds.sets.mechanics" = "기계식";
 "settings.sounds.sets.retro" = "레트로";
 "settings.sounds.sets.soft" = "부드럽게";

@@ -104,6 +104,9 @@ struct SoundsSection: View {
             SelectOption(value: SoundKit.mechanics.rawValue, title: L10n.Settings.Sounds.Sets.mechanics),
             SelectOption(value: SoundKit.glass.rawValue, title: L10n.Settings.Sounds.Sets.glass),
             SelectOption(value: SoundKit.retro.rawValue, title: L10n.Settings.Sounds.Sets.retro),
+            SelectOption(value: SoundKit.crystal.rawValue, title: L10n.Settings.Sounds.Sets.crystal),
+            SelectOption(value: SoundKit.marimba.rawValue, title: L10n.Settings.Sounds.Sets.marimba),
+            SelectOption(value: SoundKit.arcade.rawValue, title: L10n.Settings.Sounds.Sets.arcade),
         ]
     }
 }

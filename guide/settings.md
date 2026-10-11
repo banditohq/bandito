@@ -246,9 +246,9 @@ The main switch of all app sounds. Off by default.
 ## Sound pack (sound.kit)
 
 <!-- id: set-sound-kit; covers: setting:sound.kit -->
-Four packs made by the app itself: Soft (Мягкий), Mechanical (Механика), Glass (Стекло), Retro (Ретро).
+Seven packs made by the app itself: Soft (Мягкий), Mechanical (Механика), Glass (Стекло), Crystal (Кристалл), Marimba (Маримба), Retro (Ретро), Arcade (Аркада).
 Где: Settings (⌘,) → Sounds (Звуки) → Pack (Набор)
-1. Pick a pack; ▶ plays a sample.
+1. Pick a pack; ▶ plays a sample: a message sound, then a success sound.
 
 ## Volume (sound.volume)
 

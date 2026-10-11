@@ -2002,7 +2002,10 @@
 "settings.sounds.intro" = "Kurze Töne für Klicks, Tippen und Agenten-Ereignisse. Standardmäßig aus.";
 "settings.sounds.listen" = "Anhören";
 "settings.sounds.set" = "Klangset";
+"settings.sounds.sets.arcade" = "Arcade";
+"settings.sounds.sets.crystal" = "Kristall";
 "settings.sounds.sets.glass" = "Glas";
+"settings.sounds.sets.marimba" = "Marimba";
 "settings.sounds.sets.mechanics" = "Mechanisch";
 "settings.sounds.sets.retro" = "Retro";
 "settings.sounds.sets.soft" = "Weich";

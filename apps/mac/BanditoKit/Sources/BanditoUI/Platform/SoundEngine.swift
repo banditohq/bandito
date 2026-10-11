@@ -38,6 +38,18 @@ public final class SoundEngine {
         scheduleIdleStop()
     }
 
+    /// The Settings listen sound: `send`, a pause, then `done` (see `SoundSynth.previewSamples`). It is not a type
+    /// sound, so the throttle and the variants do not apply.
+    func playPreview(_ kit: SoundKit, volume: Double) {
+        guard let format, let buffer = Self.buffer(SoundSynth.previewSamples(kit), format: format), start() else {
+            return
+        }
+        player?.volume = Float(volume)
+        player?.scheduleBuffer(buffer, at: nil, options: .interrupts)
+        player?.play()
+        scheduleIdleStop()
+    }
+
     /// The buffer to play: the next variant of the event, rendering the set first if it is new.
     private func nextBuffer(_ event: SoundEvent, kit: SoundKit) -> AVAudioPCMBuffer? {
         guard let format else { return nil }
@@ -54,20 +66,22 @@ public final class SoundEngine {
         for event in SoundEvent.allCases {
             let pitches = event == .type ? SoundPitch.factors : [1]
             result[event] = pitches.compactMap { pitch in
-                let samples = SoundSynth.samples(event, kit: kit, pitch: pitch)
-                guard let buffer = AVAudioPCMBuffer(
-                    pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))
-                else { return nil }
-                buffer.frameLength = AVAudioFrameCount(samples.count)
-                if let channel = buffer.floatChannelData?[0] {
-                    for index in samples.indices {
-                        channel[index] = samples[index]
-                    }
-                }
-                return buffer
+                Self.buffer(SoundSynth.samples(event, kit: kit, pitch: pitch), format: format)
             }
         }
         return result
+    }
+
+    private static func buffer(_ samples: [Float], format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))
+        else { return nil }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        if let channel = buffer.floatChannelData?[0] {
+            for index in samples.indices {
+                channel[index] = samples[index]
+            }
+        }
+        return buffer
     }
 
     /// Starts the engine if it is not running. False when the audio system refuses (the sound is then skipped).
@@ -119,10 +133,10 @@ public enum SoundPlayer {
         SoundEngine.shared.play(event, kit: settings.kit, volume: settings.volume, atMillisecond: now)
     }
 
-    /// The Settings "listen" button: one sound of `kit` at `volume`. It ignores the on and off switches, so the person
-    /// can hear a set before turning sounds on.
+    /// The Settings "listen" button: a message sound, a pause, then a success sound, in `kit` at `volume`. It ignores
+    /// the on and off switches, so the person can hear a set before turning sounds on.
     public static func preview(_ kit: SoundKit, volume: Double) {
-        SoundEngine.shared.play(.done, kit: kit, volume: volume, atMillisecond: now)
+        SoundEngine.shared.playPreview(kit, volume: volume)
     }
 
     private static var windowActive: Bool {

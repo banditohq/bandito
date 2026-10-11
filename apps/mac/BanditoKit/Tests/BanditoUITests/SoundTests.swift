@@ -7,16 +7,31 @@ private func peak(_ samples: [Float]) -> Float {
     samples.map { abs($0) }.max() ?? 0
 }
 
+private func rms(_ samples: [Float]) -> Double {
+    guard !samples.isEmpty else { return 0 }
+    return sqrt(samples.reduce(0) { $0 + Double($1) * Double($1) } / Double(samples.count))
+}
+
 @Suite struct SoundSynthTests {
-    /// Every set makes every event: short (20 to 200 ms), finite, not clipped, and not silent.
+    /// Every set makes every event: at most 1.2 s, finite, not clipped, and not silent.
     @Test func everyEventIsShortAndDoesNotClip() {
         for kit in SoundKit.allCases {
             for event in SoundEvent.allCases {
                 let samples = SoundSynth.samples(event, kit: kit)
                 let seconds = Double(samples.count) / SoundSynth.sampleRate
-                #expect(seconds >= 0.02 && seconds <= 0.2, "\(kit) \(event) lasts \(seconds) s")
+                #expect(seconds >= 0.02 && seconds <= 1.2, "\(kit) \(event) lasts \(seconds) s")
                 #expect(samples.allSatisfy { $0.isFinite && abs($0) <= 1.0 }, "\(kit) \(event) clips")
                 #expect(peak(samples) > 0.05, "\(kit) \(event) is almost silent")
+            }
+        }
+    }
+
+    /// The sets that shipped first stay short: every event ends within 200 ms.
+    @Test func theOriginalSetsStayWithinTwoHundredMilliseconds() {
+        for kit in [SoundKit.soft, .mechanics, .glass, .retro] {
+            for event in SoundEvent.allCases {
+                let seconds = Double(SoundSynth.samples(event, kit: kit).count) / SoundSynth.sampleRate
+                #expect(seconds <= 0.2, "\(kit) \(event) lasts \(seconds) s")
             }
         }
     }
@@ -194,5 +209,78 @@ private func peak(_ samples: [Float]) -> Float {
         defer { defaults.removePersistentDomain(forName: domain) }
         defaults.set("laser", forKey: SoundSettings.kitKey)
         #expect(SoundSettings(defaults: defaults).kit == .soft)
+    }
+}
+
+/// The sets added with `crystal`, `marimba` and `arcade`. Their levels are measured against the default set (`soft`).
+@Suite struct NewSoundSetTests {
+    private static let newKits: [SoundKit] = [.crystal, .marimba, .arcade]
+
+    /// Each event lasts at most 1.2 s, is finite and does not clip, and starts and ends at silence, so nothing clicks.
+    @Test func everyEventFitsAndStartsAndEndsAtSilence() {
+        for kit in Self.newKits {
+            for event in SoundEvent.allCases {
+                let samples = SoundSynth.samples(event, kit: kit)
+                let seconds = Double(samples.count) / SoundSynth.sampleRate
+                #expect(!samples.isEmpty, "\(kit) \(event) is empty")
+                #expect(seconds <= 1.2, "\(kit) \(event) lasts \(seconds) s")
+                #expect(samples.allSatisfy { $0.isFinite && abs($0) <= 1.0 }, "\(kit) \(event) clips")
+                #expect(abs(samples.first ?? 1) <= 0.005, "\(kit) \(event) starts with a jump")
+                #expect(abs(samples.last ?? 1) <= 0.005, "\(kit) \(event) stops with a jump")
+            }
+        }
+    }
+
+    /// No event is louder than the same event in the default set, by more than 1 dB (a factor of about 1.122).
+    @Test func peakIsNoHigherThanTheDefaultSetPlusOneDecibel() {
+        let ceiling = Float(pow(10.0, 1.0 / 20.0))
+        for kit in Self.newKits {
+            for event in SoundEvent.allCases {
+                let limit = peak(SoundSynth.samples(event, kit: .soft)) * ceiling
+                #expect(peak(SoundSynth.samples(event, kit: kit)) <= limit, "\(kit) \(event) is too loud")
+            }
+        }
+    }
+
+    /// The loudness on average (RMS) is held to the same 1 dB as the peak, so no event feels louder than the default.
+    @Test func rmsIsNoHigherThanTheDefaultSetPlusOneDecibel() {
+        let ceiling = pow(10.0, 1.0 / 20.0)
+        for kit in Self.newKits {
+            for event in SoundEvent.allCases {
+                let limit = rms(SoundSynth.samples(event, kit: .soft)) * ceiling
+                #expect(rms(SoundSynth.samples(event, kit: kit)) <= limit, "\(kit) \(event) is too loud on average")
+            }
+        }
+    }
+
+    /// Marimba is short: 150 to 300 ms per event.
+    @Test func marimbaEventsAreShort() {
+        for event in SoundEvent.allCases {
+            let seconds = Double(SoundSynth.samples(event, kit: .marimba).count) / SoundSynth.sampleRate
+            #expect(seconds <= 0.3 + 1e-3, "marimba \(event) lasts \(seconds) s")
+        }
+    }
+
+    /// Crystal rings: its success sound has a tail of more than 400 ms.
+    @Test func crystalRingsLongerThanGlass() {
+        let crystal = Double(SoundSynth.samples(.done, kit: .crystal).count) / SoundSynth.sampleRate
+        let glass = Double(SoundSynth.samples(.done, kit: .glass).count) / SoundSynth.sampleRate
+        #expect(crystal > 0.4)
+        #expect(crystal > glass)
+        #expect(SoundSynth.samples(.done, kit: .crystal) != SoundSynth.samples(.done, kit: .glass))
+    }
+
+    /// The listen sound is the message sound, then the success sound a pause later, in one buffer that does not clip.
+    @Test func theListenSoundIsMessageThenSuccess() {
+        for kit in Self.newKits {
+            let preview = SoundSynth.previewSamples(kit)
+            let send = SoundSynth.samples(.send, kit: kit)
+            let done = SoundSynth.samples(.done, kit: kit)
+            let pause = Int((SoundSynth.previewPause * SoundSynth.sampleRate).rounded())
+            #expect(preview.count == max(send.count, pause + done.count), "\(kit)")
+            #expect(Double(preview.count) / SoundSynth.sampleRate <= 1.2, "\(kit) listen lasts too long")
+            #expect(peak(preview) <= 1.0, "\(kit) listen clips")
+            #expect(abs(preview.first ?? 1) <= 0.005 && abs(preview.last ?? 1) <= 0.005, "\(kit) listen jumps")
+        }
     }
 }

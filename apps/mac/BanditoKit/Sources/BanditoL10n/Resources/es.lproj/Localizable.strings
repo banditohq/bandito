@@ -2002,7 +2002,10 @@
 "settings.sounds.intro" = "Sonidos cortos para clics, escritura y eventos de agentes. Desactivados por defecto.";
 "settings.sounds.listen" = "Escuchar";
 "settings.sounds.set" = "Conjunto de sonidos";
+"settings.sounds.sets.arcade" = "Arcade";
+"settings.sounds.sets.crystal" = "Cristal";
 "settings.sounds.sets.glass" = "Cristal";
+"settings.sounds.sets.marimba" = "Marimba";
 "settings.sounds.sets.mechanics" = "Mecánico";
 "settings.sounds.sets.retro" = "Retro";
 "settings.sounds.sets.soft" = "Suave";
