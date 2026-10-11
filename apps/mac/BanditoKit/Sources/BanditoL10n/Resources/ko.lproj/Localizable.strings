@@ -818,7 +818,6 @@
 "integrations.check" = "확인";
 "integrations.checking" = "확인 중…";
 "integrations.connect" = "연결";
-"integrations.connected" = "연결됨";
 "integrations.custom.add" = "추가";
 "integrations.custom.commandHint" = "프로그램과 인수를 문서에 나온 그대로 입력하세요.";
 "integrations.custom.commandLine" = "전체 명령";
@@ -1098,6 +1097,10 @@
 "market.section.how" = "연결 방법";
 "market.section.links" = "링크";
 "market.section.needs" = "필요한 것";
+"market.shelf.all" = "전체";
+"market.shelf.allLabel" = "%1$@ 모두 보기";
+"market.shelf.next" = "오른쪽으로 스크롤";
+"market.shelf.previous" = "왼쪽으로 스크롤";
 "market.skill.by" = "제작: %1$@";
 "market.skill.claudeOnly" = "Claude 전용";
 "market.skill.conflictAgent" = "%1$@의 폴더에 같은 이름의 폴더가 이미 있고, Bandito가 만든 것이 아니에요. Bandito는 덮어쓰지 않아요. 폴더를 옮기거나 이름을 바꾼 뒤 스킬을 설치하세요.";

@@ -1195,7 +1195,6 @@ public enum L10n {
         public static var check: String { L10n.tr("integrations.check") }
         public static var checking: String { L10n.tr("integrations.checking") }
         public static var connect: String { L10n.tr("integrations.connect") }
-        public static var connected: String { L10n.tr("integrations.connected") }
         public static var edit: String { L10n.tr("integrations.edit") }
         public static var empty: String { L10n.tr("integrations.empty") }
         public static var remove: String { L10n.tr("integrations.remove") }
@@ -1575,6 +1574,13 @@ public enum L10n {
             public static var how: String { L10n.tr("market.section.how") }
             public static var links: String { L10n.tr("market.section.links") }
             public static var needs: String { L10n.tr("market.section.needs") }
+        }
+
+        public enum Shelf {
+            public static var all: String { L10n.tr("market.shelf.all") }
+            public static func allLabel(name: String) -> String { L10n.tr("market.shelf.allLabel", name) }
+            public static var next: String { L10n.tr("market.shelf.next") }
+            public static var previous: String { L10n.tr("market.shelf.previous") }
         }
 
         public enum Skill {

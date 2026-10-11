@@ -818,7 +818,6 @@
 "integrations.check" = "Check";
 "integrations.checking" = "Checking…";
 "integrations.connect" = "Connect";
-"integrations.connected" = "Connected";
 "integrations.custom.add" = "Add";
 "integrations.custom.commandHint" = "The program and its arguments, as in the documentation.";
 "integrations.custom.commandLine" = "Full command";
@@ -1098,6 +1097,10 @@
 "market.section.how" = "How to connect";
 "market.section.links" = "Links";
 "market.section.needs" = "What you need";
+"market.shelf.all" = "All";
+"market.shelf.allLabel" = "Show all in %1$@";
+"market.shelf.next" = "Scroll forward";
+"market.shelf.previous" = "Scroll back";
 "market.skill.by" = "by %1$@";
 "market.skill.claudeOnly" = "Claude only";
 "market.skill.conflictAgent" = "A folder with this name is already in the folder of %1$@, and Bandito did not put it there. Bandito never overwrites it: move or rename it, then install the skill.";

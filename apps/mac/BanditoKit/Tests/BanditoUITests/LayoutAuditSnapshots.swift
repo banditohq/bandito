@@ -20,8 +20,8 @@ import Testing
     static let settingsColumn: CGFloat = 520
 
     static var cases: [AuditCase] {
-        settings + sheets + dataSheets + serverScreens + marketScreens + onboardingScreens + flowSheets + browserScreens
-            + approvalViews + messageTimeRows + perfCheckViews
+        settings + sheets + dataSheets + serverScreens + marketScreens + marketShelfScreens + onboardingScreens
+            + flowSheets + browserScreens + approvalViews + messageTimeRows + perfCheckViews
     }
 
     /// The results of the smoothness check (Help → ⌥ Smoothness check…) in the narrowest window.

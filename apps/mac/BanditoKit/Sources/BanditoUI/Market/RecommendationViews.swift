@@ -3,11 +3,14 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// A compact card of the "suited to the project" row: the service, why it was suggested, the file that showed it,
-/// and Connect.
-struct RecommendationCard: View {
+/// A card of the "suited to the project" shelf: the service, why it was suggested, the file that showed it, and
+/// Connect. It takes the width and the height its shelf gives it. `Equatable` on the suggestion, so a redraw of the
+/// page does not rebuild it.
+struct RecommendationCard: View, Equatable {
     let item: RecommendationLogic.Item
     var onConnect: () -> Void
+
+    nonisolated static func == (lhs: RecommendationCard, rhs: RecommendationCard) -> Bool { lhs.item == rhs.item }
 
     var body: some View {
         let entry = MarketEntry(
@@ -38,7 +41,7 @@ struct RecommendationCard: View {
                     .fixedSize()
             }
             .padding(12)
-            .frame(width: 230, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 }

@@ -506,41 +506,103 @@ private struct PerfSteps {
     func market() async throws -> String {
         router.select(mode: .market)
         router.marketTab = .services
+        router.marketFilter = .all
+        router.marketDetail = nil
         try await wait(frames: 600) { !router.marketCategories.isEmpty }
-        await settle(30)
+        await settle(40)
+        guard let page = PerfScroller.main(in: window) else { throw PerfProblem(message: "no Marketplace page") }
         recorder.begin()
         recorder.beginSegment()
-        try await sweepMain(speed: 50, seconds: 5)
+        try await sweep(page, toTop: false, speed: 50, seconds: 8)
+        try await sweep(page, toTop: true, speed: 50, seconds: 8)
         recorder.endSegment("services")
+        // Two shelves moved sideways, like a trackpad: out to the last card and back.
+        let lanes = Array(PerfScroller.shelves(in: window).prefix(2))
+        guard !lanes.isEmpty else { throw PerfProblem(message: "no shelf to scroll sideways") }
         recorder.beginSegment()
-        for name in router.marketCategories {
+        for lane in lanes {
+            try await sweepX(lane, toStart: false, speed: 40, seconds: 5)
+            try await sweepX(lane, toStart: true, speed: 40, seconds: 5)
+        }
+        recorder.endSegment("shelves sideways")
+        // A category's page, the way "All" opens it, scrolled, and back to the shelves.
+        let categories = Array(router.marketCategories.prefix(3))
+        for name in categories {
             try check()
-            router.requestMarketScroll(.category(name))
+            recorder.beginSegment()
+            router.marketFilter = .category(name)
             await settle(30)
+            recorder.endSegment("open category")
+            if let grid = PerfScroller.main(in: window) {
+                recorder.beginSegment()
+                try await sweep(grid, toTop: false, speed: 50, seconds: 3)
+                try await sweep(grid, toTop: true, speed: 50, seconds: 3)
+                recorder.endSegment("category scroll")
+            }
+            recorder.beginSegment()
+            router.marketFilter = .all
+            await settle(30)
+            recorder.endSegment("back to shelves")
         }
-        router.requestMarketScroll(.top)
-        await settle(30)
-        recorder.endSegment("category jumps")
+        // The search: a few letters typed into the field one a frame, then cleared.
         recorder.beginSegment()
-        for id in ["github", "notion", "linear"] {
-            try check()
-            router.marketDetail = id
-            await settle(40)
-            router.marketDetail = nil
-            await settle(24)
-        }
-        recorder.endSegment("cards")
+        try await typeInSearch("linear")
+        recorder.endSegment("search")
+        await settle(20)
         for tab in [MarketTab.bots, .skills] {
             try check()
             router.marketTab = tab
             recorder.beginSegment()
             await settle(40)
             try await sweepMain(speed: 50, seconds: 4)
+            if let lane = PerfScroller.shelves(in: window).first {
+                try await sweepX(lane, toStart: false, speed: 40, seconds: 4)
+                try await sweepX(lane, toStart: true, speed: 40, seconds: 4)
+            }
             recorder.endSegment(tab.rawValue)
         }
         router.marketTab = .services
         await settle(20)
-        return "Services scrolled down and up, every category jumped to, 3 cards opened, then Bots and Skills scrolled"
+        return "Services swept down and up, two shelves out and back, \(categories.count) category pages opened, swept "
+            + "and left, a search typed, then Bots and Skills swept with a shelf each"
+    }
+
+    /// Types `text` into the Marketplace search field one letter a frame, as a person would, and clears the field.
+    private func typeInSearch(_ text: String) async throws {
+        guard let field = PerfScroller.textField(in: window, placeholder: L10n.Market.search) else {
+            throw PerfProblem(message: "the search field was not found")
+        }
+        window.makeFirstResponder(field)
+        await settle(4)
+        guard let editor = window.firstResponder as? NSTextView else {
+            throw PerfProblem(message: "the search field did not take focus")
+        }
+        for character in text {
+            try check()
+            editor.insertText(String(character), replacementRange: editor.selectedRange())
+            await recorder.nextFrame()
+        }
+        await settle(30)
+        editor.insertText("", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        await settle(30)
+        window.makeFirstResponder(nil)
+    }
+
+    /// Moves a shelf sideways from where it is to its last card (or its first), `speed` points a frame.
+    private func sweepX(_ scroll: NSScrollView, toStart: Bool, speed: CGFloat, seconds: Double) async throws {
+        let deadline = CACurrentMediaTime() + seconds
+        while CACurrentMediaTime() < deadline {
+            try check()
+            await recorder.nextFrame()
+            let x = PerfScroller.offsetX(scroll)
+            if toStart {
+                if x <= PerfScroller.minOffsetX(scroll) + 1 { return }
+                PerfScroller.scrollX(scroll, to: x - speed)
+            } else {
+                if x >= PerfScroller.maxOffsetX(scroll) - 1 { return }
+                PerfScroller.scrollX(scroll, to: x + speed)
+            }
+        }
     }
 
     func settings() async throws -> String {

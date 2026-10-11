@@ -36,12 +36,14 @@ public enum AppMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The filter of the Marketplace sidebar: everything, only the connected services or the installed skills, or one
-/// category of the catalog.
+/// The filter of the Marketplace sidebar: everything (the shelves), only the connected services or the installed
+/// skills, or one category of the catalog (its page).
 public enum MarketFilter: Hashable, Identifiable, Sendable {
     case all, connected
     /// Skills that are installed somewhere on the server.
     case installed
+    /// The sets of bots (the Bots page only): the page "All" of the Bundles shelf.
+    case bundles
     /// Bots made from a template (the Bots page only). Not a catalog filter: it keeps no template, service or skill.
     case myBots
     /// A catalog category: `dev`, `productivity`, `data`, `web`, `design`, `other`.
@@ -52,6 +54,7 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
         case .all: "all"
         case .connected: "connected"
         case .installed: "installed"
+        case .bundles: "bundles"
         case .myBots: "myBots"
         case .category(let name): "category:\(name)"
         }
@@ -62,6 +65,7 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
         case .all: L10n.Market.Filter.all
         case .connected: L10n.Market.Filter.connected
         case .installed: L10n.Market.Filter.installed
+        case .bundles: L10n.Market.Bundles.title
         case .myBots: L10n.Market.Filter.myBots
         case .category(let name): MarketCategory.title(name)
         }
@@ -102,6 +106,25 @@ public enum MarketCategory {
         case "business": L10n.Market.Category.business
         case "personal": L10n.Market.Category.personal
         default: name.prefix(1).uppercased() + name.dropFirst()
+        }
+    }
+
+    /// The SF Symbol in front of a category's name in a shelf header, a page header and the sidebar. A category the app
+    /// has no symbol for gets the neutral tag.
+    public static func symbol(_ name: String) -> String {
+        switch name {
+        case "dev": "chevron.left.forwardslash.chevron.right"
+        case "productivity": "checklist"
+        case "data": "cylinder.split.1x2"
+        case "web": "globe"
+        case "design": "paintpalette"
+        case "other": "square.grid.2x2"
+        case "ops": "wrench.and.screwdriver"
+        case "research": "magnifyingglass"
+        case "writing": "pencil.line"
+        case "business": "briefcase"
+        case "personal": "person"
+        default: "tag"
         }
     }
 }
@@ -228,19 +251,6 @@ public final class Router {
     public var marketDetail: String?
     /// Marketplace: the categories of the loaded catalog, for the sidebar. Set by the Marketplace page.
     public var marketCategories: [String] = []
-    /// Marketplace, Services page under All: the category block in view (its name), nil at the top or in the connected
-    /// block. The sidebar lights its row. Set by the page when the block changes.
-    public var marketSection: String?
-    /// Marketplace, Services page: a jump the sidebar asked for. The page takes it once (and sets it back to nil).
-    var marketScroll: MarketScrollRequest?
-    @ObservationIgnored private var marketScrollCount = 0
-
-    /// Asks the Services page to scroll to a place; each call is a new request, so a second click on the same row scrolls
-    /// again.
-    func requestMarketScroll(_ target: MarketScrollTarget) {
-        marketScrollCount += 1
-        marketScroll = MarketScrollRequest(id: marketScrollCount, target: target)
-    }
     /// Marketplace: the page in front (services, bots or skills). Restored from the app's defaults at start. The
     /// page shown is `MarketTab.effective(_:available:)`: a server without the feature falls back to services.
     public var marketTab: MarketTab = .services

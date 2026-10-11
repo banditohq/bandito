@@ -818,7 +818,6 @@
 "integrations.check" = "確認";
 "integrations.checking" = "確認中…";
 "integrations.connect" = "接続";
-"integrations.connected" = "接続済み";
 "integrations.custom.add" = "追加";
 "integrations.custom.commandHint" = "プログラムとその引数を、ドキュメントのとおりに入力します。";
 "integrations.custom.commandLine" = "コマンド全体";
@@ -1098,6 +1097,10 @@
 "market.section.how" = "接続方法";
 "market.section.links" = "リンク";
 "market.section.needs" = "必要なもの";
+"market.shelf.all" = "すべて";
+"market.shelf.allLabel" = "%1$@をすべて表示";
+"market.shelf.next" = "右へスクロール";
+"market.shelf.previous" = "左へスクロール";
 "market.skill.by" = "作者: %1$@";
 "market.skill.claudeOnly" = "Claude 専用";
 "market.skill.conflictAgent" = "%1$@ のフォルダに同じ名前のフォルダがすでにあり、Bandito が作ったものではありません。Bandito は上書きしません。フォルダを移動するか名前を変えてから、スキルをインストールしてください。";

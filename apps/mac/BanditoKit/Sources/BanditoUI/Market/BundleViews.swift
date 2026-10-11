@@ -5,7 +5,7 @@ import Foundation
 import SwiftUI
 import os
 
-// The bundles on the Bots page: the row of sets, a set's card, and the panel that shows what a set holds, connects
+// The bundles on the Bots page: a set's card, and the panel that shows what a set holds, connects
 // what it needs, and makes the team. The panel ends with what was made, and opens the first bot.
 
 /// A tile with a set's SF Symbol on its accent colour.
@@ -46,35 +46,19 @@ struct MemberMiniTile: View {
     }
 }
 
-// MARK: - the row and the cards
+// MARK: - the cards
 
-/// The row of sets above the bots: a section label and one card per set the filter and the search keep.
-struct BundlesRow: View {
-    let bundles: [AgentBundle]
-    let templates: [BotTemplate]
-    let languageCode: String
-    var onView: (AgentBundle) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionLabel(L10n.Market.Bundles.title)
-            MarketRows(items: bundles) { bundle in
-                BundleCard(
-                    bundle: bundle,
-                    members: BundleLogic.members(of: bundle, templates: templates),
-                    languageCode: languageCode,
-                    onView: { onView(bundle) })
-            }
-        }
-    }
-}
-
-/// A set: its tile, its name and description, the small tiles of the bots it holds, and View.
-struct BundleCard: View {
+/// A set: its tile, its name and description, the small tiles of the bots it holds, and View. `Equatable` on what it
+/// draws.
+struct BundleCard: View, Equatable {
     let bundle: AgentBundle
     let members: [BotTemplate]
     let languageCode: String
     var onView: () -> Void
+
+    nonisolated static func == (lhs: BundleCard, rhs: BundleCard) -> Bool {
+        lhs.bundle == rhs.bundle && lhs.members == rhs.members && lhs.languageCode == rhs.languageCode
+    }
 
     var body: some View {
         MarketCardFrame {

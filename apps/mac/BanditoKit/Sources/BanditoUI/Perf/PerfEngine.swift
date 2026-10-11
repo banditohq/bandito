@@ -367,6 +367,62 @@ enum PerfScroller {
         clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: min(max(0, y), maxOffset(scroll))))
         scroll.reflectScrolledClipView(clip)
     }
+
+    // MARK: sideways
+
+    /// The scroll views of the window that have more to show sideways than fits (the Marketplace shelves), the highest
+    /// on the screen first.
+    static func shelves(in window: NSWindow) -> [NSScrollView] {
+        guard let root = window.contentView else { return [] }
+        var found: [(NSScrollView, CGFloat)] = []
+        func visit(_ view: NSView) {
+            if let scroll = view as? NSScrollView, let document = scroll.documentView,
+                document.frame.width > scroll.contentView.bounds.width + 50,
+                document.frame.height <= scroll.contentView.bounds.height + 1
+            {
+                found.append((scroll, scroll.convert(scroll.bounds, to: nil).maxY))
+            }
+            for sub in view.subviews { visit(sub) }
+        }
+        visit(root)
+        return found.sorted { $0.1 > $1.1 }.map(\.0)
+    }
+
+    static func offsetX(_ scroll: NSScrollView) -> CGFloat { scroll.contentView.bounds.origin.x }
+
+    /// Where the row starts: the page margin is a content inset, so the first card sits at a negative offset.
+    static func minOffsetX(_ scroll: NSScrollView) -> CGFloat { -scroll.contentInsets.left }
+
+    static func maxOffsetX(_ scroll: NSScrollView) -> CGFloat {
+        max(
+            minOffsetX(scroll),
+            (scroll.documentView?.frame.width ?? 0) + scroll.contentInsets.right - scroll.contentView.bounds.width)
+    }
+
+    /// Scrolls to `x` (clamped), as a trackpad would: through the clip view, so the scroll notifications fire.
+    static func scrollX(_ scroll: NSScrollView, to x: CGFloat) {
+        let clip = scroll.contentView
+        clip.scroll(to: NSPoint(x: min(max(minOffsetX(scroll), x), maxOffsetX(scroll)), y: clip.bounds.origin.y))
+        scroll.reflectScrolledClipView(clip)
+    }
+
+    /// The text field of the window with this placeholder.
+    static func textField(in window: NSWindow, placeholder: String) -> NSTextField? {
+        guard let root = window.contentView else { return nil }
+        var found: NSTextField?
+        func visit(_ view: NSView) {
+            if found != nil { return }
+            if let field = view as? NSTextField, field.isEditable,
+                (field.placeholderString ?? field.placeholderAttributedString?.string) == placeholder
+            {
+                found = field
+                return
+            }
+            for sub in view.subviews { visit(sub) }
+        }
+        visit(root)
+        return found
+    }
 }
 
 /// The hangs seen during one run.
