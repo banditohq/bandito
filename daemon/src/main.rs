@@ -692,6 +692,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     if safe_mode.is_none() {
         bandito::scheduler::spawn_loop(sup.clone());
         rpc::integrations::spawn_oauth_refresher(app.clone());
+        // Polls the Telegram bot when a token is set (never in safe mode: the database is not the real one).
+        app.telegram.start();
     }
     // Stops server screens that nobody has used for 30 minutes (see docs/ARCHITECTURE.md#screen).
     app.screens.spawn_idle_reaper();

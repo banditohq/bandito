@@ -94,6 +94,15 @@ pub const RESERVED_NAME: &str = "bandito";
 /// the apps do not list, set or delete them.
 pub const OAUTH_SECRET_PREFIX: &str = "MCP_OAUTH_";
 
+/// Prefix of the secrets the daemon keeps for the Telegram bot (`telegram`: its token). Like the sign-in secrets, the
+/// secrets calls of the owner and the apps do not list, set or delete them, and no agent gets them.
+pub const TELEGRAM_SECRET_PREFIX: &str = "DAEMON_TELEGRAM_";
+
+/// Whether a secret belongs to the daemon itself (a sign-in or the Telegram bot), not to the owner's secrets screen.
+pub fn is_daemon_secret(name: &str) -> bool {
+    name.starts_with(OAUTH_SECRET_PREFIX) || name.starts_with(TELEGRAM_SECRET_PREFIX)
+}
+
 /// The id of an integration in a secret name: its hex digits, upper case.
 fn oauth_id_part(id: &str) -> String {
     id.chars()

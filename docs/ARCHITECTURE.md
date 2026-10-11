@@ -222,6 +222,8 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 - `integration_tools(integration_id, name, title, description, read_only, destructive, input_schema, seen_at)`, primary key `(integration_id, name)`: the tools an integration's server listed at its last successful `integrations.test`, with their MCP annotations (`read_only` = `readOnlyHint`, `destructive` = `destructiveHint`, both 0 when not `true`); `input_schema` is the JSON schema, NULL when over 32 KB. Replaced as a whole by each successful test; the rows go with the integration (`integrations.remove`). See [Integrations](#integrations)
 - `workspaces(id, name, kind, image, cpus, memory_mb, network, mounts, created_at)`: where an agent's CLI runs. The row `shared` is created by the migration and always exists. `agents.workspace_id` (default `shared`) says where each agent runs; see [Workspaces](#workspaces)
 
+- `telegram_chats(chat_id, user_id, title, language, linked_at, approvals, answers, current_agent)`, `telegram_messages(chat_id, message_id, agent_id, kind, ref_id, created_at)` and `telegram_state(key, value)`: the [Telegram bot](#telegram). The bot's token is a hidden secret, not a column
+
 Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`.
 
 ## Backups
@@ -701,6 +703,8 @@ API keys and passwords that agents need, such as `OPENAI_API_KEY` or a database 
 - `secrets.set {name, value, agents}` → `SecretInfo`. Creates the secret or replaces its value and agents.
 - `secrets.delete {name}` → `{deleted: bool}`.
 
+The daemon keeps its own secrets in the same table under reserved prefixes (`MCP_OAUTH_` for browser sign-ins, `DAEMON_TELEGRAM_` for the [Telegram bot](#telegram)'s token). These three calls do not list them and refuse to set or delete them, and no agent gets them.
+
 `SecretInfo` is `{name, tail, agents, updated_at}`. `tail` is the last 4 characters of a value of 12 characters or more, otherwise `""`. No method returns a value. `agents` lists agent ids; `["*"]` means every agent, and `[]` means no agent yet. A list that mixes `"*"` with ids is `INVALID_PARAMS`.
 
 **Rules.** Name: `^[A-Z_][A-Z0-9_]{0,63}$`, and not `PATH`, `HOME`, `USER`, `SHELL`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, or anything starting with `DYLD_` or `BANDITO_`. Value: 1 to 65 536 bytes, no NUL byte. Bad input is `INVALID_PARAMS`, and nothing is stored.
@@ -716,6 +720,27 @@ API keys and passwords that agents need, such as `OPENAI_API_KEY` or a database 
 - Redaction works on whole strings. A value split across two `message.delta` chunks can show in the live stream. The stored `message.assistant` text is complete and redacted.
 - Runtimes cut tool output to 16 KB before the daemon sees it, so a value cut at that point leaks its first part. Encoded forms of a value (base64, URL-encoded) are not matched.
 - Redaction protects the chat, the event log and the app. It does not protect files. An agent that writes a secret into a file it may write has put it on disk, where it is the owner's to keep.
+
+## Telegram
+
+The daemon can run a Telegram bot: approval requests arrive as cards with two buttons, agents' answers arrive as messages, and the person can write to agents from the chat. Phase 1: the person makes a bot with @BotFather and gives the daemon its token; the daemon polls it. Code: `daemon/src/telegram/` (`api.rs` the Bot API over `curl`, `format.rs` markdown to Telegram HTML, `strings.rs` and `telegram_strings.json` the texts in nine languages, `handlers.rs` messages and presses, `events.rs` the daemon's events, `mod.rs` the poll loop, sending and the calls of the app), `daemon/src/rpc/telegram.rs`, `daemon/src/store/telegram.rs`. Clients show the feature when `daemon.info.features` contains `"telegram"`.
+
+**Methods** (the owner's apps only; agents are refused). A failure is `TELEGRAM_ERROR` (-32029) with `error.data.reason` and the same code as the first word of the message: `invalid_token`, `network`, `not_configured`, `no_such_chat`, `invalid_params`, `telegram`, `internal`.
+
+- `telegram.status {}` → `{configured, bot: {username, name} | null, running, last_error: null | "unauthorized" | "conflict" | "network", chats: [{chat_id, title, language, linked_at, approvals, answers}]}`. Times are Unix ms; `title` and `language` are always strings.
+- `telegram.set_token {token}` → the status. The token must match `^\d{5,12}:[A-Za-z0-9_-]{30,64}$`; `getMe` checks it (401 or 404 → `invalid_token`, no answer → `network`). The same token again changes nothing; the token of another bot (another number before the colon) drops the chats, messages and offset first.
+- `telegram.remove_token {}` → the status. Stops polling, deletes the token, the chats and everything kept for them.
+- `telegram.link_start {}` → `{code, url, expires_at}`: a code of 8 base32 characters (CSPRNG), valid 10 minutes, one use; a new call replaces the old code; `url` is `https://t.me/<username>?start=<code>`.
+- `telegram.unlink {chat_id}` → the status; the chat gets a goodbye first. `telegram.update_chat {chat_id, approvals?, answers?}` → the status; `answers` is `all`, `telegram` or `none`.
+- Event `telegram.changed` (no payload, agent id `""`, broadcast and never stored) after any change of status or chats.
+
+**Token.** Kept as the secret `DAEMON_TELEGRAM_BOT_TOKEN` (prefix `integrations::TELEGRAM_SECRET_PREFIX`): hidden from `secrets.list/set/delete`, given to no agent, redacted from the log. It is never in an argument of `curl` (a process list would show it): every call is `curl -q --config -` with the address, the token in it and the JSON body on standard input. Errors that leave the module are scrubbed of the token and of anything shaped like one. The Bot API address is a field of the `Api` struct, set only by tests.
+
+**Polling.** `getUpdates` with `timeout=50` and `allowed_updates=[message, callback_query, my_chat_member]`; `deleteWebhook` first; the offset is kept in `telegram_state` after each update is handled. 409 → `last_error: "conflict"`, retry every 60 s; 401 → `unauthorized` and the poll stops (a new `set_token` restarts it); a network failure → `network` with a back-off up to 60 s; 429 → the `retry_after` wait. Nothing starts in safe mode. Sending: a chat gets at most one message a second (a queue; an answer that would wait over 30 s is dropped, a card or a reply is not), text is cut by characters to 4096 (UTF-16 units), HTML Telegram refuses is sent again as plain text.
+
+**Linking.** `/start <code>` from a private chat whose id is the sender's: the code is compared in constant time; 10 wrong codes burn it; at most 5 chats (a sixth is refused and the code stays). Groups and channels are left (`leaveChat`) and never obeyed. An unlinked chat gets the "not connected" notice at most once an hour and nothing else. A message or a press counts only from a linked chat and from the user it was linked for; a press on an approval counts only on a card the bot itself sent to that chat.
+
+**In a linked chat.** The language follows the sender's `language_code` (nine languages, English otherwise). Approvals (`approvals` on): a card with the agent's name and what it wants (secrets redacted, 600 characters), buttons Allow / Deny (`a:<approval_id>:y|n`); a press resolves it as `approvals.resolve` does; a decision in the app, a timeout or a withdrawal edits the cards and takes the buttons off, once. Answers (`answers`): at the end of a turn the agent's last message goes to the chats on `all`, and to the chat whose message started the turn if it is on `telegram`; `none` gets nothing. Which turns a chat started is read from the order of an agent's events (see `events.rs`). Writing: a reply to an answer goes to that agent; `/ask <name> <text>` (case-insensitive, unique prefix, else buttons); plain text goes to the chat's current agent, or asks which agent (`s:<agent_id>`, the text is held 10 minutes) and makes the choice current. Commands: `/start`, `/help`, `/agents`, `/ask`, `/approvals`, `/status`, `/unlink`. Voice, photos and files get "text only".
 
 ## Files
 

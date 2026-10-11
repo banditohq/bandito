@@ -46,6 +46,7 @@ pub mod screen;
 pub mod secrets;
 pub mod setup;
 pub mod skills;
+pub mod telegram;
 pub mod templates;
 pub mod term;
 pub mod tunnel;
@@ -102,6 +103,7 @@ pub fn features() -> Vec<&'static str> {
         "agent_templates",
         "agent_bundles",
         "sharing",
+        "telegram",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -146,6 +148,8 @@ pub struct App {
     safe_mode: std::sync::OnceLock<String>,
     /// Browser sign-ins to MCP servers that wait for their answer (see docs/ARCHITECTURE.md#integrations).
     pub oauth: crate::mcp_oauth::Flows,
+    /// The Telegram bot (see docs/ARCHITECTURE.md#telegram). Started by `main` unless the daemon is in safe mode.
+    pub telegram: Arc<crate::telegram::Telegram>,
 }
 
 impl App {
@@ -170,6 +174,7 @@ impl App {
         files: FileService,
         data_home: PathBuf,
     ) -> Arc<Self> {
+        let telegram = crate::telegram::Telegram::new(sup.clone());
         Arc::new(Self {
             sup,
             started_at: crate::store::now_ms(),
@@ -187,6 +192,7 @@ impl App {
             models: crate::runtime::models::ModelCache::default(),
             safe_mode: std::sync::OnceLock::new(),
             oauth: crate::mcp_oauth::Flows::default(),
+            telegram,
         })
     }
 
@@ -368,6 +374,8 @@ pub const SCREEN_ERROR: i64 = -32025;
 pub const COMMANDS_ERROR: i64 = -32027;
 /// Workspace failures; `error.data.reason` says which (see docs/ARCHITECTURE.md#workspaces).
 pub const WORKSPACE_ERROR: i64 = -32028;
+/// A Telegram call failed; `error.data.reason` says why and the message starts with it (see rpc::telegram).
+pub const TELEGRAM_ERROR: i64 = -32029;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -1108,6 +1116,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     }
     if method.starts_with("screen.") {
         return screen::dispatch(app, peer, method, p).await;
+    }
+    if method.starts_with("telegram.") {
+        return telegram::dispatch(app, method, p).await;
     }
     if matches!(
         method,
@@ -3829,6 +3840,12 @@ mod trust_tests {
         "backups.create",
         "backups.restore",
         "backups.leave_safe_mode",
+        "telegram.status",
+        "telegram.set_token",
+        "telegram.remove_token",
+        "telegram.link_start",
+        "telegram.unlink",
+        "telegram.update_chat",
     ];
 
     #[tokio::test]

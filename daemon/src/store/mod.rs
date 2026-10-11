@@ -20,6 +20,7 @@ mod reactions;
 mod rules;
 mod schedules;
 mod secrets;
+mod telegram;
 mod tool_calls;
 mod usage;
 mod workspaces;
@@ -37,6 +38,7 @@ pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
 pub use secrets::{SecretInfo, check_agents, check_name, check_value};
+pub use telegram::{ANSWER_MODES, TgChat, TgLink, TgMessage};
 pub use tool_calls::{CallFilter, CallStats, ERROR_MAX_CHARS, ToolCall};
 pub use usage::UsageEntry;
 pub use workspaces::{Mount, Network, NewWorkspace, SHARED_WORKSPACE, Workspace, WorkspaceKind, WorkspacePatch};
@@ -63,6 +65,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0020_integration_tool_mode.sql"),
     include_str!("../../migrations/0021_tool_calls.sql"),
     include_str!("../../migrations/0022_agent_template_id.sql"),
+    include_str!("../../migrations/0023_telegram.sql"),
 ];
 
 pub struct Store {
