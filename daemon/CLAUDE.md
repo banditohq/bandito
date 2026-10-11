@@ -17,7 +17,7 @@ with a throwaway data folder: `BANDITO_HOME=$(mktemp -d) cargo test`.
 - The daemon holds `<home>/run/daemon.lock` for its whole life; a second daemon on the same folder waits up to 20 s,
   then refuses.
 - Backups (`backup.rs`): `VACUUM INTO` copies in `<home>/backups` at start (before migrations), on a version change and
-  daily; 14 kept; `bandito backup list|restore`. Never write a database file any other way.
+  daily; `backup_keep` kept (14 by default, see the server settings in docs/ARCHITECTURE.md); `bandito backup list|restore`. Never write a database file any other way.
 - Restore never deletes live database files: they are renamed to `backups/replaced-*` / `broken-*` (never pruned), and
   a failed restore leaves the old database or starts the daemon in safe mode. Keep that order
   (docs/ARCHITECTURE.md#backups) and the fault-injection tests in `backup.rs` when you touch it.

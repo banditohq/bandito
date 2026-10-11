@@ -13,7 +13,7 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// Newest copies kept; older ones are pruned.
+/// Newest copies kept when no `backup_keep` setting is stored (the default; the setting is read by [`settings_now`]).
 pub const KEEP: usize = 14;
 
 const DB_FILE: &str = "bandito.db";
@@ -31,10 +31,8 @@ const PARTIAL_SUFFIX: &str = ".partial";
 const TS_FORMAT: &str = "%Y%m%d-%H%M%S";
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const HOUR_MS: i64 = 3_600_000;
-/// A copy younger than this is good enough at start.
+/// At start a copy younger than this is good enough, even when `backup_every_hours` is longer.
 const START_MAX_AGE_MS: i64 = 20 * HOUR_MS;
-/// The periodic check makes a copy once the newest one is older than this.
-const DAILY_MAX_AGE_MS: i64 = 24 * HOUR_MS;
 const BUSY_MSG: &str =
     "The daemon is running. Stop it first: bandito service uninstall; after the restore: bandito service install";
 
@@ -85,6 +83,22 @@ pub fn snapshot_file(db: &Path, home: &Path, reason: &str, now_ms: i64) -> Resul
     Ok(target)
 }
 
+/// The backup settings as they are stored in the database of `home` (see docs/ARCHITECTURE.md#server-settings): the
+/// defaults when there is no database or no setting yet. Read on every use, so a change applies at the next copy.
+pub fn settings_now(home: &Path) -> crate::server_settings::ServerSettings {
+    crate::store::read_settings_file(&home.join(DB_FILE)).unwrap_or_else(crate::server_settings::defaults)
+}
+
+/// True when a copy is due: there is none, or the newest one is older than `max_age_ms`.
+pub fn copy_due(newest_age_ms: Option<i64>, max_age_ms: i64) -> bool {
+    newest_age_ms.is_none_or(|age| age > max_age_ms)
+}
+
+/// The copies to remove: every one after the `keep` newest. `newest_first` is in that order.
+pub fn surplus<T>(newest_first: &[T], keep: usize) -> &[T] {
+    &newest_first[keep.min(newest_first.len())..]
+}
+
 /// Keeps the `keep` newest copies in `<home>/backups`. Other files there are not touched; in particular the databases
 /// a restore set aside (`replaced-*`, `broken-*`) are never removed: only a person cleans those up. A copy that cannot
 /// be removed is logged, not returned as an error: the copy the caller made is already safe.
@@ -103,7 +117,7 @@ pub fn prune_except(home: &Path, keep: usize, protected: &[&str]) {
             return;
         }
     };
-    for entry in entries.into_iter().skip(keep) {
+    for entry in surplus(&entries, keep) {
         if protected.contains(&entry.name.as_str()) {
             continue;
         }
@@ -218,6 +232,8 @@ pub fn restore(home: &Path, name: &str, now_ms: i64) -> Result<RestoreDone> {
 /// 6. Old copies are pruned, keeping the ones this restore names.
 fn restore_locked(home: &Path, name: &str, now_ms: i64, op_id: &str) -> Result<RestoreDone> {
     validate_name(name)?;
+    // The number kept is the one the daemon had before the restore (the restored file may store another).
+    let keep = settings_now(home).backup_keep as usize;
     let src = backups_dir(home).join(name);
     check_regular_copy(&src, name)?;
 
@@ -346,7 +362,7 @@ fn restore_locked(home: &Path, name: &str, now_ms: i64, op_id: &str) -> Result<R
     clear_progress(home);
     let mut protected = vec![name];
     protected.extend(before.as_deref());
-    prune_except(home, KEEP, &protected);
+    prune_except(home, keep, &protected);
     Ok(RestoreDone { before, saved })
 }
 
@@ -651,14 +667,15 @@ fn health(path: &Path) -> Result<Health> {
     }
 }
 
-/// Makes a copy now with `reason`, keeps the newest `KEEP`, and returns the new copy (`backups.create`).
+/// Makes a copy now with `reason`, keeps the newest `backup_keep`, and returns the new copy (`backups.create`).
 pub fn make_copy(home: &Path, reason: &str, now_ms: i64) -> Result<BackupFile> {
     let db = home.join(DB_FILE);
     if !db.is_file() {
         bail!("there is no database to copy yet");
     }
+    let settings = settings_now(home);
     let path = snapshot_file(&db, home, reason, now_ms)?;
-    prune(home, KEEP);
+    prune(home, settings.backup_keep as usize);
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -947,8 +964,10 @@ pub fn on_start(home: &Path, version: &str, now_ms: i64) -> Result<Option<PathBu
     let recorded = fs::read_to_string(dir.join(LAST_VERSION))
         .ok()
         .map(|s| s.trim().to_string());
-    let due =
-        newest_age_ms(home, now_ms).is_none_or(|age| age > START_MAX_AGE_MS) || recorded.as_deref() != Some(version);
+    let settings = settings_now(home);
+    // The newest copy must be younger than the cadence, and than 20 h: a cadence longer than 20 h keeps the 20 h.
+    let start_max_age_ms = START_MAX_AGE_MS.min(settings.backup_every_ms());
+    let due = copy_due(newest_age_ms(home, now_ms), start_max_age_ms) || recorded.as_deref() != Some(version);
     if !due {
         return Ok(None);
     }
@@ -966,22 +985,23 @@ pub fn on_start(home: &Path, version: &str, now_ms: i64) -> Result<Option<PathBu
         .context("open the last-version file")?;
     file.write_all(version.as_bytes())
         .context("record the version of the last start")?;
-    prune(home, KEEP);
+    prune(home, settings.backup_keep as usize);
     Ok(Some(path))
 }
 
-/// The periodic check: copies the database (reason `daily`) when the newest copy is older than 24 h
-/// or there is none, then prunes. Returns the new copy, if any.
+/// The periodic check: copies the database (reason `daily`) when the newest copy is older than `backup_every_hours`
+/// or there is none, then prunes to `backup_keep`. Returns the new copy, if any.
 pub fn snapshot_if_due(home: &Path, now_ms: i64) -> Result<Option<PathBuf>> {
     let db = home.join(DB_FILE);
     if !db.is_file() {
         return Ok(None);
     }
-    if newest_age_ms(home, now_ms).is_some_and(|age| age <= DAILY_MAX_AGE_MS) {
+    let settings = settings_now(home);
+    if !copy_due(newest_age_ms(home, now_ms), settings.backup_every_ms()) {
         return Ok(None);
     }
     let path = snapshot_file(&db, home, "daily", now_ms)?;
-    prune(home, KEEP);
+    prune(home, settings.backup_keep as usize);
     Ok(Some(path))
 }
 
@@ -1672,6 +1692,71 @@ mod tests {
         assert!(snapshot_if_due(home.path(), BASE_MS + 23 * HOUR_MS).unwrap().is_none());
         let due = snapshot_if_due(home.path(), BASE_MS + 25 * HOUR_MS).unwrap().unwrap();
         assert!(due.file_name().unwrap().to_str().unwrap().ends_with("-daily.db"));
+    }
+
+    /// Writes server settings into the database of `home` (the store creates its settings table when it opens).
+    fn set_settings(home: &Path, patch: serde_json::Value) {
+        let store = crate::store::Store::open(&home.join(DB_FILE)).unwrap();
+        let changes = crate::server_settings::check_patch(patch.as_object().unwrap()).unwrap();
+        store.server_settings_write(&changes).unwrap();
+    }
+
+    #[test]
+    fn a_copy_is_due_when_none_is_there_or_the_newest_is_older_than_the_cadence() {
+        assert!(copy_due(None, HOUR_MS));
+        assert!(!copy_due(Some(HOUR_MS - 1), HOUR_MS));
+        assert!(!copy_due(Some(HOUR_MS), HOUR_MS));
+        assert!(copy_due(Some(HOUR_MS + 1), HOUR_MS));
+    }
+
+    #[test]
+    fn surplus_is_everything_after_the_keep_newest() {
+        let newest_first = [1, 2, 3, 4];
+        assert_eq!(surplus(&newest_first, 2), &[3, 4]);
+        assert_eq!(surplus(&newest_first, 0), &newest_first);
+        assert!(surplus(&newest_first, 4).is_empty());
+        assert!(surplus(&newest_first, 9).is_empty());
+    }
+
+    #[test]
+    fn the_periodic_check_follows_backup_every_hours() {
+        let home = temp_home();
+        make_db(&home.path().join(DB_FILE), &["a"]);
+        set_settings(home.path(), serde_json::json!({"backup_every_hours": 6}));
+        assert!(snapshot_if_due(home.path(), BASE_MS).unwrap().is_some());
+        assert!(snapshot_if_due(home.path(), BASE_MS + 5 * HOUR_MS).unwrap().is_none());
+        let due = snapshot_if_due(home.path(), BASE_MS + 7 * HOUR_MS).unwrap().unwrap();
+        assert!(due.file_name().unwrap().to_str().unwrap().ends_with("-daily.db"));
+    }
+
+    #[test]
+    fn the_start_check_takes_the_shorter_of_the_cadence_and_20_hours() {
+        let home = temp_home();
+        make_db(&home.path().join(DB_FILE), &["a"]);
+        set_settings(home.path(), serde_json::json!({"backup_every_hours": 6}));
+        assert!(on_start(home.path(), VERSION, BASE_MS).unwrap().is_some());
+        // Same version, 7 h later: the 6 h cadence has passed, so a start copy is made.
+        assert!(on_start(home.path(), VERSION, BASE_MS + 7 * HOUR_MS).unwrap().is_some());
+        // With the default 24 h cadence the 20 h limit applies, and 7 h is still young enough.
+        let other = temp_home();
+        make_db(&other.path().join(DB_FILE), &["a"]);
+        assert!(on_start(other.path(), VERSION, BASE_MS).unwrap().is_some());
+        assert!(
+            on_start(other.path(), VERSION, BASE_MS + 7 * HOUR_MS)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn the_number_kept_comes_from_backup_keep() {
+        let home = temp_home();
+        make_db(&home.path().join(DB_FILE), &["a"]);
+        set_settings(home.path(), serde_json::json!({"backup_keep": 3}));
+        for i in 0..5 {
+            make_copy(home.path(), "manual", BASE_MS + i * HOUR_MS).unwrap();
+        }
+        assert_eq!(copies(home.path()).unwrap().len(), 3);
     }
 
     #[test]

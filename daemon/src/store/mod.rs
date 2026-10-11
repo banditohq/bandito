@@ -22,6 +22,7 @@ mod reactions;
 mod rules;
 mod schedules;
 mod secrets;
+mod server_settings;
 mod telegram;
 mod tool_calls;
 mod usage;
@@ -41,6 +42,7 @@ pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
 pub use secrets::{SecretInfo, check_agents, check_name, check_value};
+pub use server_settings::read_settings_file;
 pub use telegram::{ANSWER_MODES, TgChat, TgLink, TgMessage};
 pub use tool_calls::{CallFilter, CallStats, ERROR_MAX_CHARS, ToolCall};
 pub use usage::UsageEntry;
@@ -72,6 +74,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0024_integration_auth_device.sql"),
     include_str!("../../migrations/0025_agent_migrated.sql"),
     include_str!("../../migrations/0026_query_indexes.sql"),
+    include_str!("../../migrations/0027_server_settings.sql"),
 ];
 
 pub struct Store {

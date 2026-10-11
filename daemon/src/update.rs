@@ -2,10 +2,14 @@
 //! `SHA256SUMS` carries a valid signature from the release key. Nothing installs by itself: the owner
 //! asks (`bandito update`, or the app's `daemon.update_apply`). See docs/ARCHITECTURE.md#self-update.
 
+use crate::server_settings::AutoUpdate;
 use crate::service::{self, Mode, Paths};
+use crate::store::Store;
+use crate::turn_gate::TurnGate;
 use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use chrono::{Local, Timelike};
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -16,7 +20,7 @@ use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 /// Public key of the release signing key: Ed25519, raw 32 bytes, base64. The same key as
@@ -906,20 +910,165 @@ pub async fn rpc_apply(version: &str) -> Result<bool> {
     Ok(true)
 }
 
-/// Calls `on_available` when a newer release exists: once, 10 minutes after start, then every 24 hours.
-/// Nothing is installed here.
-pub fn spawn_background_check(current: &'static str, on_available: impl Fn(UpdateInfo) + Send + 'static) {
+/// The hours (server local time) when `auto_update = install` may install: 02:00 up to 05:00, not included.
+pub const INSTALL_FROM_HOUR: u32 = 2;
+pub const INSTALL_UNTIL_HOUR: u32 = 5;
+/// How often the install check runs while the install window is open.
+pub const INSTALL_CHECK_EVERY: Duration = Duration::from_secs(10 * 60);
+
+/// True when `hour` (0 to 23, server local time) is inside the install window.
+pub fn install_window(hour: u32) -> bool {
+    (INSTALL_FROM_HOUR..INSTALL_UNTIL_HOUR).contains(&hour)
+}
+
+/// True when an available release may be installed now: the setting is `install`, the hour is in the window, and no
+/// agent runs a turn (`running` is the number of turns running). Nothing else is checked here.
+pub fn may_install(mode: AutoUpdate, available: bool, hour: u32, running: usize) -> bool {
+    mode == AutoUpdate::Install && available && install_window(hour) && running == 0
+}
+
+/// Calls `on_available` when a newer release exists: once, 10 minutes after start, then every 24 hours. Nothing is
+/// installed here. With `auto_update = off` no check runs by itself (see docs/ARCHITECTURE.md#server-settings).
+pub fn spawn_background_check(
+    current: &'static str,
+    store: Arc<Store>,
+    on_available: impl Fn(UpdateInfo) + Send + 'static,
+) {
     tokio::spawn(async move {
         tokio::time::sleep(FIRST_CHECK_AFTER).await;
         loop {
-            match check_async(current).await {
-                Ok(info) if info.available => on_available(info),
-                Ok(_) => {}
-                Err(e) => tracing::debug!("update check: {e:#}"),
+            if store.server_settings_or_default().auto_update != AutoUpdate::Off {
+                match check_async(current).await {
+                    Ok(info) if info.available => on_available(info),
+                    Ok(_) => {}
+                    Err(e) => tracing::debug!("update check: {e:#}"),
+                }
             }
             tokio::time::sleep(CHECK_EVERY).await;
         }
     });
+}
+
+/// How long the gate stays closed after an install that asked for a restart: the restart comes one second after the
+/// reply (see `rpc_apply`), so no turn can start in between. If the restart does not come, the gate opens after this.
+pub const INSTALL_RESTART_GRACE: Duration = Duration::from_secs(3);
+
+/// With `auto_update = install`: installs a newer release at night, through [`rpc_apply`] (the same path as the
+/// owner's request, with its restart), while the install window is open and no agent runs a turn. Each release is
+/// installed once; a failed install is tried again at the next check of the window.
+///
+/// The check of "no turn runs" and the closing of the gate happen together ([`TurnGate::close_when`]): while the
+/// install runs, a new turn waits in its queue, like a turn past `max_running_agents`. If a turn runs, the gate is not
+/// closed and the install waits for the next check. A failed install opens the gate again (the hold ends).
+pub fn spawn_auto_install(store: Arc<Store>, turns: Arc<TurnGate>, current: &'static str) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(INSTALL_CHECK_EVERY);
+        let mut installed: Option<String> = None;
+        loop {
+            tick.tick().await;
+            if store.server_settings_or_default().auto_update != AutoUpdate::Install
+                || !install_window(Local::now().hour())
+            {
+                continue;
+            }
+            let info = match check_async(current).await {
+                Ok(info) => info,
+                Err(e) => {
+                    tracing::debug!("install check: {e:#}");
+                    continue;
+                }
+            };
+            if installed.as_deref() == Some(info.latest.as_str()) {
+                continue;
+            }
+            let hour = Local::now().hour();
+            let Some(hold) =
+                turns.close_when(|running| may_install(AutoUpdate::Install, info.available, hour, running))
+            else {
+                tracing::debug!("install waits: a turn is running, or no newer release");
+                continue;
+            };
+            tracing::info!(version = %info.latest, "installing the newer release (auto_update = install)");
+            match rpc_apply(&info.latest).await {
+                Ok(restarting) => {
+                    installed = Some(info.latest.clone());
+                    tracing::info!(version = %info.latest, restarting, "newer release installed");
+                    if restarting {
+                        tokio::time::sleep(INSTALL_RESTART_GRACE).await;
+                    }
+                }
+                Err(e) => tracing::error!("installing the newer release failed: {e:#}"),
+            }
+            // Success without a restart, a failure, or the grace after a restart: the waiting turns start now.
+            drop(hold);
+        }
+    });
+}
+
+#[cfg(test)]
+mod install_tests {
+    use super::*;
+
+    #[test]
+    fn the_install_window_is_two_to_five_in_the_morning() {
+        assert!(!install_window(1));
+        assert!(install_window(2));
+        assert!(install_window(4));
+        assert!(!install_window(5));
+        assert!(!install_window(12));
+    }
+
+    #[test]
+    fn install_waits_for_the_window_an_available_release_and_no_running_turn() {
+        assert!(may_install(AutoUpdate::Install, true, 3, 0));
+        assert!(
+            !may_install(AutoUpdate::Install, true, 3, 1),
+            "a running turn blocks the install"
+        );
+        assert!(!may_install(AutoUpdate::Install, true, 5, 0), "outside the window");
+        assert!(!may_install(AutoUpdate::Install, false, 3, 0), "no newer release");
+    }
+
+    #[test]
+    fn only_the_install_setting_installs_by_itself() {
+        assert!(!may_install(AutoUpdate::Notify, true, 3, 0));
+        assert!(!may_install(AutoUpdate::Off, true, 3, 0));
+    }
+
+    #[test]
+    fn the_install_holds_the_gate_only_when_it_is_due_and_no_turn_runs() {
+        let gate = TurnGate::new();
+        let due = |running: usize| may_install(AutoUpdate::Install, true, 3, running);
+
+        // A turn runs: the gate is not closed, a new turn still starts, and the install waits.
+        let slot = gate.try_take(usize::MAX).expect("a turn starts");
+        assert!(gate.close_when(due).is_none());
+        drop(slot);
+        assert!(gate.try_take(usize::MAX).is_some(), "the gate was left open");
+
+        // Idle and due: the gate closes, so a turn that asks now waits in the queue.
+        let hold = gate.close_when(due).expect("idle and due: the hold is taken");
+        assert!(gate.try_take(usize::MAX).is_none(), "a turn waits during the install");
+        assert!(!gate.has_room(usize::MAX), "the waiting message is shown as queued");
+        // The install ends (success or failure): the waiting turn starts.
+        drop(hold);
+        assert!(gate.try_take(usize::MAX).is_some());
+
+        // Idle, but not due: no hold at all.
+        assert!(
+            gate.close_when(|r| may_install(AutoUpdate::Notify, true, 3, r))
+                .is_none()
+        );
+        assert!(
+            gate.close_when(|r| may_install(AutoUpdate::Install, true, 5, r))
+                .is_none()
+        );
+        assert!(
+            gate.close_when(|r| may_install(AutoUpdate::Install, false, 3, r))
+                .is_none()
+        );
+        assert!(gate.try_take(usize::MAX).is_some());
+    }
 }
 
 #[cfg(test)]

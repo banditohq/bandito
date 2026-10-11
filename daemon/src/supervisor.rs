@@ -21,6 +21,7 @@ use crate::store::{
     Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind,
     capabilities_csv, new_id, now_ms,
 };
+use crate::turn_gate::TurnSlot;
 use crate::workspace::{self, WorkspaceManager, WorkspaceSpec};
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Local, NaiveTime, TimeZone};
@@ -30,7 +31,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 
 /// Available runtimes by kind.
 #[derive(Default, Clone)]
@@ -535,6 +536,9 @@ impl Supervisor {
             turn_until: None,
             manual_chapter: false,
             status: None,
+            slot: None,
+            slot_rx: self.hub.turns().subscribe(),
+            slot_waiting: false,
         };
         tokio::spawn(actor.run(rx));
         actors.insert(agent_id.to_string(), tx.clone());
@@ -986,6 +990,12 @@ struct Actor {
     /// A new chapter was asked for while a turn ran: it starts when the turn ends.
     manual_chapter: bool,
     status: Option<AgentStatus>,
+    /// The turn slot this agent holds while a turn or a wrap-up runs (see `turn_gate` and `max_running_agents`).
+    slot: Option<TurnSlot>,
+    /// Sees every change of the turn gate: a waiting agent checks again when it changes.
+    slot_rx: watch::Receiver<u64>,
+    /// A turn was ready but no slot was free: the agent waits, its message shown as queued.
+    slot_waiting: bool,
 }
 
 async fn recv_opt(rx: &mut Option<mpsc::Receiver<RuntimeOutput>>) -> Option<RuntimeOutput> {
@@ -1012,9 +1022,60 @@ impl Actor {
                     Some(o) => self.output(o).await,
                     None => self.output = None,
                 },
+                woke = self.slot_rx.changed(), if self.slot_waiting => match woke {
+                    Ok(()) => self.slot_retry().await,
+                    Err(_) => self.slot_waiting = false,
+                },
+            }
+            // Whatever the step did, a slot is held only while a turn or a wrap-up runs.
+            if self.turn.is_none() && self.wrap_up.is_none() {
+                self.slot = None;
             }
         }
         self.close().await;
+    }
+
+    /// The largest number of turns that may run at once, from the settings (0 in the settings means no limit).
+    fn slot_limit(&self) -> usize {
+        self.hub.store.server_settings_or_default().turn_limit()
+    }
+
+    /// True when a turn could start now: this agent holds a slot, or one is free.
+    fn slot_available(&self) -> bool {
+        self.slot.is_some() || self.hub.turns().has_room(self.slot_limit())
+    }
+
+    /// Takes a turn slot for this agent (keeps it when it holds one). When none is free the agent waits: the
+    /// watch is marked as seen first, so a slot given back after this check wakes the agent (see `run`).
+    fn claim_slot(&mut self) -> bool {
+        if self.slot.is_some() {
+            return true;
+        }
+        let _ = self.slot_rx.borrow_and_update();
+        match self.hub.turns().try_take(self.slot_limit()) {
+            Some(slot) => {
+                self.slot = Some(slot);
+                self.slot_waiting = false;
+                true
+            }
+            None => {
+                self.slot_waiting = true;
+                false
+            }
+        }
+    }
+
+    /// A slot was given back or the limit changed: the waiting work starts now, if a slot is free.
+    async fn slot_retry(&mut self) {
+        self.slot_waiting = false;
+        if self.manual_chapter
+            && let Err(e) = self.apply_manual_chapter().await
+        {
+            tracing::warn!(agent = self.id, "new chapter after a wait: {e:#}");
+        }
+        if let Err(e) = self.pump().await {
+            tracing::warn!(agent = self.id, "next message after a wait: {e:#}");
+        }
     }
 
     fn set_status(&mut self, status: AgentStatus, detail: Option<String>) {
@@ -1034,7 +1095,8 @@ impl Actor {
                     || self.turn.is_some()
                     || self.wrap_up.is_some()
                     || !self.queue.is_empty()
-                    || self.chapter_pending();
+                    || self.chapter_pending()
+                    || !self.slot_available();
                 let echoed = waits.then(|| self.echo(&msg, true)).filter(|seq| *seq > 0);
                 self.queue.push_back(Queued { msg, echoed });
                 let res = self.pump().await.map(|()| held);
@@ -1470,6 +1532,10 @@ impl Actor {
         if self.queue.is_empty() || self.is_paused() {
             return Ok(());
         }
+        // No free slot (`max_running_agents`): the message stays queued until the gate changes.
+        if !self.claim_slot() {
+            return Ok(());
+        }
         // A chapter that is over budget, or a new memory day, closes before the message goes out.
         // (If the agent can't be loaded, `ensure_session` reports it below.)
         if let Ok(agent) = self.agent()
@@ -1548,6 +1614,10 @@ impl Actor {
     /// as an automatic close does. Waits (keeps the request) while a turn or a wrap-up runs.
     async fn apply_manual_chapter(&mut self) -> Result<()> {
         if self.turn.is_some() || self.wrap_up.is_some() {
+            return Ok(());
+        }
+        // Waits for a free slot like a turn does; the request stays until then.
+        if !self.claim_slot() {
             return Ok(());
         }
         self.manual_chapter = false;
@@ -3064,6 +3134,77 @@ mod tests {
         w.push(done()).await;
         w.wait_log("send second").await;
         assert_eq!(w.spawns.lock().unwrap().len(), 1, "one session for both turns");
+    }
+
+    /// Sets server settings in `store`, through the same checks as `server.settings_set`.
+    fn set_setting(store: &Store, patch: serde_json::Value) {
+        let changes = crate::server_settings::check_patch(patch.as_object().unwrap()).unwrap();
+        store.server_settings_write(&changes).unwrap();
+    }
+
+    /// A second agent of `w`'s runtime, in the same store and folder.
+    fn second_agent(w: &World, name: &str) -> String {
+        w.store
+            .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
+                integrations: None,
+                name: name.into(),
+                role: "reviewer".into(),
+                runtime: RuntimeKind::Claude,
+                model: Some("opus".into()),
+                cwd: "/bandito-probe/u/app".into(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
+            })
+            .unwrap()
+            .id
+    }
+
+    #[tokio::test]
+    async fn max_running_agents_one_makes_the_second_agent_wait_for_the_first() {
+        let mut w = world(ApprovalMode::Risky);
+        set_setting(&w.store, json!({"max_running_agents": 1}));
+        let scout = second_agent(&w, "Scout");
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        w.sup.send(&scout, Inbound::user("second")).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        assert!(
+            !w.log.lock().unwrap().iter().any(|l| l == "send second"),
+            "the second turn starts only when a slot is free"
+        );
+        assert_eq!(w.sup.hub().turns().running(), 1);
+        // The waiting message is in the thread at once, marked as queued.
+        let queued = w
+            .store
+            .events_since(0, 1000, Some(&scout))
+            .unwrap()
+            .into_iter()
+            .any(|e| matches!(e.body, EventBody::MessageUser { queued: true, .. }));
+        assert!(queued, "the message waits in the queue");
+        // The first turn ends: its slot goes to the waiting agent.
+        w.push(done()).await;
+        w.wait_log("send second").await;
+        assert_eq!(w.sup.hub().turns().running(), 1);
+        let _ = w.wait(|b| matches!(b, EventBody::TurnStarted { .. })).await;
+    }
+
+    #[tokio::test]
+    async fn no_limit_lets_both_agents_run_at_once() {
+        let w = world(ApprovalMode::Risky);
+        let scout = second_agent(&w, "Scout");
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.sup.send(&scout, Inbound::user("second")).await.unwrap();
+        w.wait_log("send first").await;
+        w.wait_log("send second").await;
+        assert_eq!(w.sup.hub().turns().running(), 2);
     }
 
     fn user_texts(w: &World) -> Vec<String> {

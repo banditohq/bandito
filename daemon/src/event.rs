@@ -278,6 +278,10 @@ pub enum EventBody {
     /// with an empty agent id: the app reads `telegram.status` again.
     #[serde(rename = "telegram.changed")]
     TelegramChanged,
+    /// The owner changed server settings (see docs/ARCHITECTURE.md#server-settings). Broadcast only, never stored,
+    /// with an empty agent id. `keys` are the names that changed; the app reads `server.settings_get` again.
+    #[serde(rename = "server.settings_changed")]
+    ServerSettingsChanged { keys: Vec<String> },
     #[serde(rename = "error")]
     Error { message: String },
 }
@@ -288,7 +292,10 @@ pub const TOOL_OUTPUT_LIMIT: usize = 16 * 1024;
 impl EventBody {
     /// Streaming deltas are broadcast but not written to the store.
     pub fn is_persisted(&self) -> bool {
-        !matches!(self, EventBody::MessageDelta { .. } | EventBody::TelegramChanged)
+        !matches!(
+            self,
+            EventBody::MessageDelta { .. } | EventBody::TelegramChanged | EventBody::ServerSettingsChanged { .. }
+        )
     }
 
     /// Split into the `kind` string and the `payload` JSON for storage.
@@ -344,6 +351,21 @@ mod tests {
         );
         let back: EventBody = serde_json::from_value(serde_json::to_value(&body).unwrap()).unwrap();
         assert_eq!(back, body);
+    }
+
+    #[test]
+    fn server_settings_changed_names_the_keys_and_is_not_stored() {
+        let body = EventBody::ServerSettingsChanged {
+            keys: vec!["backup_keep".into()],
+        };
+        assert!(!body.is_persisted());
+        let (kind, payload) = body.to_parts();
+        assert_eq!(kind, "server.settings_changed");
+        assert_eq!(EventBody::from_parts(&kind, payload).unwrap(), body);
+        assert_eq!(
+            serde_json::to_value(&body).unwrap(),
+            serde_json::json!({"kind": "server.settings_changed", "payload": {"keys": ["backup_keep"]}})
+        );
     }
 
     #[test]

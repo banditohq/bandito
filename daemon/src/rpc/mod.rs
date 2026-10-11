@@ -46,6 +46,7 @@ pub mod preview;
 pub mod schedules;
 pub mod screen;
 pub mod secrets;
+pub mod settings;
 pub mod setup;
 pub mod skills;
 pub mod telegram;
@@ -113,6 +114,7 @@ pub fn features() -> Vec<&'static str> {
         "telegram",
         "agent_connect",
         "agent_migrate",
+        "server_settings",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -1282,7 +1284,15 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
         }
         "agents.create" => {
-            let CreateAgent { agent, workspace_id } = params(p)?;
+            // The approval mode of a new agent that the call does not set: the server setting `default_approval_mode`.
+            let explicit_mode = p.get("approval_mode").is_some();
+            let CreateAgent {
+                mut agent,
+                workspace_id,
+            } = params(p)?;
+            if !explicit_mode {
+                agent.approval_mode = store.server_settings_or_default().default_approval_mode;
+            }
             let id = create_agent(app, agent, workspace_id)?;
             ok(store
                 .agent_view(&id)?
@@ -1788,6 +1798,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "backups.list" | "backups.create" | "backups.restore" | "backups.leave_safe_mode" => {
             backups::dispatch(app, method, p).await
         }
+
+        "server.settings_get" | "server.settings_set" => settings::dispatch(app, method, p).await,
 
         "daemon.update_check" => ok(update::check_async(VERSION).await?),
         "daemon.update_apply" => {
