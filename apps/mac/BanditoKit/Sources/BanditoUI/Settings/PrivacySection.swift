@@ -53,8 +53,9 @@ struct PrivacySection: View {
                     title: L10n.Telemetry.Notice.policy,
                     icon: SettingsIcon(symbol: "hand.raised", tint: BanditoPalette.badgeDarkGray)
                 ) {
-                    Button(L10n.Telemetry.Notice.policy) { openURL(TelemetryCenter.privacyPolicyURL) }
-                        .banditoButton(.link)
+                    // The row's title already says what this is; the control is only the way to the page.
+                    Button { openURL(TelemetryCenter.privacyPolicyURL) } label: { Image(systemName: "arrow.up.right") }
+                        .banditoButton(.icon(size: 28, label: L10n.Telemetry.Notice.policy))
                 }
             }
         }

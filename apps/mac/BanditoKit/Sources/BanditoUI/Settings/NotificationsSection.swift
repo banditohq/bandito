@@ -75,11 +75,16 @@ struct NotificationsSection: View {
         }
     }
 
+    /// The system notification centre needs an app bundle: in a test process or a bare executable it aborts the process.
+    private static var hasAppBundle: Bool { Bundle.main.bundleURL.pathExtension == "app" }
+
     private func refresh() async {
+        guard Self.hasAppBundle else { return }
         status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 
     private func request() async {
+        guard Self.hasAppBundle else { return }
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
         await refresh()
     }

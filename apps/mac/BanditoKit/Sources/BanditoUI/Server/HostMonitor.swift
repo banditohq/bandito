@@ -43,13 +43,13 @@ struct ProcessRow: Identifiable, Hashable {
 final class HostMonitor {
     static let interval: Duration = .seconds(10)
 
-    private(set) var stats: HostStats?
-    private(set) var history: [HostPoint] = []
-    private(set) var processes: [ProcessRow] = []
+    internal(set) var stats: HostStats?
+    internal(set) var history: [HostPoint] = []
+    internal(set) var processes: [ProcessRow] = []
     /// The owners of the processes, as `host.processes` reports them (agents, terminals, the daemon).
-    private(set) var ownerGroups: [ProcessOwner] = []
+    internal(set) var ownerGroups: [ProcessOwner] = []
     private(set) var processesSupported = true
-    private(set) var ports: [ListeningPort] = []
+    internal(set) var ports: [ListeningPort] = []
     private(set) var portsSupported = true
     /// The last failure of a refresh, for the user.
     private(set) var error: UserFacingMessage?

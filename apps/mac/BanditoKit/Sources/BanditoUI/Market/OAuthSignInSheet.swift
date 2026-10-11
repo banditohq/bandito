@@ -29,8 +29,9 @@ struct OAuthSignInSheet: View {
             Text(title)
                 .font(BanditoFont.display(size: 18.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
-                .lineLimit(1)
+                .lineLimit(2)
                 .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
             content
             buttons
         }

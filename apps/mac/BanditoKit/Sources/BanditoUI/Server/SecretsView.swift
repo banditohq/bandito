@@ -161,7 +161,7 @@ struct SecretDraft: Identifiable {
     }
 }
 
-private struct SecretEditor: View {
+struct SecretEditor: View {
     @State var draft: SecretDraft
     let server: ServerModel
     var onSaved: () async -> Void

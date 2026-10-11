@@ -117,26 +117,42 @@ struct KeysAndGesturesSection: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.Bandito.text3)
-                TextField(L10n.Keys.search, text: $query)
-                    .textFieldStyle(.plain)
-                    .font(BanditoFont.text(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.text)
+        // The search field never gets narrower than 320 pt (its hint must read in full); when the switch beside it
+        // leaves less, the switch goes under the field.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                searchField.frame(minWidth: 320)
+                tabSwitch
             }
-            .padding(.horizontal, 12)
-            .frame(height: 34)
-            .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.Bandito.text.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.Bandito.text.opacity(0.08)))
-            SegmentedPicker(
-                selection: $tab,
-                options: [(Tab.keys, L10n.Keys.tabKeys), (Tab.gestures, L10n.Keys.tabGestures)])
-                .fixedSize()
+            VStack(alignment: .leading, spacing: 10) {
+                searchField
+                tabSwitch
+            }
         }
+    }
+
+    private var tabSwitch: some View {
+        SegmentedPicker(
+            selection: $tab,
+            options: [(Tab.keys, L10n.Keys.tabKeys), (Tab.gestures, L10n.Keys.tabGestures)])
+            .fixedSize()
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.Bandito.text3)
+            TextField(L10n.Keys.search, text: $query)
+                .textFieldStyle(.plain)
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 34)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.Bandito.text.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.Bandito.text.opacity(0.08)))
     }
 
     // MARK: keys

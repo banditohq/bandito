@@ -26,7 +26,7 @@ public final class OAuthSignIn {
         case failed(name: String, message: UserFacingMessage, canRetry: Bool)
     }
 
-    public private(set) var phase: Phase = .idle {
+    public internal(set) var phase: Phase = .idle {
         didSet { countOutcome(previous: oldValue) }
     }
 

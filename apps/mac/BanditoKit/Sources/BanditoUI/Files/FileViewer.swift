@@ -727,7 +727,7 @@ private struct RemotePDF: View {
 }
 
 /// Lines of the server's copy and the user's copy, side by side as a list: removed in red, added in green.
-private struct ConflictDiffSheet: View {
+struct ConflictDiffSheet: View {
     let serverText: String
     let mineText: String
     @Environment(\.dismiss) private var dismiss

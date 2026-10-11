@@ -12,6 +12,20 @@ struct PortsView: View {
     /// Off: every listening port. On: only the ports the overview previews.
     @State private var onlyPreview = false
 
+    /// `reply` is given only by the layout audit, with ports already listed.
+    init(server: ServerModel?, reply: HostPorts? = nil) {
+        self.server = server
+        _reply = State(initialValue: reply)
+    }
+
+    /// The columns, sized so the process column keeps at least 90 pt at the narrowest window (card ≈ 504 pt wide):
+    /// 68 + 104 + 100 + 80 + 4 gaps of 10 pt.
+    private static let columnGap: CGFloat = 10
+    private static let portWidth: CGFloat = 68
+    private static let ownerWidth: CGFloat = 104
+    private static let addressWidth: CGFloat = 100
+    private static let openWidth: CGFloat = 80
+
     var body: some View {
         ServerPage(
             title: L10n.Mode.serverPorts,
@@ -29,12 +43,12 @@ struct PortsView: View {
         ) {
             if let server, server.supports("host") {
                 ServerCard {
-                    HStack(spacing: 12) {
-                        SectionLabel(L10n.Ports.columnPort).frame(width: 80, alignment: .leading)
+                    HStack(spacing: Self.columnGap) {
+                        SectionLabel(L10n.Ports.columnPort).frame(width: Self.portWidth, alignment: .leading)
                         SectionLabel(L10n.Ports.columnProcess).frame(maxWidth: .infinity, alignment: .leading)
-                        SectionLabel(L10n.Ports.columnOwner).frame(width: 160, alignment: .leading)
-                        SectionLabel(L10n.Ports.columnAddress).frame(width: 110, alignment: .leading)
-                        Color.clear.frame(width: 90)
+                        SectionLabel(L10n.Ports.columnOwner).frame(width: Self.ownerWidth, alignment: .leading)
+                        SectionLabel(L10n.Ports.columnAddress).frame(width: Self.addressWidth, alignment: .leading)
+                        Color.clear.frame(width: Self.openWidth)
                     }
                     if let reply, !reply.supported {
                         Text(L10n.Server.Processes.unsupported).foregroundStyle(Color.Bandito.text2)
@@ -42,14 +56,15 @@ struct PortsView: View {
                         Text(L10n.Ports.empty).foregroundStyle(Color.Bandito.text2)
                     }
                     ForEach(sortedPorts, id: \.self) { port in
-                        HStack(spacing: 12) {
+                        HStack(spacing: Self.columnGap) {
                             PortBadge(port: port.port)
-                                .frame(width: 80, alignment: .leading)
+                                .frame(width: Self.portWidth, alignment: .leading)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(port.process ?? "—")
                                     .font(BanditoFont.text(size: 13, weight: 400))
                                     .foregroundStyle(Color.Bandito.text)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                    .truncationMode(.middle)
                                 if let pid = port.pid {
                                     Text(verbatim: "pid \(pid)")
                                         .font(BanditoFont.mono(size: 11, weight: 400))
@@ -60,19 +75,21 @@ struct PortsView: View {
                             Text(ownerLabel(port, server: server))
                                 .font(BanditoFont.text(size: 12.5, weight: 400))
                                 .foregroundStyle(Color.Bandito.text2)
-                                .lineLimit(1)
-                                .frame(width: 160, alignment: .leading)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
+                                .frame(width: Self.ownerWidth, alignment: .leading)
                             Text(port.addr == "*" ? L10n.Ports.allInterfaces : port.addr)
                                 .font(port.addr == "*" ? BanditoFont.text(size: 12) : BanditoFont.mono(size: 12))
                                 .foregroundStyle(Color.Bandito.text3)
-                                .lineLimit(1)
-                                .frame(width: 110, alignment: .leading)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
+                                .frame(width: Self.addressWidth, alignment: .leading)
                             Button(L10n.Server.Ports.open) {
                                 router.pendingPreviewPort = port.port
                                 router.select(mode: .browser)
                             }
                             .banditoButton(.quiet())
-                            .frame(width: 90, alignment: .trailing)
+                            .frame(width: Self.openWidth, alignment: .trailing)
                         }
                         .padding(.vertical, 4)
                         .overlay(alignment: .top) { Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1) }
