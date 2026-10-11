@@ -70,8 +70,11 @@ enum AttachmentTray {
     /// The message can go when it has text or a file that is ready, and no file is still uploading. A file that
     /// failed does not block the send; it is not sent.
     static func canSend(text: String, files: [DraftFile]) -> Bool {
-        let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return (hasText || !readyFiles(files).isEmpty) && !hasUploading(files)
+        canSend(hasText: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, files: files)
+    }
+
+    static func canSend(hasText: Bool, files: [DraftFile]) -> Bool {
+        (hasText || !readyFiles(files).isEmpty) && !hasUploading(files)
     }
 
     static func hasUploading(_ files: [DraftFile]) -> Bool {

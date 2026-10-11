@@ -298,17 +298,18 @@ struct TeamSidebar: View {
     }
 }
 
-/// Reads the thread of one agent for a row of the sidebar. The sidebar itself does not read threads: a stream writes
-/// the threads several times a second, and every view that read them was built again. Here only this reader is, and
-/// it hands the row the few facts it shows (`SidebarThreadFacts`): a row whose facts did not change is not built again
-/// (`Memo`), so a token streamed into an agent's thread costs its row nothing.
+/// Reads what a row of the sidebar shows of one agent's thread. The sidebar itself does not read threads: a stream
+/// writes a thread several times a second, and every view that read it was built again. This reader reads the thread's
+/// summary (`AgentThreadState`), which a token does not change once the preview line is full, and hands the row its
+/// facts (`SidebarThreadFacts`); a row whose facts did not change is not built again (`Memo`).
 private struct ThreadReader<Content: View>: View {
     let server: ServerModel
     let agentID: String
     @ViewBuilder var content: (SidebarThreadFacts) -> Content
 
     var body: some View {
-        content(SidebarThreadFacts(thread: server.thread(for: agentID), agent: server.agents.first { $0.id == agentID }))
+        content(
+            SidebarThreadFacts(summary: server.threadSummary(for: agentID), agent: server.agents.first { $0.id == agentID }))
     }
 }
 
@@ -321,6 +322,14 @@ struct SidebarThreadFacts: Equatable {
     var turnRunning: Bool
     /// The title of the oldest approval that waits, if any.
     var pendingTitle: String?
+
+    /// From the thread's summary: a streamed token changes none of it once the preview is full.
+    @MainActor init(summary: AgentThreadState, agent: Agent?) {
+        preview = agent.flatMap { AgentPreview.text(summary: summary, agent: $0) }
+        lastActivityMs = agent.map { AgentPreview.timestamp(summary: summary, agent: $0) } ?? 0
+        turnRunning = summary.turnRunning
+        pendingTitle = summary.firstPendingApprovalTitle
+    }
 
     init(thread: AgentThread, agent: Agent?) {
         preview = agent.flatMap { AgentPreview.text(thread: thread, agent: $0) }

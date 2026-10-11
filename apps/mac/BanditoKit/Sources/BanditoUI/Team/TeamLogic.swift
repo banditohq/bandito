@@ -353,6 +353,16 @@ public enum AgentPreview {
         return line.isEmpty ? nil : line
     }
 
+    /// The preview from a thread's summary (see `AgentThreadState.lastMessageHead`).
+    @MainActor public static func text(summary: AgentThreadState, agent: Agent) -> String? {
+        (summary.lastMessageHead ?? agent.lastMessage?.text).flatMap(plainLine)
+    }
+
+    /// The row's time from a thread's summary.
+    @MainActor public static func timestamp(summary: AgentThreadState, agent: Agent) -> Int64 {
+        [summary.lastItemTimestamp, agent.lastMessage?.ts].compactMap { $0 }.max() ?? agent.lastTurnAt ?? agent.updatedAt
+    }
+
     /// The time shown on the row: the newest of the thread's last event and the daemon's last message. Without
     /// either, the last finished turn, else the last update.
     public static func timestamp(thread: AgentThread, agent: Agent) -> Int64 {

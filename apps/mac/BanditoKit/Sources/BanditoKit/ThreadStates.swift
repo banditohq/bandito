@@ -20,8 +20,9 @@ public final class AgentThreadState {
     public private(set) var loadedStatus: AgentStatus?
     /// What the daemon said with the status (an error's reason).
     public private(set) var statusDetail: String?
-    /// Approvals in the thread that wait for an answer.
+    /// Approvals in the thread that wait for an answer, and the title of the oldest.
     public private(set) var pendingApprovalCount = 0
+    public private(set) var firstPendingApprovalTitle: String?
     /// A turn runs, and since when (Unix ms).
     public private(set) var turnRunning = false
     public private(set) var turnStartedAt: Int64?
@@ -34,6 +35,14 @@ public final class AgentThreadState {
     public private(set) var connectCardCount = 0
     /// Tool calls without a result yet, oldest first.
     public private(set) var unfinishedTools: [ToolRow] = []
+    /// The start of the newest message (a stream included), for a one-line preview. Only the start is kept: a stream
+    /// stops changing it once it is longer than a preview can show.
+    public private(set) var lastMessageHead: String?
+    /// The time of the newest item that has one (Unix ms).
+    public private(set) var lastItemTimestamp: Int64?
+
+    /// How much of the newest message `lastMessageHead` keeps.
+    public static let previewLength = 240
 
     nonisolated init() {}
 
@@ -44,15 +53,22 @@ public final class AgentThreadState {
         if turnRunning != thread.turnRunning { turnRunning = thread.turnRunning }
         if turnStartedAt != thread.turnStartedAt { turnStartedAt = thread.turnStartedAt }
         if isEmpty != thread.items.isEmpty { isEmpty = thread.items.isEmpty }
+        let head = thread.lastMessageText.map { String($0.prefix(Self.previewLength)) }
+        if lastMessageHead != head { lastMessageHead = head }
+        let stamp = thread.items.reversed().lazy.compactMap(\.timestamp).first
+        if lastItemTimestamp != stamp { lastItemTimestamp = stamp }
         // One pass over the items for the rest.
         var approvals = 0
+        var firstApprovalTitle: String?
         var forms: [FormRow] = []
         var connects: [ConnectRow] = []
         var connectCards = 0
         var tools: [ToolRow] = []
         for item in thread.items {
             switch item {
-            case .approval(let row) where row.state == .pending: approvals += 1
+            case .approval(let row) where row.state == .pending:
+                if approvals == 0 { firstApprovalTitle = row.title }
+                approvals += 1
             case .form(let row) where row.isPending: forms.append(row)
             case .connect(let row):
                 connectCards += 1
@@ -62,6 +78,7 @@ public final class AgentThreadState {
             }
         }
         if pendingApprovalCount != approvals { pendingApprovalCount = approvals }
+        if firstPendingApprovalTitle != firstApprovalTitle { firstPendingApprovalTitle = firstApprovalTitle }
         if pendingForms != forms { pendingForms = forms }
         if pendingConnects != connects { pendingConnects = connects }
         if connectCardCount != connectCards { connectCardCount = connectCards }
