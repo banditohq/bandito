@@ -18,8 +18,13 @@ struct ThreadVirtualWindow: Equatable {
     /// The space between two rows of the thread, and above the first one.
     static let rowSpacing: CGFloat = 12
     static let topPadding: CGFloat = 22
-    /// Rows built when a thread is first shown (the newest ones), before the size of the screen is known.
+    /// At most this many rows are built when a thread is first shown (the newest ones). Fewer when their guessed
+    /// heights already fill `firstScreen`: an agent switch builds what shows, and the rows around it come a few a frame
+    /// (`rowsPerStep`), not all in the frame of the switch.
     static let initialRows = 16
+    /// The height the newest rows of a thread shown for the first time must fill: the last thread's screen, with a
+    /// margin. A guess until a thread was measured.
+    nonisolated(unsafe) static var firstScreen: CGFloat = 900
     /// The guess for a row that has none.
     static let defaultEstimate: CGFloat = 100
 
@@ -62,7 +67,13 @@ struct ThreadVirtualWindow: Equatable {
 
     private mutating func showTail() {
         let count = ids.count
-        lowID = ids[max(0, count - Self.initialRows)]
+        var low = count - 1
+        var filled: CGFloat = 0
+        while low > 0, count - low < Self.initialRows, filled < Self.firstScreen {
+            filled += height(of: ids[low]) + Self.rowSpacing
+            low -= 1
+        }
+        lowID = ids[low]
         highID = ids[count - 1]
     }
 
@@ -124,7 +135,7 @@ struct ThreadVirtualWindow: Equatable {
     /// Rows added to the range by one step. A scroll asks for the next step at every frame, so the rows are built a few at a
     /// time as the screen moves, not all at once when it comes near the end of what is built (that was a pause of a
     /// quarter of a second in a fast scroll).
-    static let rowsPerStep = 3
+    static let rowsPerStep = 2
 
     /// The range to build for a screen of `viewport` points at `offset`, or nil when the range now built still does it. A
     /// range that is far larger than needed is cut back (a long scroll leaves a long range behind).
@@ -354,6 +365,9 @@ final class ThreadVirtualHost {
 
     /// The range to build for the screen now, committed. True when it changed (the thread is to be drawn again).
     func update(offset: CGFloat, viewport: CGFloat) {
+        if viewport > 0, abs(ThreadVirtualWindow.firstScreen - (viewport + 200)) > 1 {
+            ThreadVirtualWindow.firstScreen = viewport + 200
+        }
         guard let needed = window.neededRange(offset: offset, viewport: viewport) else { return }
         window.commit(low: needed.low, high: needed.high)
         ticker.bump()

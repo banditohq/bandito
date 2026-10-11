@@ -36,7 +36,9 @@ struct TeamSidebar: View {
         let pinned = Array(agents.filter { pins.isPinned($0.id) }.prefix(TeamSidebarOrder.pinnedTiles))
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            // Lazy: rows of the same height; a team of forty built forty rows (with their avatars) at every visit of the
+            // team, and when the sidebar came back after another mode.
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if agents.isEmpty {
                     emptyState
                 } else {
@@ -82,8 +84,7 @@ struct TeamSidebar: View {
                     .padding(.horizontal, 8)
                     .padding(.top, 12)
                     .padding(.bottom, 2)
-                    VStack(spacing: 2) {
-                        ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
+                    ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
                             ThreadReader(server: server, agentID: agent.id) { facts in
                                 let status = server.status(of: agent.id)
                                 Memo(key: SidebarRowKey(
@@ -95,10 +96,11 @@ struct TeamSidebar: View {
                                 }
                                 .equatable()
                             }
-                            .banditoRise(delay: Double(index) * 0.06)
-                        }
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 2)
+                            // The first rows rise in one after another; the rest (out of sight) are just there.
+                            .modifier(SidebarRise(index: index))
                     }
-                    .padding(.horizontal, 8)
                 }
                 if let actionError {
                     UserFacingErrorView(message: actionError)
@@ -310,6 +312,20 @@ private struct ThreadReader<Content: View>: View {
     var body: some View {
         content(
             SidebarThreadFacts(summary: server.threadSummary(for: agentID), agent: server.agents.first { $0.id == agentID }))
+    }
+}
+
+/// The entrance of the first rows of the team list. Rows further down are not staggered: forty rows rising one after
+/// another kept the window redrawing for nearly three seconds at every return to the team.
+private struct SidebarRise: ViewModifier {
+    let index: Int
+
+    func body(content: Content) -> some View {
+        if index < 10 {
+            content.banditoRise(delay: Double(index) * 0.05)
+        } else {
+            content
+        }
     }
 }
 

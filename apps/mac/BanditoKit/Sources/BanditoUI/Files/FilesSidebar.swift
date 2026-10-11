@@ -48,7 +48,9 @@ private struct FilesSidebarContent: View {
 
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+                // Lazy: the agents' folders are one row each, and a team of forty built forty rows (and avatars) at
+                // every visit of Files.
+                LazyVStack(alignment: .leading, spacing: 0) {
                     SectionLabel(L10n.Files.favorites)
                         .padding(.horizontal, 18)
                         .padding(.top, 14)
@@ -91,14 +93,13 @@ private struct FilesSidebarContent: View {
                             .padding(.horizontal, 18)
                             .padding(.top, 16)
                             .padding(.bottom, 6)
-                        VStack(spacing: 1) {
-                            ForEach(agentsInFolders) { agent in
-                                AgentPlaceRow(server: server, agent: agent, isCurrent: router.filesPath == agent.cwd) {
-                                    router.filesPath = agent.cwd
-                                }
+                        ForEach(agentsInFolders) { agent in
+                            AgentPlaceRow(server: server, agent: agent, isCurrent: router.filesPath == agent.cwd) {
+                                router.filesPath = agent.cwd
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 1)
                         }
-                        .padding(.horizontal, 8)
                     }
                 }
                 .padding(.bottom, 12)

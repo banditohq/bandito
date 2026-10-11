@@ -570,15 +570,15 @@ private struct PerfSteps {
 
     func modes() async throws -> String {
         recorder.begin()
-        recorder.beginSegment()
-        for _ in 0..<2 {
+        for round in 0..<2 {
             for mode in AppMode.allCases {
                 try check()
+                recorder.beginSegment()
                 router.select(mode: mode)
                 await settle(30)
+                recorder.endSegment(round == 0 ? "open \(mode.rawValue)" : "again \(mode.rawValue)")
             }
         }
-        recorder.endSegment("modes")
         recorder.beginSegment()
         for mode in [AppMode.team, .files, .server] {
             router.select(mode: mode)
