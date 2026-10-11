@@ -1,4 +1,5 @@
 import BanditoDesign
+import BanditoKit
 import BanditoL10n
 import SwiftUI
 
@@ -164,6 +165,14 @@ struct MainWindow: View {
             InstallSharedSheet(shareID: shareID, server: app.currentServer)
         case .myShares:
             MySharesView(servers: app.servers)
+        case .moveAgent(let agentID, let serverID):
+            if let source = app.servers.first(where: { $0.id == serverID }),
+                let agent = source.agents.first(where: { $0.id == agentID })
+            {
+                MoveAgentSheet(
+                    source: source, agent: agent,
+                    targets: MigrationTargets.eligible(source: source, among: app.servers))
+            }
         }
     }
 }

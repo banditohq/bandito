@@ -1745,6 +1745,64 @@ public enum L10n {
         public static var selectText: String { L10n.tr("message.selectText") }
     }
 
+    public enum Migrate {
+        public static var folder: String { L10n.tr("migrate.folder") }
+        public static var hint: String { L10n.tr("migrate.hint") }
+        public static var menu: String { L10n.tr("migrate.menu") }
+        public static var noTargets: String { L10n.tr("migrate.noTargets") }
+        public static func progress(percent: String) -> String { L10n.tr("migrate.progress", percent) }
+        public static var retry: String { L10n.tr("migrate.retry") }
+        public static var start: String { L10n.tr("migrate.start") }
+        public static var stop: String { L10n.tr("migrate.stop") }
+        public static var target: String { L10n.tr("migrate.target") }
+        public static func title(name: String) -> String { L10n.tr("migrate.title", name) }
+
+        public enum Banner {
+            public static var delete: String { L10n.tr("migrate.banner.delete") }
+            public static func deleteMessage(server: String) -> String { L10n.tr("migrate.banner.deleteMessage", server) }
+            public static func deleteTitle(name: String) -> String { L10n.tr("migrate.banner.deleteTitle", name) }
+            public static var `open`: String { L10n.tr("migrate.banner.open") }
+            public static func title(server: String) -> String { L10n.tr("migrate.banner.title", server) }
+        }
+
+        public enum Done {
+            public static var button: String { L10n.tr("migrate.done.button") }
+            public static func title(name: String, server: String) -> String { L10n.tr("migrate.done.title", name, server) }
+        }
+
+        public enum Fail {
+            public static var busy: String { L10n.tr("migrate.fail.busy") }
+            public static var cancelled: String { L10n.tr("migrate.fail.cancelled") }
+            public static func changed(server: String) -> String { L10n.tr("migrate.fail.changed", server) }
+            public static func changedCopyKept(server: String) -> String { L10n.tr("migrate.fail.changedCopyKept", server) }
+            public static func copyKept(server: String) -> String { L10n.tr("migrate.fail.copyKept", server) }
+            public static var notConnected: String { L10n.tr("migrate.fail.notConnected") }
+            public static func refused(message: String) -> String { L10n.tr("migrate.fail.refused", message) }
+            public static var stillPaused: String { L10n.tr("migrate.fail.stillPaused") }
+            public static var unsupported: String { L10n.tr("migrate.fail.unsupported") }
+        }
+
+        public enum Folder {
+            public static var pick: String { L10n.tr("migrate.folder.pick") }
+        }
+
+        public enum Note {
+            public static var downgraded: String { L10n.tr("migrate.note.downgraded") }
+            public static func errors(message: String) -> String { L10n.tr("migrate.note.errors", message) }
+            public static func missing(services: String) -> String { L10n.tr("migrate.note.missing", services) }
+            public static func skipped(count: Int) -> String { L10n.tr("migrate.note.skipped", count) }
+        }
+
+        public enum Step {
+            public static var done: String { L10n.tr("migrate.step.done") }
+            public static var finish: String { L10n.tr("migrate.step.finish") }
+            public static var pack: String { L10n.tr("migrate.step.pack") }
+            public static var pause: String { L10n.tr("migrate.step.pause") }
+            public static var transfer: String { L10n.tr("migrate.step.transfer") }
+            public static var unpack: String { L10n.tr("migrate.step.unpack") }
+        }
+    }
+
     public enum Mode {
         public static var browser: String { L10n.tr("mode.browser") }
         public static var connectServer: String { L10n.tr("mode.connectServer") }

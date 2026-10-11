@@ -98,6 +98,15 @@ import Testing
         Schedule.self,
         ##"{"id":"s1","agent_id":"a1","cron":"0 9 * * 1-5","tz":"Europe/Berlin","prompt":"Collect the open pull requests","enabled":true,"created_at":1,"title":"Weekday review reminder","human_en":"At 09:00 on weekdays","human_ru":"В 09:00 по будням"}"##)
 
+    /// An agent that moves in the sheet: a long name on purpose (the title allows two lines).
+    static let movingAgent = Agent(
+        id: "a1", name: "Forge with a long name for the layout check", runtime: .claude, cwd: "/work/forge")
+
+    /// The same agent on the server it moved from: the strip shows where it went.
+    static let movedAgent = Agent(
+        id: "a1", name: "Forge with a long name for the layout check", runtime: .claude, cwd: "/work/forge",
+        paused: true, migratedTo: "Production server in the Frankfurt datacenter", migratedAt: 1_786_000_000_000)
+
     static let linear = IntegrationCatalogEntry(
         id: "linear", name: "Linear", descriptionEn: "Issues and projects", descriptionRu: "Задачи и проекты",
         kind: .http, url: "https://mcp.linear.app/mcp",
@@ -191,6 +200,15 @@ import Testing
         },
         AuditCase(name: "sheet-integration-custom", width: 520, selfSized: true) { env in
             AnyView(CustomIntegrationSheet(server: env.server, existingNames: [], onChecked: { _, _ in }, onSaved: {}))
+        },
+        AuditCase(name: "sheet-move-agent", width: 520, selfSized: true) { env in
+            AnyView(
+                MoveAgentSheet(
+                    source: env.server, agent: movingAgent, targets: Array(env.app.servers.dropFirst()),
+                    preselectedTargetID: env.app.servers.dropFirst().first?.id))
+        },
+        AuditCase(name: "migrated-agent-strip", width: 560) { env in
+            AnyView(MigratedAgentStrip(agent: movedAgent, source: env.server, movedTo: "Production server in the Frankfurt datacenter"))
         },
         AuditCase(name: "sheet-folder-picker", width: 540, height: 380, selfSized: true) { env in
             AnyView(FolderPicker(server: env.server, selection: .constant("/Users/maria/projects"), onChoose: {}))

@@ -123,6 +123,8 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     case installShared(shareID: String)
     /// The bots and skills this account shared: visibility, update, delete (see `MySharesView`).
     case myShares
+    /// Move an agent of this server to another connected server (see `MoveAgentSheet`).
+    case moveAgent(agentID: String, serverID: UUID)
 
     public var id: String {
         switch self {
@@ -135,6 +137,7 @@ public enum Sheet: Identifiable, Hashable, Sendable {
         case .share(.skill(let name)): "share-skill-\(name)"
         case .installShared(let shareID): "install-\(shareID)"
         case .myShares: "myShares"
+        case .moveAgent(let agentID, let serverID): "moveAgent-\(agentID)-\(serverID.uuidString)"
         }
     }
 }
