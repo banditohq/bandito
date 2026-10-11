@@ -82,16 +82,41 @@ public final class TelemetryCenter {
         return try? await client.restoreSession()?.token
     }
 
-    /// Runs for the life of the window: the crash check at once, then the pulse 30 seconds after the launch and every
-    /// 24 hours. QA copies send nothing. Cancelled with the window.
+    /// Runs for the life of the window. The crash check runs at once. 30 seconds after the launch, and then once an
+    /// hour, it does what the statistics setting allows: with statistics on, the pulse (at the launch and then once a
+    /// day); with statistics off, the anonymous announcements request (at the launch and then every 6 hours). QA copies
+    /// send nothing. Cancelled with the window.
     public func run(app: AppModel) async {
         guard QABuild.index(bundleID: Bundle.main.bundleIdentifier) == nil else { return }
         await checkCrashReports()
         try? await Task.sleep(for: .seconds(30))
+        var lastPulse: Date?
+        var lastFetch: Date?
         while !Task.isCancelled {
-            await sendPulse(app: app)
-            try? await Task.sleep(for: .seconds(24 * 60 * 60))
+            let now = Date()
+            if telemetry.statsEnabled {
+                if lastPulse.map({ now.timeIntervalSince($0) >= Self.pulseInterval }) ?? true {
+                    lastPulse = now
+                    await sendPulse(app: app)
+                }
+            } else if lastFetch.map({ now.timeIntervalSince($0) >= Self.fetchInterval }) ?? true {
+                lastFetch = now
+                await fetchAnnouncements()
+            }
+            try? await Task.sleep(for: .seconds(60 * 60))
         }
+    }
+
+    static let pulseInterval: TimeInterval = 24 * 60 * 60
+    static let fetchInterval: TimeInterval = 6 * 60 * 60
+
+    /// The announcements without statistics: an anonymous request, then the same strip as with the pulse.
+    public func fetchAnnouncements() async {
+        guard let list = await telemetry.fetchAnnouncements(lang: Self.languageCode, client: Self.clientInfo) else {
+            return
+        }
+        queue = list
+        showNextBanner()
     }
 
     /// Sends the pulse now and takes the announcements of the answer.

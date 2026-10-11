@@ -63,8 +63,8 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .sounds: BanditoPalette.badgeBrown
         case .appearance: BanditoPalette.badgeIndigo
         case .updates: BanditoPalette.badgeSlate
-        // Every badge colour is taken by another section; the privacy badge shares the darkest grey of Terminal & Files.
-        case .privacy: BanditoPalette.badgeDarkGray
+        // Privacy is about the account's data, so it takes the colour of Account.
+        case .privacy: BanditoPalette.badgeBlue
         }
     }
 }

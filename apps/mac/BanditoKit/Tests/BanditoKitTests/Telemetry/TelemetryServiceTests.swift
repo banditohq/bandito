@@ -239,4 +239,24 @@ import Testing
         telemetry.markNoticeSeen()
         #expect(makeTelemetry(defaults: defaults, http: ScriptedHTTP([:])).hasSeenNotice)
     }
+
+    @Test func announcementsWithoutStatisticsAreAnAnonymousGET() async throws {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let reply = ScriptedReply(
+            #"{"ok":true,"announcements":[{"id":"n-9","title":"T","body":"B","level":"banner","expires_at":"2099-01-01T00:00:00Z"}]}"#)
+        let http = ScriptedHTTP(["GET /announcements?lang=ru&app=0.1.10&os=15.3": [reply]])
+        let telemetry = makeTelemetry(defaults: defaults, http: http, signedIn: "tok-1")
+        telemetry.statsEnabled = false
+
+        let list = await telemetry.fetchAnnouncements(lang: "ru", client: Self.client)
+
+        #expect(list?.map(\.id) == ["n-9"])
+        let request = try #require(http.requests.last)
+        #expect(request.httpMethod == "GET")
+        #expect(request.httpBody == nil)
+        #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+        #expect(request.url?.query == "lang=ru&app=0.1.10&os=15.3")
+        #expect(defaults.string(forKey: "telemetry.installID") == nil)
+    }
 }

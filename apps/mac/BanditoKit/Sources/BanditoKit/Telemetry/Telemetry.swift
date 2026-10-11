@@ -251,15 +251,37 @@ public final class Telemetry: @unchecked Sendable {
         }
     }
 
+    // MARK: announcements without statistics
+
+    /// The announcements for a Mac with statistics off: an anonymous GET with the interface language and the app and
+    /// system versions. No install id, no token, no body; the server keeps nothing. Nil when the server did not answer.
+    public func fetchAnnouncements(lang: String, client: ClientInfo) async -> [Announcement]? {
+        guard let url = endpoint("/announcements"), var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return nil }
+        components.queryItems = [
+            URLQueryItem(name: "lang", value: lang),
+            URLQueryItem(name: "app", value: client.app),
+            URLQueryItem(name: "os", value: client.os),
+        ]
+        guard let query = components.url else { return nil }
+        var request = URLRequest(url: query)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        do {
+            let (data, response) = try await http.send(request)
+            guard (200..<300).contains(response.statusCode) else { return nil }
+            return Announcement.pulseList(from: data)
+        } catch {
+            return nil
+        }
+    }
+
     // MARK: transport
 
     /// POSTs `body` as JSON. Returns the answer body for a 2xx status, nil otherwise. The base URL must be the
     /// Bandito API (`AccountClient.validate`), so the token never goes elsewhere.
     private func post<Body: Encodable>(_ path: String, _ body: Body, authenticated: Bool) async -> Data? {
-        guard (try? AccountClient.validate(baseURL: baseURL)) != nil else { return nil }
-        var root = baseURL.absoluteString
-        while root.hasSuffix("/") { root.removeLast() }
-        guard let url = URL(string: root + path), let payload = try? TelemetryWire.encode(body) else { return nil }
+        guard let url = endpoint(path), let payload = try? TelemetryWire.encode(body) else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpBody = payload
@@ -278,5 +300,14 @@ public final class Telemetry: @unchecked Sendable {
         } catch {
             return nil
         }
+    }
+
+    /// The URL of an API path. The base URL must be the Bandito API (`AccountClient.validate`), so the token never
+    /// goes elsewhere.
+    private func endpoint(_ path: String) -> URL? {
+        guard (try? AccountClient.validate(baseURL: baseURL)) != nil else { return nil }
+        var root = baseURL.absoluteString
+        while root.hasSuffix("/") { root.removeLast() }
+        return URL(string: root + path)
     }
 }

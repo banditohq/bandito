@@ -26,7 +26,9 @@ public final class OAuthSignIn {
         case failed(name: String, message: UserFacingMessage, canRetry: Bool)
     }
 
-    public private(set) var phase: Phase = .idle
+    public private(set) var phase: Phase = .idle {
+        didSet { countOutcome(previous: oldValue) }
+    }
 
     /// A sign-in the browser has not answered yet.
     struct Pending: Codable, Equatable {
@@ -48,7 +50,7 @@ public final class OAuthSignIn {
     @ObservationIgnored private var pending: Pending?
     @ObservationIgnored private var authorizeURL: URL?
     /// What to start again for "Try again", and the server to tell when the owner gives up.
-    @ObservationIgnored private var attempt: (server: any OAuthServer, target: OAuthBeginTarget, name: String, connectRequestId: String?)?
+    @ObservationIgnored private var attempt: (server: any OAuthServer, target: OAuthBeginTarget, name: String, connectRequestId: String?, catalogID: String?)?
     /// Changes with each start and each cancel, so an answer that arrives late knows it is out of date.
     @ObservationIgnored private var run = UUID()
     @ObservationIgnored private let makeListener:
@@ -85,12 +87,13 @@ public final class OAuthSignIn {
     ///
     /// With `connectRequestId` the sign-in answers an agent's request: when it ends well the daemon tells the agent.
     public func begin(
-        server: any OAuthServer, target: OAuthBeginTarget, name: String, connectRequestId: String? = nil
+        server: any OAuthServer, target: OAuthBeginTarget, name: String, connectRequestId: String? = nil,
+        catalogID: String? = nil
     ) async {
         await discard()
         let id = UUID()
         run = id
-        attempt = (server, target, name, connectRequestId)
+        attempt = (server, target, name, connectRequestId, catalogID)
         phase = .starting(name: name)
         do {
             let begun = try await server.oauthBegin(target, connectRequestId: connectRequestId)
@@ -142,7 +145,19 @@ public final class OAuthSignIn {
         guard case .failed = phase, let attempt else { return }
         await begin(
             server: attempt.server, target: attempt.target, name: attempt.name,
-            connectRequestId: attempt.connectRequestId)
+            connectRequestId: attempt.connectRequestId, catalogID: attempt.catalogID)
+    }
+
+    /// Counts the end of a sign-in that started from a catalog template, once: connected is `ok`, failed is `fail`.
+    private func countOutcome(previous: Phase) {
+        guard !previous.isSettled, let catalogID = attempt?.catalogID, let counter = CatalogCounterID(catalogID) else {
+            return
+        }
+        switch phase {
+        case .connected: Telemetry.count(.integration(counter, ok: true))
+        case .failed: Telemetry.count(.integration(counter, ok: false))
+        default: return
+        }
     }
 
     // MARK: - end
@@ -323,5 +338,15 @@ public final class OAuthSignIn {
         // with what the daemon said under the details.
         guard message.technical != nil else { return message }
         return UserFacingMessage(text: L10n.Integrations.Oauth.failed, technical: message.technical, canRetry: true)
+    }
+}
+
+extension OAuthSignIn.Phase {
+    /// Connected or failed: the sign-in is over.
+    var isSettled: Bool {
+        switch self {
+        case .connected, .failed: true
+        default: false
+        }
     }
 }

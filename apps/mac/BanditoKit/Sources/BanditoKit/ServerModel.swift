@@ -512,8 +512,11 @@ public final class ServerModel: Identifiable {
                 } else {
                     agents[i].pendingApprovals = max(0, agents[i].pendingApprovals - 1)
                 }
-            case .turnCompleted:
+            case .turnCompleted(_, let status, _, _):
                 Telemetry.count(.turnComplete)
+                if status != .ok {
+                    Telemetry.count(.turnFail(TelemetryEvent.TurnFailure(status: status)))
+                }
                 // The daemon stores the context the turn left when the turn ends; the ring and the memory tab read it
                 // from the list.
                 requestAgentsRefresh()

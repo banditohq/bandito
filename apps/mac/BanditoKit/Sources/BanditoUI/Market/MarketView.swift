@@ -897,7 +897,7 @@ struct MarketView: View {
             return
         }
         let draft = NewIntegration(name: template.id, kind: .http, url: url)
-        Task { await app.oauth.begin(server: server, target: .draft(draft), name: template.name) }
+        Task { await app.oauth.begin(server: server, target: .draft(draft), name: template.name, catalogID: template.id) }
     }
 
     /// Connect for a service that signs in with a code. A daemon without the feature says to update.
@@ -908,7 +908,7 @@ struct MarketView: View {
             return
         }
         let draft = NewIntegration(name: template.id, kind: .http, url: url)
-        Task { await app.device.begin(server: server, target: .draft(draft), name: template.name) }
+        Task { await app.device.begin(server: server, target: .draft(draft), name: template.name, catalogID: template.id) }
     }
 
     private func signInAgain(_ integration: Integration) {

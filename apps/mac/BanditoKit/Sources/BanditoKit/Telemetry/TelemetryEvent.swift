@@ -21,6 +21,8 @@ public enum TelemetryEvent: Hashable, Sendable {
     case formReply
     /// An agent turn ended (any status), counted once per turn.
     case turnComplete
+    /// An agent turn ended without `ok`: `turn.fail.<kind>`.
+    case turnFail(TurnFailure)
 
     public enum Screen: String, CaseIterable, Sendable {
         case team, market, settings, terminals, files, browser
@@ -32,6 +34,19 @@ public enum TelemetryEvent: Hashable, Sendable {
 
     public enum ApprovalChoice: String, CaseIterable, Sendable {
         case allow, deny
+    }
+
+    /// How a turn ended badly. Only these names leave the Mac; a status the app does not know counts as `other`.
+    public enum TurnFailure: String, CaseIterable, Sendable {
+        case error, interrupted, other
+
+        init(status: TurnStatus) {
+            switch status {
+            case .error: self = .error
+            case .interrupted: self = .interrupted
+            case .ok: self = .other
+            }
+        }
     }
 
     /// The counter name, as the server knows it.
@@ -50,6 +65,7 @@ public enum TelemetryEvent: Hashable, Sendable {
         case .importRun: "import.run"
         case .formReply: "form.reply"
         case .turnComplete: "turn.complete"
+        case .turnFail(let kind): "turn.fail.\(kind.rawValue)"
         }
     }
 
@@ -61,6 +77,7 @@ public enum TelemetryEvent: Hashable, Sendable {
             "skill.install", "share.publish", "share.install", "dictation.use", "approval.allow", "approval.deny",
             "telegram.link", "import.run", "form.reply", "turn.complete",
         ])
+        names.formUnion(TurnFailure.allCases.map { "turn.fail.\($0.rawValue)" })
         return names
     }()
 

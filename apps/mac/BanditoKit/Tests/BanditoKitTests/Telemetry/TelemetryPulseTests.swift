@@ -12,6 +12,7 @@ import Testing
             .integration(CatalogCounterID("github")!, ok: true), .integration(CatalogCounterID("github")!, ok: false),
             .skillInstall, .sharePublish, .shareInstall, .dictationUse, .approval(.allow), .approval(.deny),
             .telegramLink, .importRun, .formReply, .turnComplete,
+            .turnFail(.error), .turnFail(.interrupted), .turnFail(.other),
         ]
         #expect(
             events.map(\.name) == [
@@ -21,6 +22,7 @@ import Testing
                 "integration.connect.github.ok", "integration.connect.github.fail",
                 "skill.install", "share.publish", "share.install", "dictation.use", "approval.allow",
                 "approval.deny", "telegram.link", "import.run", "form.reply", "turn.complete",
+                "turn.fail.error", "turn.fail.interrupted", "turn.fail.other",
             ])
     }
 
@@ -28,6 +30,8 @@ import Testing
         #expect(TelemetryEvent.isAllowedName("screen.team.open"))
         #expect(TelemetryEvent.isAllowedName("agent.create.shared"))
         #expect(TelemetryEvent.isAllowedName("turn.complete"))
+        #expect(TelemetryEvent.isAllowedName("turn.fail.interrupted"))
+        #expect(!TelemetryEvent.isAllowedName("turn.fail.crash"))
         #expect(TelemetryEvent.isAllowedName("integration.connect.google-calendar.fail"))
         #expect(!TelemetryEvent.isAllowedName("turn.fail.timeout"))
         #expect(!TelemetryEvent.isAllowedName("screen.team.open.extra"))
