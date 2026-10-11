@@ -69,7 +69,7 @@ public struct SettingsWindow: View {
             .clipped()
             .background(Color.Bandito.surface1)
         }
-        .frame(minWidth: 760, idealWidth: 900, maxWidth: .infinity, minHeight: 520, idealHeight: 640, maxHeight: .infinity)
+        .windowRoot(minWidth: 760, minHeight: 520, idealWidth: 900, idealHeight: 640)
         .preferredColorScheme(.dark)
         .onAppear {
             Telemetry.count(.screen(.settings))

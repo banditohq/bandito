@@ -414,7 +414,7 @@ private struct PerfCheckRoot: View {
                     .padding(.bottom, 14)
             }
         }
-        .frame(minWidth: 900, minHeight: 600)
+        .windowRoot(minWidth: 900, minHeight: 600)
         .background(Color.Bandito.bg)
         .preferredColorScheme(.dark)
     }

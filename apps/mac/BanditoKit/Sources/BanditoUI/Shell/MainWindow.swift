@@ -35,7 +35,7 @@ struct MainWindow: View {
             .titleBarBand()
             .overlay { SwipeHint(progress: swipeProgress, symbol: swipeSymbol) }
         }
-        .frame(minWidth: 900, minHeight: 600)
+        .windowRoot(minWidth: 900, minHeight: 600)
         .background(Color.Bandito.bg)
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: router.sidebarVisible)
         .onTwoFingerSwipe(
