@@ -9,7 +9,7 @@ struct ServerOverview: View {
     let server: ServerModel?
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
-    @State private var monitor = HostMonitor()
+    @State private var monitor: HostMonitor
     @State private var setup = SetupModel()
     @State private var release = ReleaseStatus()
     @State private var daemonUpdate = DaemonUpdateModel()
@@ -20,6 +20,12 @@ struct ServerOverview: View {
     @State private var detail: OverviewMetric?
     /// Two columns of cards or one. Starts narrow; changes only when the measured page width crosses the threshold.
     @State private var isWide = false
+
+    /// `monitor` is given only by the layout audit, with numbers already in it.
+    init(server: ServerModel?, monitor: HostMonitor = HostMonitor()) {
+        self.server = server
+        _monitor = State(initialValue: monitor)
+    }
 
     /// The daemon runs without a database after a restore (safe mode): the reason, and the way to the copies.
     private func safeModeCard(_ info: DaemonInfo) -> some View {

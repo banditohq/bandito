@@ -812,7 +812,7 @@
 "integrations.custom.useSelected" = "Auswahl verwenden: %1$lld";
 "integrations.custom.variables" = "Umgebungsvariablen";
 "integrations.custom.willBe" = "wird: %1$@";
-"integrations.device.codeHint" = "Gib diesen Code auf %1$@ ein, um den Zugriff zu erlauben, und komm dann zurück zu Bandito.";
+"integrations.device.codeHint" = "Geben Sie diesen Code auf %1$@ ein, um den Zugriff zu erlauben, und kehren Sie dann zu Bandito zurück.";
 "integrations.device.copied" = "Kopiert";
 "integrations.device.copy" = "Kopieren";
 "integrations.device.expired" = "Der Code ist abgelaufen. Versuche es erneut, um einen neuen zu bekommen.";

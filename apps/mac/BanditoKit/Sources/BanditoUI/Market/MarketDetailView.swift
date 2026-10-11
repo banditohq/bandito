@@ -171,6 +171,9 @@ struct MarketDetailView: View {
                     }
                     .font(BanditoFont.text(size: 12.5, weight: 500))
                     .foregroundStyle(Color.Bandito.ok)
+                    // The word never breaks inside: the service name gives way instead.
+                    .lineLimit(1)
+                    .fixedSize()
                 }
                 if !integration.auth.isDaemonSignIn {
                     Button(L10n.Market.configure, action: onConfigure)

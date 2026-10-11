@@ -5,7 +5,7 @@ public enum L10n {
     public static let bundle = Bundle.module
 
     static func tr(_ key: String, _ args: CVarArg...) -> String {
-        let format = Bundle.module.localizedString(forKey: key, value: nil, table: "Localizable")
+        let format = (testingLanguage?.bundle ?? Bundle.module).localizedString(forKey: key, value: nil, table: "Localizable")
         // Most strings take no arguments: skip formatting, only unescape the percent sign. Views read
         // strings on every update, so this path has to be cheap.
         if args.isEmpty { return format.contains("%%") ? format.replacingOccurrences(of: "%%", with: "%") : format }
@@ -15,7 +15,21 @@ public enum L10n {
     /// Locale of the language the strings come from. Plural rules and number formats follow it,
     /// not the system locale: a Russian UI on an English Mac still gets Russian plurals.
     public static var locale: Locale {
-        LocaleCache.shared.locale(for: Bundle.module.preferredLocalizations.first ?? "en")
+        LocaleCache.shared.locale(for: testingLanguage?.code ?? Bundle.module.preferredLocalizations.first ?? "en")
+    }
+
+    /// Tests only (`@testable import`): the strings of one language, whatever the system language is. Nothing in the app
+    /// sets it; the layout audit uses it to look at German and Russian without touching the Mac's settings.
+    nonisolated(unsafe) static var testingLanguage: (code: String, bundle: Bundle)?
+
+    /// Tests only: `useLanguageForTests("de")` switches every string; `nil` goes back to the system language.
+    static func useLanguageForTests(_ code: String?) {
+        guard let code else { testingLanguage = nil; return }
+        guard let path = Bundle.module.path(forResource: code, ofType: "lproj"), let bundle = Bundle(path: path) else {
+            testingLanguage = nil
+            return
+        }
+        testingLanguage = (code, bundle)
     }
 
     /// One `Locale` per language identifier: making a `Locale` for every string was a hot spot.

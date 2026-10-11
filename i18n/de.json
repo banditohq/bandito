@@ -2703,7 +2703,7 @@
   "share.install.schedulesPending": "Zeitpläne: {count} — werden ausgeschaltet angelegt",
   "share.install.warningSkill": "Von der Community erstellt. Prüfen Sie die Dateien des Skills, bevor Sie ihn starten.",
   "integrations.device.starting": "Code wird angefordert …",
-  "integrations.device.codeHint": "Gib diesen Code auf {site} ein, um den Zugriff zu erlauben, und komm dann zurück zu Bandito.",
+  "integrations.device.codeHint": "Geben Sie diesen Code auf {site} ein, um den Zugriff zu erlauben, und kehren Sie dann zu Bandito zurück.",
   "integrations.device.copy": "Kopieren",
   "integrations.device.copied": "Kopiert",
   "integrations.device.openGithub": "GitHub öffnen",

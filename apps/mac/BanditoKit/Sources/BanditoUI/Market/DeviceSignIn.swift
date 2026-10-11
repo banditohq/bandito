@@ -20,7 +20,7 @@ public final class DeviceSignIn {
         case failed(name: String, message: UserFacingMessage, canRetry: Bool)
     }
 
-    public private(set) var phase: Phase = .idle {
+    public internal(set) var phase: Phase = .idle {
         didSet { countOutcome(previous: oldValue) }
     }
     /// The code was put on the pasteboard (by Copy, or by Open); shown as a short note.

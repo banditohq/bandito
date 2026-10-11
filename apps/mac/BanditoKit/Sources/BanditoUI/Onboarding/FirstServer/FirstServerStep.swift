@@ -17,9 +17,21 @@ struct FirstServerStep: View {
 
     @Environment(AppModel.self) private var app
     @Environment(AccountHub.self) private var hub
-    @State private var model = FirstServerModel()
+    @State private var model: FirstServerModel
     @State private var showLog = false
     @State private var chooserWidth: CGFloat = 760
+
+    /// `model` is given only by the layout audit, put in a phase by hand.
+    init(
+        onFinished: @escaping () -> Void, onConnected: @escaping () -> Void = {}, placesNextInFooter: Bool = false,
+        initialAddress: String? = nil, model: FirstServerModel = FirstServerModel()
+    ) {
+        self.onFinished = onFinished
+        self.onConnected = onConnected
+        self.placesNextInFooter = placesNextInFooter
+        self.initialAddress = initialAddress
+        _model = State(initialValue: model)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {

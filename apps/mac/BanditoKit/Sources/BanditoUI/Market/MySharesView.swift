@@ -25,12 +25,17 @@ final class MySharesModel {
     /// What the last update did, for the owner: the version it is now.
     private(set) var notice: String?
 
+    /// Made with its data already in place (previews, the layout audit): nothing is read from the account.
+    private let isPreset: Bool
+
     init(phase: Phase = .loading, items: [ShareSummary] = []) {
         self.phase = phase
         self.items = items
+        isPreset = phase != .loading
     }
 
     func reload(signedIn: Bool, client: () async throws -> AccountClient) async {
+        guard !isPreset else { return }
         guard signedIn else {
             phase = .signedOut
             items = []
@@ -239,40 +244,60 @@ struct MySharesView: View {
             Text(detailLine(item))
                 .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
-            HStack(spacing: 10) {
-                SegmentedPicker(
-                    selection: Binding(
-                        get: { item.visibility },
-                        set: { visibility in changeVisibility(item, to: visibility) }),
-                    options: ShareVisibility.allCases.map { ($0, ShareLogic.visibilityLabel($0)) }
-                )
-                .fixedSize()
-                .disabled(busy)
-                Spacer(minLength: 8)
-                Button(copiedID == item.id ? L10n.Share.Done.copied : L10n.Share.Done.copy) {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(item.url ?? ShareLogic.pageURL(id: item.id), forType: .string)
-                    copiedID = item.id
-                }
-                .banditoButton(.quiet())
-                .fixedSize()
-                if ShareLogic.canUpdate(item, sources: ShareSourceStore.load()) {
-                    Button(L10n.Share.Mine.update) {
-                        Task {
-                            await model.updateToCurrent(item, servers: servers, client: { try await accountHub.prepare() })
-                        }
-                    }
-                    .banditoButton(.lightPill())
-                    .disabled(busy)
-                }
-                Button(L10n.Share.Mine.delete) { deleting = item }
-                    .banditoButton(.quiet(tone: .danger))
-                    .disabled(busy)
-            }
+            controls(item, busy: busy)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    /// The visibility switch and the buttons: in one line when they fit, else the switch above and the buttons under it
+    /// (a long translation, "Copy link" + "Update" + "Delete" at the narrowest sheet).
+    private func controls(_ item: ShareSummary, busy: Bool) -> some View {
+        let picker = SegmentedPicker(
+            selection: Binding(
+                get: { item.visibility },
+                set: { visibility in changeVisibility(item, to: visibility) }),
+            options: ShareVisibility.allCases.map { ($0, ShareLogic.visibilityLabel($0)) }
+        )
+        .fixedSize()
+        .disabled(busy)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                picker
+                Spacer(minLength: 8)
+                buttons(item, busy: busy)
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                picker
+                buttons(item, busy: busy)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+    }
+
+    private func buttons(_ item: ShareSummary, busy: Bool) -> some View {
+        ActionRow(hugging: true) {
+            Button(copiedID == item.id ? L10n.Share.Done.copied : L10n.Share.Done.copy) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(item.url ?? ShareLogic.pageURL(id: item.id), forType: .string)
+                copiedID = item.id
+            }
+            .banditoButton(.quiet())
+            .fixedSize()
+            if ShareLogic.canUpdate(item, sources: ShareSourceStore.load()) {
+                Button(L10n.Share.Mine.update) {
+                    Task {
+                        await model.updateToCurrent(item, servers: servers, client: { try await accountHub.prepare() })
+                    }
+                }
+                .banditoButton(.lightPill())
+                .disabled(busy)
+            }
+            Button(L10n.Share.Mine.delete) { deleting = item }
+                .banditoButton(.quiet(tone: .danger))
+                .disabled(busy)
+        }
     }
 
     private func detailLine(_ item: ShareSummary) -> String {

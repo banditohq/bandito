@@ -33,8 +33,8 @@ final class FirstServerModel {
         case command
     }
 
-    private(set) var option: Option?
-    private(set) var phase: Phase = .choosing
+    internal(set) var option: Option?
+    internal(set) var phase: Phase = .choosing
     /// The own-server panel's choice. It only changes what the panel shows; the install is the same.
     var setupMode: SetupMode = .automatic
 
@@ -43,11 +43,11 @@ final class FirstServerModel {
         if case .connected = phase { return true }
         return false
     }
-    private(set) var checklist = InstallChecklist()
+    internal(set) var checklist = InstallChecklist()
     /// The address as typed (`user@host[:port]`).
     var address = ""
     private(set) var addressError: String?
-    private(set) var hostKeyError: UserFacingMessage?
+    internal(set) var hostKeyError: UserFacingMessage?
     /// For an address behind a jump host: the command to run once in Terminal, to confirm the key there.
     private(set) var proxyCommand: String?
     /// For a host whose old key is still in known_hosts: the command that removes that entry.

@@ -121,11 +121,11 @@ public final class AccountHub {
     public private(set) var syncStore: SyncStore?
     public private(set) var identity: DeviceIdentity?
     /// Devices of the account that wait for approval from this device. Refreshed while the app is active.
-    public private(set) var pending: [PendingDevice] = []
+    public internal(set) var pending: [PendingDevice] = []
     /// Whether a session is stored (someone is signed in on this Mac).
     public private(set) var signedIn = false
     /// The account as the server last said it (`GET /me`): the user and the devices. Nil until it has been read.
-    public private(set) var me: Me? {
+    public internal(set) var me: Me? {
         didSet {
             if let id = me?.user.id {
                 profile.bind(userID: id)

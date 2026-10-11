@@ -212,12 +212,13 @@ struct ApprovalsSection: View {
     }
 
     private func chip(_ text: String, font: Font, color: Color) -> some View {
-        // A chip stays inside its grid cell: a long text is cut in the middle and the full text shows on hover.
+        // A chip stays inside its grid cell: a long text takes a second line (nothing is cut away).
         Text(text)
             .font(font)
             .foregroundStyle(color)
-            .lineLimit(1)
-            .truncationMode(.middle)
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
             .help(text)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
