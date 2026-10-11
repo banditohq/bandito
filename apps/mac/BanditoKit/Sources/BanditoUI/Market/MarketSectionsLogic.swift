@@ -179,10 +179,19 @@ enum MarketSectionMetrics {
     }
 }
 
-/// Which block is in view, from the positions the anchors in front of the blocks report. An anchor is a zero-height view
-/// at the natural start of its block; it has passed when it is no lower than the bottom of the pinned header (the next
-/// header takes over there). The block in view is the last one passed. Anchors far from the screen are not built by the
-/// lazy stack and report nothing, so a jump sets the flags itself (`jump(to:)`).
+/// Where the header of a block sits while the block is under it, as an offset from the block's top: zero before the
+/// block reaches the top of the scroll view, then as far down as the block has scrolled past, and no further than leaves
+/// the header at the bottom of the block (the next block's header pushes it out there, as native pinned headers do).
+enum MarketStickyOffset {
+    static func offset(sectionMinY: CGFloat, sectionHeight: CGFloat, headerHeight: CGFloat = MarketSectionMetrics.headerHeight) -> CGFloat {
+        guard sectionMinY.isFinite, sectionHeight.isFinite else { return 0 }
+        return min(max(-sectionMinY, 0), max(sectionHeight - headerHeight, 0))
+    }
+}
+
+/// Which block is in view, from the positions the blocks report (the top edge of each, in the scroll view). A block has
+/// passed when its top is no lower than the bottom of the pinned header (the next header takes over there). The block in
+/// view is the last one passed. A jump sets the flags itself (`jump(to:)`), so the blocks it flies over are not reported.
 @MainActor
 final class MarketSectionTracker {
     /// How far below the top an anchor may be and still count as passed.
@@ -190,7 +199,6 @@ final class MarketSectionTracker {
 
     private var ids: [String] = []
     private var passed: [Bool] = []
-    private var heights: [String: Int] = [:]
     /// Until then a change of the block in view is not reported (a jump passes the blocks between).
     var quietUntil: TimeInterval = 0
     private var lastReported: Int?
@@ -206,28 +214,17 @@ final class MarketSectionTracker {
     func reset(ids new: [String]? = nil) {
         if let new { ids = new }
         passed = Array(repeating: false, count: ids.count)
-        heights = [:]
-        topY = nil
         lastReported = nil
     }
 
     /// An anchor moved. Returns true when the block in view changed and may be reported.
     func report(index: Int, minY: Int, now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
         guard passed.indices.contains(index) else { return false }
-        heights[ids[index]] = minY
         passed[index] = CGFloat(minY) <= Self.threshold
         guard active != lastReported else { return false }
         lastReported = active
         return now >= quietUntil
     }
-
-    /// Where the anchor at the very top last was (nil until it reports).
-    private(set) var topY: Int?
-
-    func reportTop(_ minY: Int) { topY = minY }
-
-    /// The last position an anchor reported, nil when it has not been built.
-    func minY(of id: String) -> Int? { heights[id] }
 
     /// A jump to block `index` (nil: the top): the blocks up to it count as passed, the ones after it as not.
     func jump(to index: Int?) {

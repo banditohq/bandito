@@ -128,8 +128,8 @@ extension MarketTone {
     }
 }
 
-/// The header of a block of the Services page. It stays at the top while the block scrolls under it: a bar and a soft
-/// wash in the block's color, the name, the number of services. Opaque, so cards pass under it without showing through.
+/// The header of a block of the Services page, as it is drawn: a bar and a soft wash in the block's color, the name, the
+/// number of services. Opaque, so cards pass under it without showing through.
 struct MarketSectionHeader: View {
     let title: String
     let count: Int
@@ -167,6 +167,30 @@ struct MarketSectionHeader: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+}
+
+// MARK: - sticky header
+
+/// The header of a block, kept at the top of the scroll view while the block is under it. It is laid over the block (the
+/// block leaves room for it at its top) and moved by the render pass, from where the block is in the scroll view: no view
+/// state is written while scrolling. At the end of the block it is pushed up by the next block, as a native pinned header.
+struct MarketStickyHeader: View {
+    let title: String
+    let count: Int
+    let tone: MarketTone
+
+    var body: some View {
+        VStack(spacing: 0) {
+            MarketSectionHeader(title: title, count: count, tone: tone)
+            Spacer(minLength: 0)
+        }
+        .visualEffect { content, proxy in
+            let frame = proxy.frame(in: .named(MarketScrollDriver.space))
+            return content.offset(
+                y: MarketStickyOffset.offset(sectionMinY: frame.minY, sectionHeight: frame.height))
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -222,9 +246,8 @@ struct MarketScrollContext {
     let onActive: (Int?) -> Void
 }
 
-/// Carries out the sidebar's jumps: the scroll view is asked to put the anchor of the block at its top, the same way on
-/// every system. Where the lazy stack only estimated the place, the anchor is looked at afterwards and the jump repeated
-/// until it is there.
+/// Carries out the sidebar's jumps: the scroll view is asked once to put the block at its top, the same way on every
+/// system. All blocks are built, so the place is exact.
 struct MarketScrollDriver: ViewModifier {
     let context: MarketScrollContext
     let proxy: ScrollViewProxy
@@ -275,15 +298,6 @@ struct MarketScrollDriver: ViewModifier {
             withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: level.scaled(0.45))) {
                 proxy.scrollTo(id, anchor: .top)
             }
-        }
-        // Check the place when the move is over, and correct it without animation if the estimate was off.
-        for _ in 0..<4 {
-            try? await Task.sleep(for: .milliseconds(Int(settle * 1000) + 60))
-            guard !Task.isCancelled else { return }
-            let sectionID: String? = landing.index.map { context.sections[$0].id }
-            let y = sectionID.flatMap { tracker.minY(of: $0) } ?? (landing == .top ? tracker.topY : nil)
-            if let y, abs(y) <= 2 { break }
-            proxy.scrollTo(id, anchor: .top)
         }
         tracker.jump(to: landing.index)
         context.onActive(landing.index)

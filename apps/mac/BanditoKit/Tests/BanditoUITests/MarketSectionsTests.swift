@@ -202,6 +202,48 @@ private func entries(_ catalog: [IntegrationCatalogEntry], _ integrations: [Inte
     }
 }
 
+@Suite struct MarketStickyOffsetTests {
+    private typealias Sticky = MarketStickyOffset
+    private let header = MarketSectionMetrics.headerHeight
+
+    @Test func theHeaderStaysInPlaceUntilTheBlockReachesTheTop() {
+        #expect(Sticky.offset(sectionMinY: 300, sectionHeight: 800) == 0)
+        #expect(Sticky.offset(sectionMinY: 0, sectionHeight: 800) == 0)
+    }
+
+    @Test func thenItFollowsTheTopEdge() {
+        #expect(Sticky.offset(sectionMinY: -1, sectionHeight: 800) == 1)
+        #expect(Sticky.offset(sectionMinY: -250, sectionHeight: 800) == 250)
+    }
+
+    @Test func atTheEndOfTheBlockItIsPushedUpByTheNextOne() {
+        // The block is 800 tall and has scrolled 756 past: its header is at the bottom of it, as far as it goes.
+        #expect(Sticky.offset(sectionMinY: -(800 - header), sectionHeight: 800) == 800 - header)
+        // Scrolled further, the header moves up with the block: the offset stays, the block's own position carries it.
+        #expect(Sticky.offset(sectionMinY: -790, sectionHeight: 800) == 800 - header)
+        #expect(Sticky.offset(sectionMinY: -5000, sectionHeight: 800) == 800 - header)
+    }
+
+    @Test func aBlockShorterThanItsHeaderDoesNotMove() {
+        #expect(Sticky.offset(sectionMinY: -10, sectionHeight: 20) == 0)
+        #expect(Sticky.offset(sectionMinY: -10, sectionHeight: 0) == 0)
+    }
+
+    @Test func nonsenseGivesNoOffset() {
+        #expect(Sticky.offset(sectionMinY: .nan, sectionHeight: 500) == 0)
+        #expect(Sticky.offset(sectionMinY: -10, sectionHeight: .infinity) == 0)
+    }
+
+    @Test func theNextHeaderArrivesAtTheBottomOfThePinnedOne() {
+        // With block A 800 tall at minY -756, block B starts at A's bottom, 44 below the top: its header touches the
+        // pinned header of A exactly when A's header has reached its lowest place.
+        let aTop: CGFloat = -(800 - header)
+        let bTop = aTop + 800
+        #expect(bTop == header)
+        #expect(Sticky.offset(sectionMinY: aTop, sectionHeight: 800) + header == 800)
+    }
+}
+
 @MainActor
 @Suite struct MarketSectionTrackerTests {
     private func tracker(_ ids: [String] = ["a", "b", "c"]) -> MarketSectionTracker {
@@ -264,16 +306,10 @@ private func entries(_ catalog: [IntegrationCatalogEntry], _ integrations: [Inte
         #expect(t.active == nil)
     }
 
-    @Test func positionsAreRememberedAndForgottenOnReset() {
+    @Test func aResetForgetsWhatWasSeen() {
         let t = tracker()
         _ = t.report(index: 1, minY: 12)
-        #expect(t.minY(of: "b") == 12)
-        #expect(t.minY(of: "c") == nil)
-        t.reportTop(3)
-        #expect(t.topY == 3)
         t.reset()
-        #expect(t.minY(of: "b") == nil)
-        #expect(t.topY == nil)
         #expect(t.active == nil)
     }
 
