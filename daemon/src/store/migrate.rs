@@ -7,6 +7,9 @@ use rusqlite::params;
 use serde_json::Value;
 use std::collections::HashMap;
 
+/// Events written per transaction by `events_import`.
+const IMPORT_BATCH: usize = 500;
+
 /// One stored event as it leaves the server: the payload stays the JSON text that was stored.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExportedEvent {
@@ -45,33 +48,90 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
-    /// Writes a moved agent's events in one transaction: either all of them are stored or none. `source` yields them
+    /// Writes a moved agent's events, 500 at a time, each batch in a transaction of its own (the connection is free
+    /// between batches, so the rest of the daemon keeps working while a long history comes in). `source` yields them
     /// oldest first. `prepare` gets each event's kind and payload and the map from source seqs to the new ones (of the
     /// events already written), may change the payload, and returns `false` to leave the event out. Returns how many
-    /// were written. Each event gets a new `seq` and keeps its source time.
+    /// were written. Each event gets a new `seq` and keeps its source time. When anything fails half way, the events
+    /// this call already wrote are deleted again, and the error is returned: all of them are stored or none.
     pub fn events_import<I, F>(&self, agent_id: &str, source: I, mut prepare: F) -> Result<usize>
     where
         I: Iterator<Item = Result<NewEvent>>,
         F: FnMut(&str, &mut Value, &HashMap<i64, i64>) -> bool,
     {
-        let conn = self.conn();
-        let tx = conn.unchecked_transaction()?;
-        let mut map: HashMap<i64, i64> = HashMap::new();
-        let mut written = 0;
-        {
-            let mut insert = tx.prepare("INSERT INTO events (agent_id, ts, kind, payload) VALUES (?1, ?2, ?3, ?4)")?;
-            for event in source {
-                let mut event = event?;
-                if !prepare(&event.kind, &mut event.payload, &map) {
-                    continue;
+        let mut inserted: Vec<i64> = Vec::new();
+        let result = self.import_batches(agent_id, source, &mut prepare, &mut inserted);
+        if result.is_err() {
+            for chunk in inserted.chunks(IMPORT_BATCH) {
+                let conn = self.conn();
+                let ids = chunk.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+                let sql = format!("DELETE FROM events WHERE agent_id = ?1 AND seq IN ({ids})");
+                if let Err(e) = conn.execute(&sql, [agent_id]) {
+                    tracing::warn!(agent_id, "undo of a failed history import: {e}");
                 }
-                insert.execute(params![agent_id, event.ts, event.kind, event.payload.to_string()])?;
-                map.insert(event.old_seq, tx.last_insert_rowid());
-                written += 1;
             }
         }
-        tx.commit()?;
-        Ok(written)
+        result
+    }
+
+    fn import_batches<I, F>(
+        &self,
+        agent_id: &str,
+        mut source: I,
+        prepare: &mut F,
+        inserted: &mut Vec<i64>,
+    ) -> Result<usize>
+    where
+        I: Iterator<Item = Result<NewEvent>>,
+        F: FnMut(&str, &mut Value, &HashMap<i64, i64>) -> bool,
+    {
+        let mut map: HashMap<i64, i64> = HashMap::new();
+        loop {
+            let mut ended = false;
+            let mut batch: Vec<i64> = Vec::new();
+            {
+                let conn = self.conn();
+                let tx = conn.unchecked_transaction()?;
+                {
+                    let mut insert =
+                        tx.prepare("INSERT INTO events (agent_id, ts, kind, payload) VALUES (?1, ?2, ?3, ?4)")?;
+                    while batch.len() < IMPORT_BATCH {
+                        let Some(event) = source.next() else {
+                            ended = true;
+                            break;
+                        };
+                        let mut event = event?;
+                        if !prepare(&event.kind, &mut event.payload, &map) {
+                            continue;
+                        }
+                        insert.execute(params![agent_id, event.ts, event.kind, event.payload.to_string()])?;
+                        let seq = tx.last_insert_rowid();
+                        map.insert(event.old_seq, seq);
+                        batch.push(seq);
+                    }
+                }
+                tx.commit()?;
+            }
+            inserted.extend(batch);
+            if ended {
+                return Ok(inserted.len());
+            }
+        }
+    }
+
+    /// How many of the agent's events of these kinds come after `after`: for asking whether an agent did anything
+    /// since an export.
+    pub fn events_count_after(&self, agent_id: &str, after: i64, kinds: &[&str]) -> Result<i64> {
+        let list = kinds
+            .iter()
+            .map(|k| format!("'{}'", k.replace('\'', "")))
+            .collect::<Vec<_>>()
+            .join(",");
+        Ok(self.conn().query_row(
+            &format!("SELECT COUNT(*) FROM events WHERE agent_id = ?1 AND seq > ?2 AND kind IN ({list})"),
+            params![agent_id, after],
+            |r| r.get(0),
+        )?)
     }
 
     /// Marks the agent as moved to the server `moved_to` at `at`. Moving it again replaces the mark. The pause is not set
@@ -192,6 +252,67 @@ mod tests {
         });
         let n = s.events_import(&a, rows, |kind, _, _| kind != "reaction").unwrap();
         assert_eq!(n, 1);
+    }
+
+    fn many(n: i64, fail_at: Option<i64>) -> impl Iterator<Item = Result<NewEvent>> {
+        (1..=n).map(move |i| {
+            if Some(i) == fail_at {
+                return Err(anyhow::anyhow!("broken line {i}"));
+            }
+            Ok(NewEvent {
+                old_seq: i,
+                ts: i,
+                kind: "message.assistant".into(),
+                payload: serde_json::json!({ "text": format!("m{i}") }),
+            })
+        })
+    }
+
+    #[test]
+    fn a_long_history_comes_in_in_batches_and_keeps_its_order() {
+        let s = Store::open_in_memory().unwrap();
+        let a = agent(&s, "A");
+        let n = s.events_import(&a, many(1234, None), |_, _, _| true).unwrap();
+        assert_eq!(n, 1234);
+        let got = s.events_for_export(&a, 0, i64::MAX, 5000).unwrap();
+        assert_eq!(got.len(), 1234);
+        assert!(got.windows(2).all(|w| w[0].seq < w[1].seq));
+        assert_eq!(got[1233].ts, 1234);
+    }
+
+    #[test]
+    fn a_failure_in_a_later_batch_removes_what_the_earlier_ones_wrote() {
+        let s = Store::open_in_memory().unwrap();
+        let a = agent(&s, "A");
+        let other = agent(&s, "Other");
+        s.append_event(&other, user("not touched")).unwrap();
+        // Batches of 500: the first two are committed when line 1100 fails.
+        let err = s.events_import(&a, many(1500, Some(1100)), |_, _, _| true).unwrap_err();
+        assert!(err.to_string().contains("broken line 1100"));
+        assert!(s.events_for_export(&a, 0, i64::MAX, 5000).unwrap().is_empty());
+        assert_eq!(s.events_for_export(&other, 0, i64::MAX, 10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn counting_events_after_a_seq_looks_at_the_kinds_asked_for() {
+        let s = Store::open_in_memory().unwrap();
+        let a = agent(&s, "A");
+        let first = s.append_event(&a, user("one")).unwrap().seq;
+        s.append_event(
+            &a,
+            EventBody::AgentStatus {
+                status: crate::event::AgentStatus::Idle,
+                detail: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(s.events_count_after(&a, first, &["message.user"]).unwrap(), 0);
+        s.append_event(&a, user("two")).unwrap();
+        assert_eq!(s.events_count_after(&a, first, &["message.user"]).unwrap(), 1);
+        assert_eq!(
+            s.events_count_after(&a, 0, &["message.user", "agent.status"]).unwrap(),
+            3
+        );
     }
 
     #[test]

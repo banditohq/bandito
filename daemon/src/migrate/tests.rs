@@ -5,7 +5,7 @@ use super::*;
 use crate::event::{EventBody, Source};
 use crate::store::NewAgent;
 use crate::store::now_ms;
-use std::os::unix::fs::symlink;
+use std::os::unix::fs::{PermissionsExt, symlink};
 use tempfile::TempDir;
 
 // ---- a tar writer of our own, so a test can write what a careful tool never would ----
@@ -350,11 +350,7 @@ fn an_exported_agent_unpacks_with_its_settings_files_and_history() {
     assert!(!un.memory.join(".bandito-agent").exists(), "the marker is not carried");
     let mode = |p: &str| std::fs::metadata(un.memory.join(p)).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode("MEMORY.md"), 0o600);
-    assert_eq!(
-        mode("run.sh"),
-        0o700,
-        "the executable bit stays, and only for the owner"
-    );
+    assert_eq!(mode("run.sh"), 0o600, "the executable bit is dropped");
     assert!(un.avatar.as_ref().unwrap().ends_with("avatar.png"));
 
     let lines: Vec<String> = std::fs::read_to_string(&un.events)
@@ -498,9 +494,6 @@ fn paths_that_escape_or_leave_the_layout_are_refused() {
         (b"memory//a", "an empty part"),
         (b"memory/a\\b", "a backslash"),
         (b"memory/\xff\xfe", "not UTF-8"),
-        (b"memory/.git/config", ".git"),
-        (b"memory/sub/.git/hooks/pre-commit", ".git deeper"),
-        (b"memory/.bandito-agent", "the agent marker"),
         (b"etc/passwd", "outside the layout"),
         (b"events.jsonl.bak", "another top-level name"),
         (b"avatar.gif", "another picture"),
@@ -1254,9 +1247,9 @@ fn old_exports_uploads_and_stray_files_are_removed() {
             size: 1,
             sha256: String::new(),
             created_ms: now - 2 * TTL_MS,
+            upto: 0,
         },
-    )
-    .unwrap();
+    );
     let fresh_export = dir.path().join("mg_new.tgz");
     std::fs::write(&fresh_export, "x").unwrap();
     reg.add_export(
@@ -1267,9 +1260,9 @@ fn old_exports_uploads_and_stray_files_are_removed() {
             size: 1,
             sha256: String::new(),
             created_ms: now - 1000,
+            upto: 0,
         },
-    )
-    .unwrap();
+    );
     let old_up = reg
         .begin_upload(dir.path(), 1, &sha_of(b"x"), &Limits::default(), now - 2 * TTL_MS)
         .unwrap();
@@ -1323,41 +1316,72 @@ fn an_upload_being_unpacked_is_not_swept() {
     assert!(ticket.path.exists());
 }
 
+fn an_export(dir: &Path, name: &str) -> Export {
+    Export {
+        agent_id: "a".into(),
+        path: dir.join(format!("{name}.tgz")),
+        size: 1,
+        sha256: String::new(),
+        created_ms: now_ms(),
+        upto: 0,
+    }
+}
+
 #[test]
-fn only_so_many_exports_wait() {
+fn a_commit_that_hangs_is_swept_after_an_hour() {
     let dir = TempDir::new().unwrap();
     let reg = Registry::default();
-    for i in 0..EXPORTS_MAX {
-        assert!(reg.export_slot_free());
-        reg.add_export(
-            format!("mg_{i}"),
-            Export {
-                agent_id: "a".into(),
-                path: dir.path().join(format!("{i}.tgz")),
-                size: 1,
-                sha256: String::new(),
-                created_ms: 0,
-            },
-        )
+    let id = reg
+        .begin_upload(dir.path(), 1, &sha_of(b"x"), &Limits::default(), now_ms())
         .unwrap();
+    reg.write_upload(&id, 0, b"x", now_ms()).unwrap();
+    let ticket = reg.take_for_commit(&id).unwrap();
+    // Within the hour it stays, however long ago the last byte came.
+    reg.sweep(dir.path(), now_ms() + TTL_MS / 2, TTL_MS);
+    assert!(ticket.path.exists());
+    // An hour after the commit began, it is stuck: the upload and its file go.
+    reg.sweep(dir.path(), now_ms() + 2 * TTL_MS, TTL_MS);
+    assert!(!ticket.path.exists());
+    assert_eq!(reg.take_for_commit(&id).unwrap_err().reason, "unknown_upload");
+}
+
+#[test]
+fn a_dropped_commit_guard_spends_the_upload() {
+    let dir = TempDir::new().unwrap();
+    let reg = Registry::default();
+    let id = reg
+        .begin_upload(dir.path(), 1, &sha_of(b"x"), &Limits::default(), now_ms())
+        .unwrap();
+    reg.write_upload(&id, 0, b"x", now_ms()).unwrap();
+    let ticket = reg.take_for_commit(&id).unwrap();
+    {
+        // The call is cancelled: the guard goes with it.
+        let _guard = reg.commit_guard(&id);
     }
-    assert!(!reg.export_slot_free());
-    let e = reg
-        .add_export(
-            "mg_x".into(),
-            Export {
-                agent_id: "a".into(),
-                path: dir.path().join("x.tgz"),
-                size: 1,
-                sha256: String::new(),
-                created_ms: 0,
-            },
-        )
-        .unwrap_err();
-    assert_eq!(e.reason, "too_many_exports");
+    assert!(!ticket.path.exists());
+    assert_eq!(reg.counts().1, 0, "no upload is left marked as committing");
+}
+
+#[test]
+fn only_so_many_exports_wait_and_a_building_one_holds_its_place() {
+    let dir = TempDir::new().unwrap();
+    let reg = Registry::default();
+    // Five started at once, none finished yet: the sixth is refused before anything is built.
+    for _ in 0..EXPORTS_MAX {
+        reg.reserve_export().unwrap();
+    }
+    assert_eq!(reg.reserve_export().unwrap_err().reason, "too_many_exports");
+    // One fails: its place is free again. One finishes: its place is the export's.
+    reg.cancel_reservation();
+    reg.reserve_export().unwrap();
+    for i in 0..EXPORTS_MAX {
+        reg.add_export(format!("mg_{i}"), an_export(dir.path(), &i.to_string()));
+    }
+    assert_eq!(reg.counts().0, EXPORTS_MAX);
+    assert_eq!(reg.reserve_export().unwrap_err().reason, "too_many_exports");
     assert!(reg.remove_export("mg_0").is_some());
     assert!(reg.remove_export("mg_0").is_none());
-    assert!(reg.export_slot_free());
+    reg.reserve_export().unwrap();
 }
 
 #[test]
@@ -1393,4 +1417,296 @@ fn check_path_accepts_the_layout() {
     }
     assert_eq!(check_path(b"memory/notes/", &l).unwrap(), "memory/notes");
     assert!(check_path(b"memory/.gitignore", &l).is_ok(), ".gitignore is not .git");
+}
+
+// ---- names that run tools, modes, and files swapped during the walk ----
+
+const TOOL_PATHS: &[&str] = &[
+    ".CLAUDE/settings.json",
+    ".Git/hooks/x",
+    "sub/.mcp.json",
+    ".envrc",
+    ".gitmodules",
+    ".GITATTRIBUTES",
+    ".codex/config.toml",
+    ".gemini/settings.json",
+    ".grok/x",
+    ".cursor/rules",
+    ".vscode/tasks.json",
+    "deep/er/.idea/workspace.xml",
+    ".g\u{200c}it/hooks/x",
+];
+
+const KEPT_PATHS: &[&str] = &[
+    "CLAUDE.md",
+    "AGENTS.md",
+    "notes/ok.md",
+    "sub/claude.md",
+    ".gitignore",
+    "x.envrc",
+];
+
+#[test]
+fn tool_configuration_names_are_dropped_on_import_whatever_their_case() {
+    let fx = Fixture::new();
+    // Even a manifest that lists them does not bring them in.
+    let memory: Vec<(&str, &[u8])> = TOOL_PATHS
+        .iter()
+        .chain(KEPT_PATHS)
+        .map(|p| (*p, b"data".as_slice()))
+        .collect();
+    let un = fx.unpack(good_tar(&memory).finish(), &Limits::default()).unwrap();
+    for kept in KEPT_PATHS {
+        assert_eq!(
+            std::fs::read(un.memory.join(kept)).unwrap(),
+            b"data",
+            "{kept} is carried"
+        );
+    }
+    for dropped in TOOL_PATHS {
+        let top = dropped.split('/').next().unwrap();
+        assert!(
+            !un.memory.join(top).exists() || top == "sub" || top == "deep",
+            "{dropped} is not unpacked"
+        );
+        assert!(
+            un.skipped.iter().any(|s| s.starts_with(&format!("{dropped}:"))),
+            "{dropped} is named in skipped: {:?}",
+            un.skipped
+        );
+    }
+    assert!(!un.memory.join("sub/.mcp.json").exists());
+    assert!(!un.memory.join("deep/er/.idea").exists());
+}
+
+#[test]
+fn the_agent_marker_is_dropped_too_and_a_marker_in_a_folder_is_not_one() {
+    let fx = Fixture::new();
+    let un = fx
+        .unpack(
+            good_tar(&[(".bandito-agent", b"other-id"), ("sub/.bandito-agent", b"x")]).finish(),
+            &Limits::default(),
+        )
+        .unwrap();
+    assert!(!un.memory.join(".bandito-agent").exists());
+    assert!(un.memory.join("sub/.bandito-agent").is_file());
+}
+
+#[test]
+fn tool_configuration_folders_are_dropped_as_folders_too() {
+    let fx = Fixture::new();
+    let tar = good_tar(&[("a.md", b"x")])
+        .dir("memory/.CLAUDE/")
+        .dir("memory/.claude/skills/")
+        .file("memory/.claude/skills/s.md", b"x");
+    let un = fx.unpack(tar.finish(), &Limits::default()).unwrap();
+    assert!(!un.memory.join(".claude").exists() && !un.memory.join(".CLAUDE").exists());
+    assert!(un.memory.join("a.md").is_file());
+}
+
+#[test]
+fn every_imported_file_is_0600_and_every_folder_0700() {
+    let fx = Fixture::new();
+    let mut tar = Tar::default().dir("memory/");
+    // A header that asks for setuid, setgid and rwx for everyone.
+    tar.0
+        .extend_from_slice(&header(b"memory/tool.sh", b'0', 3, 0o7777, b""));
+    tar.0.extend_from_slice(b"hi!");
+    tar.0.extend(std::iter::repeat_n(0u8, 509));
+    tar.0.extend_from_slice(&header(b"memory/d/", b'5', 0, 0o777, b""));
+    let files: Vec<(&str, &[u8])> = vec![("events.jsonl", EVENT_LINE.as_bytes()), ("memory/tool.sh", b"hi!")];
+    let manifest = serde_json::to_vec(&manifest_for(&files, 1)).unwrap();
+    let tar = tar
+        .file("events.jsonl", EVENT_LINE.as_bytes())
+        .file("manifest.json", &manifest);
+    let un = fx.unpack(tar.finish(), &Limits::default()).unwrap();
+    let mode = |p: &PathBuf| std::fs::metadata(p).unwrap().permissions().mode() & 0o7777;
+    assert_eq!(mode(&un.memory.join("tool.sh")), 0o600);
+    assert_eq!(mode(&un.memory.join("d")), 0o700);
+    assert_eq!(mode(&un.memory), 0o700);
+    assert_eq!(mode(&un.root), 0o700);
+    assert_eq!(mode(&un.events), 0o600);
+}
+
+fn export_home(fx: &Fixture, home: &Path) -> (Unpacked, Exported) {
+    let store = Store::open_in_memory().unwrap();
+    let agent = new_agent(&store, "Forge");
+    store.agent_set_home(&agent.id, &home.display().to_string()).unwrap();
+    let agent = store.agent_get(&agent.id).unwrap().unwrap();
+    let run = fx.dir.path().join("run");
+    std::fs::create_dir_all(&run).unwrap();
+    let made = export_archive(
+        ExportInput {
+            store: &store,
+            agent: &agent,
+            services: vec![],
+            schedules: vec![],
+            avatar: None,
+        },
+        &run,
+        "tok",
+        &Limits::default(),
+    )
+    .unwrap();
+    let un = unpack(&run.join("tok.tgz"), &fx.dir.path().join("x-1"), &Limits::default()).unwrap();
+    (un, made)
+}
+
+#[test]
+fn tool_configuration_names_are_left_out_of_an_export_too() {
+    let fx = Fixture::new();
+    let home = fx.dir.path().join("home");
+    for p in TOOL_PATHS.iter().chain(KEPT_PATHS) {
+        let path = home.join(p);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "data").unwrap();
+    }
+    let (un, made) = export_home(&fx, &home);
+    for kept in KEPT_PATHS {
+        assert_eq!(std::fs::read(un.memory.join(kept)).unwrap(), b"data", "{kept}");
+    }
+    for dropped in TOOL_PATHS {
+        let top = dropped.split('/').next().unwrap();
+        if top == "sub" || top == "deep" {
+            continue;
+        }
+        assert!(!un.memory.join(top).exists(), "{dropped}");
+        assert!(
+            un.manifest.skipped.iter().any(|s| s.starts_with(top)),
+            "{top} is named in the manifest's skipped: {:?}",
+            un.manifest.skipped
+        );
+    }
+    assert!(!un.memory.join("sub/.mcp.json").exists());
+    assert!(!un.memory.join("deep/er/.idea").exists());
+    assert!(made.skipped >= 10, "{}", made.skipped);
+}
+
+fn set_after_list(f: impl Fn(&str) + 'static) {
+    AFTER_LIST.with(|h| *h.borrow_mut() = Some(Box::new(f)));
+}
+
+fn mkfifo(path: &Path) {
+    let c = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+    // SAFETY: a valid C string and a mode.
+    assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+}
+
+fn all_text(dir: &Path) -> String {
+    let mut out = String::new();
+    for e in std::fs::read_dir(dir).unwrap() {
+        let p = e.unwrap().path();
+        if p.is_dir() {
+            out.push_str(&all_text(&p));
+        } else {
+            out.push_str(&std::fs::read_to_string(&p).unwrap_or_default());
+        }
+    }
+    out
+}
+
+#[test]
+fn a_link_or_a_pipe_put_in_a_files_place_during_the_walk_is_not_packed() {
+    let fx = Fixture::new();
+    let home = fx.dir.path().join("home");
+    let outside = fx.dir.path().join("outside");
+    std::fs::create_dir_all(home.join("notes")).unwrap();
+    std::fs::create_dir_all(home.join("d")).unwrap();
+    std::fs::create_dir_all(outside.join("dir")).unwrap();
+    std::fs::write(outside.join("secret"), "TOP SECRET").unwrap();
+    std::fs::write(outside.join("dir/x"), "TOP SECRET 2").unwrap();
+    for name in ["a.md", "b.md", "c.md", "keep.md"] {
+        std::fs::write(home.join("notes").join(name), "mine").unwrap();
+    }
+    std::fs::write(home.join("d/x"), "mine").unwrap();
+    let (h, o) = (home.clone(), outside.clone());
+    set_after_list(move |rel| {
+        if rel == "notes" {
+            // a.md becomes a link, b.md a pipe (opening it for reading would hang without O_NONBLOCK), c.md a
+            // link to a folder.
+            for name in ["a.md", "b.md", "c.md"] {
+                std::fs::remove_file(h.join("notes").join(name)).unwrap();
+            }
+            symlink(o.join("secret"), h.join("notes/a.md")).unwrap();
+            mkfifo(&h.join("notes/b.md"));
+            symlink(&o, h.join("notes/c.md")).unwrap();
+        }
+        if rel == "d" {
+            // The folder itself is swapped for a link to another folder.
+            std::fs::remove_dir_all(h.join("d")).unwrap();
+            symlink(o.join("dir"), h.join("d")).unwrap();
+        }
+    });
+    let (un, _) = export_home(&fx, &home);
+    AFTER_LIST.with(|h| *h.borrow_mut() = None);
+    assert_eq!(std::fs::read(un.memory.join("notes/keep.md")).unwrap(), b"mine");
+    for gone in ["notes/a.md", "notes/b.md", "notes/c.md", "d/x"] {
+        assert!(!un.memory.join(gone).exists(), "{gone} must not be in the archive");
+    }
+    assert!(!all_text(&un.memory).contains("TOP SECRET"));
+    assert!(un.manifest.skipped.len() >= 3, "{:?}", un.manifest.skipped);
+}
+
+#[test]
+fn a_pipe_in_the_folder_is_skipped_without_hanging() {
+    let fx = Fixture::new();
+    let home = fx.dir.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("a.md"), "mine").unwrap();
+    mkfifo(&home.join("pipe"));
+    let (un, _) = export_home(&fx, &home);
+    assert!(un.memory.join("a.md").is_file() && !un.memory.join("pipe").exists());
+    assert!(un.manifest.skipped.iter().any(|s| s.starts_with("pipe")));
+}
+
+#[test]
+fn an_attachment_is_not_kept_when_the_new_folder_is_unknown() {
+    let remap = Remap {
+        old_home: Some("/old/home".into()),
+        new_home: PathBuf::new(),
+    };
+    let mut payload = serde_json::json!({
+        "text": "see", "source": "user",
+        "attachments": [{"path": "/old/home/files/a.png", "name": "a.png", "size": 1, "mime": "image/png"}],
+    });
+    assert!(remap.apply("message.user", &mut payload, &HashMap::new()));
+    assert!(payload.get("attachments").is_none());
+    assert!(
+        payload["text"]
+            .as_str()
+            .unwrap()
+            .contains("[attachment not moved: a.png]")
+    );
+}
+
+#[test]
+fn excluded_folds_case_and_look_alike_characters() {
+    for name in [
+        ".GIT",
+        ".Claude/x",
+        "a/.CODEX",
+        ".gro\u{212a}",
+        ".g\u{200b}it",
+        ".gi\u{feff}t/hooks",
+        ".c\u{200d}laude",
+        ".MCP.JSON",
+        "deep/.VsCode/tasks.json",
+        ".bandito-agent",
+        ".Bandito-Agent",
+    ] {
+        assert!(excluded(name).is_some(), "{name:?}");
+    }
+    for name in [
+        "CLAUDE.md",
+        "AGENTS.md",
+        "claude.md",
+        ".gitignore",
+        "x.git",
+        "notes/.claude.md",
+        "sub/.bandito-agent",
+        ".gitx",
+        "git",
+    ] {
+        assert!(excluded(name).is_none(), "{name:?}");
+    }
 }

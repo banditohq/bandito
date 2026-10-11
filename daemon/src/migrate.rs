@@ -25,9 +25,12 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
+use std::ffi::CString;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd};
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -284,20 +287,58 @@ pub fn check_path(raw: &[u8], limits: &Limits) -> Result<String> {
         if part.len() > COMPONENT_MAX {
             return Err(bad_path(text, "a name in the path is too long"));
         }
-        if *part == ".git" {
-            return Err(bad_path(text, ".git is not carried"));
-        }
     }
     match parts[0] {
-        "memory" => {
-            if parts.len() == 2 && parts[1] == MARKER {
-                return Err(bad_path(text, "the agent marker is not carried"));
-            }
-        }
+        "memory" => {}
         top if TOP_FILES.contains(&top) && parts.len() == 1 => {}
         _ => return Err(bad_path(text, "path outside the archive layout")),
     }
     Ok(path.to_string())
+}
+
+/// Names that configure or run tools when an agent works in a folder (git hooks and config, the CLIs' settings, MCP
+/// servers, editors, direnv): a moved folder must not bring them, whatever their case.
+const EXCLUDED_NAMES: &[&str] = &[
+    ".git",
+    ".gitmodules",
+    ".gitattributes",
+    ".claude",
+    ".codex",
+    ".gemini",
+    ".grok",
+    ".cursor",
+    ".vscode",
+    ".idea",
+    ".mcp.json",
+    ".envrc",
+];
+
+/// A name as a file system that folds case and ignores some characters would see it: without zero-width and
+/// direction marks, ASCII lowercase, and the Kelvin sign (the one letter of the list with a canonical equivalent:
+/// NFC composes it to K) as k.
+fn fold_name(part: &str) -> String {
+    part.chars()
+        .filter(|c| {
+            !matches!(
+                *c as u32,
+                0x200B..=0x200F | 0x202A..=0x202E | 0x2060..=0x2064 | 0x206A..=0x206F | 0xFEFF | 0xAD
+            )
+        })
+        .map(|c| if c == '\u{212A}' { 'k' } else { c.to_ascii_lowercase() })
+        .collect()
+}
+
+/// Why a path below `memory/` is not carried, or `None`: a part that is one of [`EXCLUDED_NAMES`] (any depth, any
+/// case), or the agent marker at the top. `CLAUDE.md` and `AGENTS.md` are the agent's memory and are carried.
+pub fn excluded(rel: &str) -> Option<&'static str> {
+    let mut parts = rel.split('/').filter(|p| !p.is_empty());
+    if parts.clone().count() == 1 && fold_name(parts.clone().next()?) == MARKER {
+        return Some("the agent marker is not carried");
+    }
+    if parts.any(|p| EXCLUDED_NAMES.contains(&fold_name(p).as_str())) {
+        return Some("a tool configuration name is not carried");
+    }
+    None
 }
 
 // ---- writing the archive ----
@@ -334,6 +375,8 @@ struct ExactReader {
     file: File,
     remaining: u64,
     hasher: Sha256,
+    /// Set when the file ended before its size: the rest was padded with zeros.
+    short: bool,
 }
 
 impl Read for ExactReader {
@@ -344,6 +387,7 @@ impl Read for ExactReader {
         let want = buf.len().min(self.remaining.min(usize::MAX as u64) as usize);
         let n = self.file.read(&mut buf[..want])?;
         let n = if n == 0 {
+            self.short = true;
             buf[..want].fill(0);
             want
         } else {
@@ -363,7 +407,8 @@ pub fn sha_hex(bytes: &[u8]) -> String {
 #[derive(Debug, Default)]
 struct Walked {
     dirs: Vec<String>,
-    files: Vec<(String, PathBuf, u64, u32)>,
+    /// Path below the folder and size at the time of the walk.
+    files: Vec<(String, u64)>,
     skipped: Vec<String>,
 }
 
@@ -373,23 +418,137 @@ fn skip(walked: &mut Walked, rel: &str, why: &str) {
     }
 }
 
-/// Lists `root` without following links. Only regular files and folders are taken. Links, sockets and the like,
-/// `.git` folders and names the archive cannot hold are skipped and named in `skipped`.
-fn walk_memory(root: &Path, limits: &Limits) -> Result<Walked> {
+// The folder is read through file descriptors: every part of every path is opened relative to the folder above it
+// with O_NOFOLLOW, so a link put in place of a file or a folder after the walk is never followed.
+
+fn from_fd(fd: i32) -> std::io::Result<OwnedFd> {
+    if fd < 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        // SAFETY: `fd` is a new descriptor that nothing else owns.
+        Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+    }
+}
+
+fn c_name(name: &str) -> std::io::Result<CString> {
+    CString::new(name).map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))
+}
+
+/// Opens the agent's folder itself (it may be reached through a link: it is the agent's own folder).
+fn open_root(path: &Path) -> std::io::Result<OwnedFd> {
+    let c = CString::new(path.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+    // SAFETY: `c` is a valid C string.
+    from_fd(unsafe { libc::open(c.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC) })
+}
+
+fn open_at(dir: &OwnedFd, name: &str, flags: i32) -> std::io::Result<OwnedFd> {
+    let c = c_name(name)?;
+    // SAFETY: `dir` is an open descriptor and `c` a valid C string.
+    from_fd(unsafe { libc::openat(dir.as_raw_fd(), c.as_ptr(), flags | libc::O_CLOEXEC | libc::O_NOFOLLOW) })
+}
+
+/// Opens `rel` below `root` one part at a time, never following a link. The last part is opened with `last`.
+fn open_below(root: &OwnedFd, rel: &str, last: i32) -> std::io::Result<OwnedFd> {
+    let parts: Vec<&str> = rel.split('/').filter(|p| !p.is_empty()).collect();
+    let Some((final_part, folders)) = parts.split_last() else {
+        return root.try_clone();
+    };
+    let mut cur = root.try_clone()?;
+    for part in folders {
+        cur = open_at(&cur, part, libc::O_RDONLY | libc::O_DIRECTORY)?;
+    }
+    open_at(&cur, final_part, last)
+}
+
+/// The names in an open folder.
+fn list_names(dir: &OwnedFd) -> std::io::Result<Vec<std::ffi::OsString>> {
+    let fd = dir.try_clone()?.into_raw_fd();
+    // SAFETY: `fd` is a descriptor we own; on success the directory stream owns it.
+    let stream = unsafe { libc::fdopendir(fd) };
+    if stream.is_null() {
+        let e = std::io::Error::last_os_error();
+        // SAFETY: fdopendir failed, so `fd` is still ours.
+        unsafe { libc::close(fd) };
+        return Err(e);
+    }
+    let mut names = Vec::new();
+    loop {
+        // SAFETY: `stream` is open; the entry is read before the next call.
+        let entry = unsafe { libc::readdir(stream) };
+        if entry.is_null() {
+            break;
+        }
+        // SAFETY: `d_name` is a NUL-terminated name.
+        let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
+        if name != b"." && name != b".." {
+            names.push(std::ffi::OsString::from_vec(name.to_vec()));
+        }
+    }
+    // SAFETY: `stream` is open and closed once.
+    unsafe { libc::closedir(stream) };
+    Ok(names)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Dir,
+    File,
+    Other,
+}
+
+/// What `name` in `dir` is, without following a link, and its size.
+fn kind_at(dir: &OwnedFd, name: &str) -> std::io::Result<(Kind, u64)> {
+    let c = c_name(name)?;
+    // SAFETY: an all-zero `stat` is a valid value to fill in.
+    let mut st: libc::stat = unsafe { std::mem::zeroed() };
+    // SAFETY: `dir` is open, `c` is a valid C string and `st` a valid out-pointer.
+    if unsafe { libc::fstatat(dir.as_raw_fd(), c.as_ptr(), &mut st, libc::AT_SYMLINK_NOFOLLOW) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let kind = match st.st_mode & libc::S_IFMT {
+        libc::S_IFDIR => Kind::Dir,
+        libc::S_IFREG => Kind::File,
+        _ => Kind::Other,
+    };
+    Ok((kind, st.st_size.max(0) as u64))
+}
+
+#[cfg(test)]
+type WalkHook = Box<dyn Fn(&str)>;
+
+#[cfg(test)]
+thread_local! {
+    /// Called with the path of a folder right after its names were listed (a test puts a link in a file's place).
+    pub(crate) static AFTER_LIST: std::cell::RefCell<Option<WalkHook>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Lists the folder without following links. Only regular files and folders are taken. Links, sockets and the like,
+/// the names of [`EXCLUDED_NAMES`] and names the archive cannot hold are skipped and named in `skipped`.
+fn walk_memory(root: &OwnedFd, limits: &Limits) -> Result<Walked> {
     let mut walked = Walked::default();
     let mut total: u64 = 0;
-    let mut stack: Vec<(PathBuf, String)> = vec![(root.to_path_buf(), String::new())];
-    while let Some((dir, rel)) = stack.pop() {
-        let mut names: Vec<std::ffi::OsString> = match std::fs::read_dir(&dir) {
-            Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.file_name())).collect(),
+    let mut stack: Vec<String> = vec![String::new()];
+    while let Some(rel) = stack.pop() {
+        let listed = open_below(root, &rel, libc::O_RDONLY | libc::O_DIRECTORY).and_then(|dir| {
+            let names = list_names(&dir)?;
+            Ok((dir, names))
+        });
+        let (dir, mut names) = match listed {
+            Ok(v) => v,
             Err(e) => {
                 skip(&mut walked, &rel, &format!("cannot be read: {e}"));
                 continue;
             }
         };
         names.sort();
+        #[cfg(test)]
+        AFTER_LIST.with(|h| {
+            if let Some(f) = h.borrow().as_ref() {
+                f(&rel)
+            }
+        });
         for name in names {
-            let path = dir.join(&name);
             let Some(name) = name.to_str() else {
                 skip(&mut walked, &rel, "a name that is not UTF-8");
                 continue;
@@ -399,48 +558,46 @@ fn walk_memory(root: &Path, limits: &Limits) -> Result<Walked> {
             } else {
                 format!("{rel}/{name}")
             };
-            if rel.is_empty() && name == MARKER {
+            if let Some(why) = excluded(&child) {
+                skip(&mut walked, &child, why);
                 continue;
             }
-            if name == ".git" {
-                skip(&mut walked, &child, ".git is not carried");
-                continue;
-            }
-            let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            let Ok((kind, size)) = kind_at(&dir, name) else {
                 skip(&mut walked, &child, "cannot be read");
                 continue;
             };
-            let archive_path = format!("memory/{child}");
-            if check_path(archive_path.as_bytes(), limits).is_err() {
+            if check_path(format!("memory/{child}").as_bytes(), limits).is_err() {
                 skip(&mut walked, &child, "a name the archive cannot hold");
                 continue;
             }
-            if meta.file_type().is_dir() {
-                if walked.dirs.len() >= limits.max_files {
-                    return Err(MigrateError::new(
-                        "too_many_files",
-                        format!("the agent's folder has more than {} folders", limits.max_files),
-                    ));
+            match kind {
+                Kind::Dir => {
+                    if walked.dirs.len() >= limits.max_files {
+                        return Err(MigrateError::new(
+                            "too_many_files",
+                            format!("the agent's folder has more than {} folders", limits.max_files),
+                        ));
+                    }
+                    walked.dirs.push(child.clone());
+                    stack.push(child);
                 }
-                walked.dirs.push(child.clone());
-                stack.push((path, child));
-            } else if meta.file_type().is_file() {
-                if walked.files.len() >= limits.max_files {
-                    return Err(MigrateError::new(
-                        "too_many_files",
-                        format!("the agent's folder has more than {} files", limits.max_files),
-                    ));
+                Kind::File => {
+                    if walked.files.len() >= limits.max_files {
+                        return Err(MigrateError::new(
+                            "too_many_files",
+                            format!("the agent's folder has more than {} files", limits.max_files),
+                        ));
+                    }
+                    total += size;
+                    if total > limits.max_total_bytes {
+                        return Err(MigrateError::new(
+                            "too_large",
+                            "the agent's folder is over the size limit",
+                        ));
+                    }
+                    walked.files.push((child, size));
                 }
-                total += meta.len();
-                if total > limits.max_total_bytes {
-                    return Err(MigrateError::new(
-                        "too_large",
-                        "the agent's folder is over the size limit",
-                    ));
-                }
-                walked.files.push((child, path, meta.len(), meta.permissions().mode()));
-            } else {
-                skip(&mut walked, &child, "not a regular file or folder");
+                Kind::Other => skip(&mut walked, &child, "not a regular file or folder"),
             }
         }
     }
@@ -458,6 +615,8 @@ pub struct Exported {
     pub files: usize,
     pub events: u64,
     pub skipped: usize,
+    /// The newest seq of the history at the time of the export: later events are not in the archive.
+    pub upto: i64,
 }
 
 /// Everything an export reads about the agent.
@@ -486,7 +645,7 @@ fn tar_header(size: u64, mode: u32, mtime: u64) -> tar::Header {
 }
 
 /// Writes `events.jsonl` for the agent up to the seq at the time of the call. Returns the file's hash and the count.
-fn write_events(store: &Store, agent_id: &str, path: &Path, limits: &Limits) -> Result<(String, u64)> {
+fn write_events(store: &Store, agent_id: &str, path: &Path, limits: &Limits) -> Result<(String, u64, i64)> {
     let upto = store
         .last_seq()
         .map_err(|e| MigrateError::new("io", format!("read the history: {e:#}")))?;
@@ -523,7 +682,7 @@ fn write_events(store: &Store, agent_id: &str, path: &Path, limits: &Limits) -> 
     }
     out.flush()
         .map_err(|e| MigrateError::io("write the history file", &e))?;
-    Ok((hex::encode(hasher.finalize()), count))
+    Ok((hex::encode(hasher.finalize()), count, upto))
 }
 
 /// Writes the agent's archive to `<dir>/<token>.tgz` (mode 0600) and returns its size and hash. A failure leaves no
@@ -541,12 +700,16 @@ pub fn export_archive(input: ExportInput<'_>, dir: &Path, token: &str, limits: &
 
 fn export_inner(input: &ExportInput<'_>, archive: &Path, events_tmp: &Path, limits: &Limits) -> Result<Exported> {
     let agent = input.agent;
-    let (events_sha, events_count) = write_events(input.store, &agent.id, events_tmp, limits)?;
+    let (events_sha, events_count, upto) = write_events(input.store, &agent.id, events_tmp, limits)?;
     let events_size = std::fs::metadata(events_tmp)
         .map_err(|e| MigrateError::io("read the history file", &e))?
         .len();
-    let walked = match agent.home_dir.as_deref().map(Path::new).filter(|p| p.is_dir()) {
-        Some(home) => walk_memory(home, limits)?,
+    let root = agent
+        .home_dir
+        .as_deref()
+        .and_then(|home| open_root(Path::new(home)).ok());
+    let walked = match &root {
+        Some(root) => walk_memory(root, limits)?,
         None => Walked::default(),
     };
 
@@ -601,47 +764,66 @@ fn export_inner(input: &ExportInput<'_>, archive: &Path, events_tmp: &Path, limi
     for dir in &walked.dirs {
         tar_dir_checked(&mut builder, &format!("memory/{dir}"), &fail)?;
     }
-    for (rel, path, size, mode) in &walked.files {
+    for (rel, _) in &walked.files {
         let archive_path = format!("memory/{rel}");
-        let mode = if mode & 0o111 != 0 { 0o755 } else { 0o644 };
-        let Ok(mut file) = File::open(path) else {
+        let mut note = |why: &str| {
             skipped_total += 1;
             if skipped.len() < SKIPPED_LISTED {
-                skipped.push(format!("{rel}: cannot be read"));
+                skipped.push(format!("{rel}: {why}"));
             }
+        };
+        let Some(root) = &root else { continue };
+        // No link is followed and nothing blocks: a pipe put in the file's place does not hang the export.
+        let Ok(mut file) = open_below(root, rel, libc::O_RDONLY | libc::O_NONBLOCK).map(File::from) else {
+            note("cannot be opened: a link, or gone since the walk");
             continue;
         };
-        if *size <= SMALL_FILE {
-            let mut bytes = Vec::with_capacity(*size as usize);
-            if file.read_to_end(&mut bytes).is_err() {
-                skipped_total += 1;
-                if skipped.len() < SKIPPED_LISTED {
-                    skipped.push(format!("{rel}: cannot be read"));
-                }
+        let size = match file.metadata() {
+            Ok(meta) if meta.is_file() => meta.len(),
+            Ok(_) => {
+                note("not a regular file");
                 continue;
             }
-            let mut header = tar_header(bytes.len() as u64, mode, 0);
+            Err(_) => {
+                note("cannot be read");
+                continue;
+            }
+        };
+        if size <= SMALL_FILE {
+            let mut bytes = Vec::with_capacity(size as usize);
+            if (&mut file).take(size).read_to_end(&mut bytes).is_err() || bytes.len() as u64 != size {
+                note("changed while it was read");
+                continue;
+            }
+            let mut header = tar_header(size, 0o644, 0);
             builder
                 .append_data(&mut header, &archive_path, bytes.as_slice())
                 .map_err(&fail)?;
             entries.push(FileEntry {
                 path: archive_path,
-                size: bytes.len() as u64,
+                size,
                 sha256: sha_hex(&bytes),
             });
         } else {
             let mut reader = ExactReader {
                 file,
-                remaining: *size,
+                remaining: size,
                 hasher: Sha256::new(),
+                short: false,
             };
-            let mut header = tar_header(*size, mode, 0);
+            let mut header = tar_header(size, 0o644, 0);
             builder
                 .append_data(&mut header, &archive_path, &mut reader)
                 .map_err(&fail)?;
+            if reader.short {
+                return Err(MigrateError::new(
+                    "io",
+                    format!("{rel} got shorter while it was packed: pause the agent and export again"),
+                ));
+            }
             entries.push(FileEntry {
                 path: archive_path,
-                size: *size,
+                size,
                 sha256: hex::encode(reader.hasher.finalize()),
             });
         }
@@ -671,6 +853,7 @@ fn export_inner(input: &ExportInput<'_>, archive: &Path, events_tmp: &Path, limi
         files,
         events: events_count,
         skipped: skipped_total,
+        upto,
     })
 }
 
@@ -699,6 +882,8 @@ pub struct Unpacked {
     pub memory: PathBuf,
     /// The avatar picture, when the archive has one.
     pub avatar: Option<PathBuf>,
+    /// Entries of the archive that were not unpacked (tool configuration names), as "path: why". At most 200.
+    pub skipped: Vec<String>,
 }
 
 fn bad_archive(why: impl std::fmt::Display) -> MigrateError {
@@ -714,7 +899,6 @@ struct RawEntry {
     path: Vec<u8>,
     kind: EntryKind,
     size: u64,
-    mode: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -839,7 +1023,6 @@ fn for_each_entry<R: Read>(
             path: long_name.take().unwrap_or(path),
             kind,
             size,
-            mode: octal(&block[100..108]).unwrap_or(0) as u32,
         };
         let mut data = (&mut r).take(size);
         f(entry, &mut data)?;
@@ -888,10 +1071,20 @@ fn unpack_into(archive: &Path, dest: &Path, limits: &Limits) -> Result<Unpacked>
     let mut written: HashMap<String, (u64, String)> = HashMap::new();
     let mut dirs: usize = 0;
     let mut total: u64 = 0;
+    let mut dropped: Vec<String> = Vec::new();
     for_each_entry(GzDecoder::new(BufReader::new(file)), limits, |entry, data| {
         let rel = check_path(&entry.path, limits)?;
         if !seen.insert(rel.clone()) {
             return Err(bad_archive(format!("{rel} is in the archive twice")));
+        }
+        if let Some(sub) = rel.strip_prefix("memory/")
+            && let Some(why) = excluded(sub)
+        {
+            // Not unpacked; its data is read past and thrown away.
+            if dropped.len() < SKIPPED_LISTED {
+                dropped.push(format!("{sub}: {why}"));
+            }
+            return Ok(());
         }
         let target = dest.join(&rel);
         if entry.kind == EntryKind::Dir {
@@ -923,11 +1116,11 @@ fn unpack_into(archive: &Path, dest: &Path, limits: &Limits) -> Result<Unpacked>
         if let Some(parent) = target.parent() {
             make_dirs(parent)?;
         }
-        let exec = entry.mode & 0o100 != 0;
+        // Whatever the archive says, a file is the owner's alone and not executable.
         let mut out = OpenOptions::new()
             .write(true)
             .create_new(true)
-            .mode(if exec { 0o700 } else { 0o600 })
+            .mode(0o600)
             .open(&target)
             .map_err(|e| bad_archive(format!("{rel} cannot be written: {e}")))?;
         let mut hasher = Sha256::new();
@@ -951,7 +1144,7 @@ fn unpack_into(archive: &Path, dest: &Path, limits: &Limits) -> Result<Unpacked>
         written.insert(rel, (copied, hex::encode(hasher.finalize())));
         Ok(())
     })?;
-    check_unpacked(dest, written, limits)
+    check_unpacked(dest, written, dropped, limits)
 }
 
 fn make_dirs(path: &Path) -> Result<()> {
@@ -963,7 +1156,12 @@ fn make_dirs(path: &Path) -> Result<()> {
 }
 
 /// Reads the manifest and holds the written files up against it.
-fn check_unpacked(dest: &Path, mut written: HashMap<String, (u64, String)>, limits: &Limits) -> Result<Unpacked> {
+fn check_unpacked(
+    dest: &Path,
+    mut written: HashMap<String, (u64, String)>,
+    skipped: Vec<String>,
+    limits: &Limits,
+) -> Result<Unpacked> {
     let Some(_) = written.remove("manifest.json") else {
         return Err(MigrateError::new("bad_manifest", "the archive has no manifest.json"));
     };
@@ -999,6 +1197,14 @@ fn check_unpacked(dest: &Path, mut written: HashMap<String, (u64, String)>, limi
                 "bad_manifest",
                 format!("{} is listed twice", entry.path),
             ));
+        }
+        if entry
+            .path
+            .strip_prefix("memory/")
+            .is_some_and(|sub| excluded(sub).is_some())
+        {
+            // A name that is not carried: the archive may list it, and it was not unpacked.
+            continue;
         }
         let Some((size, sha)) = written.get(&entry.path) else {
             return Err(MigrateError::new(
@@ -1042,6 +1248,7 @@ fn check_unpacked(dest: &Path, mut written: HashMap<String, (u64, String)>, limi
         events: dest.join("events.jsonl"),
         memory,
         avatar,
+        skipped,
         manifest,
     })
 }
@@ -1253,6 +1460,9 @@ impl Remap {
         if rel.is_empty() || rel.split('/').any(|p| p.is_empty() || p == "." || p == "..") {
             return None;
         }
+        if !self.new_home.is_absolute() {
+            return None;
+        }
         let new = self.new_home.join(rel);
         let meta = std::fs::symlink_metadata(&new).ok()?;
         meta.file_type().is_file().then(|| new.display().to_string())
@@ -1349,6 +1559,8 @@ pub struct Export {
     pub size: u64,
     pub sha256: String,
     pub created_ms: i64,
+    /// The newest seq of the agent's history that is in the archive (see [`Exported::upto`]).
+    pub upto: i64,
 }
 
 struct Upload {
@@ -1358,7 +1570,8 @@ struct Upload {
     written: u64,
     hasher: Sha256,
     touched_ms: i64,
-    committing: bool,
+    /// When the commit began (milliseconds), or `None`.
+    committing: Option<i64>,
 }
 
 /// What `take_for_commit` hands to the commit: the verified upload file.
@@ -1371,6 +1584,8 @@ pub struct Committing {
 #[derive(Default)]
 pub struct Registry {
     exports: Mutex<HashMap<String, Export>>,
+    /// Export places taken by exports that are being built.
+    reserved: Mutex<usize>,
     uploads: Mutex<HashMap<String, Arc<Mutex<Upload>>>>,
     limits: Limits,
 }
@@ -1453,10 +1668,14 @@ impl Registry {
             let mut uploads = lock(&self.uploads);
             uploads.retain(|_, u| {
                 let u = lock(u);
-                let live = u.committing || now - u.touched_ms < ttl_ms;
+                // A commit that began over an hour ago is stuck: its upload goes too.
+                let live = match u.committing {
+                    Some(since) => now - since < ttl_ms,
+                    None => now - u.touched_ms < ttl_ms,
+                };
                 if !live {
                     let _ = std::fs::remove_file(&u.path);
-                } else if u.committing {
+                } else if u.committing.is_some() {
                     keep.insert(u.path.clone());
                 }
                 live
@@ -1465,21 +1684,31 @@ impl Registry {
         sweep_dir(dir, now, ttl_ms, &keep);
     }
 
-    pub fn add_export(&self, token: String, export: Export) -> Result<()> {
-        let mut exports = lock(&self.exports);
-        if exports.len() >= EXPORTS_MAX {
+    /// Takes a place for an export that is about to be built, so that the limit holds while it is built. Give it back
+    /// with [`Registry::cancel_reservation`] when the export fails; [`Registry::add_export`] uses it up.
+    pub fn reserve_export(&self) -> Result<()> {
+        let exports = lock(&self.exports);
+        let mut reserved = lock(&self.reserved);
+        if exports.len() + *reserved >= EXPORTS_MAX {
             return Err(MigrateError::new(
                 "too_many_exports",
                 format!("{EXPORTS_MAX} exports already wait to be read: finish one first"),
             ));
         }
-        exports.insert(token, export);
+        *reserved += 1;
         Ok(())
     }
 
-    /// Whether another export may start now.
-    pub fn export_slot_free(&self) -> bool {
-        lock(&self.exports).len() < EXPORTS_MAX
+    pub fn cancel_reservation(&self) {
+        let mut reserved = lock(&self.reserved);
+        *reserved = reserved.saturating_sub(1);
+    }
+
+    /// Records a finished export in the place `reserve_export` took.
+    pub fn add_export(&self, token: String, export: Export) {
+        let mut exports = lock(&self.exports);
+        self.cancel_reservation();
+        exports.insert(token, export);
     }
 
     pub fn export(&self, token: &str) -> Option<Export> {
@@ -1526,7 +1755,7 @@ impl Registry {
                 written: 0,
                 hasher: Sha256::new(),
                 touched_ms: now,
-                committing: false,
+                committing: None,
             })),
         );
         Ok(id)
@@ -1543,7 +1772,7 @@ impl Registry {
     pub fn write_upload(&self, id: &str, offset: u64, data: &[u8], now: i64) -> Result<u64> {
         let upload = self.upload(id)?;
         let mut u = lock(&upload);
-        if u.committing {
+        if u.committing.is_some() {
             return Err(MigrateError::new("busy", "the upload is being unpacked"));
         }
         if offset != u.written {
@@ -1580,7 +1809,7 @@ impl Registry {
     pub fn take_for_commit(&self, id: &str) -> Result<Committing> {
         let upload = self.upload(id)?;
         let mut u = lock(&upload);
-        if u.committing {
+        if u.committing.is_some() {
             return Err(MigrateError::new("busy", "the upload is already being unpacked"));
         }
         if u.written != u.size {
@@ -1600,8 +1829,17 @@ impl Registry {
                 "the uploaded archive does not match its sha256: upload it again",
             ));
         }
-        u.committing = true;
+        u.committing = Some(crate::store::now_ms());
         Ok(Committing { path: u.path.clone() })
+    }
+
+    /// A guard that forgets the upload and removes its file when it is dropped: when the commit ends, however it ends,
+    /// and when the call is cancelled half way (the caller went away), so an upload never stays stuck as "committing".
+    pub fn commit_guard(&self, id: &str) -> CommitGuard<'_> {
+        CommitGuard {
+            registry: self,
+            id: id.to_string(),
+        }
     }
 
     /// Forgets the upload and removes its file.
@@ -1614,6 +1852,18 @@ impl Registry {
     #[cfg(test)]
     pub fn counts(&self) -> (usize, usize) {
         (lock(&self.exports).len(), lock(&self.uploads).len())
+    }
+}
+
+/// See [`Registry::commit_guard`].
+pub struct CommitGuard<'a> {
+    registry: &'a Registry,
+    id: String,
+}
+
+impl Drop for CommitGuard<'_> {
+    fn drop(&mut self) {
+        self.registry.finish_upload(&self.id);
     }
 }
 

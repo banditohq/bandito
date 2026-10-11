@@ -277,7 +277,7 @@ fn make_history(s: &Server, id: &str) -> (i64, i64) {
         .append_event(
             id,
             EventBody::AgentStatus {
-                status: crate::event::AgentStatus::Working,
+                status: crate::event::AgentStatus::Idle,
                 detail: None,
             },
         )
@@ -1323,4 +1323,203 @@ async fn an_upload_that_goes_quiet_for_an_hour_is_dropped() {
         .unwrap_err();
     assert_eq!(err_reason(&e), "unknown_upload");
     assert!(dst.leftovers().is_empty());
+}
+
+// ---- the security review's points ----
+
+#[tokio::test]
+async fn never_ask_is_not_carried_over_and_the_services_given_are_listed() {
+    let dst = server();
+    dst.connect("notion");
+    dst.connect("not-in-the-catalog");
+    let tgz = tgz_of(
+        &good_files(),
+        |m| {
+            m.agent.approval_mode = crate::store::ApprovalMode::Never;
+            m.agent.services = vec!["notion".into(), "github".into()];
+        },
+        Tar::default(),
+    );
+    let reply = commit_bytes(&dst, &tgz).await.unwrap();
+    assert_eq!(reply["agent"]["approval_mode"], "risky");
+    assert_eq!(reply["downgraded"], json!(["approval_mode"]));
+    assert_eq!(reply["granted_services"], json!(["notion"]));
+    assert_eq!(reply["missing_services"], json!(["github"]));
+    let notion = dst
+        .store
+        .integration_list()
+        .unwrap()
+        .into_iter()
+        .find(|i| i.name == "notion")
+        .unwrap();
+    assert_eq!(reply["agent"]["integrations"], json!([notion.id]));
+
+    // Any other mode is kept as it is, and nothing is reported.
+    let tgz = tgz_of(
+        &good_files(),
+        |m| m.agent.approval_mode = crate::store::ApprovalMode::Always,
+        Tar::default(),
+    );
+    let reply = commit_bytes(&dst, &tgz).await.unwrap();
+    assert_eq!(reply["agent"]["approval_mode"], "always");
+    assert_eq!(reply["downgraded"], json!([]));
+    assert_eq!(reply["granted_services"], json!([]));
+}
+
+#[tokio::test]
+async fn tool_configuration_files_are_dropped_and_named_and_the_rest_is_private() {
+    let dst = server();
+    let extra = Tar::default()
+        .file("memory/.Git/hooks/pre-commit", b"#!/bin/sh\necho pwned")
+        .file("memory/.CLAUDE/settings.json", b"{\"hooks\":{}}")
+        .file("memory/sub/.mcp.json", b"{}");
+    let mut files = good_files();
+    files.push(("memory/CLAUDE.md".into(), b"the agent's own memory".to_vec()));
+    let reply = commit_bytes(&dst, &tgz_of(&files, |_| {}, extra)).await.unwrap();
+    assert_eq!(reply["errors"], json!([]));
+    let skipped: Vec<String> = reply["skipped"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(skipped.len(), 3, "{skipped:?}");
+    for want in [".Git/hooks/pre-commit", ".CLAUDE/settings.json", "sub/.mcp.json"] {
+        assert!(skipped.iter().any(|s| s.starts_with(want)), "{want} in {skipped:?}");
+    }
+    let home = PathBuf::from(reply["agent"]["home_dir"].as_str().unwrap());
+    assert!(!home.join(".Git").exists() && !home.join(".CLAUDE").exists());
+    assert!(!home.join("sub/.mcp.json").exists());
+    use std::os::unix::fs::PermissionsExt;
+    let mode = |p: &str| std::fs::metadata(home.join(p)).unwrap().permissions().mode() & 0o777;
+    assert_eq!(
+        std::fs::read(home.join("CLAUDE.md")).unwrap(),
+        b"the agent's own memory"
+    );
+    assert_eq!(mode("CLAUDE.md"), 0o600, "no exec bit, owner only");
+    assert_eq!(mode("MEMORY.md"), 0o600);
+}
+
+#[tokio::test]
+async fn a_working_agent_is_not_exported_and_a_refusal_keeps_no_place() {
+    use crate::event::{AgentStatus, EventBody};
+    let src = server();
+    let id = make_source_named(&src, "Forge").await;
+    for status in [AgentStatus::Working, AgentStatus::NeedsYou] {
+        src.store
+            .append_event(&id, EventBody::AgentStatus { status, detail: None })
+            .unwrap();
+        // More refusals than the export limit allows: none of them may use up a place.
+        for _ in 0..crate::migrate::EXPORTS_MAX + 2 {
+            let e = src
+                .call("agents.migrate_export", json!({"agent_id": id}))
+                .await
+                .unwrap_err();
+            assert_eq!(err_reason(&e), "agent_busy");
+        }
+    }
+    assert!(src.leftovers().is_empty());
+    for status in [AgentStatus::Idle, AgentStatus::Error, AgentStatus::Offline] {
+        src.store
+            .append_event(&id, EventBody::AgentStatus { status, detail: None })
+            .unwrap();
+        let ex = export(&src, &id).await;
+        src.call("agents.migrate_done", json!({"token": ex["token"]}))
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn exports_started_together_cannot_pass_the_limit() {
+    let src = server();
+    let id = make_source_named(&src, "Forge").await;
+    let calls =
+        (0..crate::migrate::EXPORTS_MAX + 3).map(|_| src.call("agents.migrate_export", json!({"agent_id": id})));
+    let results = futures_util::future::join_all(calls).await;
+    let ok = results.iter().filter(|r| r.is_ok()).count();
+    assert_eq!(ok, crate::migrate::EXPORTS_MAX);
+    for r in results.iter().filter_map(|r| r.as_ref().err()) {
+        assert_eq!(err_reason(r), "too_many_exports");
+    }
+    assert_eq!(src.leftovers().len(), crate::migrate::EXPORTS_MAX);
+    // A failed export gives its place back.
+    let e = src
+        .call("agents.migrate_export", json!({"agent_id": "nobody"}))
+        .await
+        .unwrap_err();
+    assert_eq!(err_reason(&e), "unknown_agent");
+}
+
+#[tokio::test]
+async fn an_agent_that_did_something_after_the_export_is_not_marked_as_moved() {
+    use crate::event::{AgentStatus, EventBody};
+    let src = server();
+    let id = make_source_named(&src, "Forge").await;
+    let ex = export(&src, &id).await;
+    let token = ex["token"].as_str().unwrap();
+    // Events the archive does not carry change nothing.
+    src.store
+        .append_event(
+            &id,
+            EventBody::AgentStatus {
+                status: AgentStatus::Working,
+                detail: None,
+            },
+        )
+        .unwrap();
+    // A message after the export does.
+    src.store
+        .append_event(&id, EventBody::MessageAssistant { text: "late".into() })
+        .unwrap();
+    let e = src
+        .call("agents.migrate_done", json!({"token": token, "moved_to": "vps"}))
+        .await
+        .unwrap_err();
+    assert_eq!(err_reason(&e), "changed_since_export");
+    let got = src.call("agents.get", json!({"id": id})).await.unwrap();
+    assert_eq!(
+        (got["migrated_to"].clone(), got["paused"].as_bool()),
+        (Value::Null, Some(false))
+    );
+    assert_eq!(src.leftovers().len(), 1, "the archive stays");
+    // Without moved_to it still cleans up.
+    src.call("agents.migrate_done", json!({"token": token})).await.unwrap();
+    assert!(src.leftovers().is_empty());
+    // A fresh export after the message is whole again (the agent is idle once more).
+    src.store
+        .append_event(
+            &id,
+            EventBody::AgentStatus {
+                status: AgentStatus::Idle,
+                detail: None,
+            },
+        )
+        .unwrap();
+    let ex = export(&src, &id).await;
+    let done = src
+        .call("agents.migrate_done", json!({"token": ex["token"], "moved_to": "vps"}))
+        .await
+        .unwrap();
+    assert_eq!(done["agent"]["migrated_to"], "vps");
+}
+
+#[tokio::test]
+async fn the_periodic_cleanup_removes_what_is_old() {
+    let s = server();
+    let dir = migrate::migrate_dir(&s.data).unwrap();
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 3600);
+    std::fs::write(dir.join("in-up_dead.tgz"), "x").unwrap();
+    std::fs::File::open(dir.join("in-up_dead.tgz"))
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+    std::fs::write(dir.join("in-up_fresh.tgz"), "x").unwrap();
+    cleanup_now(&s.app);
+    assert!(!dir.join("in-up_dead.tgz").exists());
+    assert!(dir.join("in-up_fresh.tgz").exists());
+    // With no folder yet, it makes none.
+    let fresh = server();
+    cleanup_now(&fresh.app);
+    assert!(!fresh.run_dir().exists());
 }

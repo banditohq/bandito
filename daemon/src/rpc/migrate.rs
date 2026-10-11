@@ -8,12 +8,12 @@ use super::{
     App, INVALID_PARAMS, METHOD_NOT_FOUND, MIGRATE_ERROR, RpcError, RpcResult, SERVER_ERROR, create_agent, ok, params,
     schedules,
 };
-use crate::event::{AgentChange, EventBody};
+use crate::event::{AgentChange, AgentStatus, EventBody};
 use crate::migrate::{
     self, Export, ExportInput, Limits, MOVED_TO_MAX, MigrateError, READ_MAX, Remap, ScheduleSpec, TTL_MS, WRITE_MAX,
 };
 use crate::shared;
-use crate::store::{NewAgent, NewSchedule, Store, now_ms, validate_name};
+use crate::store::{ApprovalMode, NewAgent, NewSchedule, Store, now_ms, validate_name};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde::Deserialize;
@@ -21,6 +21,8 @@ use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Deserialize)]
 struct ExportParams {
@@ -105,18 +107,62 @@ pub fn cleanup_at_start(data_home: &Path) {
     }
 }
 
+/// How often the daemon looks for archives, uploads and folders older than an hour, besides every call.
+pub const CLEANUP_EVERY: Duration = Duration::from_secs(10 * 60);
+
+/// One pass of the periodic cleanup: the registry's expired entries and the stray files in the folder.
+pub fn cleanup_now(app: &App) {
+    let dir = app.data_home.join("run").join("migrate");
+    if dir.is_dir() {
+        app.migrate.sweep(&dir, now_ms(), TTL_MS);
+    }
+}
+
+/// Starts the periodic cleanup. It ends with the process.
+pub fn spawn_cleanup(app: Arc<App>) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(CLEANUP_EVERY);
+        loop {
+            tick.tick().await;
+            cleanup_now(&app);
+        }
+    });
+}
+
+/// A place in the export limit that is given back unless the export was recorded (also when the call is cancelled).
+struct Reservation<'a> {
+    registry: &'a migrate::Registry,
+    armed: bool,
+}
+
+impl Drop for Reservation<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            self.registry.cancel_reservation();
+        }
+    }
+}
+
 async fn export(app: &App, req: ExportParams) -> RpcResult {
     let dir = prepare(app)?;
     let store = app.sup.hub().store.clone();
     let agent = store
         .agent_get(&req.agent_id)?
         .ok_or_else(|| refuse("unknown_agent", format!("no agent {}", req.agent_id)))?;
-    if !app.migrate.export_slot_free() {
+    // A turn that is running changes the history and the folder under the export: the app pauses the agent and waits.
+    let status = store.agent_view(&agent.id)?.and_then(|a| a.status);
+    if matches!(status, Some(AgentStatus::Working | AgentStatus::NeedsYou)) {
         return Err(refuse(
-            "too_many_exports",
-            "other exports wait to be read: finish one first",
+            "agent_busy",
+            "the agent is working: pause it, wait for its turn to end, then export",
         ));
     }
+    // The place is taken before the archive is built, so five exports started at once cannot all pass.
+    app.migrate.reserve_export().map_err(fail)?;
+    let reservation = Reservation {
+        registry: &app.migrate,
+        armed: true,
+    };
     let services = shared_services(&store, &agent)?;
     let schedules: Vec<ScheduleSpec> = store
         .schedule_list(Some(&agent.id))?
@@ -163,12 +209,11 @@ async fn export(app: &App, req: ExportParams) -> RpcResult {
         size: made.size,
         sha256: made.sha256.clone(),
         created_ms: now_ms(),
+        upto: made.upto,
     };
-    let path = export.path.clone();
-    if let Err(e) = app.migrate.add_export(token.clone(), export) {
-        let _ = std::fs::remove_file(path);
-        return Err(fail(e));
-    }
+    let mut reservation = reservation;
+    reservation.armed = false;
+    app.migrate.add_export(token.clone(), export);
     ok(json!({
         "token": token,
         "size": made.size,
@@ -240,6 +285,15 @@ async fn done(app: &App, req: DoneParams) -> RpcResult {
         app.migrate.remove_export(&req.token);
         return ok(json!({ "ok": true, "agent": Value::Null }));
     };
+    // The archive must hold everything the agent has: after a new message or turn it is stale, and moving would lose it.
+    if store.agent_get(&export.agent_id)?.is_some()
+        && store.events_count_after(&export.agent_id, export.upto, migrate::EVENT_KINDS)? > 0
+    {
+        return Err(refuse(
+            "changed_since_export",
+            "the agent did something after the export: pause it and export again",
+        ));
+    }
     let marked = store.agent_set_migrated(&export.agent_id, &name, now_ms());
     app.migrate.remove_export(&req.token);
     if marked.is_err() {
@@ -319,10 +373,10 @@ async fn commit(app: &App, req: CommitParams) -> RpcResult {
         _ => None,
     };
     let ticket = app.migrate.take_for_commit(&req.upload_id).map_err(fail)?;
-    let result = commit_checked(app, &dir, &ticket.path, cwd, name).await;
-    // Done or refused, the upload is spent: a second commit finds nothing.
-    app.migrate.finish_upload(&req.upload_id);
-    result
+    // Done, refused or cancelled (the caller went away), the upload is spent: a second commit finds nothing, and
+    // the upload is never left marked as being committed.
+    let _spent = app.migrate.commit_guard(&req.upload_id);
+    commit_checked(app, &dir, &ticket.path, cwd, name).await
 }
 
 async fn commit_checked(app: &App, dir: &Path, archive: &Path, cwd: Option<String>, name: Option<String>) -> RpcResult {
@@ -376,7 +430,14 @@ async fn make_agent(
         .map_err(|e| RpcError::new(SERVER_ERROR, format!("agent defaults: {e}")))?;
     new_agent.role = spec.role.clone();
     new_agent.model = spec.model.clone();
-    new_agent.approval_mode = spec.approval_mode;
+    // "Never ask" is not carried over on the word of a file: the person sets it again here if they want it.
+    let mut downgraded: Vec<&str> = Vec::new();
+    new_agent.approval_mode = if spec.approval_mode == ApprovalMode::Never {
+        downgraded.push("approval_mode");
+        ApprovalMode::Risky
+    } else {
+        spec.approval_mode
+    };
     new_agent.system_prompt = spec.system_prompt.clone();
     new_agent.effort = spec.effort;
     new_agent.memory_mode = spec.memory_mode;
@@ -391,6 +452,7 @@ async fn make_agent(
     }
     // The agent may use the enabled integrations whose catalog id it used before, and no other.
     let mut granted: Vec<String> = Vec::new();
+    let mut granted_services: Vec<String> = Vec::new();
     for integration in store.integration_list()? {
         if !integration.enabled {
             continue;
@@ -400,6 +462,9 @@ async fn make_agent(
         };
         if known.contains(&service) && !granted.contains(&integration.id) {
             granted.push(integration.id);
+            if !granted_services.contains(&service) {
+                granted_services.push(service);
+            }
         }
     }
     new_agent.integrations = Some(granted);
@@ -553,6 +618,9 @@ async fn make_agent(
     ok(json!({
         "agent": agent,
         "missing_services": missing_services,
+        "granted_services": granted_services,
+        "downgraded": downgraded,
+        "skipped": unpacked.skipped,
         "schedule_ids": schedule_ids,
         "events": events_written,
         "files": files_moved,
