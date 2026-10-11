@@ -531,9 +531,8 @@ struct FilesToolbar: View {
     @State private var searchPopover = false
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            layout(search: .field)
-            layout(search: .loupe)
+        FirstFit(count: 2) { index, measuring in
+            layout(search: index == 0 ? .field : .loupe, measuring: measuring)
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
@@ -545,8 +544,10 @@ struct FilesToolbar: View {
 
     enum SearchStyle { case field, loupe }
 
+    /// One form of the toolbar. A copy made to be measured has the field and the loupe as spaces of their width and no
+    /// path in its trail's space: none of them change its width, and a hidden field must not take focus or report.
     @ViewBuilder
-    func layout(search: SearchStyle) -> some View {
+    func layout(search: SearchStyle, measuring: Bool = false) -> some View {
         HStack(spacing: 8) {
             Button(action: onBack) { Image(systemName: "chevron.left") }
                 .banditoButton(.icon(size: 32, label: L10n.Files.back))
@@ -559,15 +560,17 @@ struct FilesToolbar: View {
                 .focusable(false)
                 .disabled(!canGoForward)
 
-            trail
+            trail(measuring: measuring)
 
             switch search {
             case .field:
-                searchField
-                    .frame(minWidth: 200, idealWidth: 260, maxWidth: 360)
-                    .frame(height: 32)
+                Group {
+                    if measuring { Color.clear } else { searchField }
+                }
+                .frame(minWidth: 200, idealWidth: 260, maxWidth: 360)
+                .frame(height: 32)
             case .loupe:
-                loupe
+                if measuring { Color.clear.frame(width: 32, height: 32) } else { loupe }
             }
 
             layoutSwitch
@@ -585,13 +588,15 @@ struct FilesToolbar: View {
     /// The path trail takes the space the other items leave, at least 180 pt. The space is a spacer, and the
     /// trail is an overlay on it, so the trail's content never changes the toolbar's own layout. Its priority
     /// keeps the flexible search field from pushing the row past its measured width.
-    private var trail: some View {
+    private func trail(measuring: Bool) -> some View {
         Spacer(minLength: 180)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .leading) {
+                if !measuring {
                 GeometryReader { proxy in
                     CrumbTrailView(crumbs: crumbs, onCrumb: onCrumb, onCopy: onCopyPath)
                         .frame(width: max(proxy.size.width, 0), height: proxy.size.height, alignment: .leading)
+                }
                 }
             }
             .layoutPriority(1)
@@ -716,12 +721,9 @@ private struct CrumbTrailView: View {
 
     var body: some View {
         let layouts = CrumbTrail.layouts(count: crumbs.count)
-        ViewThatFits(in: .horizontal) {
-            trail(layouts[0])
-            trail(layouts[1])
-            trail(layouts[2])
+        FirstFit(count: layouts.count) { index, _ in
+            trail(layouts[index])
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func trail(_ items: [CrumbTrailItem]) -> some View {

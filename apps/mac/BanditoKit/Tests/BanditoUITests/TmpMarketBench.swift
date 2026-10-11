@@ -94,8 +94,8 @@ import Testing
                 }
             }
         }
-        for round in 0..<2 {
-            for mode in [AppMode.team, .files, .terminals, .browser, .screen, .market, .server] {
+        for round in 0..<3 {
+            for mode in [AppMode.team, .screen, .files, .screen, .terminals, .browser, .screen, .market, .server, .screen] {
                 _ = timed("mode \(mode) \(round)", hosting) { world.router.select(mode: mode) }
             }
         }
