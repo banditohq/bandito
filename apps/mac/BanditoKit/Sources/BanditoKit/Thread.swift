@@ -19,6 +19,8 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
     case chapter(id: String, number: Int, saved: Bool, ts: Int64)
     /// A form the agent asked the person (see docs/ARCHITECTURE.md#forms).
     case form(FormRow)
+    /// A service the agent asked the person to connect (see docs/ARCHITECTURE.md#connect-requests).
+    case connect(ConnectRow)
 
     public var id: String {
         switch self {
@@ -29,6 +31,7 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
         case .tool(let t): return "tool-\(t.callId)"
         case .approval(let a): return "approval-\(a.approvalId)"
         case .form(let f): return "form-\(f.formId)"
+        case .connect(let c): return "connect-\(c.requestId)"
         }
     }
 
@@ -68,6 +71,7 @@ extension ThreadItem {
         case .runtimeSwitch(_, _, _, _, let ts): ts
         case .chapter(_, _, _, let ts): ts
         case .form(let f): f.ts
+        case .connect(let c): c.ts
         case .streaming, .tool, .approval: nil
         }
     }
@@ -138,6 +142,8 @@ public struct AgentThread: Sendable, Hashable {
     /// How each form ended, by form id. Kept apart from the rows because a page of history may hold the answer and not
     /// the question (the question comes with an older page).
     private var formOutcomes: [String: FormOutcome] = [:]
+    /// How each connect request ended, by request id; kept apart from the rows for the same reason as `formOutcomes`.
+    private var connectOutcomes: [String: ConnectOutcome] = [:]
     /// Between the hidden memory-save turn and the chapter rotation that ends it.
     private var memorySaveRunning = false
     /// The memory-save turn ended with an error, so the chapter closes with its memory unsaved.
@@ -175,6 +181,14 @@ public struct AgentThread: Sendable, Hashable {
     public var pendingForms: [FormRow] {
         items.compactMap {
             if case .form(let f) = $0, f.isPending { return f }
+            return nil
+        }
+    }
+
+    /// The connect requests that wait for the person, oldest first.
+    public var pendingConnects: [ConnectRow] {
+        items.compactMap {
+            if case .connect(let c) = $0, c.isPending { return c }
             return nil
         }
     }
@@ -345,6 +359,21 @@ public struct AgentThread: Sendable, Hashable {
                     items.append(.user(id: id, text: text, source: .user, from: nil, ts: e.ts))
                 }
             }
+        case .integrationRequested(let requestId, let service, let reason):
+            finalizeStreaming(e)
+            if !items.contains(where: { $0.id == "connect-\(requestId)" }) {
+                items.append(
+                    .connect(
+                        ConnectRow(
+                            requestId: requestId, service: service, reason: reason,
+                            outcome: connectOutcomes[requestId], ts: e.ts)))
+            }
+        case .integrationRequestEnded(let requestId, let status, let integration):
+            switch status {
+            case .connected: close(connect: requestId, with: .connected(integration: integration))
+            case .declined: close(connect: requestId, with: .declined)
+            case .expired: close(connect: requestId, with: .expired)
+            }
         case .reaction(let seq, let emoji, let by):
             reactions[seq, default: MessageReactions()].set(by: by, emoji: emoji, eventSeq: e.seq)
         case .usageLimits, .agentChanged, .telegramChanged, .unknown:
@@ -367,6 +396,15 @@ public struct AgentThread: Sendable, Hashable {
         if let i = items.firstIndex(where: { $0.id == "form-\(formId)" }), case .form(var row) = items[i] {
             row.outcome = Self.restored(outcome, fields: row.spec.fields)
             items[i] = .form(row)
+        }
+    }
+
+    /// Ends a connect request: its row, if loaded, and the table that serves a row loaded later.
+    public mutating func close(connect requestId: String, with outcome: ConnectOutcome) {
+        connectOutcomes[requestId] = outcome
+        if let i = items.firstIndex(where: { $0.id == "connect-\(requestId)" }), case .connect(var row) = items[i] {
+            row.outcome = outcome
+            items[i] = .connect(row)
         }
     }
 
@@ -426,6 +464,13 @@ public struct AgentThread: Sendable, Hashable {
         for (seq, files) in other.attachments where attachments[seq] == nil { attachments[seq] = files }
         for (seq, list) in other.mentions where mentions[seq] == nil { mentions[seq] = list }
         for (id, outcome) in other.formOutcomes where formOutcomes[id] == nil { formOutcomes[id] = outcome }
+        for (id, outcome) in other.connectOutcomes where connectOutcomes[id] == nil { connectOutcomes[id] = outcome }
+        for (i, item) in items.enumerated() {
+            guard case .connect(var row) = item, row.outcome == nil, let outcome = connectOutcomes[row.requestId]
+            else { continue }
+            row.outcome = outcome
+            items[i] = .connect(row)
+        }
         for (i, item) in items.enumerated() {
             guard case .form(var row) = item, row.outcome == nil, let outcome = formOutcomes[row.formId] else { continue }
             row.outcome = Self.restored(outcome, fields: row.spec.fields)

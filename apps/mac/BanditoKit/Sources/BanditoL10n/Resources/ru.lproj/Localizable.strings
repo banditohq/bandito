@@ -50,6 +50,14 @@
 "agent.menu.resume" = "Продолжить";
 "agent.menu.schedules" = "Расписания…";
 "agent.menu.unpin" = "Открепить";
+"agentConnect.connected" = "%1$@ подключён, %2$@ продолжает";
+"agentConnect.declined" = "Вы не стали подключать %1$@";
+"agentConnect.expired" = "Запрос на %1$@ истёк";
+"agentConnect.hintBrowser" = "Вы входите в браузере. Доступ агенту %1$@ Bandito выдаст сам.";
+"agentConnect.hintKeys" = "Вы заполняете ключи в форме. Доступ агенту %1$@ Bandito выдаст сам.";
+"agentConnect.notNow" = "Не сейчас";
+"agentConnect.title" = "Агенту %1$@ нужен %2$@";
+"agentConnect.unknown" = "%1$@ нет в каталоге этого сервера";
 "agentSheet.advanced" = "Дополнительно";
 "agentSheet.advancedCollapsed" = "Свёрнуто";
 "agentSheet.advancedEffort" = "Усилие: %1$@";
@@ -404,6 +412,8 @@
 "composer.attach.screenshot" = "Снимок экрана";
 "composer.attach.tooLarge" = "Больше 20 МБ";
 "composer.attach.uploading" = "Загрузка…";
+"composer.connectGo" = "К карточке";
+"composer.connectWaiting" = "%1$@ ждёт, когда вы подключите %2$@";
 "composer.contextHint" = "Насколько заполнена текущая глава";
 "composer.contextPopover" = "Контекст: %1$@%% — столько памяти модели занимает этот разговор. На 80%% агент сохранит память и начнёт новую главу.";
 "composer.formGo" = "К форме";

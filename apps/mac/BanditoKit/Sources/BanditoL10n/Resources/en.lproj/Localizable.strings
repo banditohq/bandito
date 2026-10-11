@@ -50,6 +50,14 @@
 "agent.menu.resume" = "Resume";
 "agent.menu.schedules" = "Schedules…";
 "agent.menu.unpin" = "Unpin";
+"agentConnect.connected" = "%1$@ connected, %2$@ continues";
+"agentConnect.declined" = "You did not connect %1$@";
+"agentConnect.expired" = "The request for %1$@ timed out";
+"agentConnect.hintBrowser" = "You sign in in the browser. Bandito hands the access to %1$@ by itself.";
+"agentConnect.hintKeys" = "You fill in the keys in a form. Bandito hands the access to %1$@ by itself.";
+"agentConnect.notNow" = "Not now";
+"agentConnect.title" = "%1$@ needs %2$@";
+"agentConnect.unknown" = "%1$@ is not in this server's catalog";
 "agentSheet.advanced" = "Advanced";
 "agentSheet.advancedCollapsed" = "Collapsed";
 "agentSheet.advancedEffort" = "Effort: %1$@";
@@ -404,6 +412,8 @@
 "composer.attach.screenshot" = "Screenshot";
 "composer.attach.tooLarge" = "Over 20 MB";
 "composer.attach.uploading" = "Uploading…";
+"composer.connectGo" = "Go to the card";
+"composer.connectWaiting" = "%1$@ is waiting for you to connect %2$@";
 "composer.contextHint" = "How full the current chapter is";
 "composer.contextPopover" = "Context: %1$@%% — how much of the model's memory this conversation takes. At 80%% the agent saves its memory and starts a new chapter.";
 "composer.formGo" = "Go to the form";

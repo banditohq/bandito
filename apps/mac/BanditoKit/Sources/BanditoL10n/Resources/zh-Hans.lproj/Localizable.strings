@@ -50,6 +50,14 @@
 "agent.menu.resume" = "继续";
 "agent.menu.schedules" = "定时任务…";
 "agent.menu.unpin" = "取消置顶";
+"agentConnect.connected" = "%1$@ 已连接，%2$@ 继续工作";
+"agentConnect.declined" = "你没有连接 %1$@";
+"agentConnect.expired" = "%1$@ 的请求已超时";
+"agentConnect.hintBrowser" = "你在浏览器中登录，Bandito 会自动把访问权限交给 %1$@。";
+"agentConnect.hintKeys" = "你在表单中填写密钥，Bandito 会自动把访问权限交给 %1$@。";
+"agentConnect.notNow" = "暂不";
+"agentConnect.title" = "%1$@ 需要 %2$@";
+"agentConnect.unknown" = "此服务器的目录中没有 %1$@";
 "agentSheet.advanced" = "高级";
 "agentSheet.advancedCollapsed" = "已折叠";
 "agentSheet.advancedEffort" = "投入度：%1$@";
@@ -404,6 +412,8 @@
 "composer.attach.screenshot" = "屏幕截图";
 "composer.attach.tooLarge" = "超过 20 MB";
 "composer.attach.uploading" = "上传中…";
+"composer.connectGo" = "前往卡片";
+"composer.connectWaiting" = "%1$@ 正在等你连接 %2$@";
 "composer.contextHint" = "当前章节的占用程度";
 "composer.contextPopover" = "上下文：%1$@%%——这段对话占用的模型记忆量。达到 80%% 时，智能体会保存记忆并开始新的章节。";
 "composer.formGo" = "前往表单";

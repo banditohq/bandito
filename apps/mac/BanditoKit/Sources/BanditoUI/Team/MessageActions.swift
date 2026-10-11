@@ -17,6 +17,8 @@ struct ThreadChat {
     var repliesOn = false
     /// The daemon has `forms`.
     var formsOn = false
+    /// The daemon has `agent_connect`: the card an agent shows to ask for a service.
+    var connectOn = false
     var agentName = ""
     /// The agent's colour: the bar of a quote, the flash of a message that was jumped to.
     var accent: Color = Color.Bandito.signal
@@ -43,6 +45,10 @@ struct ThreadChat {
     var onReact: (Int64, String?) -> Void = { _, _ in }
     var onJump: (Int64) -> Void = { _ in }
     var onAnswerForm: (FormRow, FormAction, [String: JSONValue]?, String?) async throws -> Void = { _, _, _, _ in }
+    /// Starts the connection of the service a card asks for.
+    var onConnectService: (ConnectRow) -> Void = { _ in }
+    /// Declines the request of a card.
+    var onDeclineConnect: (ConnectRow) async throws -> Void = { _ in }
 }
 
 /// A message with what a person does to it: a bar of actions on hover (reply, react, copy, more), the same actions

@@ -838,6 +838,18 @@ public final class ServerModel: Identifiable {
         }
     }
 
+    /// The person does not want the service an agent asked for (`integrations.request_decline`). The thread closes the
+    /// card when the daemon's `integration_request_ended` arrives. A request that is over already is not an error.
+    public func declineConnect(_ requestId: String) async throws {
+        try requireFeature("agent_connect")
+        struct P: Encodable { var requestId: String }
+        do {
+            try await rpc().call("integrations.request_decline", P(requestId: requestId))
+        } catch let error as RPCError where error.message == "already_answered" {
+            return
+        }
+    }
+
     public func interrupt(_ agentId: String) async throws {
         struct P: Encodable { var agentId: String }
         try await rpc().call("agents.interrupt", P(agentId: agentId))
