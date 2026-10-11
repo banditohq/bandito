@@ -771,6 +771,9 @@
 "integrations.custom.recognizedProgram" = "Reconnu : programme %1$@";
 "integrations.custom.recognizedWeb" = "Reconnu : adresse web %1$@";
 "integrations.custom.remaining" = "Reste à ajouter : %1$lld";
+"integrations.custom.signIn" = "Se connecter dans le navigateur";
+"integrations.custom.signInHint" = "Aucune clé ni en-tête n'est nécessaire. Connectez-vous à votre compte dans le navigateur, Bandito obtiendra l'accès lui-même.";
+"integrations.custom.signInTitle" = "Ce serveur se connecte via le navigateur";
 "integrations.custom.titleLabel" = "Nom";
 "integrations.custom.titlePlaceholder" = "Par exemple, GitHub";
 "integrations.custom.trialNote" = "La vérification ajoute le serveur désactivé. Si vous quittez sans Ajouter, il est supprimé.";

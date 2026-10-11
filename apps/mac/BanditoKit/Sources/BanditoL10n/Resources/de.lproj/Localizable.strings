@@ -771,6 +771,9 @@
 "integrations.custom.recognizedProgram" = "Erkannt: Programm %1$@";
 "integrations.custom.recognizedWeb" = "Erkannt: Webadresse %1$@";
 "integrations.custom.remaining" = "Noch hinzuzufügen: %1$lld";
+"integrations.custom.signIn" = "Im Browser anmelden";
+"integrations.custom.signInHint" = "Ein Schlüssel oder Header ist nicht nötig. Melden Sie sich im Browser an, Bandito erhält den Zugriff selbst.";
+"integrations.custom.signInTitle" = "Dieser Server meldet sich über den Browser an";
 "integrations.custom.titleLabel" = "Name";
 "integrations.custom.titlePlaceholder" = "Zum Beispiel GitHub";
 "integrations.custom.trialNote" = "Beim Prüfen wird der Server deaktiviert hinzugefügt. Schließen Sie ohne Hinzufügen, wird er wieder entfernt.";

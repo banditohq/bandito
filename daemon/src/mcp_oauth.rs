@@ -744,7 +744,8 @@ fn read_server_metadata(meta: &Value, issuer: &str, resource: &str, scope: Optio
 
 /// Reads the metadata of a server: the challenge of an unsigned request, the resource metadata, the first
 /// authorization server that answers.
-async fn discover(server: &Url) -> Result<Discovery> {
+/// The first request to a server, with no header and no token: its answer says whether, and how, it signs in.
+fn unsigned_initialize(server: &Url) -> Req<'_> {
     let init = json!({
         "jsonrpc": "2.0", "id": 1, "method": "initialize",
         "params": {
@@ -757,7 +758,30 @@ async fn discover(server: &Url) -> Result<Discovery> {
     req.headers
         .push(("Accept", "application/json, text/event-stream".into()));
     req.headers.push(("MCP-Protocol-Version", PROTOCOL.into()));
-    let probe = send(req).await.context("could not reach the server")?;
+    req
+}
+
+/// Whether a service signs in in the browser: an unsigned request is answered 401, and the service's metadata (named
+/// in the challenge, or at its well-known address) lists an authorization server. The address gets the same checks as
+/// a sign-in, and nothing else is sent to it.
+pub(crate) async fn offers_sign_in(server: &str) -> bool {
+    let Ok(url) = Url::parse(server) else { return false };
+    if check_server_url(&url, allow_local()).is_err() {
+        return false;
+    }
+    let Ok(probe) = send(unsigned_initialize(&url)).await else {
+        return false;
+    };
+    probe.status == 401
+        && protected_resource(&url, challenge_param(&probe, "resource_metadata"))
+            .await
+            .is_ok()
+}
+
+async fn discover(server: &Url) -> Result<Discovery> {
+    let probe = send(unsigned_initialize(server))
+        .await
+        .context("could not reach the server")?;
     let (from_challenge, scope) = if probe.status == 401 {
         (
             challenge_param(&probe, "resource_metadata"),

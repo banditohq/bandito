@@ -115,7 +115,10 @@ the text. The server is listed with the connected services.
    for an HTTP or SSE server. A program has one field, the Full command (Команда целиком), with quotes for a word that
    holds a space.
 4. Add the Environment variables (Переменные окружения) or the Headers (Заголовки). Turn on Secret (Секрет) for a
-   key: its value is kept on the server and the integration holds only a reference.
+   key: its value is kept on the server and the integration holds only a reference. If the address signs in in the
+   browser, the Headers are replaced by the line "This server signs in through the browser" (Этот сервер входит через
+   браузер) and the button Sign in in the browser (Войти в браузере): no key is needed, the browser opens the service's
+   page, and the server is connected when you allow access there.
 5. Click Check (Проверить) to try the connection: the sheet lists the tools it found, or says what went wrong. A check
    adds the server turned off; leaving the sheet without Add (Добавить) removes it again, with the secrets the
    sheet wrote.

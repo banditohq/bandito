@@ -771,6 +771,9 @@
 "integrations.custom.recognizedProgram" = "Распознано: программа %1$@";
 "integrations.custom.recognizedWeb" = "Распознано: адрес %1$@";
 "integrations.custom.remaining" = "Осталось добавить: %1$lld";
+"integrations.custom.signIn" = "Войти в браузере";
+"integrations.custom.signInHint" = "Ключ и заголовки не нужны. Войдите в свою учётную запись в браузере, и Bandito получит доступ сам.";
+"integrations.custom.signInTitle" = "Этот сервер входит через браузер";
 "integrations.custom.titleLabel" = "Название";
 "integrations.custom.titlePlaceholder" = "Например, GitHub";
 "integrations.custom.trialNote" = "Проверка добавляет сервер выключенным. Если выйти без «Добавить», он удалится.";

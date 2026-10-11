@@ -771,6 +771,9 @@
 "integrations.custom.recognizedProgram" = "Reconhecido: programa %1$@";
 "integrations.custom.recognizedWeb" = "Reconhecido: endereço web %1$@";
 "integrations.custom.remaining" = "Faltam adicionar: %1$lld";
+"integrations.custom.signIn" = "Entrar no navegador";
+"integrations.custom.signInHint" = "Não é preciso chave nem cabeçalho. Entre na sua conta no navegador, e o Bandito obtém o acesso sozinho.";
+"integrations.custom.signInTitle" = "Este servidor entra pelo navegador";
 "integrations.custom.titleLabel" = "Nome";
 "integrations.custom.titlePlaceholder" = "Por exemplo, GitHub";
 "integrations.custom.trialNote" = "Verificar adiciona o servidor desativado. Se sair sem Adicionar, ele é removido.";

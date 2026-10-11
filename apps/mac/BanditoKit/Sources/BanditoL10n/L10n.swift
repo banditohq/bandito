@@ -1120,6 +1120,9 @@ public enum L10n {
             public static func recognizedProgram(command: String) -> String { L10n.tr("integrations.custom.recognizedProgram", command) }
             public static func recognizedWeb(url: String) -> String { L10n.tr("integrations.custom.recognizedWeb", url) }
             public static func remaining(count: Int) -> String { L10n.tr("integrations.custom.remaining", count) }
+            public static var signIn: String { L10n.tr("integrations.custom.signIn") }
+            public static var signInHint: String { L10n.tr("integrations.custom.signInHint") }
+            public static var signInTitle: String { L10n.tr("integrations.custom.signInTitle") }
             public static var titleLabel: String { L10n.tr("integrations.custom.titleLabel") }
             public static var titlePlaceholder: String { L10n.tr("integrations.custom.titlePlaceholder") }
             public static var trialNote: String { L10n.tr("integrations.custom.trialNote") }

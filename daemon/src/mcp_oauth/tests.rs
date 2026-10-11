@@ -1502,6 +1502,17 @@ async fn the_probe_of_a_sign_in_row_gets_the_same_address_checks_and_pin() {
     }
 }
 
+#[tokio::test]
+async fn a_service_that_signs_in_in_the_browser_is_known_by_an_unsigned_request() {
+    let fake = Fake::start().await;
+    // The fake answers an unsigned request 401 with its resource metadata named in the challenge.
+    assert!(offers_sign_in(&fake.url()).await);
+    // Nothing at the address: no metadata, so no browser sign-in.
+    assert!(!offers_sign_in(&format!("{}/elsewhere/mcp", fake.base)).await);
+    // Plain http for a public name is refused before any request.
+    assert!(!offers_sign_in("http://plain.example/mcp").await);
+}
+
 #[test]
 fn tunnel_and_relay_ranges_are_local_too() {
     let remote = |s: &str| Url::parse(s).and_then(|u| check_remote_url(&u, "x", false));
