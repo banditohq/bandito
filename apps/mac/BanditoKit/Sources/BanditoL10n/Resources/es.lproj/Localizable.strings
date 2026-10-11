@@ -1670,10 +1670,16 @@
 "screen.clipboardOff" = "Apagado";
 "screen.clipboardShared" = "Compartido";
 "screen.connecting" = "Conectando con la pantalla…";
+"screen.didNotStart" = "La pantalla no se inició. Inténtelo de nuevo.";
 "screen.error" = "No se pudo conectar con la pantalla";
 "screen.fullscreen" = "Pantalla completa";
 "screen.hint" = "Haz clic en la pantalla o pulsa «Tomar el control». El agente espera a que sueltes.";
 "screen.latency" = "%1$@ ms";
+"screen.missingComponent" = "En el servidor falta %1$@, así que la pantalla no puede iniciarse. Instálelo e inténtelo de nuevo.";
+"screen.needsUpdate" = "En este servidor hay una versión antigua de Bandito. Actualice el servidor para iniciar la pantalla.";
+"screen.noAddress" = "El servidor no indicó cómo conectarse a la pantalla. Inténtelo de nuevo.";
+"screen.noFrame" = "La pantalla no responde";
+"screen.openUpdates" = "Abrir actualizaciones";
 "screen.quality" = "Calidad";
 "screen.qualityAuto" = "Automática";
 "screen.qualityFaster" = "Más rápido";
@@ -1683,6 +1689,7 @@
 "screen.sharedSub" = "Pantalla del lugar de trabajo";
 "screen.sleepHint" = "La pantalla se despierta bajo demanda. Tras 30 minutos sin que nadie la use, ni tú ni los agentes, se duerme para liberar memoria del servidor.";
 "screen.start" = "Iniciar pantalla";
+"screen.starting" = "Iniciando la pantalla…";
 "screen.title" = "Pantalla del servidor";
 "screen.transfer" = "Transferencia";
 "screen.unsupported" = "La pantalla del servidor funciona en servidores Linux";

@@ -2280,10 +2280,16 @@ public enum L10n {
         public static var clipboardOff: String { L10n.tr("screen.clipboardOff") }
         public static var clipboardShared: String { L10n.tr("screen.clipboardShared") }
         public static var connecting: String { L10n.tr("screen.connecting") }
+        public static var didNotStart: String { L10n.tr("screen.didNotStart") }
         public static var error: String { L10n.tr("screen.error") }
         public static var fullscreen: String { L10n.tr("screen.fullscreen") }
         public static var hint: String { L10n.tr("screen.hint") }
         public static func latency(ms: String) -> String { L10n.tr("screen.latency", ms) }
+        public static func missingComponent(component: String) -> String { L10n.tr("screen.missingComponent", component) }
+        public static var needsUpdate: String { L10n.tr("screen.needsUpdate") }
+        public static var noAddress: String { L10n.tr("screen.noAddress") }
+        public static var noFrame: String { L10n.tr("screen.noFrame") }
+        public static var openUpdates: String { L10n.tr("screen.openUpdates") }
         public static var quality: String { L10n.tr("screen.quality") }
         public static var qualityAuto: String { L10n.tr("screen.qualityAuto") }
         public static var qualityFaster: String { L10n.tr("screen.qualityFaster") }
@@ -2293,6 +2299,7 @@ public enum L10n {
         public static var sharedSub: String { L10n.tr("screen.sharedSub") }
         public static var sleepHint: String { L10n.tr("screen.sleepHint") }
         public static var start: String { L10n.tr("screen.start") }
+        public static var starting: String { L10n.tr("screen.starting") }
         public static var title: String { L10n.tr("screen.title") }
         public static var transfer: String { L10n.tr("screen.transfer") }
         public static var unsupported: String { L10n.tr("screen.unsupported") }

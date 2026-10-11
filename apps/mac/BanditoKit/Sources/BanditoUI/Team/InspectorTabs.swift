@@ -35,6 +35,12 @@ struct DetailsTab: View {
         Binding(get: { chips }, set: { sendCapabilities($0) })
     }
 
+    /// The chips this server cannot give (the screen without the `screen` feature), disabled with their reason, as in
+    /// the new-agent sheet.
+    private var unavailableCapabilities: [AgentCapability: String] {
+        AgentCapability.unavailable(infoKnown: server.info != nil, supports: { server.supports($0) })
+    }
+
     /// Sends the whole list of chips. A daemon without the field ignores it and the agent's list comes back as all on.
     private func sendCapabilities(_ next: Set<AgentCapability>) {
         chips = next
@@ -223,7 +229,7 @@ struct DetailsTab: View {
                     Text(L10n.Capability.title)
                         .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
-                    CapabilityChips(enabled: capabilities)
+                    CapabilityChips(enabled: capabilities, unavailable: unavailableCapabilities)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)

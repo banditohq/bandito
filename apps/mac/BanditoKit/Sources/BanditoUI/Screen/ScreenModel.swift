@@ -37,6 +37,14 @@ final class ScreenModel {
     private(set) var vncDelegate: VNCSessionDelegate?
     private(set) var isConnected = false
     private(set) var errorText: UserFacingMessage?
+    /// The last failure of a start or of a connection. It stays until a start is made or a picture arrives, so a poll
+    /// does not wipe it. Shown by the start area with "Повторить" (see `phase`).
+    private(set) var startError: UserFacingMessage?
+    /// A `screen.start` call is in flight.
+    private(set) var isStarting = false
+    /// The connection waited `ScreenStartRules.frameTimeout` for its first picture and got none.
+    private(set) var frameTimedOut = false
+    private var frameTimer: Task<Void, Never>?
     /// True while an agent holds the screen and the person tried to act on it.
     private(set) var asksToTakeControl = false
     /// Starts from the choice in Settings → Browser and screen (`screen.quality`).
@@ -62,6 +70,14 @@ final class ScreenModel {
 
     /// The person may act on the screen: the screen is theirs, or nobody holds it.
     var canInteract: Bool { status?.running == true && !isAgentControlling }
+
+    /// What the screen area shows now (see `ScreenStartRules`).
+    var phase: ScreenStartPhase {
+        ScreenStartRules.phase(
+            ScreenStartRules.Facts(
+                supported: isSupported, startInFlight: isStarting, running: status?.running == true,
+                hasFrame: framebuffer != nil, frameTimedOut: frameTimedOut, error: startError))
+    }
 
     // MARK: Lifecycle
 
@@ -99,27 +115,51 @@ final class ScreenModel {
         }
     }
 
-    /// Starts the screen on the server and connects to it.
+    /// Starts the screen on the server and connects to it. Shows a spinner while the call is in flight. A failure stays
+    /// on the screen with "Повторить": a start that did not produce a running screen is an error too, not a silence.
     func start() async {
+        guard !isStarting else { return }
+        isStarting = true
+        startError = nil
+        defer { isStarting = false }
         do {
-            status = try await server.screenStart(width: 1280, height: 800)
-            errorText = nil
+            let fresh = try await server.screenStart(width: 1280, height: 800)
+            status = fresh
+            guard fresh.running else {
+                startError = UserFacingMessage(text: L10n.Screen.didNotStart, canRetry: true)
+                return
+            }
             await connect()
         } catch {
-            errorText = BrowserModel.describe(error)
+            startError = Self.startFailure(error)
         }
     }
 
+    /// The sentence for a failed start or connection. Retry is always offered: starting again is the way out.
+    static func startFailure(_ error: Error) -> UserFacingMessage {
+        if let rpc = error as? RPCError, rpc.reason == "missing_component", let component = rpc.data?["component"]?.string {
+            return UserFacingMessage(text: L10n.Screen.missingComponent(component: component), technical: rpc.message, canRetry: true)
+        }
+        var message = UserFacingError.message(for: error)
+        message.canRetry = true
+        return message
+    }
+
     /// Connects to the running screen: the VNC port goes through a one-shot tunnel, with the screen's password.
+    /// A running screen that gives no address, or a tunnel that fails, sets `startError` instead of returning quietly.
     func connect() async {
-        guard let status, status.running, let vncPort = status.vncPort, let password = status.vncPassword else { return }
+        guard let status, status.running else { return }
+        guard let vncPort = status.vncPort, let password = status.vncPassword else {
+            startError = UserFacingMessage(text: L10n.Screen.noAddress, canRetry: true)
+            return
+        }
         disconnect()
         // Settings → Browser and screen: the clipboard choice applies to each connection.
         clipboard = Self.storedClipboard()
         do {
             let local = try await server.forwardOnce(port: vncPort)
             guard let host = local.host, let port = local.port, let port16 = UInt16(exactly: port) else {
-                errorText = UserFacingMessage(text: L10n.Screen.error)
+                startError = UserFacingMessage(text: L10n.Screen.error, canRetry: true)
                 return
             }
             let settings = VNCConnection.Settings(
@@ -139,8 +179,9 @@ final class ScreenModel {
             self.connection = connection
             self.vncDelegate = delegate
             connection.connect()
+            armFrameTimer()
         } catch {
-            errorText = BrowserModel.describe(error)
+            startError = Self.startFailure(error)
         }
     }
 
@@ -150,7 +191,25 @@ final class ScreenModel {
         vncDelegate = nil
         framebuffer = nil
         isConnected = false
+        cancelFrameTimer()
         old?.disconnect()
+    }
+
+    /// Starts the wait for the first picture. A connection that gets none in time reports `frameTimedOut`, so the
+    /// area says the screen did not answer instead of waiting forever.
+    private func armFrameTimer() {
+        cancelFrameTimer()
+        frameTimer = Task { [weak self] in
+            try? await Task.sleep(for: ScreenStartRules.frameTimeout)
+            guard !Task.isCancelled, let self, self.framebuffer == nil else { return }
+            self.frameTimedOut = true
+        }
+    }
+
+    private func cancelFrameTimer() {
+        frameTimer?.cancel()
+        frameTimer = nil
+        if frameTimedOut { frameTimedOut = false }
     }
 
     private func reconnect() async {
@@ -164,6 +223,7 @@ final class ScreenModel {
         case .connected:
             isConnected = true
             errorText = nil
+            if startError != nil { startError = nil }
         case .disconnected, .disconnecting:
             isConnected = false
         default:
@@ -174,6 +234,8 @@ final class ScreenModel {
     func framebufferChanged(_ framebuffer: VNCFramebuffer) {
         self.framebuffer = framebuffer
         isConnected = true
+        cancelFrameTimer()
+        if startError != nil { startError = nil }
     }
 
     // MARK: Control
@@ -216,6 +278,7 @@ final class ScreenModel {
     /// Stops the screen on the server (it wakes again on the next start).
     func stop() async {
         disconnect()
+        startError = nil
         do {
             try await server.screenStop()
             status = try await server.screenStatus()

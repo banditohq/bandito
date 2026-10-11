@@ -1670,10 +1670,16 @@
 "screen.clipboardOff" = "Выкл";
 "screen.clipboardShared" = "Общий";
 "screen.connecting" = "Подключаем экран…";
+"screen.didNotStart" = "Экран не запустился. Повторите попытку.";
 "screen.error" = "Не удалось подключиться к экрану";
 "screen.fullscreen" = "Во весь экран";
 "screen.hint" = "Нажмите «Взять управление» или просто кликните по экрану. Агент подождёт, пока вы не отпустите.";
 "screen.latency" = "%1$@ мс";
+"screen.missingComponent" = "На сервере нет %1$@, поэтому экран не запустить. Установите его и повторите.";
+"screen.needsUpdate" = "На этом сервере старая версия Bandito — обновите сервер, чтобы запускать экран.";
+"screen.noAddress" = "Сервер не сообщил, как подключиться к экрану. Повторите запуск.";
+"screen.noFrame" = "Экран не ответил";
+"screen.openUpdates" = "Открыть обновления";
 "screen.quality" = "Качество";
 "screen.qualityAuto" = "Авто";
 "screen.qualityFaster" = "Быстрее";
@@ -1683,6 +1689,7 @@
 "screen.sharedSub" = "Экран рабочего места";
 "screen.sleepHint" = "Экран просыпается по запросу. Когда им 30 минут никто не пользуется — ни вы, ни агенты, — он засыпает и не тратит память сервера.";
 "screen.start" = "Запустить экран";
+"screen.starting" = "Запускаем экран…";
 "screen.title" = "Экран сервера";
 "screen.transfer" = "Передача";
 "screen.unsupported" = "Экран сервера работает на Linux-серверах";
