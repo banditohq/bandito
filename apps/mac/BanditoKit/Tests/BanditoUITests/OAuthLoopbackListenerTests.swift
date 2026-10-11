@@ -74,6 +74,24 @@ import Testing
         #expect(got.all.count == 1, "a second request is not a second answer")
     }
 
+    @Test func silentConnectionsDoNotHoldUpTheRightRequest() async throws {
+        let (listener, port, got) = try await start()
+        defer { listener.stop() }
+        // Three sockets that connect and say nothing, as a browser's spare connections do.
+        let silent = (0..<3).map { _ in
+            NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
+        }
+        for connection in silent { connection.start(queue: .global()) }
+        defer { for connection in silent { connection.cancel() } }
+        try await Task.sleep(for: .milliseconds(200))
+        let started = Date()
+        let (status, _) = try await get(port, "/callback?code=abc&state=S1")
+        #expect(status == 200)
+        #expect(Date().timeIntervalSince(started) < 1)
+        await waitForCallback(got)
+        #expect(got.all.count == 1)
+    }
+
     @Test func stopClosesTheSocket() async throws {
         let (listener, port, _) = try await start()
         listener.stop()
