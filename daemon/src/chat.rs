@@ -140,9 +140,248 @@ pub fn runtime_text(
     out
 }
 
+/// Most buttons in one set of quick replies.
+pub const QUICK_BUTTONS_MAX: usize = 4;
+/// Longest label of a button or a link, in characters.
+pub const QUICK_LABEL_CHARS: usize = 40;
+/// Longest reply a button sends, in characters.
+pub const QUICK_REPLY_CHARS: usize = 500;
+/// Longest link address, in characters.
+pub const QUICK_URL_CHARS: usize = 2000;
+/// Most steps "2 of 6" may count.
+pub const QUICK_PROGRESS_MAX: u32 = 99;
+
+/// A checked set of quick replies (the tool `reply_buttons`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuickReplies {
+    pub buttons: Vec<crate::event::QuickButton>,
+    pub link: Option<crate::event::QuickLink>,
+    pub progress: Option<crate::event::QuickProgress>,
+}
+
+/// A text of one line, trimmed, of 1 to `max` characters.
+fn one_line(v: &serde_json::Value, what: &str, max: usize) -> Result<String, String> {
+    let text = v.as_str().ok_or_else(|| format!("{what} must be text"))?.trim();
+    if text.is_empty() {
+        return Err(format!("{what} is empty"));
+    }
+    if text.chars().count() > max {
+        return Err(format!("{what} is longer than {max} characters"));
+    }
+    if text.chars().any(char::is_control) {
+        return Err(format!("{what} must be one line without control characters"));
+    }
+    Ok(text.to_string())
+}
+
+/// Checks the arguments of `reply_buttons`: 1 to 4 buttons `{label, reply}` (label up to 40 characters on one line,
+/// reply up to 500, labels different), an optional `link` `{label, url}` with an https address, and an optional
+/// `progress` `{done, total}`. Returns the text of the first mistake, for the agent to fix.
+pub fn check_quick_replies(args: &serde_json::Value) -> Result<QuickReplies, String> {
+    let list = args
+        .get("buttons")
+        .and_then(serde_json::Value::as_array)
+        .ok_or("reply_buttons needs \"buttons\", a list of {label, reply}")?;
+    if list.is_empty() || list.len() > QUICK_BUTTONS_MAX {
+        return Err(format!("give 1 to {QUICK_BUTTONS_MAX} buttons"));
+    }
+    let mut buttons: Vec<crate::event::QuickButton> = Vec::new();
+    for (i, b) in list.iter().enumerate() {
+        let label = one_line(
+            b.get("label").unwrap_or(&serde_json::Value::Null),
+            &format!("label of button {}", i + 1),
+            QUICK_LABEL_CHARS,
+        )?;
+        let reply_text = b
+            .get("reply")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .trim();
+        if reply_text.is_empty() {
+            return Err(format!("reply of button {} is empty", i + 1));
+        }
+        if reply_text.chars().count() > QUICK_REPLY_CHARS {
+            return Err(format!(
+                "reply of button {} is longer than {QUICK_REPLY_CHARS} characters",
+                i + 1
+            ));
+        }
+        if buttons.iter().any(|x| x.label.to_lowercase() == label.to_lowercase()) {
+            return Err(format!("two buttons are called {label}: give each its own label"));
+        }
+        buttons.push(crate::event::QuickButton {
+            label,
+            reply: reply_text.to_string(),
+        });
+    }
+    let link = match args.get("link").filter(|v| !v.is_null()) {
+        None => None,
+        Some(l) => {
+            let label = one_line(
+                l.get("label").unwrap_or(&serde_json::Value::Null),
+                "label of the link",
+                QUICK_LABEL_CHARS,
+            )?;
+            let url = l
+                .get("url")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("the link needs \"url\"")?
+                .trim();
+            check_https(url)?;
+            Some(crate::event::QuickLink {
+                label,
+                url: url.to_string(),
+            })
+        }
+    };
+    let progress = match args.get("progress").filter(|v| !v.is_null()) {
+        None => None,
+        Some(p) => {
+            let number = |key: &str| -> Result<u32, String> {
+                p.get(key)
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|n| u32::try_from(n).ok())
+                    .ok_or_else(|| format!("progress needs \"{key}\", a whole number"))
+            };
+            let (done, total) = (number("done")?, number("total")?);
+            if total == 0 || total > QUICK_PROGRESS_MAX || done > total {
+                return Err(format!(
+                    "progress needs 0 <= done <= total, and total from 1 to {QUICK_PROGRESS_MAX}"
+                ));
+            }
+            Some(crate::event::QuickProgress { done, total })
+        }
+    };
+    Ok(QuickReplies {
+        buttons,
+        link,
+        progress,
+    })
+}
+
+/// An https address a person may open: a host (letters, digits, `-`, `.`, with an optional port), no user name, no
+/// spaces or control characters, at most [`QUICK_URL_CHARS`] characters.
+fn check_https(url: &str) -> Result<(), String> {
+    let bad = || "the link must be an https address, like https://example.com/page".to_string();
+    if url.chars().count() > QUICK_URL_CHARS {
+        return Err(format!("the link is longer than {QUICK_URL_CHARS} characters"));
+    }
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(bad());
+    }
+    let rest = url.strip_prefix("https://").ok_or_else(bad)?;
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((host, port)) => (host, Some(port)),
+        None => (authority, None),
+    };
+    let host_ok = !host.is_empty()
+        && !host.starts_with(['.', '-'])
+        && !host.ends_with(['-'])
+        && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.');
+    let port_ok = port.is_none_or(|p| !p.is_empty() && p.len() <= 5 && p.chars().all(|c| c.is_ascii_digit()));
+    if host_ok && port_ok { Ok(()) } else { Err(bad()) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn buttons(n: usize) -> serde_json::Value {
+        let list: Vec<serde_json::Value> = (0..n)
+            .map(|i| serde_json::json!({ "label": format!("Option {i}"), "reply": format!("I choose {i}") }))
+            .collect();
+        serde_json::json!({ "buttons": list })
+    }
+
+    #[test]
+    fn one_to_four_buttons_pass_and_are_trimmed() {
+        let ok = check_quick_replies(&serde_json::json!({
+            "buttons": [{ "label": "  Done  ", "reply": " Mail is connected " }, { "label": "Not yet", "reply": "Not yet" }],
+        }))
+        .unwrap();
+        assert_eq!(ok.buttons[0].label, "Done");
+        assert_eq!(ok.buttons[0].reply, "Mail is connected");
+        assert_eq!((ok.link, ok.progress), (None, None));
+        assert!(check_quick_replies(&buttons(4)).is_ok());
+        assert!(check_quick_replies(&buttons(5)).is_err());
+        assert!(check_quick_replies(&buttons(0)).is_err());
+        assert!(check_quick_replies(&serde_json::json!({})).is_err());
+    }
+
+    #[test]
+    fn labels_and_replies_are_bounded() {
+        let one = |label: &str, reply: &str| {
+            check_quick_replies(&serde_json::json!({ "buttons": [{ "label": label, "reply": reply }] }))
+        };
+        assert!(one(&"é".repeat(40), "x").is_ok());
+        assert!(one(&"é".repeat(41), "x").is_err());
+        assert!(one("ok", &"я".repeat(500)).is_ok());
+        assert!(one("ok", &"я".repeat(501)).is_err());
+        assert!(one("", "x").is_err());
+        assert!(one("   ", "x").is_err());
+        assert!(one("ok", "  ").is_err());
+        assert!(one("two\nlines", "x").is_err());
+        assert!(
+            check_quick_replies(&serde_json::json!({ "buttons": [{ "label": "ok" }] }))
+                .unwrap_err()
+                .contains("reply")
+        );
+        let same =
+            serde_json::json!({ "buttons": [{ "label": "Yes", "reply": "a" }, { "label": "yes", "reply": "b" }] });
+        assert!(check_quick_replies(&same).unwrap_err().contains("own label"));
+    }
+
+    #[test]
+    fn a_link_is_https_only() {
+        let with = |url: &str| {
+            let mut args = buttons(1);
+            args["link"] = serde_json::json!({ "label": "Open", "url": url });
+            check_quick_replies(&args)
+        };
+        assert!(with("https://mail.google.com/mail/u/0/#inbox").is_ok());
+        assert!(with("https://example.com:8443/x?y=1").is_ok());
+        for bad in [
+            "http://example.com",
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "https://",
+            "https:///path",
+            "https://user@evil.com",
+            "https://example.com/a b",
+            "https://exa mple.com",
+            "https://example.com:port/",
+            "//example.com",
+            "example.com",
+        ] {
+            assert!(with(bad).is_err(), "{bad}");
+        }
+        assert!(with(&format!("https://example.com/{}", "a".repeat(2000))).is_err());
+        let mut args = buttons(1);
+        args["link"] = serde_json::json!({ "label": "Open" });
+        assert!(check_quick_replies(&args).is_err());
+    }
+
+    #[test]
+    fn progress_counts_whole_steps() {
+        let with = |done: serde_json::Value, total: serde_json::Value| {
+            let mut args = buttons(1);
+            args["progress"] = serde_json::json!({ "done": done, "total": total });
+            check_quick_replies(&args)
+        };
+        assert_eq!(
+            with(2.into(), 6.into()).unwrap().progress.map(|p| (p.done, p.total)),
+            Some((2, 6))
+        );
+        assert!(with(0.into(), 6.into()).is_ok());
+        assert!(with(6.into(), 6.into()).is_ok());
+        assert!(with(7.into(), 6.into()).is_err());
+        assert!(with(1.into(), 0.into()).is_err());
+        assert!(with(1.into(), 100.into()).is_err());
+        assert!(with((-1).into(), 6.into()).is_err());
+        assert!(with(serde_json::json!("2"), 6.into()).is_err());
+        assert!(with(1.5.into(), 6.into()).is_err());
+    }
 
     #[test]
     fn common_emoji_pass() {

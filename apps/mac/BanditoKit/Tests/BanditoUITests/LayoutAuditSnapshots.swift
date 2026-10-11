@@ -359,6 +359,37 @@ import Testing
         approvalId: "ap1", tool: "bash", title: "Run a command", command: "git push origin release/0.1.11",
         diff: nil, reason: "risky: git push", state: .pending)
 
+    /// A request to create an agent, with a summary that fills every row with long words.
+    static let createApproval = ApprovalRow(
+        approvalId: "ap2", tool: AgentCreateSummary.tool, title: "Create agent «Mailer»", command: "Mailer", diff: nil,
+        reason: "agent: create", state: .pending,
+        input: .object([
+            "name": .string("Postfach-Überwachung für Rechnungen"), "role": .string("mail watcher"),
+            "runtime": .string("claude"), "model": .string("claude-sonnet-5-5"), "approvalMode": .string("risky"),
+            "capabilities": .array(["terminal", "files", "browser", "team", "screen"].map(JSONValue.string)),
+            "integrations": .array([.string("Gmail"), .string("Notion")]), "integrationsAll": .bool(false),
+            "schedules": .array([
+                .object([
+                    "title": .string("Eingehende Rechnungen prüfen"), "prompt": .string("Check the mail"),
+                    "humanEn": .string("every 5 minutes"), "humanRu": .string("каждые 5 минут"),
+                ])
+            ]),
+            "folder": .object(["mode": .string("existing"), "path": .string("/Users/someone/Documents/Projects/invoices")]),
+            "instructions": .string(
+                "Watch the mailbox every few minutes. Report each new invoice with its sender and amount, and never delete a letter."),
+            "creator": .string("Forge"),
+        ]))
+
+    static let longQuickReplies = QuickReplies(
+        buttons: [
+            QuickReplyButton(label: "Postfach ist verbunden, weiter geht's", reply: "Verbunden"),
+            QuickReplyButton(label: "Подключил почту, продолжай работу", reply: "Подключено"),
+            QuickReplyButton(label: "1", reply: "Option 1"),
+            QuickReplyButton(label: String(repeating: "W", count: 40), reply: "Option 2"),
+        ],
+        link: QuickReplyLink(label: "Gmail-Einstellungen öffnen und prüfen", url: "https://mail.google.com/mail/u/0/#settings"),
+        progress: QuickReplyProgress(done: 2, total: 6), seq: 1)
+
     static let approvalViews: [AuditCase] = [
         // The card's own glow (a shadow) paints just beyond its box on purpose: no spill check. The width check still runs.
         AuditCase(name: "approval-card-narrow", width: 360, bleeds: true) { _ in
@@ -366,6 +397,28 @@ import Testing
         },
         AuditCase(name: "approval-card", width: 560, bleeds: true) { _ in
             AnyView(ApprovalCard(row: pendingApproval, agentName: "Forge", onDecide: { _, _ in }))
+        },
+        // An agent asks to create another one: the longest card of the thread, with every row filled.
+        AuditCase(name: "approval-create-narrow", width: 360, bleeds: true) { _ in
+            AnyView(ApprovalCard(row: createApproval, agentName: "Forge", onDecide: { _, _ in }))
+        },
+        AuditCase(name: "approval-create", width: 560, bleeds: true) { _ in
+            AnyView(ApprovalCard(row: createApproval, agentName: "Forge", onDecide: { _, _ in }))
+        },
+        AuditCase(name: "approval-create-answered", width: 360) { _ in
+            AnyView(
+                VStack(alignment: .leading, spacing: 8) {
+                    ApprovalCard(row: createApproval.with(.approved(by: .user, remember: false)), agentName: "Forge", onDecide: { _, _ in })
+                    ApprovalCard(row: createApproval.with(.denied(by: .user)), agentName: "Forge", onDecide: { _, _ in })
+                    ApprovalCard(row: createApproval.with(.denied(by: .policy)), agentName: "Forge", onDecide: { _, _ in })
+                })
+        },
+        // Quick replies under the last message: four buttons with the longest labels, a link and the count.
+        AuditCase(name: "quick-replies-narrow", width: 360) { _ in
+            AnyView(QuickRepliesBar(replies: longQuickReplies, onReply: { _ in }, onOpen: { _ in }))
+        },
+        AuditCase(name: "quick-replies", width: 700) { _ in
+            AnyView(QuickRepliesBar(replies: longQuickReplies, onReply: { _ in }, onOpen: { _ in }))
         },
         // The agent's details with the approval mode's hint under the choice (the longest hint: Risky only).
         AuditCase(name: "agent-inspector-approvals", width: 360, scrolls: true) { env in
@@ -419,5 +472,14 @@ import Testing
     @Test func textThatWrapsIsNotReported() {
         let result = finding(Text(String(repeating: "A long sentence that wraps. ", count: 8)).padding(), width: 200)
         #expect(!result.isProblem)
+    }
+}
+
+private extension ApprovalRow {
+    /// The same request in another state.
+    func with(_ state: ApprovalState) -> ApprovalRow {
+        var copy = self
+        copy.state = state
+        return copy
     }
 }

@@ -49,6 +49,7 @@ pub mod secrets;
 pub mod settings;
 pub mod setup;
 pub mod skills;
+pub mod team_create;
 pub mod telegram;
 pub mod templates;
 pub mod term;
@@ -113,6 +114,8 @@ pub fn features() -> Vec<&'static str> {
         "sharing",
         "telegram",
         "agent_connect",
+        "agent_create",
+        "quick_replies",
         "agent_migrate",
         "server_settings",
     ];
@@ -165,6 +168,8 @@ pub struct App {
     pub telegram: Arc<crate::telegram::Telegram>,
     /// The agents' requests to connect a catalog service that wait for the person (see docs/ARCHITECTURE.md#connect-requests).
     pub connects: connect::Requests,
+    /// The agents' requests to create an agent that wait for the person (see docs/ARCHITECTURE.md#agents-creating-agents).
+    pub creations: team_create::Creations,
     /// The agent archives waiting to be read and the uploads being received (see docs/ARCHITECTURE.md#agent-migration).
     pub migrate: crate::migrate::Registry,
 }
@@ -212,6 +217,7 @@ impl App {
             device: crate::mcp_oauth::device::DeviceFlows::default(),
             telegram,
             connects: connect::Requests::default(),
+            creations: team_create::Creations::default(),
             migrate: crate::migrate::Registry::default(),
         })
     }
@@ -277,9 +283,11 @@ const AGENT_METHODS: &[&str] = &[
     "team.list",
     "team.assign",
     "team.status",
+    "team.create",
     "forms.agent.ask",
     "integrations.agent.request",
     "messages.agent.react",
+    "messages.agent.quick_replies",
     "history.day",
     "history.search",
     "browser.agent.back",
@@ -1185,6 +1193,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             | "forms.agent.ask"
             | "messages.react"
             | "messages.agent.react"
+            | "messages.agent.quick_replies"
             | "attachments.upload"
     ) {
         return chat::dispatch(app, peer, method, p).await;
@@ -1582,6 +1591,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let TeamAgentParams { agent_id, agent } = params(p)?;
             ok(team::status(store, &agent_id, &agent).map_err(team_error)?)
         }
+        "team.create" => team_create::create(app, p).await,
         "team.assign" => {
             let TeamAssignParams {
                 agent_id,
@@ -2225,6 +2235,104 @@ mod crew_tests {
             .unwrap();
         assert_eq!(v["name"], json!("Scout"));
     }
+
+    #[tokio::test]
+    async fn quick_replies_are_an_agent_call_that_shows_buttons_in_its_own_feed() {
+        let (app, forge, scout) = app_with_crew();
+        let buttons = |of: &str| -> Vec<EventBody> {
+            app.sup
+                .hub()
+                .store
+                .events_since(0, 100, Some(of))
+                .unwrap()
+                .into_iter()
+                .map(|e| e.body)
+                .filter(|b| matches!(b, EventBody::AgentQuickReplies { .. }))
+                .collect()
+        };
+        // Not for the owner's CLI or an app.
+        let err = dispatch(
+            &app,
+            &Peer::Local,
+            "messages.agent.quick_replies",
+            json!({ "agent_id": forge, "buttons": [{ "label": "Yes", "reply": "yes" }] }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.message, "messages.agent.quick_replies is only for agents");
+
+        let first = json!({
+            "buttons": [{ "label": "Done", "reply": "The mailbox is connected" }],
+            "link": { "label": "Open settings", "url": "https://mail.google.com/mail/u/0/#settings" },
+            "progress": { "done": 2, "total": 6 },
+        });
+        let v = dispatch(&app, &Peer::Agent(forge.clone()), "messages.agent.quick_replies", first)
+            .await
+            .unwrap();
+        assert_eq!(v, json!({ "shown": 1 }));
+        // A second set is another event: the client shows the newest and drops the older one.
+        dispatch(
+            &app,
+            &Peer::Agent(forge.clone()),
+            "messages.agent.quick_replies",
+            json!({ "buttons": [{ "label": "1", "reply": "Option 1" }, { "label": "2", "reply": "Option 2" }] }),
+        )
+        .await
+        .unwrap();
+        let shown = buttons(&forge);
+        assert_eq!(shown.len(), 2);
+        let EventBody::AgentQuickReplies {
+            buttons: last,
+            link,
+            progress,
+        } = &shown[1]
+        else {
+            panic!("not quick replies");
+        };
+        assert_eq!(last.iter().map(|b| b.label.as_str()).collect::<Vec<_>>(), ["1", "2"]);
+        assert!(link.is_none() && progress.is_none());
+        let EventBody::AgentQuickReplies { progress, link, .. } = &shown[0] else {
+            panic!("not quick replies");
+        };
+        assert_eq!(progress.map(|p| (p.done, p.total)), Some((2, 6)));
+        assert_eq!(link.as_ref().map(|l| l.label.as_str()), Some("Open settings"));
+        // The buttons are in the feed of the agent that showed them, not in another's.
+        assert!(buttons(&scout).is_empty());
+
+        // A bad set shows nothing, and another agent's id does not move it to that agent.
+        for bad in [
+            json!({ "buttons": [] }),
+            json!({ "buttons": [{ "label": "x".repeat(41), "reply": "y" }] }),
+            json!({ "buttons": [{ "label": "go", "reply": "y" }], "link": { "label": "l", "url": "javascript:alert(1)" } }),
+        ] {
+            let err = dispatch(&app, &Peer::Agent(forge.clone()), "messages.agent.quick_replies", bad)
+                .await
+                .unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS);
+        }
+        let err = dispatch(
+            &app,
+            &Peer::Agent(forge.clone()),
+            "messages.agent.quick_replies",
+            json!({ "agent_id": scout, "buttons": [{ "label": "Yes", "reply": "yes" }] }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
+        assert_eq!(buttons(&forge).len(), 2);
+        assert!(buttons(&scout).is_empty());
+    }
+
+    #[test]
+    fn the_new_features_are_announced_and_a_creation_may_hold_the_connection() {
+        let list = features();
+        assert!(list.contains(&"agent_create") && list.contains(&"quick_replies"));
+        assert!(waits_long("team.create", &json!({})));
+        assert!(allowed(&Peer::Agent("a".into()), "team.create"));
+        assert!(allowed(&Peer::Agent("a".into()), "messages.agent.quick_replies"));
+        assert!(!allowed(&Peer::Local, "team.create"));
+        assert!(!allowed(&Peer::Local, "messages.agent.quick_replies"));
+    }
 }
 
 #[cfg(test)]
@@ -2572,6 +2680,7 @@ async fn recv_event(rx: &mut Option<broadcast::Receiver<Event>>) -> Result<Event
 fn waits_long(method: &str, params: &Value) -> bool {
     method == "forms.agent.ask"
         || method == "integrations.agent.request"
+        || method == "team.create"
         || (method == "team.assign" && params.get("wait").and_then(Value::as_bool) == Some(true))
 }
 

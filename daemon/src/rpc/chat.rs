@@ -147,6 +147,25 @@ pub async fn dispatch(app: &App, _peer: &Peer, method: &str, p: Value) -> RpcRes
             );
             ok(json!({ "seq": seq }))
         }
+        "messages.agent.quick_replies" => {
+            // `agent_id` is the agent the session's token names (filled in by `bind_to_agent`).
+            let agent_id = p
+                .get("agent_id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| RpcError::new(INVALID_PARAMS, "no agent"))?
+                .to_string();
+            let checked = chat::check_quick_replies(&p).map_err(|e| RpcError::new(INVALID_PARAMS, e))?;
+            let shown = checked.buttons.len();
+            app.sup.hub().emit(
+                &agent_id,
+                EventBody::AgentQuickReplies {
+                    buttons: checked.buttons,
+                    link: checked.link,
+                    progress: checked.progress,
+                },
+            );
+            ok(json!({ "shown": shown }))
+        }
         "attachments.upload" => {
             let u: UploadParams = params(p)?;
             let store = &app.sup.hub().store;

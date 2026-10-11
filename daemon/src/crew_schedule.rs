@@ -17,12 +17,17 @@ pub fn tool_defs() -> Vec<Value> {
     vec![
         json!({
             "name": "schedule_list",
-            "description": "List your scheduled runs: id, what they are for, on or paused, and the next run. Bandito starts you on the schedule, so cron and launchd are not needed.",
-            "inputSchema": { "type": "object", "properties": {} },
+            "description": "List your scheduled runs: id, what they are for, on or paused, and the next run. Bandito starts you on the schedule, so cron and launchd are not needed. The main agent can pass agent_id to list another agent's runs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "agent_id": { "type": "string", "description": "Main agent only: another agent of the crew, by id or name" },
+                },
+            },
         }),
         json!({
             "name": "schedule_create",
-            "description": "Schedule a run of yourself: Bandito starts you with the prompt at the given times, in the server's time zone. For regular tasks (check the mail every 15 minutes and the like). Give exactly one of every, at (with optional days), or cron. every must be 5m to 60m, 1h to 12h, or 1d (at midnight).",
+            "description": "Schedule a run of yourself: Bandito starts you with the prompt at the given times, in the server's time zone. For regular tasks (check the mail every 15 minutes and the like). Give exactly one of every, at (with optional days), or cron. every must be 5m to 60m, 1h to 12h, or 1d (at midnight). The main agent can pass agent_id to schedule the run for another agent of the crew (for example the one it just created); the prompt is then what that agent does on each run.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -36,13 +41,14 @@ pub fn tool_defs() -> Vec<Value> {
                     "cron": { "type": "string", "description": "A 5-field cron: minute hour day month weekday" },
                     "prompt": { "type": "string", "description": "What to do on each run" },
                     "title": { "type": "string", "description": "A short name for the list" },
+                    "agent_id": { "type": "string", "description": "Main agent only: the agent the run is for, by id or name. Leave out for yourself." },
                 },
                 "required": ["prompt"],
             },
         }),
         json!({
             "name": "schedule_delete",
-            "description": "Delete one of your scheduled runs, by its id from schedule_list.",
+            "description": "Delete one of your scheduled runs, by its id from schedule_list. The main agent can delete any agent's run.",
             "inputSchema": {
                 "type": "object",
                 "properties": { "id": { "type": "string" } },
@@ -51,7 +57,7 @@ pub fn tool_defs() -> Vec<Value> {
         }),
         json!({
             "name": "schedule_pause",
-            "description": "Pause or resume one of your scheduled runs, by its id. A paused run is skipped until it is resumed.",
+            "description": "Pause or resume one of your scheduled runs, by its id. A paused run is skipped until it is resumed. The main agent can pause any agent's run.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -67,7 +73,7 @@ pub fn tool_defs() -> Vec<Value> {
 /// Runs one schedule tool. `Err` is a tool error, shown to the agent.
 pub async fn call(name: &str, args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
     match name {
-        "schedule_list" => list(backend).await,
+        "schedule_list" => list(args, backend).await,
         "schedule_create" => create(args, backend).await,
         "schedule_delete" => delete(args, backend).await,
         "schedule_pause" => pause(args, backend).await,
@@ -75,14 +81,31 @@ pub async fn call(name: &str, args: &Value, backend: &dyn CrewBackend) -> Result
     }
 }
 
-async fn list(backend: &dyn CrewBackend) -> Result<String, String> {
+/// The agent a call is for (`agent_id`: an id or a name), when it is not the caller.
+fn target_arg(args: &Value) -> Result<Option<String>, String> {
+    match args.get("agent_id") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(key)) => Ok(Some(key.trim().to_string()).filter(|k| !k.is_empty())),
+        Some(_) => Err("agent_id must be an agent id or name".into()),
+    }
+}
+
+async fn list(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    let target = target_arg(args)?;
+    let mut params = json!({});
+    if let Some(key) = &target {
+        params["for_agent"] = json!(key);
+    }
     let v = backend
-        .schedules("schedules.agent.list", json!({}))
+        .schedules("schedules.agent.list", params)
         .await
         .map_err(|e| format!("{e:#}"))?;
     let rows = v.as_array().cloned().unwrap_or_default();
     if rows.is_empty() {
-        return Ok("You have no scheduled runs. Create one with schedule_create.".into());
+        return Ok(match target {
+            Some(key) => format!("{key} has no scheduled runs. Create one with schedule_create and agent_id."),
+            None => "You have no scheduled runs. Create one with schedule_create.".into(),
+        });
     }
     let lines: Vec<String> = rows.iter().map(line).collect();
     Ok(lines.join("\n"))
@@ -101,12 +124,19 @@ async fn create(args: &Value, backend: &dyn CrewBackend) -> Result<String, Strin
             params[key] = v.clone();
         }
     }
+    if let Some(key) = target_arg(args)? {
+        params["for_agent"] = json!(key);
+    }
     let v = backend
         .schedules("schedules.agent.create", params)
         .await
         .map_err(|e| format!("{e:#}"))?;
+    let whose = match v.get("agent_name").and_then(Value::as_str) {
+        Some(name) => format!(" for {name}"),
+        None => String::new(),
+    };
     Ok(format!(
-        "Scheduled {}: {}. Next run: {}.",
+        "Scheduled{whose} {}: {}. Next run: {}.",
         str_of(&v, "id"),
         str_of(&v, "human_en"),
         when(&v["next_run_at"])
@@ -160,7 +190,17 @@ fn line(s: &Value) -> String {
     } else {
         "paused".to_string()
     };
-    format!("{} | {} | {} | {}", str_of(s, "id"), what, str_of(s, "human_en"), state)
+    match s.get("agent_name").and_then(Value::as_str) {
+        Some(name) => format!(
+            "{} | {} | {} | {} | {}",
+            str_of(s, "id"),
+            name,
+            what,
+            str_of(s, "human_en"),
+            state
+        ),
+        None => format!("{} | {} | {} | {}", str_of(s, "id"), what, str_of(s, "human_en"), state),
+    }
 }
 
 fn str_of(v: &Value, key: &str) -> String {

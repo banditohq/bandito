@@ -662,7 +662,7 @@ public final class ServerModel: Identifiable {
             switch e.body {
             case .agentStatus(let status, _):
                 agents[i].status = status
-            case .approvalRequested(let approvalId, _, _, _, _, _, _):
+            case .approvalRequested(let approvalId, _, _, _, _, _, _, _):
                 if agents[i].reportsPendingApprovalIds {
                     agents[i].pendingApprovalIds.insert(approvalId)
                 } else {

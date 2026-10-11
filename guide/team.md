@@ -232,6 +232,26 @@ When an agent needs a service from the catalog (GitHub, Notion, Composio and so 
 3. Click Not now (Не сейчас) to refuse: the line says "You did not connect GitHub" (Вы не стали подключать GitHub), and the agent is told so.
 4. A request that nobody answered for a day, or that was open when the server restarted, ends as "The request for GitHub timed out" (Запрос на GitHub истёк). A server older than this build shows no card.
 
+## An agent asks to create another agent
+
+<!-- id: team-agent-create; covers: -->
+The main agent of the crew creates agents when you ask for one: "make an agent that checks my mail every 5 minutes". A card appears in its thread, "Forge wants to create an agent" (Forge хочет создать агента), with everything the new agent gets: Role (Роль), Runs on (Работает на), Asks you (Спрашивает вас), Can use (Может использовать), Services (Сервисы), Runs (Запуски), Folder (Папка) and Instructions (Инструкции). A new agent never gets more than the one that creates it: not a capability or a service it lacks, and it asks you at least as often.
+Где: Team → main agent's thread → card "wants to create an agent"
+1. Read the rows. Nothing exists yet.
+2. Click Create (Создать) or press ⌘↵ to make the agent. It appears in the sidebar, and its thread says "Created by Forge" (Создан агентом Forge). The main agent then sets its regular runs and gives it its first task.
+3. Click Decline (Отклонить) or press Esc (⎋) to refuse. The main agent is told not to try again unless you ask.
+4. The card folds into a line: You allowed creating “Mailer” (Вы разрешили создать «Mailer»), You declined creating “Mailer” (Вы отклонили создание «Mailer»), or The request to create “Mailer” timed out (Запрос на создание «Mailer» истёк).
+5. If the main agent asks for nothing (its approvals are set to About nothing), the agent is made at once, and the thread says "Created the agent “Mailer” without asking" (Создан агент «Mailer» без вопроса).
+
+## Quick replies under a message
+
+<!-- id: team-quick-replies; covers: -->
+When an agent waits for you to do something outside the chat, or offers choices, it shows buttons under its last message instead of waiting for you to type: for example Done, it is connected (Готово, подключил) after you connect a mailbox, or buttons for options 1 and 2. A button with an arrow (↗) opens a page, such as the settings you have to change. "2 of 6" (2 из 6) says where you are in a long setup.
+Где: Team → agent thread → buttons above the message field
+1. Click a button to answer. Its text is sent as your message, and the buttons disappear. Point at a button to see the full text it sends when its label is short.
+2. Click the button with the arrow to open the page. Web links open as links in messages do (see Links in a message).
+3. Write your own message instead and the buttons go away too. They also go away when the agent starts another turn, and a newer set replaces an older one.
+
 ## Go to who needs you (К тому, кто ждёт вас)
 
 <!-- id: team-needs-you; covers: -->

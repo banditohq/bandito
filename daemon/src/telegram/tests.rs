@@ -726,6 +726,7 @@ async fn a_card_is_not_sent_for_an_approval_already_decided() {
             command: Some("ls".into()),
             diff: None,
             reason: "always".into(),
+            input: None,
         },
     };
     rig.tg.handle_event(again).await;

@@ -26,6 +26,9 @@ pub struct AgentCreate {
     pub at: Option<String>,
     pub days: Option<Vec<String>>,
     pub cron: Option<String>,
+    /// The agent the run is for (an id or a name): only the main agent names another one than itself.
+    #[serde(default)]
+    pub for_agent: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -37,6 +40,12 @@ struct AgentId {
 struct AgentUpdate {
     id: String,
     paused: Option<bool>,
+}
+
+#[derive(Deserialize, Default)]
+struct AgentListParams {
+    #[serde(default)]
+    for_agent: Option<String>,
 }
 
 /// One schedule as the wire shows it: the stored fields, `next_run_at` computed from the cron now while the
@@ -120,49 +129,124 @@ pub fn update(app: &App, id: &str, mut patch: SchedulePatch) -> RpcResult {
     ok(view(&updated, crate::store::now_ms()))
 }
 
-/// The agent's methods. `me` is the agent the session's token names; every id must be one of its schedules.
+/// The agent a call is about: the caller, or, for the main agent only, another one of the crew by id or name.
+fn target_of(app: &App, me: &str, key: Option<&str>) -> Result<crate::store::Agent, RpcError> {
+    let store = &app.sup.hub().store;
+    let caller = store
+        .agent_get(me)?
+        .ok_or_else(|| RpcError::new(super::SERVER_ERROR, format!("no agent {me}")))?;
+    let key = key.map(str::trim).filter(|k| !k.is_empty());
+    let Some(key) = key else {
+        return Ok(caller);
+    };
+    let found = match store.agent_get(key)? {
+        Some(agent) => Some(agent),
+        None => store.agent_by_name(key)?,
+    };
+    let found = found.ok_or_else(|| {
+        RpcError::new(
+            INVALID_PARAMS,
+            format!("no agent '{}' in this crew", key.chars().take(60).collect::<String>()),
+        )
+    })?;
+    if found.id != caller.id && !caller.lead {
+        return Err(RpcError::new(
+            super::UNAUTHORIZED,
+            "not_allowed: only the main agent can schedule runs for other agents",
+        ));
+    }
+    Ok(found)
+}
+
+/// One schedule of an agent for its owner's request, checked: the run's timing, prompt and title. Nothing is stored.
+/// Returns the row to store (its `agent_id` is left empty) and a line for a card.
+pub fn check_new_for_agent(a: &AgentCreate, tz: &str) -> Result<(NewSchedule, Value), RpcError> {
+    if a.prompt.trim().is_empty() {
+        return Err(RpcError::new(INVALID_PARAMS, "prompt is empty"));
+    }
+    if a.prompt.chars().count() > AGENT_PROMPT_CHARS {
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            format!("prompt is longer than {AGENT_PROMPT_CHARS} characters"),
+        ));
+    }
+    let cron = cron_from_forms(a)?;
+    check_agent_interval(&cron, tz)?;
+    let title = clean_title(a.title.clone())?;
+    let (human_en, human_ru) = schedule_text::describe(&cron);
+    let line = json!({
+        "title": title,
+        "prompt": a.prompt.trim().chars().take(160).collect::<String>(),
+        "human_en": human_en,
+        "human_ru": human_ru,
+    });
+    Ok((
+        NewSchedule {
+            agent_id: String::new(),
+            cron,
+            tz: tz.to_string(),
+            prompt: a.prompt.clone(),
+            enabled: true,
+            title,
+        },
+        line,
+    ))
+}
+
+/// The agent's methods. `me` is the agent the session's token names. An agent sees and changes its own schedules; the
+/// main agent also those of every other agent of the crew.
 pub async fn agent_dispatch(app: &App, me: &str, method: &str, p: Value) -> RpcResult {
     let store = &app.sup.hub().store;
-    let own = |id: &str| -> Result<(), RpcError> {
-        match store.schedule_get(id)? {
-            Some(s) if s.agent_id == me => Ok(()),
+    // A schedule of the caller's, or any schedule for the main agent.
+    let reachable = |id: &str| -> Result<(), RpcError> {
+        let schedule = store.schedule_get(id)?;
+        let lead = || store.agent_get(me).map(|a| a.is_some_and(|a| a.lead));
+        match schedule {
+            Some(s) if s.agent_id == me || lead()? => Ok(()),
             _ => Err(RpcError::new(INVALID_PARAMS, format!("no schedule {id} of yours"))),
         }
     };
     match method {
-        "schedules.agent.list" => ok(views(store.schedule_list(Some(me))?)),
+        "schedules.agent.list" => {
+            let l: AgentListParams = params(p)?;
+            let target = target_of(app, me, l.for_agent.as_deref())?;
+            let mut rows = views(store.schedule_list(Some(&target.id))?);
+            if target.id != me
+                && let Some(list) = rows.as_array_mut()
+            {
+                for row in list {
+                    row["agent_name"] = json!(target.name);
+                }
+            }
+            ok(rows)
+        }
         "schedules.agent.create" => {
             let a: AgentCreate = params(p)?;
-            if a.prompt.chars().count() > AGENT_PROMPT_CHARS {
+            let target = target_of(app, me, a.for_agent.as_deref())?;
+            if store.schedule_list(Some(&target.id))?.len() >= AGENT_SCHEDULES {
                 return Err(RpcError::new(
                     INVALID_PARAMS,
-                    format!("prompt is longer than {AGENT_PROMPT_CHARS} characters"),
+                    format!(
+                        "{} can have at most {AGENT_SCHEDULES} schedules: delete one first",
+                        if target.id == me {
+                            "an agent"
+                        } else {
+                            target.name.as_str()
+                        }
+                    ),
                 ));
             }
-            if store.schedule_list(Some(me))?.len() >= AGENT_SCHEDULES {
-                return Err(RpcError::new(
-                    INVALID_PARAMS,
-                    format!("an agent can have at most {AGENT_SCHEDULES} schedules: delete one first"),
-                ));
+            let (mut row, _) = check_new_for_agent(&a, &schedule_text::local_zone())?;
+            row.agent_id = target.id.clone();
+            let mut made = create(app, row)?;
+            if target.id != me {
+                made["agent_name"] = json!(target.name);
             }
-            let cron = cron_from_forms(&a)?;
-            let tz = schedule_text::local_zone();
-            check_agent_interval(&cron, &tz)?;
-            create(
-                app,
-                NewSchedule {
-                    agent_id: me.to_string(),
-                    cron,
-                    tz,
-                    prompt: a.prompt,
-                    enabled: true,
-                    title: a.title,
-                },
-            )
+            ok(made)
         }
         "schedules.agent.update" => {
             let AgentUpdate { id, paused } = params(p)?;
-            own(&id)?;
+            reachable(&id)?;
             update(
                 app,
                 &id,
@@ -174,7 +258,7 @@ pub async fn agent_dispatch(app: &App, me: &str, method: &str, p: Value) -> RpcR
         }
         "schedules.agent.delete" => {
             let AgentId { id } = params(p)?;
-            own(&id)?;
+            reachable(&id)?;
             ok(json!({ "deleted": store.schedule_delete(&id)? }))
         }
         _ => Err(RpcError::new(
@@ -608,5 +692,136 @@ mod tests {
         )
         .await
         .unwrap();
+    }
+
+    #[tokio::test]
+    async fn only_the_main_agent_schedules_runs_for_other_agents() {
+        let (app, forge, scout) = two_agents();
+        let create_for = |who: &str, target: &str| {
+            let (app, who, target) = (app.clone(), who.to_string(), target.to_string());
+            async move {
+                as_agent(
+                    &app,
+                    &who,
+                    "schedules.agent.create",
+                    json!({ "for_agent": target, "every": "15m", "prompt": "check", "title": "Mail" }),
+                )
+                .await
+            }
+        };
+        // A plain agent: itself (by id or by name) is fine, another agent is not.
+        let own = create_for(&scout, "scout").await.unwrap();
+        assert_eq!(own["agent_id"], scout.as_str());
+        assert!(
+            own.get("agent_name").is_none(),
+            "a run for itself says nothing about whose it is"
+        );
+        assert!(create_for(&scout, &scout).await.is_ok());
+        let err = create_for(&scout, "Forge").await.unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
+        assert!(err.message.starts_with("not_allowed"), "{}", err.message);
+        let err = as_agent(&app, &scout, "schedules.agent.list", json!({ "for_agent": forge }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
+        assert_eq!(app.sup.hub().store.schedule_list(Some(&forge)).unwrap().len(), 0);
+
+        // The main agent: another agent by name or by id; the run is that agent's.
+        app.sup.hub().store.agent_set_lead(&forge, true).unwrap();
+        let made = create_for(&forge, "Scout").await.unwrap();
+        assert_eq!(made["agent_id"], scout.as_str());
+        assert_eq!(made["agent_name"], "Scout");
+        assert_eq!(made["title"], "Mail");
+        assert!(create_for(&forge, &scout).await.is_ok());
+        let err = create_for(&forge, "Nobody").await.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        let listed = as_agent(&app, &forge, "schedules.agent.list", json!({ "for_agent": "Scout" }))
+            .await
+            .unwrap();
+        assert_eq!(listed.as_array().map(Vec::len), Some(4));
+        assert_eq!(listed[0]["agent_name"], "Scout");
+        // Without a target the main agent sees its own (none).
+        let mine = as_agent(&app, &forge, "schedules.agent.list", json!({})).await.unwrap();
+        assert_eq!(mine, json!([]));
+
+        // The main agent pauses and deletes another agent's run; the plain agent may not touch the main agent's.
+        let id = made["id"].as_str().unwrap();
+        let paused = as_agent(
+            &app,
+            &forge,
+            "schedules.agent.update",
+            json!({ "id": id, "paused": true }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(paused["enabled"], false);
+        let deleted = as_agent(&app, &forge, "schedules.agent.delete", json!({ "id": id }))
+            .await
+            .unwrap();
+        assert_eq!(deleted, json!({ "deleted": true }));
+        let lead_run = as_agent(
+            &app,
+            &forge,
+            "schedules.agent.create",
+            json!({ "every": "1h", "prompt": "mine" }),
+        )
+        .await
+        .unwrap();
+        let lead_id = lead_run["id"].as_str().unwrap();
+        for (method, p) in [
+            ("schedules.agent.update", json!({ "id": lead_id, "paused": true })),
+            ("schedules.agent.delete", json!({ "id": lead_id })),
+        ] {
+            let err = as_agent(&app, &scout, method, p).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{method}");
+        }
+        assert!(
+            app.sup
+                .hub()
+                .store
+                .schedule_get(lead_id)
+                .unwrap()
+                .is_some_and(|s| s.enabled)
+        );
+    }
+
+    #[tokio::test]
+    async fn the_limit_counts_the_schedules_of_the_agent_the_run_is_for() {
+        let (app, forge, scout) = two_agents();
+        app.sup.hub().store.agent_set_lead(&forge, true).unwrap();
+        for _ in 0..AGENT_SCHEDULES {
+            as_agent(
+                &app,
+                &forge,
+                "schedules.agent.create",
+                json!({ "for_agent": "Scout", "every": "1h", "prompt": "x" }),
+            )
+            .await
+            .unwrap();
+        }
+        let err = as_agent(
+            &app,
+            &forge,
+            "schedules.agent.create",
+            json!({ "for_agent": "Scout", "every": "1h", "prompt": "x" }),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.message.contains("Scout can have at most"), "{}", err.message);
+        // The main agent's own list is not full.
+        assert!(
+            as_agent(
+                &app,
+                &forge,
+                "schedules.agent.create",
+                json!({ "every": "1h", "prompt": "x" })
+            )
+            .await
+            .is_ok()
+        );
+        assert_eq!(
+            app.sup.hub().store.schedule_list(Some(&scout)).unwrap().len(),
+            AGENT_SCHEDULES
+        );
     }
 }

@@ -23,6 +23,15 @@ When an action is asked about, the agent stops and an approval card appears in i
 3. Tick Always allow this here (Всегда разрешать здесь) to allow this exact command for this agent from now on. Other commands still ask.
 4. You can also answer from the menu bar, from a notification, or from the iPhone app.
 
+## Agents that create agents
+
+<!-- id: sec-agent-create; covers: -->
+Only the main agent of the crew can create agents, and you decide on a card each time (see [team.md](team.md)). The limits do not depend on what it asks: the new agent gets at most the capabilities and services the main agent has itself, never a softer approval mode than its creator's or the server's default, only a runtime installed on the server and a model that runtime offers, and it runs in the same workplace. It never gets a folder inside Bandito's own data folder. The main agent makes at most 10 agents an hour.
+Где: Team → main agent's thread → card "wants to create an agent"
+1. Check Can use and Services on the card: they are what the new agent may touch.
+2. Check Asks you: a new agent never asks less than its creator.
+3. If the main agent's approvals are set to About nothing, it creates agents without a card; the thread says "without asking".
+
 ## Rules: allow, ask, deny (Approvals)
 
 <!-- id: sec-rules; covers: -->

@@ -483,6 +483,7 @@ struct ThreadView: View {
                     Task { await server.connect() }
                 }
             }
+            QuickRepliesHost(server: server, agentID: agent.id, onReply: sendQuickReply, onOpen: openQuickLink)
             Composer(
                 agentName: agent.name,
                 running: thread.turnRunning,
@@ -651,6 +652,25 @@ struct ThreadView: View {
                 replyDrafts.restore(reply, for: id)
             }
         }
+    }
+
+    /// Sends the text of a quick-reply button as the person's message. `false` when it did not go out.
+    private func sendQuickReply(_ text: String) async -> Bool {
+        sendError = nil
+        beginSendFollow()
+        do {
+            try await server.send(text, to: agent.id)
+            return true
+        } catch {
+            scroll.sendPinned = false
+            sendError = UserFacingError.message(for: error)
+            return false
+        }
+    }
+
+    /// Opens the page of a quick-reply link as a link in a message opens.
+    private func openQuickLink(_ url: URL) {
+        ChatLinkText.open(url, agentID: agent.id, folder: agent.cwd, server: server, router: router)
     }
 
     /// Answers the form the agent waits on with the typed message. A failure puts the text back in the field.

@@ -255,6 +255,7 @@ fn an_exported_agent_unpacks_with_its_settings_files_and_history() {
                 command: None,
                 diff: None,
                 reason: "r".into(),
+                input: None,
             },
         )
         .unwrap();

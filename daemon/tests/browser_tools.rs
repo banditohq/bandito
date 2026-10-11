@@ -236,6 +236,7 @@ async fn crew_lists_the_browser_tools_after_the_crew_tools() {
             "ask_form",
             "request_connection",
             "react",
+            "reply_buttons",
             "screen_screenshot",
             "screen_click",
             "screen_move",

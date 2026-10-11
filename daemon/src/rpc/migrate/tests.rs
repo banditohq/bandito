@@ -244,6 +244,7 @@ fn make_history(s: &Server, id: &str) -> (i64, i64) {
                 command: None,
                 diff: None,
                 reason: "risky".into(),
+                input: None,
             },
         )
         .unwrap();
