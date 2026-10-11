@@ -29,8 +29,9 @@ import Testing
         let cache = MessageRenderCache()
         let streamed = cache.streamingMessage(for: text, markdown: true)
         let whole = MessageRenderCache.rendered(text, markdown: true)
-        #expect(String(streamed.blocks.plainText) == String(whole.blocks.plainText))
-        #expect(streamed.blocks.count == whole.blocks.count)
+        // Two texts (the finished paragraphs, the one being written) that read as the whole one.
+        #expect(streamed.blocks.count == 2)
+        #expect(streamed.blocks.plainText.replacingOccurrences(of: "|", with: "\n\n") == whole.blocks.plainText)
         #expect(streamed.firstWebLink == whole.firstWebLink)
     }
 
@@ -49,6 +50,45 @@ import Testing
         other[0] = .user(id: ThreadItem.messageID(seq: 1), text: "hey", source: .user, from: nil, ts: 1_700_000_000_000)
         #expect(ThreadRows.replacingLast(rows, from: items, to: other) == nil)
         #expect(ThreadRows.replacingLast(rows, from: items, to: items + [.streaming(text: "x")]) == nil)
+    }
+
+    @MainActor @Test func theListRemakesOnlyTheStreamedLine() {
+        let rows = ThreadRowsMemo()
+        let lines = ThreadListMemo()
+        let signature = ThreadListMemo.Signature(
+            chat: ThreadChat(), agentName: "Forge", runtime: "claude", agentID: "a", folder: nil, baseline: nil)
+        var items: [ThreadItem] = [
+            .user(id: ThreadItem.messageID(seq: 1), text: "hi", source: .user, from: nil, ts: 1_700_000_000_000),
+            .streaming(text: "Hel"),
+        ]
+        var made = 0
+        func update(typing: ThreadListLine? = nil) -> Int {
+            lines.update(rows: rows.rows(of: items), memo: rows, signature: signature, typing: typing) { row in
+                made += 1
+                return .row(
+                    ThreadRowKey(
+                        row: row, agentName: "Forge", primaryRuntime: "claude", agentID: "a", folder: nil,
+                        chat: ThreadChat()),
+                    live: false)
+            }
+        }
+        let first = update()
+        let all = made
+        #expect(all >= 2 && lines.box.change == .all && lines.box.lines.count == all)
+        // Nothing changed: the same version, nothing made.
+        #expect(update() == first && made == all)
+        // A token: only the streamed line is made, and the list is told so.
+        items[1] = .streaming(text: "Hello")
+        #expect(update() == first + 1 && made == all + 1 && lines.box.change == .last)
+        // Rows read again by someone else in between do not hide the change.
+        items[1] = .streaming(text: "Hello, wor")
+        _ = rows.rows(of: items)
+        _ = rows.rows(of: items)
+        #expect(update() == first + 2 && made == all + 2 && lines.box.change == .last)
+        // A new item makes the lines again; the typing line goes under them.
+        items.append(.streaming(text: "x"))
+        _ = update(typing: .typing(.thinking, since: nil))
+        #expect(lines.box.change == .all && lines.box.lines.last?.id == ThreadListLine.typingID)
     }
 
     @Test func theSparklineSpansItsRectAndNeverOvershoots() {

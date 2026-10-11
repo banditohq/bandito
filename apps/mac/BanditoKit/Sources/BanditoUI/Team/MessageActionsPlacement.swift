@@ -10,7 +10,7 @@ enum MessageActionsPlacement {
     static let rowHeight: CGFloat = 28
     /// The gap between two messages once the row is in it, from the bubble's bottom to the next message's top.
     static let gapBetweenMessages: CGFloat = 28
-    /// The spacing `ThreadItemsView` puts between rows. Keep in step with it.
+    /// The spacing the thread's list puts between rows (`ThreadListView.rowSpacing`). Keep in step with it.
     static let threadSpacing: CGFloat = 12
     /// The part of the gap the row keeps as layout space. The row is drawn over the rest of it.
     static let reservedBelow: CGFloat = gapBetweenMessages - threadSpacing

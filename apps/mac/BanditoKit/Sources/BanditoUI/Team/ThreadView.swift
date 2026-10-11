@@ -40,38 +40,25 @@ struct ThreadView: View {
     @State private var highlightedID: String?
     /// Counts the requests to scroll to the bottom (the send, the "down" button); the scroll chain answers each one.
     @State private var bottomRequest = 0
-    /// The id of the first item drawn. Items older than it are not drawn until the top is reached (see
-    /// `ThreadScroll.windowSize`). Kept, not computed from the end, so appended items do not slide the window.
-    @State private var windowStartID: String?
     @State private var jumpTask: Task<Void, Never>?
     @State private var highlightTask: Task<Void, Never>?
+    /// The AppKit list of the rows, and how the thread moves it (see `ThreadList`).
+    @State private var list = ThreadListController()
+
+    /// Hooks the list's reports into the rules of the thread's scroll.
+    private func attachList() {
+        list.onMetrics = { new in
+            let old = scroll.metrics
+            scroll.metrics = new
+            scroll.contentHeight = Double(new.contentHeight)
+            scroll.containerHeight = Double(new.height)
+            scroll.nearTop = ThreadScroll.nearTop(offset: Double(new.offset))
+            if !scroll.nearTop { scroll.topRetried = false }
+            scrollGeometryChanged(old, new)
+        }
+        list.onNearTop = { DispatchQueue.main.async { topReached() } }
+    }
     private var replyDrafts: ReplyDrafts { ReplyDrafts.shared }
-
-    /// The items drawn: from the start of the window to the newest.
-    private var shownItems: [ThreadItem] {
-        let items = thread.items
-        let start = ThreadScroll.windowStart(ids: items.map(\.id), startID: windowStartID)
-        return start == 0 ? items : Array(items[start...])
-    }
-
-    private var shownRowIDs: [String] { ThreadRows.build(shownItems).map(\.id) }
-
-    /// At the bottom, the window does not grow without a limit: rows far above the screen are dropped.
-    private func slideWindow() {
-        guard atBottom else { return }
-        let ids = thread.items.map(\.id)
-        let start = ThreadScroll.windowStart(ids: ids, startID: windowStartID)
-        let slid = ThreadScroll.slidStart(count: ids.count, start: start, atBottom: true)
-        if slid != start { windowStartID = ids[slid] }
-    }
-
-    /// Pins the window's start to an item once there are items, or when the pinned one is gone.
-    private func pinWindow() {
-        let items = thread.items
-        guard !items.isEmpty else { return }
-        if let windowStartID, items.contains(where: { $0.id == windowStartID }) { return }
-        windowStartID = items[ThreadScroll.windowStart(ids: items.map(\.id), startID: nil)].id
-    }
 
     private var thread: AgentThread { server.thread(for: agent.id) }
     /// What the frame of the chat (header, composer, banners) shows of the thread. Its body reads this, not `thread`:
@@ -97,113 +84,42 @@ struct ThreadView: View {
         #endif
     }
 
-    /// The rows in their scroll view. Plain stack, not a lazy one: the heights are exact, so rows do not move under a
-    /// still pointer while estimates are redone (that fed a loop of hover and layout). Where the rows are is read
-    /// from their geometry into `scroll`, a reference that does not redraw the view.
-    private func rows(_ proxy: ScrollViewProxy) -> some View {
-        ScrollView {
-            ThreadItemsView(
-                items: shownItems, server: server, agentID: agent.id, folder: agent.cwd,
-                onError: { actionError = $0 },
-                agentName: agent.name,
-                primaryRuntime: agent.runtime.rawValue,
-                chat: chat,
-                typing: thread.turnRunning && !isStreaming,
-                turnStartedAt: thread.turnStartedAt,
-                onContent: { offset, height in contentChanged(offset: offset, height: height, proxy) },
-                arrival: arrival,
-                virtual: scroll.virtual)
-        }
-        .coordinateSpace(name: ThreadScroll.scrollSpace)
-        .modifier(ThreadGeometryGate { old, new in scrollGeometryChanged(old, new, proxy) })
-        .onGeometryChange(for: Double.self) { Double($0.size.height).rounded() } action: { height in
-            scroll.containerHeight = height
-            legacyMetricsChanged(proxy)
-        }
-    }
-
-    /// The content moved or changed height (reported from its geometry): the top is watched for older rows, and where
-    /// the scroll geometry is not known (macOS 14) the metrics are built from it.
-    private func contentChanged(offset: Double, height: Double, _ proxy: ScrollViewProxy) {
-        if offset != scroll.offset { ThreadScrollActivity.noteMove() }
-        scroll.offset = offset
-        scroll.contentHeight = height
-        virtualUpdate()
-        let near = ThreadScroll.nearTop(offset: offset)
-        if near != scroll.nearTop {
-            scroll.nearTop = near
-            if !near { scroll.topRetried = false }
-            if near { DispatchQueue.main.async { topReached() } }
-        }
-        legacyMetricsChanged(proxy)
-    }
-
-    private func legacyMetricsChanged(_ proxy: ScrollViewProxy) {
-        guard !ThreadScroll.hasScrollGeometry, scroll.containerHeight > 0 else { return }
-        let new = ThreadScrollMetrics(
-            offset: scroll.offset, contentHeight: scroll.contentHeight, height: scroll.containerHeight)
-        guard new != scroll.metrics else { return }
-        let old = scroll.metrics
-        scroll.metrics = new
-        scrollGeometryChanged(old, new, proxy)
-    }
-
-    /// The top of the thread came near: draw older rows that are loaded, else read older history.
-    private func topReached() {
-        guard scroll.alive, !thread.items.isEmpty else { return }
-        let ids = thread.items.map(\.id)
-        let start = ThreadScroll.windowStart(ids: ids, startID: windowStartID)
-        if start > 0 {
-            // No row on top known: the window is not changed blindly.
-            keepTopRow()
-            guard scroll.anchorRow != nil else { return }
-            windowStartID = ids[ThreadScroll.widenedStart(from: start)]
-        } else if server.hasMoreHistory[agent.id] == true {
-            loadEarlier()
-        }
-    }
-
-    /// The index of the first item to draw so that the row `id` is among the rows, searching upward from the window's
-    /// start in steps; nil when no loaded item gives that row.
-    private func startRevealing(row id: String) -> Int? {
+    /// The rows in the AppKit list (`ThreadList`): a scroll moves layers, and a row is made only when it comes into
+    /// view. Every loaded row is in the list; the lines are kept between updates (`ThreadListMemo`), so a token makes
+    /// the streamed row's line only.
+    private var rowList: some View {
         let items = thread.items
-        var start = ThreadScroll.windowStart(ids: items.map(\.id), startID: windowStartID)
-        while start > 0 {
-            start = max(0, start - 50)
-            if ThreadRows.build(Array(items[start...])).contains(where: { $0.id == id }) { return start }
+        let rows = scroll.rows.rows(of: items)
+        var rowChat = chat
+        rowChat.lastAgentID = ThreadListLine.lastAgentID(in: items)
+        let signature = ThreadListMemo.Signature(
+            chat: rowChat, agentName: agent.name, runtime: agent.runtime.rawValue, agentID: agent.id, folder: agent.cwd,
+            baseline: arrival.baseline)
+        let typing: ThreadListLine? =
+            thread.turnRunning && !isStreaming
+            ? .typing(AgentActivity.current(in: items), since: thread.turnStartedAt) : nil
+        let version = scroll.listMemo.update(rows: rows, memo: scroll.rows, signature: signature, typing: typing) { row in
+            .row(
+                ThreadRowKey(
+                    row: row, agentName: agent.name, primaryRuntime: agent.runtime.rawValue, agentID: agent.id,
+                    folder: agent.cwd, chat: rowChat),
+                live: arrival.isLive(seq: ThreadArrival.seq(of: row)))
         }
-        return nil
+        return ThreadList(
+            lines: scroll.listMemo.box, version: version,
+            context: ThreadListContext(server: server, chat: rowChat, onError: { actionError = $0 }), controller: list)
     }
 
-    /// The row on top of what shows, from where the rows are (`ThreadVirtualWindow`: the built rows have their real
-    /// heights, the rest the ones their empty spaces were made with).
-    private func topRowID() -> String? {
-        guard let id = scroll.virtual.rowID(atOffset: CGFloat(scroll.offset)) else { return nil }
-        return shownRowIDs.contains(id) ? id : nil
+    /// The top of the thread came near: older history is read.
+    private func topReached() {
+        guard scroll.alive, !thread.items.isEmpty, server.hasMoreHistory[agent.id] == true else { return }
+        loadEarlier()
     }
 
-    /// Sets the rows to build for the screen where it is. Written only when the range changes.
-    private func virtualUpdate() {
-        guard scroll.containerHeight > 0 else { return }
-        scroll.virtual.update(offset: CGFloat(scroll.offset), viewport: CGFloat(scroll.containerHeight))
-    }
-
-    /// Builds the rows around `id` if they are not built, and runs `action` once they are drawn (a scroll to a row that is
-    /// only an empty space would go nowhere).
-    private func reveal(_ id: String, then action: @escaping () -> Void) {
-        guard scroll.virtual.reveal(id) else {
-            action()
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-            guard scroll.alive else { return }
-            action()
-        }
-    }
-
-    /// Notes the row on top, so that rows put above it do not move it: it is scrolled back to once they are drawn.
+    /// Notes the row on top before older rows are put above it: the list keeps it in place, and the follow of the bottom
+    /// is skipped once for the growth.
     private func keepTopRow() {
-        scroll.anchorRow = topRowID()
+        scroll.anchorRow = list.topRowID()
         if scroll.anchorRow != nil { scroll.skipFollow = true }
     }
 
@@ -217,9 +133,9 @@ struct ThreadView: View {
         if jumpVisible != value { jumpVisible = value }
     }
 
-    /// The scroll geometry changed (macOS 15 and later): the bottom, the "down" button and the follow of the bottom
-    /// all follow from the measured distance, never from the position of a marker.
-    private func scrollGeometryChanged(_ old: ThreadScrollMetrics?, _ new: ThreadScrollMetrics, _ proxy: ScrollViewProxy) {
+    /// The list moved or changed size: the bottom, the "down" button and the follow of the bottom all follow from the
+    /// measured distance.
+    private func scrollGeometryChanged(_ old: ThreadScrollMetrics?, _ new: ThreadScrollMetrics) {
         if let old, old.offset != new.offset { ThreadScrollActivity.noteMove() }
         // After a send the thread follows the bottom until the person scrolls up themselves.
         // A layout settling (rows rising in, the composer changing height) does not end it; the person's own scroll
@@ -236,12 +152,12 @@ struct ThreadView: View {
             : ThreadScroll.flags(was: atBottom, old: old, new: new, pinned: false)
         setAtBottom(flags.atBottom)
         setJumpVisible(flags.jump)
-        if ThreadScroll.shouldFollow(atBottom: flags.atBottom, old: old, new: new) { followBottom(proxy) }
+        if ThreadScroll.shouldFollow(atBottom: flags.atBottom, old: old, new: new) { followBottom() }
     }
 
     /// Brings the bottom on screen, without animation (an animation shakes a growing stream), at most once per
     /// cycle of the run loop however many changes ask for it. Nothing happens if the person scrolled up meanwhile.
-    private func followBottom(_ proxy: ScrollViewProxy) {
+    private func followBottom() {
         guard scroll.alive, !scroll.followScheduled else { return }
         // Older history put above does not move the bottom: one follow is skipped after it.
         if scroll.skipFollow {
@@ -249,19 +165,19 @@ struct ThreadView: View {
             return
         }
         scroll.followScheduled = true
-        DispatchQueue.main.async { [scroll] in
+        DispatchQueue.main.async { [scroll, list] in
             scroll.followScheduled = false
             guard scroll.alive, atBottom else { return }
-            proxy.scrollTo(ThreadScroll.bottomID, anchor: .bottom)
+            list.scrollToBottom(slide: nil)
         }
     }
 
     /// The person goes to the newest message (the send, the "down" button): the thread follows the bottom again.
-    private func goToBottom(_ proxy: ScrollViewProxy) {
+    private func goToBottom() {
         scroll.skipFollow = false
         setAtBottom(true)
         setJumpVisible(false)
-        scrollToBottomSmoothly(proxy)
+        scrollToBottomSmoothly()
     }
 
     /// Whether motion is dropped (Reduce Motion, or "Off" in Settings).
@@ -269,15 +185,10 @@ struct ThreadView: View {
         MotionLevel(stored: motionLevel).reducesMotion(systemReduceMotion: reduceMotion)
     }
 
-    /// Slides the thread to its bottom: one soft move, or a plain jump while motion is reduced. The bottom marker is
-    /// the end of the last row, so a message taller than the screen shows its end.
-    private func scrollToBottomSmoothly(_ proxy: ScrollViewProxy) {
-        let target = ThreadScroll.bottomID
-        if let animation = ThreadFollowRules.scrollAnimation(reduced: motionReduced) {
-            withAnimation(animation) { proxy.scrollTo(target, anchor: .bottom) }
-        } else {
-            proxy.scrollTo(target, anchor: .bottom)
-        }
+    /// Slides the thread to its bottom: one soft move, or a plain jump while motion is reduced. The bottom is the end
+    /// of the last row, so a message taller than the screen shows its end.
+    private func scrollToBottomSmoothly() {
+        list.scrollToBottom(slide: ThreadFollowRules.scrollAnimation(reduced: motionReduced))
     }
 
     /// The person sent a message: the thread follows the bottom until they scroll up themselves, and the capsule and
@@ -290,25 +201,25 @@ struct ThreadView: View {
     }
 
     /// An item arrived while the follow after a send is on (the person's message as the daemon echoes it, then the
-    /// answer): the thread slides to its bottom once its row is drawn. At most one planned at a time; the growth that
-    /// follows (rows rising in, a stream) is followed from the scroll geometry.
-    private func followArrival(_ proxy: ScrollViewProxy) {
+    /// answer): the thread slides to its bottom once its row is in the list. At most one planned at a time; the growth
+    /// that follows (rows rising in, a stream) is followed from the scroll metrics.
+    private func followArrival() {
         guard scroll.sendPinned else { return }
         setAtBottom(true)
         setJumpVisible(false)
         guard scroll.alive, !scroll.arrivalScrollScheduled else { return }
         scroll.arrivalScrollScheduled = true
         scroll.skipFollow = false
-        // After the layout pass that draws the new row, so the bottom marker is where the row ends.
+        // After the update that puts the new row in the list, so the bottom is where the row ends.
         DispatchQueue.main.async { [scroll] in
             scroll.arrivalScrollScheduled = false
             guard scroll.alive, scroll.sendPinned else { return }
-            scrollToBottomSmoothly(proxy)
+            scrollToBottomSmoothly()
         }
     }
 
     /// Shows the thread where it was left: the row that was on top, or the newest message.
-    private func restore(_ proxy: ScrollViewProxy) {
+    private func restore() {
         var target = ThreadScroll.restoreTarget(router.threadPlaces[agent.id])
         if case .row = target {
             // The history may not be loaded yet: the row is looked for again once the first items are there.
@@ -316,29 +227,16 @@ struct ThreadView: View {
                 scroll.restorePending = true
                 return
             }
-            // The row is looked for among all loaded rows; one older than the window widens the window to it.
-            if case .row(let id) = target, !shownRowIDs.contains(id) {
-                if let start = startRevealing(row: id) {
-                    windowStartID = thread.items[start].id
-                    scroll.restorePending = false
-                    setAtBottom(false)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                        guard scroll.alive else { return }
-                        reveal(id) { proxy.scrollTo(id, anchor: .top) }
-                    }
-                    return
-                }
-            }
-            target = ThreadScroll.resolved(target, rowIDs: shownRowIDs)
+            target = ThreadScroll.resolved(target, rowIDs: scroll.rows.rows(of: thread.items).map(\.id))
         }
         scroll.restorePending = false
         switch target {
         case .bottom:
             setAtBottom(true)
-            proxy.scrollTo(ThreadScroll.bottomID, anchor: .bottom)
+            list.scrollToBottom(slide: nil)
         case .row(let id):
             setAtBottom(false)
-            reveal(id) { proxy.scrollTo(id, anchor: .top) }
+            list.scroll(to: id, centered: false, slide: nil)
         }
     }
 
@@ -393,42 +291,39 @@ struct ThreadView: View {
                 MigratedAgentStrip(agent: agent, source: server, movedTo: movedTo)
             }
 
-            ScrollViewReader { proxy in
-                ThreadRowsScope(ticker: scroll.virtual.ticker) { rows(proxy) }
-                    .background {
-                        ThreadWatch(
-                            server: server, agentID: agent.id, windowStartID: windowStartID,
-                            onLastItem: {
-                                lastItemChanged(proxy)
-                                readNewReply()
-                            },
-                            onCount: { old, new in countChanged(old, new, proxy) },
-                            onFilled: {
-                                guard scroll.restorePending else { return }
-                                DispatchQueue.main.async {
-                                    guard scroll.alive, scroll.restorePending else { return }
-                                    restore(proxy)
-                                }
-                            },
-                            onFirstShown: { firstShownChanged(proxy) })
-                    }
-                    .onChange(of: bottomRequest) { _, _ in goToBottom(proxy) }
-                    .overlay(alignment: .bottom) {
-                        ThreadJumpOverlay(visible: jumpVisible, unseen: unseen) { goToBottom(proxy) }
-                    }
-                    .onAppear {
-                        scroll.alive = true
-                        restore(proxy)
-                    }
-                    .onChange(of: scrollRequest) { _, request in
-                        guard let request else { return }
-                        reveal(request.id) {
-                            withAnimation(.easeOut(duration: BanditoMotion.base)) {
-                                proxy.scrollTo(request.id, anchor: .center)
+            ThreadRowsScope { rowList }
+                .background {
+                    ThreadWatch(
+                        server: server, agentID: agent.id,
+                        onLastItem: {
+                            lastItemChanged()
+                            readNewReply()
+                        },
+                        onCount: { old, new in countChanged(old, new) },
+                        onFilled: {
+                            guard scroll.restorePending else { return }
+                            DispatchQueue.main.async {
+                                guard scroll.alive, scroll.restorePending else { return }
+                                restore()
                             }
-                        }
-                    }
-            }
+                        },
+                        onFirstChanged: { firstChanged() })
+                }
+                .onChange(of: bottomRequest) { _, _ in goToBottom() }
+                .overlay(alignment: .bottom) {
+                    ThreadJumpOverlay(visible: jumpVisible, unseen: unseen) { goToBottom() }
+                }
+                .onAppear {
+                    scroll.alive = true
+                    attachList()
+                    restore()
+                }
+                .onChange(of: scrollRequest) { _, request in
+                    guard let request else { return }
+                    list.scroll(
+                        to: request.id, centered: true,
+                        slide: motionReduced ? nil : ThreadSlide(duration: BanditoMotion.base, curve: ThreadSlide.easeOut))
+                }
             .overlay {
                 // The first screen of a thread with no message. It waits for the history: `hasMoreHistory` is set once the
                 // first page is read, so a thread that has messages on the server never flashes it.
@@ -490,7 +385,7 @@ struct ThreadView: View {
             jumpTask?.cancel()
             highlightTask?.cancel()
             scroll.alive = false
-            let top = topRowID()
+            let top = list.topRowID()
             router.threadPlaces[agent.id] = ThreadScroll.place(atBottom: atBottom, topRowID: top)
         }
         // The header names the model from the server's list, so the list is asked once per server, not on opening
@@ -534,42 +429,36 @@ struct ThreadView: View {
     /// A new last item: the echo of the person's own message (and the answer to it) is looked at; else the bottom is
     /// followed while it is on screen. Prepending older history, or reading further up, must not jump to the bottom.
     /// (Growth of the last item, a stream or an opened card, is followed from the scroll geometry.)
-    private func lastItemChanged(_ proxy: ScrollViewProxy) {
+    private func lastItemChanged() {
         if scroll.sendPinned {
-            followArrival(proxy)
+            followArrival()
             return
         }
         guard atBottom else { return }
-        followBottom(proxy)
+        followBottom()
     }
 
-    private func countChanged(_ old: Int, _ new: Int, _ proxy: ScrollViewProxy) {
-        pinWindow()
-        slideWindow()
+    private func countChanged(_ old: Int, _ new: Int) {
         if ThreadJumpRules.countsAsUnseen(atBottom: atBottom, sendPinned: scroll.sendPinned) {
             unseen += ThreadScroll.unseenAdded(previousCount: old, currentCount: new)
         } else if scroll.sendPinned, new > old {
             // An item that came in after a send (also one that keeps the last id, as an edit of the same row does
             // not): the follow takes it.
-            followArrival(proxy)
+            followArrival()
         }
     }
 
-    /// Rows put above the one on top (older history drawn): the row stays where it was.
-    private func firstShownChanged(_ proxy: ScrollViewProxy) {
-        guard let id = scroll.anchorRow else { return }
+    /// Older rows were put above the one on top (the list keeps it where it was): the follow of the bottom comes back
+    /// once they settled, and a thread still at its top reads one more page, once.
+    private func firstChanged() {
+        guard scroll.anchorRow != nil else { return }
         scroll.anchorRow = nil
-        DispatchQueue.main.async {
-            guard scroll.alive else { return }
-            reveal(id) { proxy.scrollTo(id, anchor: .top) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                scroll.skipFollow = false
-                // Still at the top after the rows were drawn: once more, not in a loop (an empty answer never gets
-                // here, and the retry is re-armed only after the top was left).
-                if scroll.alive, scroll.nearTop, !scroll.topRetried {
-                    scroll.topRetried = true
-                    topReached()
-                }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            scroll.skipFollow = false
+            // An empty answer never gets here, and the retry is re-armed only after the top was left.
+            if scroll.alive, scroll.nearTop, !scroll.topRetried {
+                scroll.topRetried = true
+                topReached()
             }
         }
     }
@@ -602,10 +491,8 @@ struct ThreadView: View {
         Task {
             defer { loadingOlder = false }
             do { try await server.loadOlder(agent.id) } catch { actionError = UserFacingError.message(for: error) }
-            // What was read is drawn, with the row that was on top kept in place.
-            if let first = thread.items.first?.id, first != firstBefore, scroll.anchorRow != nil {
-                windowStartID = first
-            } else {
+            // Nothing was put above: the follow of the bottom is not held back.
+            if thread.items.first?.id == firstBefore {
                 scroll.anchorRow = nil
                 scroll.skipFollow = false
             }
@@ -773,7 +660,7 @@ struct ThreadView: View {
             undelivered: current.undeliveredSeqs,
             onResend: { seq in resend(seq) },
             highlightedID: highlightedID,
-            original: { seq in Self.original(seq, in: current.items) },
+            original: Self.originals(current),
             onReply: { target in
                 replyDrafts.set(target, for: agentID)
                 router.requestComposerFocus(agentID: agentID)
@@ -785,6 +672,19 @@ struct ThreadView: View {
             },
             onConnectService: { row in connectService(row) },
             onDeclineConnect: { row in try await server.declineConnect(row.requestId) })
+    }
+
+    /// The messages that replies quote, found in one pass over the items (only when the thread has replies): a lookup
+    /// per row used to walk every item, for every row with a quote, at every token of a stream.
+    static func originals(_ thread: AgentThread) -> (Int64) -> ReplyTarget? {
+        let wanted = Set(thread.replies.values)
+        guard !wanted.isEmpty else { return { _ in nil } }
+        var found: [Int64: ReplyTarget] = [:]
+        for item in thread.items {
+            guard let seq = item.messageSeq, wanted.contains(seq) else { continue }
+            found[seq] = original(seq, in: [item])
+        }
+        return { found[$0] }
     }
 
     /// A message of the loaded history by its `seq`, as something to reply to.
@@ -845,14 +745,7 @@ struct ThreadView: View {
                 }
                 pages += 1
             }
-            guard !Task.isCancelled, let index = thread.items.firstIndex(where: { $0.id == id }) else { return }
-            let ids = thread.items.map(\.id)
-            if index < ThreadScroll.windowStart(ids: ids, startID: windowStartID) {
-                // The message is older than the rows drawn: draw from just above it, then go to it.
-                windowStartID = ids[max(0, index - 10)]
-                try? await Task.sleep(for: .milliseconds(80))
-                guard !Task.isCancelled else { return }
-            }
+            guard !Task.isCancelled, thread.items.contains(where: { $0.id == id }) else { return }
             scrollTo(id: id)
             highlightedID = id
             highlightTask?.cancel()
@@ -870,19 +763,20 @@ private struct ScrollRequest: Equatable {
     var token: Int
 }
 
-/// The scroll state of one thread view that must not redraw it: where the rows are, the offset, and the flags of
-/// planned work. A reference, so that a scroll changes it without a redraw.
+/// The scroll state of one thread view that must not redraw it: the rows and lines last made, the metrics, and the
+/// flags of planned work. A reference, so that a scroll changes it without a redraw.
 @MainActor
 final class ThreadScrollMemory {
-    /// Which rows are built and how tall they are (see `ThreadVirtualWindow`).
-    let virtual = ThreadVirtualHost()
-    var offset = 0.0
+    /// The rows of the thread last made (see `ThreadRowsMemo`).
+    let rows = ThreadRowsMemo()
+    /// The lines of the list last made, kept for the next update (see `ThreadListMemo`).
+    let listMemo = ThreadListMemo()
     var contentHeight = 0.0
     var containerHeight = 0.0
-    /// The metrics last reported (built from the geometry above where the system does not measure the scroll).
+    /// The metrics the list last reported.
     var metrics: ThreadScrollMetrics?
     var nearTop = false
-    /// The row to keep on top when rows are put above it.
+    /// The row on top when older rows were asked for: set while they are being put above it.
     var anchorRow: String?
     /// The top was asked for again once after rows were drawn; cleared when the top is left.
     var topRetried = false
@@ -896,142 +790,32 @@ final class ThreadScrollMemory {
     var sendPinned = false
     /// When the person sent it (`systemUptime`): the follow is not ended by what happens in its first moments.
     var sendPinnedAt = 0.0
-    /// The scroll to the person's own message, once its row is drawn, is planned or done.
+    /// The scroll to the person's own message, once its row is in the list, is planned or done.
     var arrivalScrollScheduled = false
 }
 
-/// Reports the scroll geometry of the thread (macOS 15 and later): the distance to the bottom, the height of the
-/// screen, and the offset and content height the rules read. A change of the whole is reported once; systems without
-/// the geometry keep the bottom marker's visibility instead (see `ThreadView`).
-private struct ThreadGeometryGate: ViewModifier {
-    var onChange: (ThreadScrollMetrics?, ThreadScrollMetrics) -> Void
-
-    func body(content: Content) -> some View {
-        if #available(macOS 15.0, iOS 18.0, *) {
-            content.onScrollGeometryChange(for: ThreadScrollMetrics.self) { geometry in
-                ThreadScrollMetrics(
-                    offset: geometry.contentOffset.y, contentHeight: geometry.contentSize.height,
-                    height: geometry.containerSize.height)
-            } action: { old, new in
-                onChange(old, new)
-            }
-        } else {
-            content
-        }
-    }
-}
-
-/// Reports the height of a row that is built, to the window of built rows. The height is the row's own size: it does not
-/// change when the thread scrolls, so this costs nothing per step.
-private struct RowHeightReporter: ViewModifier {
-    var id: String
-    var virtual: ThreadVirtualHost?
-
-    func body(content: Content) -> some View {
-        if let virtual {
-            content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                virtual.record(id: id, height: height)
-            }
-        } else {
-            content
-        }
-    }
-}
-
 /// Watches one agent's thread for the changes the chat answers to: a new last item, a new number of items, the first
-/// items of an empty thread, another first row drawn. The chat itself does not read the thread (see
+/// items of an empty thread, older items put above. The chat itself does not read the thread (see
 /// `ThreadView.summary`): a streamed token builds this empty view again, not the chat's header and composer.
 private struct ThreadWatch: View {
     let server: ServerModel
     let agentID: String
-    /// The id of the first item the window draws (see `ThreadScroll.windowStart`).
-    let windowStartID: String?
     var onLastItem: () -> Void
     var onCount: (Int, Int) -> Void
     /// The thread was empty and has items now.
     var onFilled: () -> Void
-    var onFirstShown: () -> Void
+    /// Another item is the first one (older history was read).
+    var onFirstChanged: () -> Void
 
     var body: some View {
         let items = server.thread(for: agentID).items
-        let start = items.isEmpty ? 0 : ThreadScroll.windowStart(ids: items.map(\.id), startID: windowStartID)
-        let firstShown = items.isEmpty ? nil : items[start].id
         Color.clear
             .frame(width: 0, height: 0)
             .onChange(of: items.last?.id) { _, _ in onLastItem() }
             .onChange(of: items.count, initial: true) { old, new in onCount(old, new) }
             .onChange(of: items.isEmpty) { _, isEmpty in if !isEmpty { onFilled() } }
-            .onChange(of: firstShown) { _, _ in onFirstShown() }
+            .onChange(of: items.first?.id) { _, _ in onFirstChanged() }
             .accessibilityHidden(true)
-    }
-}
-
-/// The rows of a thread. Separate from the scroll view so it can be rendered on its own (snapshots, previews).
-struct ThreadItemsView: View {
-    var items: [ThreadItem]
-    var server: ServerModel
-    var agentID = ""
-    var folder: String?
-    var onError: (UserFacingMessage) -> Void = { _ in }
-    var agentName = ""
-    var primaryRuntime = ""
-    var chat = ThreadChat()
-    /// Shows the typing indicator after the last row while a turn runs.
-    var typing = false
-    /// When the running turn began (Unix ms), for the elapsed time on the typing indicator.
-    var turnStartedAt: Int64?
-    /// The content's offset in the scroll view and its height.
-    var onContent: (Double, Double) -> Void = { _, _ in }
-    /// Which messages came in live (see `ThreadArrival`); only those rise in. Empty by default: nothing animates.
-    var arrival = ThreadArrival()
-    /// The rows built, with the empty spaces for the rest. Nil: every row is built (a thread on its own, a snapshot).
-    var virtual: ThreadVirtualHost?
-
-    var body: some View {
-        let _ = PerfCounters.hit("ThreadItemsView")
-        let allRows = virtual?.rows(of: items) ?? ThreadRows.build(items)
-        let plan = virtual?.prepare(allRows)
-        let rows = plan.map { Array(allRows[$0.range]) } ?? allRows
-        var rowChat = chat
-        rowChat.lastAgentID = items.last(where: { item in
-            if case .assistant = item { return true }
-            return false
-        })?.id
-        return VStack(alignment: .leading, spacing: ThreadVirtualWindow.rowSpacing) {
-            if let plan, plan.before > 0 { Color.clear.frame(height: plan.before) }
-            ForEach(rows) { row in
-                EquatableThreadRow(
-                    key: ThreadRowKey(
-                        row: row, agentName: agentName, primaryRuntime: primaryRuntime, agentID: agentID,
-                        folder: folder, chat: rowChat),
-                    server: server, chat: rowChat, onError: onError)
-                    .equatable()
-                    .modifier(LiveArrivalModifier(live: arrival.isLive(seq: ThreadArrival.seq(of: row))))
-                    .modifier(RowHeightReporter(id: row.id, virtual: virtual))
-            }
-            if let plan, plan.after > 0 { Color.clear.frame(height: plan.after) }
-            if typing {
-                TypingIndicator(activity: AgentActivity.current(in: items), since: turnStartedAt)
-            }
-            Color.clear.frame(height: 1).id(ThreadScroll.bottomID)
-        }
-        .frame(maxWidth: 740)
-        .padding(.horizontal, 24)
-        .padding(.top, 22)
-        .padding(.bottom, 12)
-        .frame(maxWidth: .infinity)
-        .coordinateSpace(name: ThreadScroll.contentSpace)
-        .background { ThreadScrollFinder(bridge: virtual?.bridge) }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-            virtual?.setWidth(width)
-        }
-        .onGeometryChange(for: ThreadRowSpan.self) { proxy in
-            let frame = proxy.frame(in: .named(ThreadScroll.scrollSpace))
-            // minY..maxY is the content's place in the scroll view: -minY is the offset, the length the height.
-            return ThreadRowSpan(minY: Double(-frame.minY).rounded(), maxY: Double(frame.height).rounded())
-        } action: { span in
-            onContent(span.minY, span.maxY)
-        }
     }
 }
 

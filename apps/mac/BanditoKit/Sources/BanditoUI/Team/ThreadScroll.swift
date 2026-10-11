@@ -9,9 +9,6 @@ enum ThreadPlace: Equatable, Sendable {
 /// Rules of a thread's scroll: where to come back to, what to keep when it is left, when the "down" button shows, and
 /// how many messages wait below. Pure, so tested alone.
 enum ThreadScroll {
-    /// The id of the marker at the end of the rows: the newest message is on screen when it is.
-    static let bottomID = "bottom"
-
     /// Where a thread is shown again: where it was left. A thread never shown before (or left at the bottom) starts
     /// at its newest message.
     static func restoreTarget(_ place: ThreadPlace?) -> ThreadPlace {
@@ -22,7 +19,7 @@ enum ThreadScroll {
     /// top. An unknown top row is the bottom.
     static func place(atBottom: Bool, topRowID: String?) -> ThreadPlace {
         if atBottom { return .bottom }
-        guard let topRowID, topRowID != bottomID else { return .bottom }
+        guard let topRowID else { return .bottom }
         return .row(topRowID)
     }
 
@@ -82,61 +79,16 @@ enum ThreadScroll {
         return layoutChanged && new.distance > 1
     }
 
-    /// The rows drawn at most (the last ones); older ones are added when the top of the thread is reached.
-    static let windowSize = 300
     /// Within this many points of the top the thread asks for older rows.
     static let topSlack = 300
-    /// The names of the coordinate spaces: the scroll view's, and the rows' content.
-    static let scrollSpace = "thread-scroll"
-    static let contentSpace = "thread-content"
-
     /// Whether the thread is near its top.
     static func nearTop(offset: Double) -> Bool { offset <= Double(topSlack) }
-
-    /// The row on top of what is on screen: of the `valid` rows, the highest one whose bottom edge is below `offset`.
-    static func topRow(spans: [String: ThreadRowSpan], offset: Double, valid: Set<String>) -> String? {
-        var best: (id: String, minY: Double)?
-        for (id, span) in spans where valid.contains(id) && span.maxY > offset + 1 {
-            if best == nil || span.minY < best!.minY { best = (id, span.minY) }
-        }
-        return best?.id
-    }
-
-    /// The row on top of what shows, from the ids the scroll view reports as visible (top to bottom): the first one that is
-    /// a row of the thread (the typing indicator and the bottom marker are not).
-    static func topVisibleRow(visible: [String], valid: Set<String>) -> String? {
-        visible.first { valid.contains($0) }
-    }
-
-    /// The first row drawn: `startID` if it is among `ids`, else the last `windowSize` of them.
-    static func windowStart(ids: [String], startID: String?) -> Int {
-        if let startID, let index = ids.firstIndex(of: startID) { return index }
-        return max(0, ids.count - windowSize)
-    }
-
-    /// The start of the window when `count` items are there and the window starts at `start`. At the bottom, a window
-    /// of more than twice `windowSize` is cut to the last `windowSize`: the rows dropped are far above the screen.
-    /// Away from the bottom the start never moves (the rows on screen must stay).
-    static func slidStart(count: Int, start: Int, atBottom: Bool) -> Int {
-        guard atBottom, count - start > 2 * windowSize else { return start }
-        return count - windowSize
-    }
-
-    /// The start of the window after it grows upward by one step from `start`. Zero when it reaches the first row.
-    static func widenedStart(from start: Int) -> Int { max(0, start - windowSize) }
 
     /// Where to show a thread again once its rows are loaded: a row that is not among them (older than the loaded
     /// history) falls back to the newest message.
     static func resolved(_ target: ThreadPlace, rowIDs: [String]) -> ThreadPlace {
         if case .row(let id) = target, !rowIDs.contains(id) { return .bottom }
         return target
-    }
-
-    /// Whether the scroll geometry is known on this system (macOS 15 and later): the distance to the bottom is then
-    /// measured, not guessed from the bottom marker.
-    static var hasScrollGeometry: Bool {
-        if #available(macOS 15.0, iOS 18.0, *) { return true }
-        return false
     }
 
     /// Messages that came in since the last look: the growth of the thread. Never negative.
@@ -158,12 +110,6 @@ enum ThreadScrollActivity {
     static func isScrolling(at now: Double = ProcessInfo.processInfo.systemUptime) -> Bool {
         now - lastMove < settle
     }
-}
-
-/// Where a row is in the content of the thread, from its top edge to its bottom edge.
-struct ThreadRowSpan: Equatable, Sendable {
-    var minY: Double
-    var maxY: Double
 }
 
 /// What the scroll view reports about its geometry, in whole points (so that sub-point noise is not a change).

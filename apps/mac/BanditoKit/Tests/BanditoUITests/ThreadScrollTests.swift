@@ -23,7 +23,6 @@ import Testing
 
     @Test func leavingAboveWithoutAKnownTopRowFallsBackToTheBottom() {
         #expect(ThreadScroll.place(atBottom: false, topRowID: nil) == .bottom)
-        #expect(ThreadScroll.place(atBottom: false, topRowID: ThreadScroll.bottomID) == .bottom)
     }
 
     private func m(distance: Int, offset: Int, content: Int, height: Int = 800) -> ThreadScrollMetrics {
@@ -179,51 +178,6 @@ import Testing
         #expect(ThreadScroll.atBottom(was: true, old: nil, new: empty))
         #expect(!ThreadScroll.shouldFollow(atBottom: true, old: empty, new: empty))
         #expect(!ThreadScroll.showsJump(atBottom: true, distance: 0))
-    }
-
-    @Test func topRowIsTheHighestRowBelowTheOffset() {
-        let spans = [
-            "a": ThreadRowSpan(minY: 0, maxY: 100), "b": ThreadRowSpan(minY: 112, maxY: 300),
-            "c": ThreadRowSpan(minY: 312, maxY: 400),
-        ]
-        #expect(ThreadScroll.topRow(spans: spans, offset: 0, valid: ["a", "b", "c"]) == "a")
-        #expect(ThreadScroll.topRow(spans: spans, offset: 150, valid: ["a", "b", "c"]) == "b")
-        #expect(ThreadScroll.topRow(spans: spans, offset: 100, valid: ["a", "b", "c"]) == "b", "a ends at the offset")
-        #expect(ThreadScroll.topRow(spans: spans, offset: 150, valid: ["a", "c"]) == "c", "gone rows do not count")
-        #expect(ThreadScroll.topRow(spans: spans, offset: 900, valid: ["a", "b", "c"]) == nil)
-        #expect(ThreadScroll.topRow(spans: [:], offset: 0, valid: ["a"]) == nil)
-    }
-
-    @Test func windowShowsTheLast300AndKeepsItsStart() {
-        let ids = (0..<1000).map { "r\($0)" }
-        #expect(ThreadScroll.windowStart(ids: ids, startID: nil) == 700)
-        #expect(ThreadScroll.windowStart(ids: ids, startID: "r400") == 400, "a pinned start does not slide")
-        #expect(ThreadScroll.windowStart(ids: ids, startID: "gone") == 700)
-        #expect(ThreadScroll.windowStart(ids: Array(ids.prefix(10)), startID: nil) == 0)
-        #expect(ThreadScroll.windowStart(ids: [], startID: nil) == 0)
-    }
-
-    @Test func windowWidensBy300AndStopsAtTheFirstRow() {
-        #expect(ThreadScroll.widenedStart(from: 700) == 400)
-        #expect(ThreadScroll.widenedStart(from: 100) == 0)
-        #expect(ThreadScroll.widenedStart(from: 0) == 0)
-    }
-
-    @Test func windowAtTheBottomStaysWithin600WhileItemsAreAppended() {
-        var start = 0
-        for count in 1...1000 {
-            start = ThreadScroll.slidStart(count: count, start: start, atBottom: true)
-            #expect(count - start <= 2 * ThreadScroll.windowSize)
-        }
-        #expect(1000 - start >= ThreadScroll.windowSize)
-    }
-
-    @Test func windowAwayFromTheBottomDoesNotMove() {
-        var start = 0
-        for count in 1...1000 {
-            start = ThreadScroll.slidStart(count: count, start: start, atBottom: false)
-        }
-        #expect(start == 0)
     }
 
     @Test func nearTopIsWithin300Points() {

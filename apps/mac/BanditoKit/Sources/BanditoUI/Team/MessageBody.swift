@@ -29,7 +29,16 @@ struct MessageBodyView: View {
 
     @ViewBuilder
     private func messageBody(_ blocks: [RenderedBlock]) -> some View {
-        if blocks.contains(where: { if case .code = $0 { return true } else { return false } }) {
+        let hasCode = blocks.contains(where: { if case .code = $0 { return true } else { return false } })
+        if !hasCode, blocks.count > 1 {
+            // A stream: the finished paragraphs and the one being written are two texts, so a token redraws the last
+            // paragraph only, not the whole reply. The gap between them is the gap between two lines of one text.
+            VStack(alignment: .leading, spacing: markdown ? 4 : 3) {
+                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                    if case .text(let running) = block { runningText(running) }
+                }
+            }
+        } else if hasCode {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
@@ -137,10 +146,10 @@ final class MessageRenderCache: @unchecked Sendable {
     /// are parsed once and kept; only the paragraph being written is parsed at each token, and the two are joined.
     func streamingMessage(for text: String, markdown: Bool) -> RenderedMessage {
         guard let split = StreamingSplit.stableEnd(of: text) else { return message(for: text, markdown: markdown, cached: false) }
-        let head = message(for: String(text[..<split]), markdown: markdown)
+        // The finished part without its closing blank line: the stack between the two texts stands for it.
+        let head = message(for: String(text[..<split]).trimmingTrailingNewlines, markdown: markdown)
         let tail = message(for: String(text[split...]), markdown: markdown, cached: false)
-        return RenderedMessage(
-            blocks: StreamingSplit.join(head.blocks, tail.blocks), firstWebLink: head.firstWebLink ?? tail.firstWebLink)
+        return RenderedMessage(blocks: head.blocks + tail.blocks, firstWebLink: head.firstWebLink ?? tail.firstWebLink)
     }
 
     static func rendered(_ text: String, markdown: Bool) -> RenderedMessage {
@@ -193,11 +202,14 @@ enum StreamingSplit {
         return lastSplit
     }
 
-    /// The blocks of the finished part followed by those of the part being written. Two running texts that meet are
-    /// one text, as a parse of the whole would give.
-    static func join(_ head: [RenderedBlock], _ tail: [RenderedBlock]) -> [RenderedBlock] {
-        guard case .text(let last)? = head.last, case .text(let first)? = tail.first else { return head + tail }
-        return head.dropLast() + [.text(last + first)] + tail.dropFirst()
+}
+
+private extension String {
+    /// The text without the line breaks at its end.
+    var trimmingTrailingNewlines: String {
+        var end = endIndex
+        while end > startIndex, self[index(before: end)] == "\n" { end = index(before: end) }
+        return String(self[..<end])
     }
 }
 

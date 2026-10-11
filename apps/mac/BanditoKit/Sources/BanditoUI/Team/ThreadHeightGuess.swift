@@ -1,8 +1,8 @@
 import BanditoKit
 import Foundation
 
-/// A guess of how tall a row will be, from what it holds. Only used for rows that were never built (see
-/// `ThreadVirtualWindow`); it has to be roughly right and always the same for the same row.
+/// A guess of how tall a row will be, from what it holds. Only used for rows the list has not measured yet (see
+/// `ThreadListView`); it has to be roughly right and always the same for the same row.
 enum ThreadHeightGuess {
     /// Characters of a line of message text at the usual width, and the height of a line with its spacing.
     static let charsPerLine = 80
