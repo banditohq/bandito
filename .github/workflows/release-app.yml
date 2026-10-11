@@ -95,6 +95,19 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: brew install xcodegen
 
+      # The disk image is built by dmgbuild (pinned in apps/mac/scripts/dmg-requirements.txt). setup-python gives a
+      # python3 that pip may install into (the runner's Homebrew python refuses pip installs outside a venv).
+      - name: Set up Python for dmgbuild
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dmgbuild (builds the disk image)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user -r apps/mac/scripts/dmg-requirements.txt
+          python3 -c 'import dmgbuild; print("dmgbuild", dmgbuild.__version__)'
+
       - name: Install Rust (the app bundles the bandito daemon)
         uses: dtolnay/rust-toolchain@stable
 
