@@ -365,6 +365,8 @@ struct ShareSheet: View {
     }
 }
 
+#if DEBUG
+// Previews and their sample data are for development builds only.
 #Preview("Publish: before") {
     ShareSheet(subject: .bot(agentID: "agent-1"), server: nil, model: ShareSamples.publishDraft)
         .environment(AccountHub())
@@ -380,3 +382,4 @@ struct ShareSheet: View {
         .padding(40)
         .background(Color.Bandito.bg)
 }
+#endif

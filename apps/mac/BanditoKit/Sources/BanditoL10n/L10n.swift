@@ -2854,6 +2854,7 @@ public enum L10n {
             public static var signIn: String { L10n.tr("share.mine.signIn") }
             public static var title: String { L10n.tr("share.mine.title") }
             public static var update: String { L10n.tr("share.mine.update") }
+            public static func updated(number: String) -> String { L10n.tr("share.mine.updated", number) }
         }
 
         public enum Own {

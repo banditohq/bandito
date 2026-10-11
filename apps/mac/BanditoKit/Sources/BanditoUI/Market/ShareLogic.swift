@@ -84,8 +84,14 @@ public struct SharedPayloadInfo: Equatable, Sendable {
     public var license: String?
     /// Skill: the file paths, in order.
     public var files: [String]
-    /// Skill: the paths of the scripts agents may run.
+    /// Skill: the paths the payload marks executable.
     public var executables: [String]
+
+    /// Skill: every file agents may run: each file under `scripts/` and each path marked executable, once, sorted.
+    /// The install sheet names all of them and needs the owner's tick whenever there is one.
+    public var scripts: [String] {
+        Array(Set(executables + files.filter { $0.hasPrefix("scripts/") })).sorted()
+    }
 
     public init?(kind: ShareKind, payload: JSONValue) {
         guard let name = payload["name"]?.string, !name.isEmpty else { return nil }
@@ -174,12 +180,13 @@ public enum ShareLogic {
     /// `https`, the host `bandito.dev`, with no port, user or query.
     public static func shareID(fromLink text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmed), url.scheme?.lowercased() == "https",
-            url.host?.lowercased() == host, url.port == nil, url.user == nil, url.query == nil, url.fragment == nil
-        else { return nil }
-        let parts = url.path.split(separator: "/", omittingEmptySubsequences: false)
-        guard parts.count == 3, parts[0].isEmpty, parts[1] == "s" else { return nil }
-        let id = String(parts[2])
+        // The whole text must be the page's address: https, exactly this host (no user part, port, query or
+        // fragment), `/s/`, the id, and at most one trailing slash. It is matched as text, because URL parsing
+        // normalises paths and hosts and would widen what is accepted.
+        guard let match = trimmed.wholeMatch(of: /(?i:https:\/\/bandito\.dev)\/s\/([A-Za-z0-9]{22})\/?/) else {
+            return nil
+        }
+        let id = String(match.output.1)
         return ShareID.isValid(id) ? id : nil
     }
 
@@ -216,11 +223,12 @@ public enum ShareLogic {
     }
 
     /// The install button: a server, a loaded item, no install running, and for a skill with scripts the owner's tick.
+    /// `scripts` is `SharedPayloadInfo.scripts`: the files under `scripts/` together with the executable paths.
     public static func canInstall(
-        hasServer: Bool, hasItem: Bool, executables: [String], acknowledged: Bool, inFlight: Bool
+        hasServer: Bool, hasItem: Bool, scripts: [String], acknowledged: Bool, inFlight: Bool
     ) -> Bool {
         guard hasServer, hasItem, !inFlight else { return false }
-        return executables.isEmpty || acknowledged
+        return scripts.isEmpty || acknowledged
     }
 
     /// The payload as text for the preview and the install sheet: pretty, sorted keys, the exact JSON that is sent.

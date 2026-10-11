@@ -2735,5 +2735,6 @@
   "share.mine.noSource": "Обновить можно из того бота или скилла, с которого публиковали, на этом Mac.",
   "share.own.title": "Мои скиллы",
   "share.own.sharedBadge": "по ссылке",
-  "share.skipped": "Эти файлы не войдут: {files}"
+  "share.skipped": "Эти файлы не войдут: {files}",
+  "share.mine.updated": "Обновлено до версии {number}."
 }

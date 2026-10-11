@@ -16,6 +16,26 @@ import Testing
         #expect(ShareLogic.shareID(fromLink: "  https://bandito.dev/s/\(Self.id)\n") == Self.id)
     }
 
+    @Test func aLookalikeHostIsNotTheSite() {
+        // The user part is not the host: `bandito.dev@evil.com` is a host of evil.com.
+        #expect(ShareLogic.shareID(fromLink: "https://bandito.dev@evil.com/s/\(Self.id)") == nil)
+        #expect(ShareLogic.shareID(fromLink: "https://user:pass@bandito.dev/s/\(Self.id)") == nil)
+        // A host that only starts with the site's name.
+        #expect(ShareLogic.shareID(fromLink: "https://bandito.dev.evil.com/s/\(Self.id)") == nil)
+        #expect(ShareLogic.shareID(fromLink: "https://evil-bandito.dev/s/\(Self.id)") == nil)
+        // A Cyrillic letter in the host is another host.
+        #expect(ShareLogic.shareID(fromLink: "https://b\u{0430}ndito.dev/s/\(Self.id)") == nil)
+        // A trailing dot names the same host to DNS, but not to this check.
+        #expect(ShareLogic.shareID(fromLink: "https://bandito.dev./s/\(Self.id)") == nil)
+    }
+
+    @Test func aTrailingSlashIsAcceptedOnceAndNothingMore() {
+        #expect(ShareLogic.shareID(fromLink: "https://bandito.dev/s/\(Self.id)/") == Self.id)
+        #expect(ShareLogic.shareID(fromLink: "https://bandito.dev/s/\(Self.id)//") == nil)
+        #expect(ShareLogic.shareID(fromLink: "https://bandito.dev/s/\(Self.id)/?x=1") == nil)
+        #expect(ShareLogic.shareID(fromLink: "https://bandito.dev/s/") == nil)
+    }
+
     @Test func otherLinksGiveNothing() {
         #expect(ShareLogic.shareID(fromLink: "http://bandito.dev/s/\(Self.id)") == nil)
         #expect(ShareLogic.shareID(fromLink: "https://evil.example/s/\(Self.id)") == nil)
@@ -81,15 +101,44 @@ import Testing
             title: "  ", summary: "", hasPayload: true, signedIn: true, inFlight: false))
     }
 
-    @Test func installNeedsAServerAnItemAndTheTickForScripts() {
-        #expect(ShareLogic.canInstall(hasServer: true, hasItem: true, executables: [], acknowledged: false, inFlight: false))
-        #expect(!ShareLogic.canInstall(hasServer: false, hasItem: true, executables: [], acknowledged: false, inFlight: false))
-        #expect(!ShareLogic.canInstall(hasServer: true, hasItem: false, executables: [], acknowledged: false, inFlight: false))
-        #expect(!ShareLogic.canInstall(hasServer: true, hasItem: true, executables: [], acknowledged: false, inFlight: true))
+    @Test func aFileUnderScriptsNeedsTheTickEvenWhenNothingIsMarkedExecutable() throws {
+        let payload: JSONValue = .object([
+            "schema": .number(1),
+            "name": .string("pdf"),
+            "description": .string("PDFs"),
+            "license": .string("MIT"),
+            "files": .object(["SKILL.md": .string("y"), "scripts/run.sh": .string("x")]),
+            "executable": .array([]),
+        ])
+        let info = try #require(SharedPayloadInfo(kind: .skill, payload: payload))
+        #expect(info.scripts == ["scripts/run.sh"])
         #expect(!ShareLogic.canInstall(
-            hasServer: true, hasItem: true, executables: ["scripts/run.sh"], acknowledged: false, inFlight: false))
+            hasServer: true, hasItem: true, scripts: info.scripts, acknowledged: false, inFlight: false))
         #expect(ShareLogic.canInstall(
-            hasServer: true, hasItem: true, executables: ["scripts/run.sh"], acknowledged: true, inFlight: false))
+            hasServer: true, hasItem: true, scripts: info.scripts, acknowledged: true, inFlight: false))
+    }
+
+    @Test func theScriptsAreEveryScriptsFileAndEveryExecutablePathOnce() throws {
+        let payload: JSONValue = .object([
+            "name": .string("pdf"),
+            "files": .object([
+                "scripts/run.sh": .string("x"), "tools/build.sh": .string("y"), "SKILL.md": .string("z"),
+            ]),
+            "executable": .array([.string("tools/build.sh"), .string("bin/extra")]),
+        ])
+        let info = try #require(SharedPayloadInfo(kind: .skill, payload: payload))
+        #expect(info.scripts == ["bin/extra", "scripts/run.sh", "tools/build.sh"])
+    }
+
+    @Test func installNeedsAServerAnItemAndTheTickForScripts() {
+        #expect(ShareLogic.canInstall(hasServer: true, hasItem: true, scripts: [], acknowledged: false, inFlight: false))
+        #expect(!ShareLogic.canInstall(hasServer: false, hasItem: true, scripts: [], acknowledged: false, inFlight: false))
+        #expect(!ShareLogic.canInstall(hasServer: true, hasItem: false, scripts: [], acknowledged: false, inFlight: false))
+        #expect(!ShareLogic.canInstall(hasServer: true, hasItem: true, scripts: [], acknowledged: false, inFlight: true))
+        #expect(!ShareLogic.canInstall(
+            hasServer: true, hasItem: true, scripts: ["scripts/run.sh"], acknowledged: false, inFlight: false))
+        #expect(ShareLogic.canInstall(
+            hasServer: true, hasItem: true, scripts: ["scripts/run.sh"], acknowledged: true, inFlight: false))
     }
 
     // MARK: capabilities
@@ -266,7 +315,7 @@ import Testing
     @Test func onlyAShareWithAKnownSourceCanBeUpdated() {
         let item = ShareSummary(
             id: Self.id, kind: .skill, visibility: .link, title: "pdf", summary: "", lang: nil, version: 1,
-            installs: 0, hidden: false, createdAt: 0, updatedAt: 0)
+            installs: 0, hidden: false, createdAt: nil, updatedAt: nil)
         #expect(!ShareLogic.canUpdate(item, sources: [:]))
         #expect(ShareLogic.canUpdate(item, sources: [Self.id: ShareSource(kind: .skill, serverID: "s", skillName: "pdf")]))
     }

@@ -2087,6 +2087,7 @@
 "share.mine.signIn" = "공유한 봇과 스킬을 보려면 로그인하세요.";
 "share.mine.title" = "내 게시물";
 "share.mine.update" = "현재 버전으로 업데이트";
+"share.mine.updated" = "버전 %1$@(으)로 업데이트했습니다.";
 "share.own.sharedBadge" = "링크로";
 "share.own.title" = "내 스킬";
 "share.preview.collapse" = "접기";

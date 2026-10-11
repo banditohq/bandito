@@ -252,10 +252,13 @@ public actor AccountClient {
 
     /// Changes the visibility, title, summary or payload of one of the owner's shares (`PATCH /shares/:id`).
     /// A payload change makes the next version. Another account's share is `ShareFailure.notFound`.
-    public func updateShare(id: String, _ update: ShareUpdate) async throws {
+    /// Returns the share's version after the change: a payload change makes the next version (`{ok, version}`).
+    @discardableResult
+    public func updateShare(id: String, _ update: ShareUpdate) async throws -> Int {
+        struct Wire: Decodable { var version: Int }
         let path = "/shares/\(try Self.shareSegment(id))"
         let reply = try await shareSend("PATCH", path, body: update, authenticated: true)
-        try shareCheck(reply)
+        return try shareDecode(Wire.self, reply).version
     }
 
     /// Removes one of the owner's shares (`DELETE /shares/:id`). The link stops working.

@@ -98,7 +98,7 @@ import Testing
         let http = ScriptedHTTP([
             "GET /shares/\(Self.shareID)": [
                 ScriptedReply(
-                    #"{"ok":true,"share":{"id":"\#(Self.shareID)","kind":"skill","visibility":"link","title":"pdf","summary":"Read PDFs","lang":"en","author":{"login":null,"name":"Ann"},"version":3,"installs":2,"created_at":1700000000000,"updated_at":1700000100000,"payload":{"schema":1,"name":"pdf","executable":["scripts/run_me.sh"],"files":{"scripts/run_me.sh":"echo"}}}}"#)
+                    #"{"ok":true,"share":{"id":"\#(Self.shareID)","kind":"skill","visibility":"link","title":"pdf","summary":"Read PDFs","lang":"en","author":{"login":null,"name":"Ann"},"version":3,"installs":2,"created_at":"2023-11-14T22:13:20.500Z","updated_at":"2023-11-14T22:15:00Z","payload":{"schema":1,"name":"pdf","executable":["scripts/run_me.sh"],"files":{"scripts/run_me.sh":"echo"}}}}"#)
             ]
         ])
         let client = try makeClient(http: http)
@@ -110,7 +110,7 @@ import Testing
         #expect(item.version == 3)
         #expect(item.author.login == nil)
         #expect(item.author.name == "Ann")
-        #expect(item.createdAt == 1_700_000_000_000)
+        #expect(abs((item.createdAt?.timeIntervalSince1970 ?? 0) - 1_700_000_000.5) < 0.001)
         #expect(item.payload["executable"] == .array([.string("scripts/run_me.sh")]))
         #expect(item.payload["files"]?["scripts/run_me.sh"] == .string("echo"))
         #expect(http.requests.first?.value(forHTTPHeaderField: "Authorization") == nil)
@@ -151,7 +151,7 @@ import Testing
         let http = ScriptedHTTP([
             "GET /shares/mine": [
                 ScriptedReply(
-                    #"{"ok":true,"shares":[{"id":"\#(Self.shareID)","kind":"bot","visibility":"public","title":"Release notes","summary":"","lang":"en","version":2,"installs":14,"hidden":true,"created_at":1,"updated_at":2}]}"#)
+                    #"{"ok":true,"shares":[{"id":"\#(Self.shareID)","kind":"bot","visibility":"public","title":"Release notes","summary":"","lang":"en","version":2,"installs":14,"hidden":true,"created_at":"2026-10-11T08:12:34.567Z","updated_at":"2026-10-11T08:12:34Z","url":"https://bandito.dev/s/\#(Self.shareID)"}]}"#)
             ]
         ])
         let client = try makeClient(http: http, sessions: sessions)
@@ -161,7 +161,8 @@ import Testing
         #expect(shares.count == 1)
         #expect(shares[0].hidden)
         #expect(shares[0].installs == 14)
-        #expect(shares[0].updatedAt == 2)
+        #expect(shares[0].updatedAt?.timeIntervalSince1970 == 1_791_706_354)
+        #expect(shares[0].url == "https://bandito.dev/s/\(Self.shareID)")
     }
 
     @Test func updateSendsOnlyTheFieldsThatChange() async throws {
@@ -172,7 +173,8 @@ import Testing
         ])
         let client = try makeClient(http: http, sessions: sessions)
 
-        try await client.updateShare(id: Self.shareID, ShareUpdate(visibility: .link))
+        let version = try await client.updateShare(id: Self.shareID, ShareUpdate(visibility: .link))
+        #expect(version == 3)
 
         let body = try jsonBody(try #require(http.requests.first))
         #expect(body.keys.sorted() == ["visibility"])
