@@ -32,6 +32,10 @@ struct FrameStats: Equatable, Codable, Sendable {
     var shareOver16Ms: Double
     /// Busy stretches of the main thread of 100 ms or more: freezes anyone sees.
     var stretchesOver100Ms: Int = 0
+    /// Sheets that slid in or out (`SheetSlideRule`): the main thread waited in AppKit's animation loop, the window's
+    /// display link did not tick. Not frames of this window: counted apart, with the longest.
+    var sheetSlides: Int = 0
+    var sheetSlideWorstMs: Double = 0
 
     /// - Parameters:
     ///   - intervals: seconds between each frame callback and the one before.
@@ -39,9 +43,17 @@ struct FrameStats: Equatable, Codable, Sendable {
     ///   - cpu: seconds of processor time the main thread used in each frame; may be empty.
     ///   - longStretches: busy stretches of 100 ms or more that ended during the run.
     ///   - frameDuration: the display's frame time in seconds.
+    ///   - slides: the frames (by index) whose gap was a sheet's slide; they are left out and counted apart.
     static func compute(
-        intervals: [Double], work: [Double] = [], cpu: [Double] = [], longStretches: Int = 0, frameDuration: Double
+        intervals allIntervals: [Double], work allWork: [Double] = [], cpu allCPU: [Double] = [], longStretches: Int = 0,
+        frameDuration: Double, slides: [Bool] = []
     ) -> FrameStats {
+        // A slide's gap is not a frame of this window; the work in it (the sheet's building) still is work.
+        func isSlide(_ index: Int) -> Bool { index < slides.count && slides[index] }
+        let slid = allIntervals.indices.filter(isSlide)
+        let intervals = allIntervals.indices.filter { !isSlide($0) }.map { allIntervals[$0] }
+        let work = allWork
+        let cpu = allCPU
         let duration = frameDuration > 0 ? frameDuration : 1.0 / 60.0
         func percentile(_ sorted: [Double], _ p: Double) -> Double {
             guard !sorted.isEmpty else { return 0 }
@@ -53,12 +65,12 @@ struct FrameStats: Equatable, Codable, Sendable {
         let sortedCPU = cpu.sorted()
         let over8 = work.isEmpty ? 0 : Double(work.filter { $0 > PerfBudget.frame120 }.count) / Double(work.count)
         var late = 0
-        for index in intervals.indices {
-            let gap = intervals[index]
+        for index in allIntervals.indices {
+            let gap = isSlide(index) ? 0 : allIntervals[index]
             let busy = index < work.count ? work[index] : 0
             if gap > PerfBudget.frame60 * 1.25 || busy > PerfBudget.frame60 { late += 1 }
         }
-        let over16 = intervals.isEmpty ? 0 : Double(late) / Double(intervals.count)
+        let over16 = allIntervals.isEmpty ? 0 : Double(late) / Double(allIntervals.count)
         let sorted = intervals.sorted()
         let missed = intervals.filter { $0 > 1.5 * duration }.count
         let dropped = intervals.reduce(0) { total, gap in
@@ -71,7 +83,8 @@ struct FrameStats: Equatable, Codable, Sendable {
             workP50Ms: percentile(sortedWork, 0.5) * 1000, workP95Ms: percentile(sortedWork, 0.95) * 1000,
             workWorstMs: (sortedWork.last ?? 0) * 1000, cpuP50Ms: percentile(sortedCPU, 0.5) * 1000,
             cpuP95Ms: percentile(sortedCPU, 0.95) * 1000, shareOver8Ms: rounded(over8), shareOver16Ms: rounded(over16),
-            stretchesOver100Ms: longStretches)
+            stretchesOver100Ms: longStretches, sheetSlides: slid.count,
+            sheetSlideWorstMs: (slid.map { allIntervals[$0] }.max() ?? 0) * 1000)
     }
 
     /// The owner's bar for a release: on the screen that measures, no frame is late (p95 of the gaps within 15 % of its
@@ -192,6 +205,8 @@ final class FrameRecorder: NSObject {
     private var cpu: [Double] = []
     /// Busy stretches of 100 ms or more, by the frame they ended in.
     private var long: [Int] = []
+    /// Frames whose gap was a sheet's slide (see `FrameStats.sheetSlides`).
+    private var slid: [Bool] = []
     private var segmentStart = 0
     private(set) var segments: [PerfSegment] = []
     private(set) var frameDuration: Double = 0
@@ -234,7 +249,7 @@ final class FrameRecorder: NSObject {
         let stats = FrameStats.compute(
             intervals: Array(intervals[from...]), work: Array(work[min(from, work.count)...]),
             cpu: Array(cpu[min(from, cpu.count)...]), longStretches: long[min(from, long.count)...].reduce(0, +),
-            frameDuration: frameDuration)
+            frameDuration: frameDuration, slides: Array(slid[min(from, slid.count)...]))
         segments.append(PerfSegment(name: name, frames: stats, meetsTarget: stats.meetsTarget(displayFrameMs: displayFrameMs)))
     }
 
@@ -244,6 +259,8 @@ final class FrameRecorder: NSObject {
         work.removeAll(keepingCapacity: true)
         cpu.removeAll(keepingCapacity: true)
         long.removeAll(keepingCapacity: true)
+        slid.removeAll(keepingCapacity: true)
+        _ = HangMonitor.takeSlides()
         segments.removeAll()
         segmentStart = 0
         last = nil
@@ -262,7 +279,8 @@ final class FrameRecorder: NSObject {
         HangMonitor.meter(false)
         peakFootprint = max(peakFootprint, physicalFootprintBytes())
         return FrameStats.compute(
-            intervals: intervals, work: work, cpu: cpu, longStretches: long.reduce(0, +), frameDuration: frameDuration)
+            intervals: intervals, work: work, cpu: cpu, longStretches: long.reduce(0, +), frameDuration: frameDuration,
+            slides: slid)
     }
 
     func invalidate() {
@@ -296,12 +314,15 @@ final class FrameRecorder: NSObject {
         if recording {
             let busy = Double(HangMonitor.takeBusy()) / 1_000_000_000
             let stretches = HangMonitor.takeLongStretches()
+            let slides = HangMonitor.takeSlides()
             let cpuNow = currentThreadCPUSeconds()
             if let last {
                 intervals.append(now - last)
                 work.append(busy)
                 cpu.append(max(0, cpuNow - lastCPU))
                 long.append(stretches)
+                // The gap before this frame held a sheet's slide: the display link stood still for it.
+                slid.append(slides > 0 && now - last > 1.5 * max(frameDuration, 1.0 / 120))
             }
             last = now
             lastCPU = cpuNow

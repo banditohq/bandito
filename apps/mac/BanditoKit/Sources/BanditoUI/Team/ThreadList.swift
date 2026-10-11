@@ -561,6 +561,9 @@ final class ThreadListCell: NSTableCellView {
         super.init(frame: .zero)
         identifier = Self.identifier
         host.sizingOptions = []
+        // A row has no safe area: without this, each row that scrolled under the title bar was given new insets and laid
+        // out again at every step of a scroll.
+        host.safeAreaRegions = []
         let view = host.view
         view.translatesAutoresizingMaskIntoConstraints = true
         view.autoresizingMask = [.width, .height]
@@ -726,6 +729,22 @@ struct ThreadListLineView: View {
         .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGFloat.self) { ($0.size.height * 2).rounded() / 2 } action: { height in
             onHeight?(height)
+        }
+        .modifier(SteadyWindowState())
+    }
+}
+
+/// Keeps a row the same whether its window is in front or not. Each cell hosts its own SwiftUI view, and the window
+/// going to the back (a sheet, another app) changed the environment of every cell: all the rows on screen were built
+/// again, twice per sheet.
+private struct SteadyWindowState: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content
+                .environment(\.controlActiveState, .key)
+                .environment(\.appearsActive, true)
+        } else {
+            content.environment(\.controlActiveState, .key)
         }
     }
 }

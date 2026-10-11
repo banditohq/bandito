@@ -118,6 +118,25 @@ import Testing
         #expect(!disclosure.isOpen("tools-a"))
     }
 
+    @Test func aSheetSlideIsNotAFreeze() {
+        let ms: UInt64 = 1_000_000
+        // 380 ms in AppKit's loop while a sheet moved, 40 ms of it on the processor: 40 ms of work.
+        #expect(SheetSlideRule.busy(start: 0, end: 380 * ms, cpu: 40 * ms, sheetMovedAt: 10 * ms) == 40 * ms)
+        // The sheet's building is work all the same.
+        #expect(SheetSlideRule.busy(start: 0, end: 380 * ms, cpu: 200 * ms, sheetMovedAt: 10 * ms) == 200 * ms)
+        // No sheet moving in it: the whole stretch, waiting or not (a wait on a lock is a freeze).
+        #expect(SheetSlideRule.busy(start: 0, end: 380 * ms, cpu: 40 * ms, sheetMovedAt: nil) == 380 * ms)
+        #expect(SheetSlideRule.busy(start: 100 * ms, end: 380 * ms, cpu: 40 * ms, sheetMovedAt: 50 * ms) == 280 * ms)
+        // Its frame is counted apart, not as a late frame.
+        let stats = FrameStats.compute(
+            intervals: [0.0167, 0.38, 0.0167], work: [0.002, 0.04, 0.002], frameDuration: 1.0 / 60,
+            slides: [false, true, false])
+        #expect(stats.frames == 2 && stats.sheetSlides == 1 && stats.worstFrameMs < 20)
+        // The work in it still counts: 40 ms is over a 60 Hz frame.
+        #expect(stats.workWorstMs == 40 && stats.shareOver16Ms > 0.3)
+        #expect(abs(stats.sheetSlideWorstMs - 380) < 0.01)
+    }
+
     @Test func firstFitTakesTheFirstCandidateThatFits() {
         let widths: [Int: CGFloat] = [0: 500, 1: 300, 2: 40]
         #expect(FirstFitRule.index(available: nil, widths: widths, count: 3) == 2)
