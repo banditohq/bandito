@@ -213,6 +213,136 @@ pub fn check_skill(p: &SkillPayload) -> Result<(), ShareError> {
     Ok(())
 }
 
+/// One skill in a folder of skills, as `skills.own` lists it. `source` is `own` or `shared:<share_id>`; `version` is the
+/// shared install's version (null for the owner's own); `has_scripts` is a file under `scripts/`; `files` counts the
+/// files `skills.export` would send.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct OwnSkill {
+    pub name: String,
+    pub description: String,
+    pub source: String,
+    pub version: Option<u64>,
+    pub has_scripts: bool,
+    pub files: usize,
+}
+
+/// The skills in `base/.claude/skills`: the owner's own and the copies of shared links, sorted by name. Catalog installs
+/// are left out, and so are folders without a `SKILL.md`, dot names, and links (never followed).
+pub fn own_skills(base: &Path) -> Result<Vec<OwnSkill>, ShareError> {
+    let skills_dir = base.join(".claude").join("skills");
+    if is_link(&base.join(".claude")) || is_link(&skills_dir) {
+        return Ok(Vec::new());
+    }
+    let read = match fs::read_dir(&skills_dir) {
+        Ok(read) => read,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(io_refused(&skills_dir, &e)),
+    };
+    let mut out = Vec::new();
+    for entry in read {
+        let entry = entry.map_err(|e| io_refused(&skills_dir, &e))?;
+        let os_name = entry.file_name();
+        let Some(name) = os_name.to_str() else {
+            continue;
+        };
+        if name.starts_with('.') {
+            continue;
+        }
+        let dir = entry.path();
+        // A link is not a folder here: `symlink_metadata` does not follow it.
+        if !fs::symlink_metadata(&dir).is_ok_and(|m| m.is_dir()) {
+            continue;
+        }
+        if !fs::symlink_metadata(dir.join("SKILL.md")).is_ok_and(|m| m.is_file()) {
+            continue;
+        }
+        let marker = folder_marker(&dir);
+        if marker.as_ref().is_some_and(|m| is_catalog_marker(m, name)) {
+            continue;
+        }
+        // A copy of a shared link: its marker names this folder and a `shared:` source.
+        let shared_source = marker
+            .as_ref()
+            .filter(|m| m.get("id").and_then(Value::as_str) == Some(name))
+            .and_then(|m| m.get("source").and_then(Value::as_str))
+            .filter(|s| s.starts_with("shared:"))
+            .map(str::to_string);
+        let (source, version) = match shared_source {
+            Some(source) => (
+                source,
+                marker.as_ref().and_then(|m| m.get("version")).and_then(Value::as_u64),
+            ),
+            None => ("own".to_string(), None),
+        };
+        let description = read_capped(&dir.join("SKILL.md"), "SKILL.md")
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .and_then(|text| description_of(&text))
+            .unwrap_or_default();
+        out.push(OwnSkill {
+            name: name.to_string(),
+            description,
+            source,
+            version,
+            has_scripts: has_script_file(&dir.join("scripts")),
+            files: count_files(&dir, ""),
+        });
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(out)
+}
+
+/// Whether `path` is a link (never followed by the skill functions).
+fn is_link(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
+}
+
+/// Whether the folder `scripts` is a real folder holding a file that is not a dot file.
+fn has_script_file(scripts: &Path) -> bool {
+    if !fs::symlink_metadata(scripts).is_ok_and(|m| m.is_dir()) {
+        return false;
+    }
+    fs::read_dir(scripts).is_ok_and(|read| {
+        read.flatten().any(|e| {
+            let name = e.file_name();
+            !name.to_string_lossy().starts_with('.') && fs::symlink_metadata(e.path()).is_ok_and(|m| m.is_file())
+        })
+    })
+}
+
+/// How many files under `dir` `skills.export` would send: real files that are not dot names, in folders no deeper than
+/// [`SKILL_DEPTH_MAX`]. Links and unreadable folders are not counted and not followed.
+fn count_files(dir: &Path, rel: &str) -> usize {
+    let Ok(read) = fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut total = 0;
+    for entry in read.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name.starts_with('.') {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(meta) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        let child = if rel.is_empty() {
+            name.to_string()
+        } else {
+            format!("{rel}/{name}")
+        };
+        if meta.is_file() {
+            total += 1;
+        } else if meta.is_dir() && child.split('/').count() < SKILL_DEPTH_MAX {
+            total += count_files(&path, &child);
+        }
+    }
+    total
+}
+
 /// The names of a skill's files as a case-insensitive file system holds them: no two paths differ only in case (a folder
 /// spelled two ways is one folder), a file is not also the folder of another file, and a path is at most
 /// [`SKILL_PATH_MAX`] characters and [`SKILL_DEPTH_MAX`] levels deep. A refusal names the path.

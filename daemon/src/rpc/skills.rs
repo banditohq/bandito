@@ -47,6 +47,17 @@ pub(super) async fn dispatch_in(app: &App, home: Option<PathBuf>, method: &str, 
                 .map_err(share_error)?;
             ok(json!({ "payload": payload, "skipped": skipped }))
         }
+        "skills.own" => {
+            let p: OwnParams = params(p)?;
+            let scope = if p.agent_id.is_some() {
+                Scope::Project
+            } else {
+                Scope::User
+            };
+            let base = base_dir(app, home, scope, p.agent_id)?;
+            let list = run(move || shared::own_skills(&base)).await?.map_err(share_error)?;
+            ok(json!({ "skills": list }))
+        }
         "skills.install_shared" => {
             let p: InstallShared = params(p)?;
             shared::check_share_id(&p.share_id).map_err(share_error)?;
@@ -205,6 +216,13 @@ struct ExportSkill {
     name: String,
     #[serde(default)]
     license: Option<String>,
+}
+
+/// What `skills.own` takes: the agent whose folder is listed; none lists the daemon user's.
+#[derive(Deserialize)]
+struct OwnParams {
+    #[serde(default)]
+    agent_id: Option<String>,
 }
 
 /// What `skills.install_shared` takes. The folder is the agent's when `agent_id` is given, else the daemon user's.
@@ -632,6 +650,130 @@ mod share_tests {
         assert_eq!(err.message, "invalid: files");
         assert_eq!(err.data.as_ref().unwrap()["path"], "scripts/run.sh");
         assert!(!home.path().join(".claude").exists());
+    }
+
+    /// The shared payload with another name, so it can sit beside the owner's `release-notes`.
+    fn shared_payload(name: &str) -> Value {
+        let mut p = payload();
+        p["name"] = json!(name);
+        p
+    }
+
+    #[tokio::test]
+    async fn skills_own_lists_the_own_and_the_shared_skills_and_leaves_out_the_catalog() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        own_folder(home.path(), "release-notes");
+        call(
+            &r,
+            home.path(),
+            "skills.install_shared",
+            json!({"share_id": SHARE, "version": 3, "payload": shared_payload("shared-notes")}),
+        )
+        .await
+        .unwrap();
+        call(
+            &r,
+            home.path(),
+            "skills.install",
+            json!({"skill_id": "commit", "scope": "user"}),
+        )
+        .await
+        .unwrap();
+        let reply = call(&r, home.path(), "skills.own", json!({})).await.unwrap();
+        let list = reply["skills"].as_array().unwrap();
+        let names: Vec<&str> = list.iter().map(|s| s["name"].as_str().unwrap()).collect();
+        assert_eq!(
+            names,
+            vec!["release-notes", "shared-notes"],
+            "the catalog install is left out"
+        );
+
+        let own = &list[0];
+        assert_eq!(own["source"], "own");
+        assert_eq!(own["version"], Value::Null);
+        assert_eq!(own["has_scripts"], true);
+        assert_eq!(own["files"], 3);
+        assert_eq!(own["description"], "Writes release notes");
+
+        let shared = &list[1];
+        assert_eq!(shared["source"], format!("shared:{SHARE}"));
+        assert_eq!(shared["version"], 3);
+        assert_eq!(shared["has_scripts"], true);
+        assert_eq!(shared["files"], 3, "the marker is not counted");
+        assert_eq!(shared["description"], "Writes release notes");
+    }
+
+    #[tokio::test]
+    async fn skills_own_of_a_missing_or_empty_folder_is_an_empty_list() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let missing = call(&r, home.path(), "skills.own", json!({})).await.unwrap();
+        assert_eq!(missing, json!({"skills": []}));
+        fs::create_dir_all(home.path().join(".claude/skills")).unwrap();
+        let empty = call(&r, home.path(), "skills.own", json!({})).await.unwrap();
+        assert_eq!(empty, json!({"skills": []}));
+    }
+
+    #[tokio::test]
+    async fn skills_own_lists_the_agents_folder_when_an_agent_is_named() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let cwd = TempDir::new().unwrap();
+        let id = agent(&r.store, cwd.path());
+        own_folder(cwd.path(), "release-notes");
+        let reply = call(&r, home.path(), "skills.own", json!({"agent_id": id}))
+            .await
+            .unwrap();
+        let names: Vec<&str> = reply["skills"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, vec!["release-notes"]);
+        let none = call(&r, home.path(), "skills.own", json!({"agent_id": "nobody"}))
+            .await
+            .unwrap_err();
+        assert_eq!(none.code, INVALID_PARAMS);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn skills_own_skips_folders_without_skill_md_dot_names_and_links() {
+        use std::os::unix::fs::symlink;
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        own_folder(home.path(), "release-notes");
+        let skills_dir = home.path().join(".claude/skills");
+        fs::create_dir_all(skills_dir.join("no-skill-md")).unwrap();
+        fs::write(skills_dir.join("no-skill-md/notes.md"), "x").unwrap();
+        fs::create_dir_all(skills_dir.join(".release-notes.tmp-leftover")).unwrap();
+        fs::write(skills_dir.join(".release-notes.tmp-leftover/SKILL.md"), "x").unwrap();
+        fs::create_dir_all(outside.path().join("linked-skill")).unwrap();
+        fs::write(outside.path().join("linked-skill/SKILL.md"), "outside").unwrap();
+        symlink(outside.path().join("linked-skill"), skills_dir.join("linked")).unwrap();
+        fs::create_dir_all(skills_dir.join("docs-only")).unwrap();
+        fs::write(skills_dir.join("docs-only/SKILL.md"), "# no front matter\n").unwrap();
+
+        let reply = call(&r, home.path(), "skills.own", json!({})).await.unwrap();
+        let list = reply["skills"].as_array().unwrap();
+        let names: Vec<&str> = list.iter().map(|s| s["name"].as_str().unwrap()).collect();
+        assert_eq!(names, vec!["docs-only", "release-notes"]);
+        let docs = &list[0];
+        assert_eq!(docs["description"], "", "no front matter, no description");
+        assert_eq!(docs["has_scripts"], false);
+        assert_eq!(docs["files"], 1);
+    }
+
+    #[tokio::test]
+    async fn agents_cannot_list_their_own_skills() {
+        let r = rig();
+        let err = dispatch(&r.app, &Peer::Agent("agent-a".into()), "skills.own", json!({}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
     }
 
     #[test]
