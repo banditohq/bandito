@@ -272,7 +272,7 @@ struct ServerOverview: View {
         let memTotal = monitor.stats?.memTotal ?? 0
         let memFraction = memTotal > 0 ? min(1, Double(row.rssBytes) / Double(memTotal)) : 0
         return HStack(alignment: .center, spacing: 10) {
-            ownerAvatar(row, name: name)
+            ownerAvatar(row, name: name, server: server)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                     .font(BanditoFont.text(size: 13, weight: 600))
@@ -325,10 +325,10 @@ struct ServerOverview: View {
     }
 
     @ViewBuilder
-    private func ownerAvatar(_ row: ProcessRow, name: String) -> some View {
+    private func ownerAvatar(_ row: ProcessRow, name: String, server: ServerModel) -> some View {
         switch row.owner.kind {
         case .agent:
-            AgentAvatar(name: name, size: 24)
+            OwnerAgentAvatar(owner: row.owner, server: server, fallbackName: name, size: 24)
         case .terminal, .daemon:
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.Bandito.text.opacity(0.07))
@@ -640,5 +640,22 @@ struct PortBadge: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(Color.Bandito.ok.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+}
+
+/// The avatar of the agent that owns a process: its own look (color, face, picture) when the server knows the agent,
+/// else one drawn from the name, so the Server screens show the same faces as the sidebar.
+struct OwnerAgentAvatar: View {
+    let owner: ProcessOwnerRef
+    let server: ServerModel?
+    let fallbackName: String
+    let size: CGFloat
+
+    var body: some View {
+        if let server, let agent = server.agents.first(where: { $0.id == owner.id }) {
+            AgentAvatarView(agent: agent, server: server, size: size)
+        } else {
+            AgentAvatar(name: fallbackName, size: size)
+        }
     }
 }
