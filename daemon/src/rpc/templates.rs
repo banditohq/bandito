@@ -88,8 +88,17 @@ pub(super) async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
             if req.language.as_deref().is_some_and(|l| l.trim().is_empty()) {
                 return Err(share_error(ShareError::invalid("language")));
             }
+            if let Some(list) = &req.capabilities {
+                // Each name must be one the payload has, and none may repeat: the list only narrows the payload's.
+                let mut seen = HashSet::new();
+                for c in list {
+                    if !bot.capabilities.contains(c) || !seen.insert(c.as_str()) {
+                        return Err(share_error(ShareError::invalid("capabilities")));
+                    }
+                }
+            }
             let _creating = CREATE_LOCK.lock().await;
-            create_shared(app, &req.share_id, bot).await
+            create_shared(app, &req.share_id, bot, req.capabilities).await
         }
         "agents.bundles" => {
             // As with the templates: the file is checked by the tests.
@@ -407,11 +416,12 @@ fn shared_services(store: &Store, agent: &Agent) -> Result<Vec<String>, RpcError
 }
 
 /// `agents.create_from_shared`: the bot of a share, made as `create_from` makes a template's bot, without a template:
-/// no skills, the payload's schedules (enabled, the payload's `text` as cron), and `template_id` = `shared:<share_id>`.
+/// no skills, the payload's schedules (off, with the payload's `cron`), and `template_id` = `shared:<share_id>`. Its
+/// integrations are the connected ones the payload names, and its capabilities the payload's or the `capabilities` narrowing.
 /// Every check runs before the agent exists. A service the catalog does not have is dropped and listed in
 /// `unknown_services`; a catalog service no enabled integration connects is listed in `missing_services`. The name is
 /// taken as `free_name` takes a bundle's: `<name> 2` when another agent has it.
-async fn create_shared(app: &App, share_id: &str, bot: shared::BotPayload) -> RpcResult {
+async fn create_shared(app: &App, share_id: &str, bot: shared::BotPayload, narrowed: Option<Vec<String>>) -> RpcResult {
     validate_name(bot.name.trim()).map_err(|_| share_error(ShareError::invalid("name")))?;
     let starter = bot.starter.clone();
     let tz = schedule_text::local_zone();
@@ -421,8 +431,8 @@ async fn create_shared(app: &App, share_id: &str, bot: shared::BotPayload) -> Rp
     }
     let name = free_name(app, bot.name.trim())?;
     validate_name(&name).map_err(|_| share_error(ShareError::invalid("name")))?;
-    let capabilities = bot
-        .capabilities
+    let wanted = narrowed.unwrap_or_else(|| bot.capabilities.clone());
+    let capabilities = wanted
         .iter()
         .map(|c| Capability::parse(c).ok_or_else(|| share_error(ShareError::invalid("capabilities"))))
         .collect::<Result<Vec<_>, _>>()?;
@@ -445,9 +455,24 @@ async fn create_shared(app: &App, share_id: &str, bot: shared::BotPayload) -> Rp
     new_agent.role = bot.role.clone();
     new_agent.system_prompt = Some(bot.system_prompt.clone());
     new_agent.capabilities = Some(capabilities);
+    // The agent may use the enabled integrations whose catalog id the payload names, and no other. Without a match
+    // it may use none.
+    let store = &app.sup.hub().store;
+    let mut granted: Vec<String> = Vec::new();
+    for integration in store.integration_list()? {
+        if !integration.enabled {
+            continue;
+        }
+        let Some(service) = shared::catalog_service(&integration.name, integration.url.as_deref()) else {
+            continue;
+        };
+        if known.contains(&service) && !granted.contains(&integration.id) {
+            granted.push(integration.id);
+        }
+    }
+    new_agent.integrations = Some(granted);
     let id = create_agent(app, new_agent, None)?;
 
-    let store = &app.sup.hub().store;
     let mut errors: Vec<Value> = Vec::new();
     // The mark comes first, so the reply's agent carries it. A failure is listed; the agent stays.
     if let Err(e) = store.agent_set_template(&id, &format!("shared:{share_id}")) {
@@ -476,7 +501,8 @@ async fn create_shared(app: &App, share_id: &str, bot: shared::BotPayload) -> Rp
             cron: s.cron,
             tz: tz.clone(),
             prompt: s.prompt,
-            enabled: true,
+            // Off until the owner turns them on: a shared bot's schedules never run unasked.
+            enabled: false,
             title: None,
         };
         match schedules::create(app, new) {
@@ -518,7 +544,7 @@ struct ExportAgent {
 }
 
 /// What `agents.create_from_shared` takes. `language` is checked when given; the payload's text is in its own language,
-/// so nothing else reads it.
+/// so nothing else reads it. `capabilities`, when given, narrows the payload's list (never widens it).
 #[derive(Deserialize)]
 struct CreateFromShared {
     share_id: String,
@@ -526,6 +552,8 @@ struct CreateFromShared {
     payload: Value,
     #[serde(default)]
     language: Option<String>,
+    #[serde(default)]
+    capabilities: Option<Vec<String>>,
 }
 
 /// Every index must name one of the template's schedules, and none may be listed twice.

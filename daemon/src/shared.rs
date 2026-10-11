@@ -8,8 +8,9 @@ use crate::skills::{self, MARKER, Slot};
 use crate::store::{ALL_CAPABILITIES, Agent, Capability};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// The integrations catalog: the ids of the services a shared bot may name, and their urls.
@@ -33,6 +34,9 @@ pub const SKILL_DESCRIPTION_MAX: usize = 1_024;
 pub const SKILL_FILES_MAX: usize = 50;
 /// The bytes of all files of a skill together.
 pub const SKILL_BYTES_MAX: usize = 150 * 1024;
+/// The characters of a skill file's path, and its levels (folders and the file name).
+pub const SKILL_PATH_MAX: usize = 200;
+pub const SKILL_DEPTH_MAX: usize = 8;
 /// The licenses a skill may name (the platform's list).
 pub const LICENSES: [&str; 9] = [
     "MIT",
@@ -195,14 +199,7 @@ pub fn check_skill(p: &SkillPayload) -> Result<(), ShareError> {
     if total > SKILL_BYTES_MAX {
         return Err(ShareError::invalid("files"));
     }
-    // A file cannot also be the folder of another file.
-    for a in p.files.keys() {
-        for b in p.files.keys() {
-            if b.len() > a.len() && b.starts_with(a.as_str()) && b.as_bytes()[a.len()] == b'/' {
-                return Err(ShareError::invalid("files"));
-            }
-        }
-    }
+    check_names(&p.files)?;
     if !p.files.contains_key("SKILL.md") {
         return Err(ShareError::invalid("SKILL.md"));
     }
@@ -211,6 +208,40 @@ pub fn check_skill(p: &SkillPayload) -> Result<(), ShareError> {
         let under_scripts = e.starts_with("scripts/");
         if !under_scripts || !valid_path(e) || !p.files.contains_key(e) || !seen.insert(e.as_str()) {
             return Err(ShareError::invalid("executable"));
+        }
+    }
+    Ok(())
+}
+
+/// The names of a skill's files as a case-insensitive file system holds them: no two paths differ only in case (a folder
+/// spelled two ways is one folder), a file is not also the folder of another file, and a path is at most
+/// [`SKILL_PATH_MAX`] characters and [`SKILL_DEPTH_MAX`] levels deep. A refusal names the path.
+fn check_names(files: &BTreeMap<String, String>) -> Result<(), ShareError> {
+    let refuse = |path: &str| ShareError::InvalidAt {
+        field: "files".into(),
+        path: path.into(),
+    };
+    for a in files.keys() {
+        if a.chars().count() > SKILL_PATH_MAX || a.split('/').count() > SKILL_DEPTH_MAX {
+            return Err(refuse(a));
+        }
+        for b in files.keys() {
+            if b.len() > a.len() && b.starts_with(a.as_str()) && b.as_bytes()[a.len()] == b'/' {
+                return Err(refuse(b));
+            }
+        }
+    }
+    let mut spellings: HashMap<String, String> = HashMap::new();
+    for path in files.keys() {
+        let parts: Vec<&str> = path.split('/').collect();
+        for k in 1..=parts.len() {
+            let spelling = parts[..k].join("/");
+            let seen = spellings
+                .entry(spelling.to_ascii_lowercase())
+                .or_insert_with(|| spelling.clone());
+            if *seen != spelling {
+                return Err(refuse(path));
+            }
         }
     }
     Ok(())
@@ -368,10 +399,7 @@ pub fn skill_from_folder(
     let mut files = BTreeMap::new();
     let mut executable = Vec::new();
     for (rel, path, exec) in found {
-        let bytes = fs::read(&path).map_err(|e| io_refused(&path, &e))?;
-        if bytes.len() > SKILL_BYTES_MAX {
-            return Err(ShareError::refused("too_large", format!("{rel} is over 150 KiB")));
-        }
+        let bytes = read_capped(&path, &rel)?;
         let text = String::from_utf8(bytes)
             .map_err(|_| ShareError::refused("not_utf8", format!("{rel} is not UTF-8 text")))?;
         if exec && rel.starts_with("scripts/") {
@@ -405,6 +433,9 @@ pub fn install_shared(
     version: u32,
     payload: &SkillPayload,
 ) -> Result<(PathBuf, bool), ShareError> {
+    let _serial = SHARED_INSTALL_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     if name != payload.name {
         return Err(ShareError::invalid("name"));
     }
@@ -470,7 +501,8 @@ fn serde_field(e: serde_json::Error) -> ShareError {
     for prefix in ["unknown field `", "missing field `"] {
         let named = text.strip_prefix(prefix).and_then(|rest| rest.split_once('`'));
         if let Some((field, _)) = named {
-            return ShareError::invalid(field);
+            // The name comes from the payload, so it is cut to keep the error short.
+            return ShareError::invalid(field.chars().take(64).collect::<String>());
         }
     }
     ShareError::invalid("payload")
@@ -572,6 +604,12 @@ fn walk(
             skipped.push(child);
             continue;
         }
+        if child.split('/').count() > SKILL_DEPTH_MAX {
+            return Err(ShareError::InvalidAt {
+                field: "files".into(),
+                path: child,
+            });
+        }
         if meta.is_dir() {
             walk(&path, &child, found, skipped)?;
             continue;
@@ -587,6 +625,16 @@ fn walk(
                 "bad_path",
                 format!("{child} is a name a shared skill cannot have"),
             ));
+        }
+        // The count and the size are checked before the file is read: a file over the limit is never read.
+        if found.len() >= SKILL_FILES_MAX {
+            return Err(ShareError::InvalidAt {
+                field: "files".into(),
+                path: child,
+            });
+        }
+        if meta.len() > SKILL_BYTES_MAX as u64 {
+            return Err(ShareError::refused("too_large", format!("{child} is over 150 KiB")));
         }
         found.push((child, path, is_executable(&meta)));
     }
@@ -608,6 +656,19 @@ fn io_refused(path: &Path, e: &std::io::Error) -> ShareError {
     ShareError::refused("io", format!("{}: {e}", path.display()))
 }
 
+/// The bytes of a file the walk accepted. At most one byte past the limit is read, so a file that grew after its size
+/// check is refused (`too_large`) without being read whole.
+fn read_capped(path: &Path, rel: &str) -> Result<Vec<u8>, ShareError> {
+    let mut bytes = Vec::new();
+    fs::File::open(path)
+        .and_then(|f| f.take(SKILL_BYTES_MAX as u64 + 1).read_to_end(&mut bytes))
+        .map_err(|e| io_refused(path, &e))?;
+    if bytes.len() > SKILL_BYTES_MAX {
+        return Err(ShareError::refused("too_large", format!("{rel} is over 150 KiB")));
+    }
+    Ok(bytes)
+}
+
 /// The `description:` line of a SKILL.md front matter. A quoted value loses its quotes. A block scalar is read: `>`
 /// folds the block's lines into paragraphs (lines joined by a space, a blank line starts a new paragraph), and `|` keeps
 /// its lines joined by `\n`. The block is the indented lines after the key, with the indentation of its first line
@@ -626,13 +687,15 @@ fn description_of(skill_md: &str) -> Option<String> {
             .copied()
             .take_while(|l| l.is_empty() || l.starts_with([' ', '\t']))
             .collect();
+        // Only spaces and tabs are indentation: they are one byte each, so a cut never lands inside a character.
+        let indentation = |l: &str| l.len() - l.trim_start_matches([' ', '\t']).len();
         let indent = body
             .iter()
             .find(|l| !l.trim().is_empty())
-            .map_or(0, |&l| l.len() - l.trim_start().len());
+            .map_or(0, |&l| indentation(l));
         let stripped: Vec<&str> = body
             .iter()
-            .map(|&l| &l[(l.len() - l.trim_start().len()).min(indent)..])
+            .map(|&l| l.get(indentation(l).min(indent)..).unwrap_or(l))
             .collect();
         if value.starts_with('>') {
             let mut paragraphs: Vec<String> = Vec::new();
@@ -981,7 +1044,8 @@ mod tests {
         let mut v = skill();
         v["files"]["docs"] = json!("a file named docs");
         v["files"]["docs/notes.md"] = json!("inside");
-        assert_eq!(skill_invalid(v), "files");
+        // Refused at the path that collides, as the review asked: `invalid: files` names it.
+        assert_eq!(skill_invalid_at(v), ("files".to_string(), "docs/notes.md".to_string()));
     }
 
     #[test]
