@@ -176,6 +176,7 @@ public enum L10n {
         public static var colorSage: String { L10n.tr("agentSheet.colorSage") }
         public static var colorSky: String { L10n.tr("agentSheet.colorSky") }
         public static var create: String { L10n.tr("agentSheet.create") }
+        public static var createBlockedAgentsRoot: String { L10n.tr("agentSheet.createBlockedAgentsRoot") }
         public static var createBlockedFolder: String { L10n.tr("agentSheet.createBlockedFolder") }
         public static var createBlockedWorkplace: String { L10n.tr("agentSheet.createBlockedWorkplace") }
         public static var effortCaption: String { L10n.tr("agentSheet.effortCaption") }
@@ -194,8 +195,16 @@ public enum L10n {
         public static var fallbackNone: String { L10n.tr("agentSheet.fallbackNone") }
         public static var folder: String { L10n.tr("agentSheet.folder") }
         public static var folderAccessibility: String { L10n.tr("agentSheet.folderAccessibility") }
+        public static var folderChange: String { L10n.tr("agentSheet.folderChange") }
+        public static var folderChoose: String { L10n.tr("agentSheet.folderChoose") }
         public static var folderClear: String { L10n.tr("agentSheet.folderClear") }
+        public static func folderCreateFailed(message: String) -> String { L10n.tr("agentSheet.folderCreateFailed", message) }
+        public static var folderExisting: String { L10n.tr("agentSheet.folderExisting") }
         public static var folderHint: String { L10n.tr("agentSheet.folderHint") }
+        public static var folderNew: String { L10n.tr("agentSheet.folderNew") }
+        public static var folderNewHint: String { L10n.tr("agentSheet.folderNewHint") }
+        public static var folderNoFreeName: String { L10n.tr("agentSheet.folderNoFreeName") }
+        public static var folderRootNone: String { L10n.tr("agentSheet.folderRootNone") }
         public static var fromTemplate: String { L10n.tr("agentSheet.fromTemplate") }
         public static var installGuide: String { L10n.tr("agentSheet.installGuide") }
         public static var instructions: String { L10n.tr("agentSheet.instructions") }
