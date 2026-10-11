@@ -2,10 +2,14 @@
 //! `SHA256SUMS` carries a valid signature from the release key. Nothing installs by itself: the owner
 //! asks (`bandito update`, or the app's `daemon.update_apply`). See docs/ARCHITECTURE.md#self-update.
 
+use crate::server_settings::AutoUpdate;
 use crate::service::{self, Mode, Paths};
+use crate::store::Store;
+use crate::turn_gate::TurnGate;
 use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use chrono::{Local, Timelike};
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -16,7 +20,7 @@ use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 /// Public key of the release signing key: Ed25519, raw 32 bytes, base64. The same key as
@@ -906,20 +910,274 @@ pub async fn rpc_apply(version: &str) -> Result<bool> {
     Ok(true)
 }
 
-/// Calls `on_available` when a newer release exists: once, 10 minutes after start, then every 24 hours.
-/// Nothing is installed here.
-pub fn spawn_background_check(current: &'static str, on_available: impl Fn(UpdateInfo) + Send + 'static) {
+/// The hours (server local time) when `auto_update = install` may install: 02:00 up to 05:00, not included.
+pub const INSTALL_FROM_HOUR: u32 = 2;
+pub const INSTALL_UNTIL_HOUR: u32 = 5;
+/// How often the install check runs while the install window is open.
+pub const INSTALL_CHECK_EVERY: Duration = Duration::from_secs(10 * 60);
+
+/// True when `hour` (0 to 23, server local time) is inside the install window.
+pub fn install_window(hour: u32) -> bool {
+    (INSTALL_FROM_HOUR..INSTALL_UNTIL_HOUR).contains(&hour)
+}
+
+/// True when an available release may be installed now: the setting is `install`, the hour is in the window, and no
+/// agent runs a turn (`running` is the number of turns running). Nothing else is checked here.
+pub fn may_install(mode: AutoUpdate, available: bool, hour: u32, running: usize) -> bool {
+    mode == AutoUpdate::Install && available && install_window(hour) && running == 0
+}
+
+/// Calls `on_available` when a newer release exists: once, 10 minutes after start, then every 24 hours. Nothing is
+/// installed here. With `auto_update = off` no check runs by itself (see docs/ARCHITECTURE.md#server-settings).
+pub fn spawn_background_check(
+    current: &'static str,
+    store: Arc<Store>,
+    on_available: impl Fn(UpdateInfo) + Send + 'static,
+) {
     tokio::spawn(async move {
         tokio::time::sleep(FIRST_CHECK_AFTER).await;
         loop {
-            match check_async(current).await {
-                Ok(info) if info.available => on_available(info),
-                Ok(_) => {}
-                Err(e) => tracing::debug!("update check: {e:#}"),
+            if store.server_settings_or_default().auto_update != AutoUpdate::Off {
+                match check_async(current).await {
+                    Ok(info) if info.available => on_available(info),
+                    Ok(_) => {}
+                    Err(e) => tracing::debug!("update check: {e:#}"),
+                }
             }
             tokio::time::sleep(CHECK_EVERY).await;
         }
     });
+}
+
+/// How long the gate stays closed after an install that asked for a restart: the restart comes one second after the
+/// reply (see `rpc_apply`), so no turn can start in between. If the restart does not come, the gate opens after this.
+pub const INSTALL_RESTART_GRACE: Duration = Duration::from_secs(3);
+
+/// After a failed install, no new attempt (and no new download of the release) for this long.
+pub const INSTALL_RETRY_AFTER: Duration = Duration::from_secs(6 * 60 * 60);
+
+/// What the night install remembers between its attempts: the release installed last, and until when a failed
+/// attempt holds the next one back.
+#[derive(Debug, Default)]
+pub struct InstallRetry {
+    installed: Option<String>,
+    retry_after_ms: i64,
+}
+
+impl InstallRetry {
+    /// True when no backoff is in force at `now_ms`: a check may run.
+    pub fn may_check(&self, now_ms: i64) -> bool {
+        now_ms >= self.retry_after_ms
+    }
+
+    /// True when `latest` should be installed now: no backoff, and it is not the release installed last.
+    pub fn wants(&self, now_ms: i64, latest: &str) -> bool {
+        self.may_check(now_ms) && self.installed.as_deref() != Some(latest)
+    }
+
+    /// Records a successful install of `latest` (and ends any backoff).
+    pub fn installed(&mut self, latest: &str) {
+        self.installed = Some(latest.to_string());
+        self.retry_after_ms = 0;
+    }
+
+    /// Records a failed attempt at `now_ms`: the next one waits [`INSTALL_RETRY_AFTER`].
+    pub fn failed(&mut self, now_ms: i64) {
+        let wait = i64::try_from(INSTALL_RETRY_AFTER.as_millis()).unwrap_or(i64::MAX);
+        self.retry_after_ms = now_ms.saturating_add(wait);
+    }
+}
+
+/// With `auto_update = install`: installs a newer release at night, through [`rpc_apply`] (the same path as the
+/// owner's request, with its restart), while the install window is open and no agent runs a turn. Each release is
+/// installed once. A failed attempt starts a backoff of [`INSTALL_RETRY_AFTER`]: until it ends, the daemon does not even
+/// look for the release again.
+///
+/// The check of "no turn runs" and the closing of the gate happen together ([`TurnGate::close_when`]): while the
+/// install runs, a new turn waits in its queue, like a turn past `max_running_agents`. If a turn runs, the gate is not
+/// closed and the install waits for the next check. Every attempt runs in its own task ([`run_isolated`]): a panic
+/// ends that attempt, counts as a failure, and the loop goes on.
+pub fn spawn_auto_install(store: Arc<Store>, turns: Arc<TurnGate>, current: &'static str) {
+    let state = Arc::new(Mutex::new(InstallRetry::default()));
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(INSTALL_CHECK_EVERY);
+        loop {
+            tick.tick().await;
+            let attempt = install_attempt(Arc::clone(&store), Arc::clone(&turns), current, Arc::clone(&state));
+            run_isolated(Arc::clone(&state), attempt).await;
+        }
+    });
+}
+
+/// Runs one attempt in its own task. A panic, or an attempt that was cancelled, is a failure: the backoff applies.
+async fn run_isolated(state: Arc<Mutex<InstallRetry>>, attempt: impl Future<Output = ()> + Send + 'static) {
+    if let Err(e) = tokio::spawn(attempt).await {
+        tracing::error!("the night install stopped: {e}");
+        state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .failed(crate::store::now_ms());
+    }
+}
+
+/// One night-install attempt: see [`spawn_auto_install`].
+async fn install_attempt(
+    store: Arc<Store>,
+    turns: Arc<TurnGate>,
+    current: &'static str,
+    state: Arc<Mutex<InstallRetry>>,
+) {
+    if store.server_settings_or_default().auto_update != AutoUpdate::Install || !install_window(Local::now().hour()) {
+        return;
+    }
+    if !state
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .may_check(crate::store::now_ms())
+    {
+        return;
+    }
+    let info = match check_async(current).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::debug!("install check: {e:#}");
+            return;
+        }
+    };
+    let now = crate::store::now_ms();
+    if !state.lock().unwrap_or_else(|p| p.into_inner()).wants(now, &info.latest) {
+        return;
+    }
+    let hour = Local::now().hour();
+    let Some(hold) = turns.close_when(|running| may_install(AutoUpdate::Install, info.available, hour, running)) else {
+        tracing::debug!("install waits: a turn is running, or no newer release");
+        return;
+    };
+    tracing::info!(version = %info.latest, "installing the newer release (auto_update = install)");
+    match rpc_apply(&info.latest).await {
+        Ok(restarting) => {
+            state.lock().unwrap_or_else(|p| p.into_inner()).installed(&info.latest);
+            tracing::info!(version = %info.latest, restarting, "newer release installed");
+            if restarting {
+                tokio::time::sleep(INSTALL_RESTART_GRACE).await;
+            }
+        }
+        Err(e) => {
+            state
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .failed(crate::store::now_ms());
+            tracing::error!("installing the newer release failed (next try in 6 hours): {e:#}");
+        }
+    }
+    // Success without a restart, a failure, or the grace after a restart: the waiting turns start now.
+    drop(hold);
+}
+
+#[cfg(test)]
+mod install_tests {
+    use super::*;
+
+    #[test]
+    fn the_install_window_is_two_to_five_in_the_morning() {
+        assert!(!install_window(1));
+        assert!(install_window(2));
+        assert!(install_window(4));
+        assert!(!install_window(5));
+        assert!(!install_window(12));
+    }
+
+    #[test]
+    fn install_waits_for_the_window_an_available_release_and_no_running_turn() {
+        assert!(may_install(AutoUpdate::Install, true, 3, 0));
+        assert!(
+            !may_install(AutoUpdate::Install, true, 3, 1),
+            "a running turn blocks the install"
+        );
+        assert!(!may_install(AutoUpdate::Install, true, 5, 0), "outside the window");
+        assert!(!may_install(AutoUpdate::Install, false, 3, 0), "no newer release");
+    }
+
+    #[test]
+    fn a_failed_install_waits_six_hours_before_the_next_attempt_and_the_release_is_not_fetched_again() {
+        const HOUR: i64 = 3_600_000;
+        let t0 = 1_800_000_000_000;
+        let mut retry = InstallRetry::default();
+        assert!(retry.wants(t0, "1.2.3"), "the first night may install");
+
+        retry.failed(t0);
+        assert!(
+            !retry.may_check(t0 + 5 * HOUR),
+            "no check and no download during the backoff"
+        );
+        assert!(!retry.wants(t0 + 5 * HOUR, "1.2.3"));
+        assert!(
+            retry.may_check(t0 + 6 * HOUR),
+            "after six hours the next attempt may run"
+        );
+        assert!(retry.wants(t0 + 6 * HOUR, "1.2.3"));
+
+        retry.installed("1.2.3");
+        assert!(
+            !retry.wants(t0 + 7 * HOUR, "1.2.3"),
+            "an installed release is not installed again"
+        );
+        assert!(retry.wants(t0 + 7 * HOUR, "1.2.4"), "a newer release is");
+    }
+
+    #[tokio::test]
+    async fn a_panicking_attempt_is_a_failure_and_the_loop_goes_on() {
+        let state = Arc::new(Mutex::new(InstallRetry::default()));
+        run_isolated(Arc::clone(&state), async { panic!("install attempt panicked (test)") }).await;
+        let now = crate::store::now_ms();
+        {
+            let retry = state.lock().unwrap();
+            assert!(!retry.may_check(now), "the panic put the attempts into backoff");
+        }
+        // The next attempt that runs in its own task completes normally and is not affected by the earlier panic.
+        run_isolated(Arc::clone(&state), async {}).await;
+    }
+
+    #[test]
+    fn only_the_install_setting_installs_by_itself() {
+        assert!(!may_install(AutoUpdate::Notify, true, 3, 0));
+        assert!(!may_install(AutoUpdate::Off, true, 3, 0));
+    }
+
+    #[test]
+    fn the_install_holds_the_gate_only_when_it_is_due_and_no_turn_runs() {
+        let gate = TurnGate::new();
+        let due = |running: usize| may_install(AutoUpdate::Install, true, 3, running);
+
+        // A turn runs: the gate is not closed, a new turn still starts, and the install waits.
+        let slot = gate.try_take(usize::MAX).expect("a turn starts");
+        assert!(gate.close_when(due).is_none());
+        drop(slot);
+        assert!(gate.try_take(usize::MAX).is_some(), "the gate was left open");
+
+        // Idle and due: the gate closes, so a turn that asks now waits in the queue.
+        let hold = gate.close_when(due).expect("idle and due: the hold is taken");
+        assert!(gate.try_take(usize::MAX).is_none(), "a turn waits during the install");
+        assert!(!gate.has_room(usize::MAX), "the waiting message is shown as queued");
+        // The install ends (success or failure): the waiting turn starts.
+        drop(hold);
+        assert!(gate.try_take(usize::MAX).is_some());
+
+        // Idle, but not due: no hold at all.
+        assert!(
+            gate.close_when(|r| may_install(AutoUpdate::Notify, true, 3, r))
+                .is_none()
+        );
+        assert!(
+            gate.close_when(|r| may_install(AutoUpdate::Install, true, 5, r))
+                .is_none()
+        );
+        assert!(
+            gate.close_when(|r| may_install(AutoUpdate::Install, false, 3, r))
+                .is_none()
+        );
+        assert!(gate.try_take(usize::MAX).is_some());
+    }
 }
 
 #[cfg(test)]

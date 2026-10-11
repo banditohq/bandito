@@ -2,6 +2,7 @@
 
 use crate::event::{Event, EventBody};
 use crate::store::Store;
+use crate::turn_gate::TurnGate;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
@@ -9,12 +10,23 @@ use tokio::sync::broadcast;
 pub struct Hub {
     pub store: Arc<Store>,
     tx: broadcast::Sender<Event>,
+    /// How many agents run a turn at once (see docs/ARCHITECTURE.md#server-settings). Shared by every agent of the daemon.
+    turns: Arc<TurnGate>,
 }
 
 impl Hub {
     pub fn new(store: Arc<Store>) -> Self {
         let (tx, _) = broadcast::channel(1024);
-        Self { store, tx }
+        Self {
+            store,
+            tx,
+            turns: TurnGate::new(),
+        }
+    }
+
+    /// The turn slots of the daemon's agents (see [`TurnGate`]).
+    pub fn turns(&self) -> &Arc<TurnGate> {
+        &self.turns
     }
 
     /// Store (unless it's a delta) and broadcast. Usage limits also update the

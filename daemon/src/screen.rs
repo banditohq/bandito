@@ -5,8 +5,10 @@
 
 #[cfg(target_os = "linux")]
 use crate::children::TrackedChild;
+#[cfg(not(target_os = "linux"))]
+use crate::store::Store;
 #[cfg(target_os = "linux")]
-use crate::store::now_ms;
+use crate::store::{Store, now_ms};
 use serde::Serialize;
 use serde_json::Value;
 #[cfg(target_os = "linux")]
@@ -42,9 +44,7 @@ pub const DEFAULT_WIDTH: u32 = 1600;
 pub const DEFAULT_HEIGHT: u32 = 1000;
 /// Screenshots wider than this are scaled down. Coordinates stay in screen pixels.
 pub const SCREENSHOT_MAX_WIDTH: u32 = 1280;
-/// A screen with no VNC client and no agent call for this long is stopped.
-pub const IDLE_STOP_MS: i64 = 30 * 60 * 1000;
-/// How often the idle check runs.
+/// How often the idle check runs. The idle time it stops at is the `screen_idle_minutes` setting, read each time.
 pub const IDLE_CHECK_INTERVAL: Duration = Duration::from_secs(60);
 /// RFB (VNC) uses only the first 8 characters of a password, so the whole password is 8.
 pub const PASSWORD_LEN: usize = 8;
@@ -385,7 +385,7 @@ impl ScreenManager {
     }
 
     /// Start the background task that stops idle screens. Call once, from `main`.
-    pub fn spawn_idle_reaper(self: &Arc<Self>) {
+    pub fn spawn_idle_reaper(self: &Arc<Self>, store: Arc<Store>) {
         let manager = Arc::clone(self);
         tokio::spawn(async move {
             let mut tick = tokio::time::interval(IDLE_CHECK_INTERVAL);
@@ -393,19 +393,21 @@ impl ScreenManager {
             tick.tick().await;
             loop {
                 tick.tick().await;
-                manager.stop_idle().await;
+                // Read at every check, so a changed `screen_idle_minutes` applies to running screens too.
+                let stop_after_ms = store.server_settings_or_default().screen_idle_ms();
+                manager.stop_idle(stop_after_ms).await;
             }
         });
     }
 
-    /// Stop the screens with no VNC client and no agent call for `IDLE_STOP_MS`.
-    async fn stop_idle(&self) {
+    /// Stop the screens with no VNC client and no agent call for `stop_after_ms`.
+    async fn stop_idle(&self, stop_after_ms: i64) {
         let now = now_ms();
         let idle: Vec<Session> = {
             let mut sessions = self.sessions.lock().await;
             let names: Vec<String> = sessions
                 .iter()
-                .filter(|(_, s)| should_auto_stop(vnc_clients(s.vnc_port), now - s.last_agent_ms))
+                .filter(|(_, s)| should_auto_stop(vnc_clients(s.vnc_port), now - s.last_agent_ms, stop_after_ms))
                 .map(|(name, _)| name.clone())
                 .collect();
             names.iter().filter_map(|name| sessions.remove(name)).collect()
@@ -468,7 +470,7 @@ impl ScreenManager {
 
     pub async fn shutdown_all(&self) {}
 
-    pub fn spawn_idle_reaper(self: &Arc<Self>) {}
+    pub fn spawn_idle_reaper(self: &Arc<Self>, _store: Arc<Store>) {}
 }
 
 // Pure helpers. Linux code uses them, and the tests run them on every system.
@@ -738,10 +740,11 @@ pub fn validate_workspace(workspace: &str) -> Result<(), ScreenError> {
     }
 }
 
-/// True when the idle check should stop a screen: no VNC client and idle for `IDLE_STOP_MS` or more.
+/// True when the idle check should stop a screen: no VNC client and idle for `stop_after_ms` or more
+/// (the `screen_idle_minutes` setting, see docs/ARCHITECTURE.md#server-settings).
 #[cfg(any(target_os = "linux", test))]
-pub fn should_auto_stop(clients: usize, idle_ms: i64) -> bool {
-    clients == 0 && idle_ms >= IDLE_STOP_MS
+pub fn should_auto_stop(clients: usize, idle_ms: i64, stop_after_ms: i64) -> bool {
+    clients == 0 && idle_ms >= stop_after_ms
 }
 
 // Linux: process handling. Every program of a screen runs in its own process group.
@@ -1612,11 +1615,25 @@ mod tests {
     }
 
     #[test]
-    fn idle_screen_without_clients_stops_after_30_minutes() {
-        assert!(should_auto_stop(0, IDLE_STOP_MS));
-        assert!(should_auto_stop(0, IDLE_STOP_MS * 2));
-        assert!(!should_auto_stop(0, IDLE_STOP_MS - 1));
-        assert!(!should_auto_stop(1, IDLE_STOP_MS * 2));
+    fn idle_screen_without_clients_stops_after_the_setting() {
+        let thirty = crate::server_settings::defaults().screen_idle_ms();
+        assert_eq!(thirty, 30 * 60 * 1000);
+        assert!(should_auto_stop(0, thirty, thirty));
+        assert!(should_auto_stop(0, thirty * 2, thirty));
+        assert!(!should_auto_stop(0, thirty - 1, thirty));
+        assert!(!should_auto_stop(1, thirty * 2, thirty));
+    }
+
+    #[test]
+    fn a_changed_idle_setting_decides_the_next_stop() {
+        let five = 5 * 60 * 1000;
+        let four_hours = 240 * 60 * 1000;
+        // Five minutes idle: stopped at a 5-minute setting, kept at 30 minutes or at 4 hours.
+        assert!(should_auto_stop(0, five, five));
+        assert!(!should_auto_stop(0, five, 30 * 60 * 1000));
+        assert!(!should_auto_stop(0, five, four_hours));
+        // A screen used by a VNC client is never stopped for idleness.
+        assert!(!should_auto_stop(2, four_hours * 2, five));
     }
 
     #[test]
