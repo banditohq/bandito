@@ -39,4 +39,9 @@ window_rect = ((100, 100), (660, 420 + TITLE_BAR_PT))
 icon_locations = {
     app_name: (170, 214),
     "Applications": (490, 214),
+    # The volume's own hidden files: far below the window, and invisible (hide), so they never show even when the
+    # person has hidden files on in Finder.
+    ".background.tiff": (100, 1000),
+    ".VolumeIcon.icns": (250, 1000),
 }
+hide = [".background.tiff", ".VolumeIcon.icns"]
