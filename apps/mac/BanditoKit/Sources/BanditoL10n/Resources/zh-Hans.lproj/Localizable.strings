@@ -407,6 +407,7 @@
 "composer.contextHint" = "当前章节的占用程度";
 "composer.contextPopover" = "上下文：%1$@%%——这段对话占用的模型记忆量。达到 80%% 时，智能体会保存记忆并开始新的章节。";
 "composer.formGo" = "前往表单";
+"composer.formReplyHint" = "或在下方输入消息";
 "composer.formWaiting" = "%1$@ 正在等待上方表单的回答";
 "composer.newChapter.afterTurn" = "将在当前回复结束后开始";
 "composer.newChapter.button" = "立即开始新章节";
@@ -666,6 +667,7 @@
 "form.reject" = "拒绝";
 "form.rejected" = "已拒绝";
 "form.rejectedWhy" = "已拒绝：%1$@";
+"form.replied" = "你已用消息回复";
 "form.requiredHelp" = "必填";
 "form.sent" = "已发送…";
 "form.showAnswers" = "显示回答";

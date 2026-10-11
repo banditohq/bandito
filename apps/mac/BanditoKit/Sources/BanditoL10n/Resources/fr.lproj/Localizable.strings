@@ -407,6 +407,7 @@
 "composer.contextHint" = "Niveau de remplissage du chapitre en cours";
 "composer.contextPopover" = "Contexte : %1$@ %% — la part de mémoire du modèle qu'occupe cette conversation. À 80 %%, l'agent sauvegarde sa mémoire et commence un nouveau chapitre.";
 "composer.formGo" = "Aller au formulaire";
+"composer.formReplyHint" = "ou écrivez un message ci-dessous";
 "composer.formWaiting" = "%1$@ attend votre réponse dans le formulaire ci-dessus";
 "composer.newChapter.afterTurn" = "Commence après la réponse en cours";
 "composer.newChapter.button" = "Commencer un nouveau chapitre maintenant";
@@ -666,6 +667,7 @@
 "form.reject" = "Refuser";
 "form.rejected" = "Refusé";
 "form.rejectedWhy" = "Refusé : %1$@";
+"form.replied" = "Vous avez répondu par un message";
 "form.requiredHelp" = "Obligatoire";
 "form.sent" = "Envoyé…";
 "form.showAnswers" = "Afficher les réponses";

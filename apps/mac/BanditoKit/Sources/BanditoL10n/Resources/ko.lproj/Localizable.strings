@@ -407,6 +407,7 @@
 "composer.contextHint" = "현재 챕터가 얼마나 찼는지";
 "composer.contextPopover" = "컨텍스트: %1$@%% — 이 대화가 모델 메모리를 차지하는 비율이에요. 80%%가 되면 에이전트가 메모리를 저장하고 새 챕터를 시작해요.";
 "composer.formGo" = "양식으로 이동";
+"composer.formReplyHint" = "또는 아래에 메시지를 입력하세요";
 "composer.formWaiting" = "%1$@이(가) 위 양식의 답변을 기다리고 있어요";
 "composer.newChapter.afterTurn" = "현재 답변이 끝난 뒤 시작돼요";
 "composer.newChapter.button" = "지금 새 챕터 시작";
@@ -666,6 +667,7 @@
 "form.reject" = "거절";
 "form.rejected" = "거절했어요";
 "form.rejectedWhy" = "거절했어요: %1$@";
+"form.replied" = "메시지로 답했어요";
 "form.requiredHelp" = "필수 항목이에요";
 "form.sent" = "보냈어요…";
 "form.showAnswers" = "답변 보기";

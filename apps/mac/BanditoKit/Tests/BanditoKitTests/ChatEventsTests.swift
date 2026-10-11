@@ -195,6 +195,29 @@ import Testing
         #expect(values == ["to_address": .string("a@b.c"), "subjectLine": .string("Hi")])
     }
 
+    @Test mutating func aReplyClosesTheFormAndShowsAsAMessageOfThePerson() throws {
+        var t = AgentThread()
+        t.apply(ev(.formRequested(formId: "f1", spec: Self.spec)))
+        let reply = try decode(
+            #"{"seq":9,"agent_id":"a","ts":9,"kind":"form_answered","payload":{"form_id":"f1","action":"reply","message":"where is the id?"}}"#
+        )
+        #expect(reply.body == .formAnswered(formId: "f1", action: .reply, values: nil, comment: nil, message: "where is the id?"))
+        t.apply(reply)
+        #expect(t.pendingForms.isEmpty)
+        guard case .form(let row)? = t.items.first else { Issue.record("expected a form row"); return }
+        #expect(row.outcome == .replied(message: "where is the id?"))
+        guard case .user(let id, let text, let source, _, _, _)? = t.items.last else {
+            Issue.record("expected the message of the person")
+            return
+        }
+        #expect(text == "where is the id?" && source == .user)
+        #expect(id == "reply-f1")
+        #expect(ThreadItem.user(id: id, text: text, source: source, from: nil, ts: 9).messageSeq == nil)
+        // The same event twice (a replay) adds nothing.
+        t.apply(reply)
+        #expect(t.items.count == 2)
+    }
+
     @Test mutating func aRejectedAndAnExpiredFormEnd() {
         var t = AgentThread()
         t.apply(ev(.formRequested(formId: "f1", spec: Self.spec)))

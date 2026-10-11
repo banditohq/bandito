@@ -407,6 +407,7 @@
 "composer.contextHint" = "Насколько заполнена текущая глава";
 "composer.contextPopover" = "Контекст: %1$@%% — столько памяти модели занимает этот разговор. На 80%% агент сохранит память и начнёт новую главу.";
 "composer.formGo" = "К форме";
+"composer.formReplyHint" = "или напишите сообщение ниже";
 "composer.formWaiting" = "%1$@ ждёт ответа в форме выше";
 "composer.newChapter.afterTurn" = "Начнётся после текущего ответа";
 "composer.newChapter.button" = "Начать новую главу сейчас";
@@ -666,6 +667,7 @@
 "form.reject" = "Отклонить";
 "form.rejected" = "Отклонено";
 "form.rejectedWhy" = "Отклонено: %1$@";
+"form.replied" = "Вы ответили сообщением";
 "form.requiredHelp" = "Обязательное поле";
 "form.sent" = "Отправлено…";
 "form.showAnswers" = "Показать ответы";

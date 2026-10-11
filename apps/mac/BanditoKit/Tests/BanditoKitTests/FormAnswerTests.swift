@@ -192,6 +192,14 @@ import Testing
         #expect(object["values"] == nil)
     }
 
+    @Test func aReplyCarriesItsMessage() throws {
+        let data = try FormAnswer.answerParams(formId: "f", action: .reply, message: "where do I find it?")
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["action"] as? String == "reply")
+        #expect(object["message"] as? String == "where do I find it?")
+        #expect(object["values"] == nil)
+    }
+
     @Test func theDecoderSpellingOfAnIdIsUndone() {
         let fields = [
             FormField(id: "to_address", label: "To", type: .email),

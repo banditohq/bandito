@@ -407,6 +407,7 @@
 "composer.contextHint" = "How full the current chapter is";
 "composer.contextPopover" = "Context: %1$@%% — how much of the model's memory this conversation takes. At 80%% the agent saves its memory and starts a new chapter.";
 "composer.formGo" = "Go to the form";
+"composer.formReplyHint" = "or write a message below";
 "composer.formWaiting" = "%1$@ is waiting for your answer in the form above";
 "composer.newChapter.afterTurn" = "Starts after the current reply";
 "composer.newChapter.button" = "Start a new chapter now";
@@ -666,6 +667,7 @@
 "form.reject" = "Reject";
 "form.rejected" = "Rejected";
 "form.rejectedWhy" = "Rejected: %1$@";
+"form.replied" = "You replied with a message";
 "form.requiredHelp" = "Required";
 "form.sent" = "Sent…";
 "form.showAnswers" = "Show answers";
