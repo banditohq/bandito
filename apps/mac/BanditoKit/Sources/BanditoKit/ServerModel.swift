@@ -824,10 +824,12 @@ public final class ServerModel: Identifiable {
     /// daemon says is over (`expired`) is closed in the thread at once; the error is still thrown for the card to show.
     public func answerForm(
         _ formId: String, in agentId: String, action: FormAction, values: [String: JSONValue]? = nil,
-        comment: String? = nil
+        comment: String? = nil, message: String? = nil
     ) async throws {
         try requireFeature("forms")
-        let params = try FormAnswer.answerParams(formId: formId, action: action, values: values, comment: comment)
+        if action == .reply { try requireFeature("form_reply") }
+        let params = try FormAnswer.answerParams(
+            formId: formId, action: action, values: values, comment: comment, message: message)
         do {
             try await rpc().call("forms.answer", jsonParams: params)
         } catch let error as RPCError where error.message == "expired" {

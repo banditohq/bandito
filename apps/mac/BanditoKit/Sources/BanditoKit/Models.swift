@@ -444,7 +444,7 @@ public enum EventBody: Sendable, Hashable {
     /// The agent asked the person a form (`form_requested`).
     case formRequested(formId: String, spec: FormSpec)
     /// The form ended. `values` are keyed by field id.
-    case formAnswered(formId: String, action: FormAction, values: [String: JSONValue]?, comment: String?)
+    case formAnswered(formId: String, action: FormAction, values: [String: JSONValue]?, comment: String?, message: String? = nil)
     /// A reaction on the message with that `seq`; no `emoji` means it was taken off.
     case reaction(seq: Int64, emoji: String?, by: ReactionBy)
     /// The Telegram bot or its linked chats changed (`telegram.changed`, no data). Read `telegram.status` again.
@@ -491,7 +491,7 @@ extension Event: Decodable {
         }
     }
     private struct FormAnsweredP: Decodable {
-        var formId: String; var action: FormAction; var values: [String: JSONValue]?; var comment: String?
+        var formId: String; var action: FormAction; var values: [String: JSONValue]?; var comment: String?; var message: String?
     }
     private struct ReactionP: Decodable { var seq: Int64; var emoji: String?; var by: ReactionBy }
     private struct TextP: Decodable { var text: String }
@@ -575,7 +575,7 @@ extension Event: Decodable {
             let x = try p(FormRequestedP.self); body = .formRequested(formId: x.formId, spec: x.spec)
         case "form_answered":
             let x = try p(FormAnsweredP.self)
-            body = .formAnswered(formId: x.formId, action: x.action, values: x.values, comment: x.comment)
+            body = .formAnswered(formId: x.formId, action: x.action, values: x.values, comment: x.comment, message: x.message)
         case "reaction":
             let x = try p(ReactionP.self); body = .reaction(seq: x.seq, emoji: x.emoji, by: x.by)
         case "telegram.changed": body = .telegramChanged

@@ -407,6 +407,7 @@
 "composer.contextHint" = "現在のチャプターがどれだけ埋まっているか";
 "composer.contextPopover" = "コンテキスト: %1$@%% — この会話がモデルのメモリをどれだけ使っているかです。80%%に達するとエージェントはメモリを保存して新しいチャプターを始めます。";
 "composer.formGo" = "フォームへ";
+"composer.formReplyHint" = "または下にメッセージを書いてください";
 "composer.formWaiting" = "%1$@が上のフォームへの回答を待っています";
 "composer.newChapter.afterTurn" = "現在の返信の後に開始されます";
 "composer.newChapter.button" = "今すぐ新しい章を始める";
@@ -666,6 +667,7 @@
 "form.reject" = "却下";
 "form.rejected" = "却下しました";
 "form.rejectedWhy" = "却下しました：%1$@";
+"form.replied" = "メッセージで返信しました";
 "form.requiredHelp" = "必須";
 "form.sent" = "送信しました…";
 "form.showAnswers" = "回答を表示";

@@ -37,6 +37,7 @@ private struct AnsweredFormLine: View {
         switch outcome {
         case .submitted: ("checkmark.circle", Color.Bandito.ok)
         case .rejected: ("xmark.circle", row.spec.kind == .confirm ? Color.Bandito.danger : Color.Bandito.text3)
+        case .replied: ("text.bubble", Color.Bandito.text3)
         case .expired: ("clock.badge.xmark", Color.Bandito.text3)
         }
     }

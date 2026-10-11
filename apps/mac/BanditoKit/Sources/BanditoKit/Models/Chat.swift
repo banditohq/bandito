@@ -101,7 +101,7 @@ public struct FormSpec: Codable, Sendable, Hashable {
 
 /// How a form ended (`action` of `form_answered`).
 public enum FormAction: String, ForwardCompatibleEnum, CaseIterable {
-    case submit, reject, expired
+    case submit, reject, reply, expired
 
     /// A way of ending this app does not know has closed the form all the same: `expired` offers no answer.
     public static var fallback: FormAction { .expired }
@@ -111,6 +111,8 @@ public enum FormAction: String, ForwardCompatibleEnum, CaseIterable {
 public enum FormOutcome: Sendable, Hashable {
     case submitted(values: [String: JSONValue])
     case rejected(comment: String?)
+    /// The person wrote a message instead of filling the form.
+    case replied(message: String)
     case expired
 }
 
@@ -359,7 +361,8 @@ public enum FormAnswer {
     /// The params of `forms.answer` as JSON bytes. Built by hand: the RPC encoder would rewrite the keys of `values`
     /// (a field `subjectLine` would be sent as `subject_line`).
     public static func answerParams(
-        formId: String, action: FormAction, values: [String: JSONValue]? = nil, comment: String? = nil
+        formId: String, action: FormAction, values: [String: JSONValue]? = nil, comment: String? = nil,
+        message: String? = nil
     ) throws -> Data {
         var object: [String: Any] = ["form_id": formId, "action": action.rawValue]
         if let values {
@@ -367,6 +370,7 @@ public enum FormAnswer {
                 with: JSONEncoder().encode(JSONValue.object(values)), options: .fragmentsAllowed)
         }
         if let comment { object["comment"] = comment }
+        if let message { object["message"] = message }
         return try JSONSerialization.data(withJSONObject: object)
     }
 }

@@ -71,6 +71,8 @@ public enum FormPresentation {
                 return why.isEmpty ? L10n.Form.rejected : L10n.Form.rejectedWhy(comment: why)
             }
             return why.isEmpty ? L10n.Form.skipped : L10n.Form.skippedWhy(comment: why)
+        case .replied:
+            return L10n.Form.replied
         case .expired:
             return L10n.Form.expired
         }

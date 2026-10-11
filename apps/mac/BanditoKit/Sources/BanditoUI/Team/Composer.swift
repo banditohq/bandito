@@ -30,6 +30,10 @@ struct Composer: View {
     /// A form the agent waits on: the hint above the field, with a link that scrolls to the form (given its id).
     var waitingForm: FormRow?
     var onGoToForm: (String) -> Void = { _ in }
+    /// The form a typed message answers while the agent waits on it; `nil` when the daemon cannot take a reply.
+    var replyFormId: String?
+    /// Sends the draft as the answer of the form with this id (`forms.answer`, action `reply`).
+    var onReplyToForm: (String) -> Void = { _ in }
     var onSend: () -> Void
     var onStop: () -> Void
     /// Starts the agent's next chapter now (see `ServerModel.startNewChapter`). Shown only when the server supports it.
@@ -50,6 +54,14 @@ struct Composer: View {
     @State private var dictation = DictationController()
     private var canSend: Bool {
         AttachmentTray.canSend(text: draft, files: files)
+    }
+
+    /// What the round button does now: send, stop, or answer the waiting form with the typed message.
+    private var sendMode: ComposerSendMode {
+        let typed = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let isCommand = SlashInvocationParser.parse(draft) != nil
+        return ComposerSendMode.resolve(
+            running: running, hasText: typed && !isCommand, hasFiles: !files.isEmpty, waitingFormId: replyFormId)
     }
 
     /// The files waiting in this agent's composer.
@@ -206,7 +218,11 @@ struct Composer: View {
                                 pickMention(picked)
                                 return .handled
                             }
-                            if canSend && !running { submit() }
+                            if case .replyToForm(let formId) = sendMode {
+                                submitReply(formId)
+                            } else if canSend && !running {
+                                submit()
+                            }
                             return .handled
                         }
 
@@ -374,11 +390,19 @@ struct Composer: View {
     private func formHint(_ form: FormRow) -> some View {
         HStack(spacing: 10) {
             StatusDot(status: .needsYou, size: 7, ringColor: Color.Bandito.signal.opacity(0.15))
-            Text(L10n.Composer.formWaiting(name: agentName))
-                .font(BanditoFont.text(size: 12.5, weight: 500))
-                .foregroundStyle(Color.Bandito.text)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.Composer.formWaiting(name: agentName))
+                    .font(BanditoFont.text(size: 12.5, weight: 500))
+                    .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if replyFormId != nil {
+                    Text(L10n.Composer.formReplyHint)
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                }
+            }
             Spacer(minLength: 8)
             Button {
                 onGoToForm(form.formId)
@@ -476,7 +500,17 @@ struct Composer: View {
 
     @ViewBuilder
     private var sendOrStop: some View {
-        if running {
+        if case .replyToForm(let formId) = sendMode {
+            Button { submitReply(formId) } label: {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color.Bandito.bg)
+                    .frame(width: 34, height: 34)
+                    .background(Color.Bandito.text, in: Circle())
+            }
+            .banditoButton(.brighten)
+            .help(L10n.Thread.send)
+        } else if running {
             Button(action: onStop) {
                 Image(systemName: "stop.fill")
                     .font(.system(size: 11, weight: .bold))
@@ -659,6 +693,12 @@ struct Composer: View {
 
     /// Enter or the send button. Built-in commands run here; a Mac command that the server lacks waits for
     /// the install prompt; everything else is sent as typed.
+    /// Sends the draft as the answer of the waiting form.
+    private func submitReply(_ formId: String) {
+        SoundPlayer.play(.send)
+        onReplyToForm(formId)
+    }
+
     private func submit() {
         guard let agent, let server else {
             SoundPlayer.play(.send)

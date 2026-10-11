@@ -436,6 +436,9 @@ struct ThreadView: View {
                 onCancelReply: { replyDrafts.set(nil, for: agent.id) },
                 waitingForm: server.supports("forms") ? thread.pendingForms.last : nil,
                 onGoToForm: { scrollTo(id: "form-\($0)") },
+                replyFormId: ComposerSendMode.formToAnswer(
+                    in: thread.pendingForms, supportsReply: server.supports("form_reply")),
+                onReplyToForm: replyToForm,
                 onSend: send,
                 onStop: stop,
                 onNewChapter: startNewChapter,
@@ -576,6 +579,25 @@ struct ThreadView: View {
                 router.restoreDraft(text, for: id)
                 router.restoreMentions(draftMentions, for: id)
                 replyDrafts.restore(reply, for: id)
+            }
+        }
+    }
+
+    /// Answers the form the agent waits on with the typed message. A failure puts the text back in the field.
+    private func replyToForm(_ formId: String) {
+        let id = agent.id
+        let text = router.takeDraft(for: id).trimmingCharacters(in: .whitespacesAndNewlines)
+        _ = router.takeMentions(for: id)
+        guard !text.isEmpty else { return }
+        sendError = nil
+        scroll.sendPinned = true
+        bottomRequest += 1
+        Task {
+            do {
+                try await server.answerForm(formId, in: id, action: .reply, message: text)
+            } catch {
+                sendError = FormPresentation.message(for: error)
+                router.restoreDraft(text, for: id)
             }
         }
     }

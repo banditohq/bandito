@@ -226,7 +226,7 @@ pub enum EventBody {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reject_label: Option<String>,
     },
-    /// The form ended: submitted, rejected, or expired (never answered in time, or the turn was cancelled).
+    /// The form ended: submitted, rejected, answered with a message, or expired (never answered in time, or the turn was cancelled).
     #[serde(rename = "form_answered")]
     FormAnswered {
         form_id: String,
@@ -235,6 +235,9 @@ pub enum EventBody {
         values: Option<Map<String, Value>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         comment: Option<String>,
+        /// The person's message, on `reply`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
     },
     /// A reaction on a message, by seq. No `emoji` means the reaction was taken off.
     #[serde(rename = "reaction")]

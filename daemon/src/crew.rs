@@ -406,7 +406,7 @@ fn ask_form_tool() -> Value {
     });
     json!({
         "name": "ask_form",
-        "description": "Ask the person a form instead of several questions in text. Blocks until they answer (up to 24 hours). Returns JSON: {\"action\": \"submit\" | \"reject\" | \"expired\", \"values\": {field id: answer}} on submit, {\"comment\"} may come with reject. Use kind \"confirm\" before anything that leaves the server (a letter, a post, a payment, a deletion): the fields are then shown as an editable summary.",
+        "description": "Ask the person a form instead of several questions in text. Blocks until they answer (up to 24 hours). Returns JSON: {\"action\": \"submit\" | \"reject\" | \"reply\" | \"expired\", \"values\": {field id: answer}} on submit, {\"comment\"} may come with reject, {\"message\"} comes with reply. action=reply: the person answered with a message instead of filling the form — read it and continue (ask again if needed). Use kind \"confirm\" before anything that leaves the server (a letter, a post, a payment, a deletion): the fields are then shown as an editable summary.",
         "inputSchema": {
             "type": "object",
             "properties": {

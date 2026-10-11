@@ -327,14 +327,24 @@ public struct AgentThread: Sendable, Hashable {
                 let known = formOutcomes[formId].map { Self.restored($0, fields: spec.fields) }
                 items.append(.form(FormRow(formId: formId, spec: spec, outcome: known, ts: e.ts)))
             }
-        case .formAnswered(let formId, let action, let values, let comment):
+        case .formAnswered(let formId, let action, let values, let comment, let message):
             let outcome: FormOutcome
             switch action {
             case .submit: outcome = .submitted(values: values ?? [:])
             case .reject: outcome = .rejected(comment: comment)
+            case .reply: outcome = .replied(message: message ?? "")
             case .expired: outcome = .expired
             }
             close(form: formId, with: outcome)
+            if case .replied(let text) = outcome, !text.isEmpty {
+                // The person's reply is a message of theirs in the thread. It has no `seq` of its own (it is not a
+                // `message.user` event), so nothing offers a reaction or a quote on it.
+                let id = "reply-\(formId)"
+                if !items.contains(where: { $0.id == id }) {
+                    dropStreaming()
+                    items.append(.user(id: id, text: text, source: .user, from: nil, ts: e.ts))
+                }
+            }
         case .reaction(let seq, let emoji, let by):
             reactions[seq, default: MessageReactions()].set(by: by, emoji: emoji, eventSeq: e.seq)
         case .usageLimits, .agentChanged, .telegramChanged, .unknown:

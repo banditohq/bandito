@@ -87,6 +87,7 @@ pub fn features() -> Vec<&'static str> {
         "agent_own_folder",
         "runtime_models",
         "forms",
+        "form_reply",
         "reactions",
         "attachments",
         "integrations",

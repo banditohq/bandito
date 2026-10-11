@@ -573,6 +573,7 @@ public enum L10n {
         public static var contextHint: String { L10n.tr("composer.contextHint") }
         public static func contextPopover(percent: String) -> String { L10n.tr("composer.contextPopover", percent) }
         public static var formGo: String { L10n.tr("composer.formGo") }
+        public static var formReplyHint: String { L10n.tr("composer.formReplyHint") }
         public static func formWaiting(name: String) -> String { L10n.tr("composer.formWaiting", name) }
 
         public enum Attach {
@@ -973,6 +974,7 @@ public enum L10n {
         public static var reject: String { L10n.tr("form.reject") }
         public static var rejected: String { L10n.tr("form.rejected") }
         public static func rejectedWhy(comment: String) -> String { L10n.tr("form.rejectedWhy", comment) }
+        public static var replied: String { L10n.tr("form.replied") }
         public static var requiredHelp: String { L10n.tr("form.requiredHelp") }
         public static var sent: String { L10n.tr("form.sent") }
         public static var showAnswers: String { L10n.tr("form.showAnswers") }

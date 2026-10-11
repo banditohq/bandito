@@ -407,6 +407,7 @@
 "composer.contextHint" = "Wie voll das aktuelle Kapitel ist";
 "composer.contextPopover" = "Kontext: %1$@ %% — so viel Modellspeicher belegt dieses Gespräch. Bei 80 %% speichert der Agent seinen Speicher und beginnt ein neues Kapitel.";
 "composer.formGo" = "Zum Formular";
+"composer.formReplyHint" = "oder schreiben Sie unten eine Nachricht";
 "composer.formWaiting" = "%1$@ wartet oben im Formular auf Ihre Antwort";
 "composer.newChapter.afterTurn" = "Beginnt nach der aktuellen Antwort";
 "composer.newChapter.button" = "Jetzt ein neues Kapitel beginnen";
@@ -666,6 +667,7 @@
 "form.reject" = "Ablehnen";
 "form.rejected" = "Abgelehnt";
 "form.rejectedWhy" = "Abgelehnt: %1$@";
+"form.replied" = "Sie haben mit einer Nachricht geantwortet";
 "form.requiredHelp" = "Pflichtfeld";
 "form.sent" = "Gesendet …";
 "form.showAnswers" = "Antworten anzeigen";
