@@ -290,6 +290,11 @@ fn bare_url(url: &str) -> &str {
     url.trim_end_matches('/')
 }
 
+/// The id of the catalog template an integration was made from (see [`template_of`]).
+pub fn template_id_of<'a>(row: &Integration, templates: &'a [Template]) -> Option<&'a str> {
+    template_of(row, templates).map(|t| t.id.as_str())
+}
+
 /// The template an integration was made from: the one whose id is its name, else the one with the same url.
 fn template_of<'a>(row: &Integration, templates: &'a [Template]) -> Option<&'a Template> {
     templates.iter().find(|t| t.id == row.name).or_else(|| {
