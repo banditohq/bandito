@@ -44,6 +44,8 @@ enum ThreadRowsChange: Equatable {
 /// What every row needs besides its key: the server and the actions, which do not decide how a row looks.
 struct ThreadListContext {
     var server: ServerModel
+    /// The agent whose rows these are: another one is another thread (row ids repeat between agents).
+    var agentID: String
     var chat: ThreadChat
     var onError: (UserFacingMessage) -> Void
 }
@@ -163,7 +165,18 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
     private var version = -1
 
     func update(lines new: [ThreadListLine], change: ThreadRowsChange, version next: Int, context: ThreadListContext) {
+        let switched = self.context.map { $0.agentID != context.agentID } ?? false
         self.context = context
+        if switched {
+            // Another agent's thread: nothing measured or guessed for the last one holds (its row ids repeat here).
+            version = next
+            heights.removeAll()
+            guesses.removeAll()
+            lines = new
+            table.prepareOnlyVisible()
+            table.reloadData()
+            return
+        }
         guard next != version else { return }
         version = next
         let old = lines
@@ -571,7 +584,7 @@ final class ThreadListMemo {
         box.lines = nextTyping.map { made + [$0] } ?? made
         // With the typing line under the rows, the stream's row is not the last line: the list compares then.
         box.change = kind == .last && nextTyping == nil ? .last : .all
-        box.version &+= 1
+        box.version = ThreadListLines.nextVersion()
         return box.version
     }
 }
@@ -582,7 +595,14 @@ final class ThreadListLines {
     var lines: [ThreadListLine] = []
     /// What changed with the last version: only the last line (a stream), or anything.
     var change = ThreadRowsChange.all
-    var version = 0
+    /// Unique among all boxes, so a list given another box never takes its first version for the one it has.
+    var version = ThreadListLines.nextVersion()
+
+    private static var counter = 0
+    static func nextVersion() -> Int {
+        counter &+= 1
+        return counter
+    }
 }
 
 /// The SwiftUI content of a cell: the row at the width of the thread's column, with the space under it.
@@ -635,7 +655,7 @@ struct ThreadItemsView: View {
     var body: some View {
         var rowChat = chat
         rowChat.lastAgentID = ThreadListLine.lastAgentID(in: items)
-        let context = ThreadListContext(server: server, chat: rowChat, onError: onError)
+        let context = ThreadListContext(server: server, agentID: agentID, chat: rowChat, onError: onError)
         var lines: [ThreadListLine] = ThreadRows.build(items).map { row in
             .row(
                 ThreadRowKey(

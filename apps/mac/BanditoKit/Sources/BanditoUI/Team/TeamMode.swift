@@ -76,10 +76,10 @@ struct TeamMode: View {
     }
 
     private func chat(server: ServerModel, agent: Agent) -> some View {
-        // Switching agents gives a fresh view. The composer text is not in the view: it is kept per agent id in
-        // the Router (`Router.drafts`), so it stays with its agent.
+        // One view for every agent of a server (see `ThreadView`): a switch gives it the new agent. The composer text
+        // is kept per agent id in the Router (`Router.drafts`), so it stays with its agent.
         ThreadView(server: server, agent: agent)
-            .id(agent.id)
+            .id(server.id)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

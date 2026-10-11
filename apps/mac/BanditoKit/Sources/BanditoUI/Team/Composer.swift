@@ -264,6 +264,8 @@ struct Composer: View {
                     ComposerTextField(
                         agentID: agentID, focused: $focused, frozen: DictationFreeze.isFrozen(dictation.phase),
                         onChange: draftChanged, onKey: handleKey)
+                        // Its own field per agent: the undo of one agent's text never reaches another's.
+                        .id(agentID)
 
                     // The row is bottom-aligned: the 34 pt send disc, and the + and mic (30 pt plus 2) centre 17 pt
                     // above the bottom. The 22 pt indicator sits 6 pt up from the bottom, so its centre matches them.
@@ -322,8 +324,15 @@ struct Composer: View {
                 mention.closed()
             }
         }
-        .onChange(of: agent?.id, initial: true) { _, id in
+        .onChange(of: agent?.id, initial: true) { old, id in
             draftFacts.update(draft)
+            // The composer stays when another agent is shown (see `ThreadView`): what was open for the last one closes.
+            if old != id {
+                dictation.cancel()
+                router.dictationRecording = false
+                showsContext = false
+                asksNewChapter = false
+            }
             // A connect belongs to the agent it was started for: going to another one drops it, and sends nothing.
             mention.agentID = id
             if mention.connecting != nil { mention.connecting = nil }

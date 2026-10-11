@@ -6,9 +6,11 @@ import SwiftUI
 import AppKit
 #endif
 
-enum ThreadExp { nonisolated(unsafe) static var on: Set<Int> = [] }
-
 /// The thread of one agent: header, the rows, banners and the composer.
+///
+/// One view for every agent: a switch gives it another `agent`, and the header, the composer and the list (with its
+/// cells) are kept and given the new agent, not built again (a new view per agent was 50–100 ms at each switch). What
+/// belongs to one agent's chat (the scroll, the flags, the banners) is a `ThreadSession`, made fresh for each agent.
 struct ThreadView: View {
     var server: ServerModel
     var agent: Agent
@@ -18,34 +20,68 @@ struct ThreadView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
-    @State private var sendError: UserFacingMessage?
-    /// Failures of interrupt, approval and history loading.
-    @State private var actionError: UserFacingMessage?
-    /// The sheet of keys a connect card opened (see `connectService`).
-    @State private var connectSheet: AgentConnectRules.SheetItem?
-    @State private var loadingOlder = false
-    /// Files changed since the last checkpoint; `nil` until loaded or when the server lacks `changes`.
-    @State private var changes: ChangesDiff?
-    /// Whether the newest message is on screen (the bottom marker is visible).
-    @State private var atBottom = true
     /// Files are dragged over the chat.
     @State private var dropTargeted = false
-    /// The "down" button shows (see `ThreadScroll.showsJump`), and how many messages came in while the person is above.
-    @State private var jumpVisible = false
-    @State private var unseen = 0
-    /// The scroll position, kept outside the view state: a scroll must not redraw the header and the composer.
-    @State private var scroll = ThreadScrollMemory()
-    /// Which messages arrived after the chat opened: the baseline is set after the first history load (see `ThreadArrival`).
-    @State private var arrival = ThreadArrival()
-    /// A row to bring on screen (a quoted message, a form), and the row that flashes after it.
-    @State private var scrollRequest: ScrollRequest?
-    @State private var highlightedID: String?
     /// Counts the requests to scroll to the bottom (the send, the "down" button); the scroll chain answers each one.
     @State private var bottomRequest = 0
-    @State private var jumpTask: Task<Void, Never>?
-    @State private var highlightTask: Task<Void, Never>?
     /// The AppKit list of the rows, and how the thread moves it (see `ThreadList`).
     @State private var list = ThreadListController()
+    /// The chat state of the agent on screen (see `ThreadSession`).
+    @State private var sessions = ThreadSessions()
+
+    /// The session of this view's agent. A closure that outlived a switch (an answer that came late) holds the agent
+    /// it was made for: it gets a session of its own that nothing shows, so it never writes into another agent's chat.
+    private var session: ThreadSession { sessions.lookup(agent.id) }
+    private var scroll: ThreadScrollMemory { session.scroll }
+    private var arrival: ThreadArrival { session.arrival }
+    private var sendError: UserFacingMessage? {
+        get { session.sendError }
+        nonmutating set { session.sendError = newValue }
+    }
+    private var actionError: UserFacingMessage? {
+        get { session.actionError }
+        nonmutating set { session.actionError = newValue }
+    }
+    private var connectSheet: AgentConnectRules.SheetItem? {
+        get { session.connectSheet }
+        nonmutating set { session.connectSheet = newValue }
+    }
+    private var loadingOlder: Bool {
+        get { session.loadingOlder }
+        nonmutating set { session.loadingOlder = newValue }
+    }
+    private var changes: ChangesDiff? {
+        get { session.changes }
+        nonmutating set { session.changes = newValue }
+    }
+    private var atBottom: Bool {
+        get { session.atBottom }
+        nonmutating set { session.atBottom = newValue }
+    }
+    private var jumpVisible: Bool {
+        get { session.jumpVisible }
+        nonmutating set { session.jumpVisible = newValue }
+    }
+    private var unseen: Int {
+        get { session.unseen }
+        nonmutating set { session.unseen = newValue }
+    }
+    private var scrollRequest: ScrollRequest? {
+        get { session.scrollRequest }
+        nonmutating set { session.scrollRequest = newValue }
+    }
+    private var highlightedID: String? {
+        get { session.highlightedID }
+        nonmutating set { session.highlightedID = newValue }
+    }
+    private var jumpTask: Task<Void, Never>? {
+        get { session.jumpTask }
+        nonmutating set { session.jumpTask = newValue }
+    }
+    private var highlightTask: Task<Void, Never>? {
+        get { session.highlightTask }
+        nonmutating set { session.highlightTask = newValue }
+    }
 
     /// Hooks the list's reports into the rules of the thread's scroll.
     private func attachList() {
@@ -56,6 +92,8 @@ struct ThreadView: View {
             scroll.containerHeight = Double(new.height)
             scroll.nearTop = ThreadScroll.nearTop(offset: Double(new.offset))
             if !scroll.nearTop { scroll.topRetried = false }
+            // Where the chat is left, kept as it moves: a switch keeps it for the agent left (see `agentChanged`).
+            if old?.offset != new.offset { scroll.topRow = list.topRowID() }
             scrollGeometryChanged(old, new)
         }
         list.onNearTop = { DispatchQueue.main.async { topReached() } }
@@ -109,7 +147,9 @@ struct ThreadView: View {
         }
         return ThreadList(
             lines: scroll.listMemo.box, version: version,
-            context: ThreadListContext(server: server, chat: rowChat, onError: { actionError = $0 }), controller: list)
+            context: ThreadListContext(
+                server: server, agentID: agent.id, chat: rowChat, onError: { actionError = $0 }),
+            controller: list)
     }
 
     /// The top of the thread came near: older history is read.
@@ -251,6 +291,8 @@ struct ThreadView: View {
 
     var body: some View {
         let _ = PerfCounters.hit("ThreadView")
+        // The body is where a switch begins: the agent shown now gets its session before anything reads it.
+        let _ = sessions.enter(agent.id)
         chatColumn
             // Files dragged anywhere over the chat (thread and composer) are attached to this agent.
             .overlay {
@@ -271,7 +313,6 @@ struct ThreadView: View {
 
     private var chatColumn: some View {
         VStack(spacing: 0) {
-            if ThreadExp.on.contains(1) { Color.red.frame(height: 56) } else {
             ThreadHeader(
                 agent: agent,
                 server: server,
@@ -290,12 +331,11 @@ struct ThreadView: View {
                     state: router.workbenchState(for: agent.id), runningTools: runningToolNames),
                 showsBrowserButton: server.supports("browser"),
                 onShowBrowser: { router.showInWorkbench(.browser, agentID: agent.id) })
-            }
             if let movedTo = agent.migratedTo {
                 MigratedAgentStrip(agent: agent, source: server, movedTo: movedTo)
             }
 
-            ThreadRowsScope { if ThreadExp.on.contains(2) { Color.blue } else { rowList } }
+            ThreadRowsScope { rowList }
                 .background {
                     ThreadWatch(
                         server: server, agentID: agent.id,
@@ -318,6 +358,7 @@ struct ThreadView: View {
                     ThreadJumpOverlay(visible: jumpVisible, unseen: unseen) { goToBottom() }
                 }
                 .onAppear {
+                    sessions.onScreen = true
                     scroll.alive = true
                     attachList()
                     restore()
@@ -333,6 +374,7 @@ struct ThreadView: View {
                 // first page is read, so a thread that has messages on the server never flashes it.
                 if summary.isEmpty, server.hasMoreHistory[agent.id] != nil {
                     ThreadEmptyState(agent: agent, server: server, onPick: pickSuggestion)
+                        .id(agent.id)
                 }
             }
             if summary.loadedStatus == .error, let detail = summary.statusDetail {
@@ -352,7 +394,7 @@ struct ThreadView: View {
                 }
             }
             QuickRepliesHost(server: server, agentID: agent.id, onReply: sendQuickReply, onOpen: openQuickLink)
-            if ThreadExp.on.contains(3) { Color.green.frame(height: 90) } else {
+                .id(agent.id)
             Composer(
                 agentName: agent.name,
                 running: summary.turnRunning,
@@ -375,7 +417,6 @@ struct ThreadView: View {
                 .frame(maxWidth: 780)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 14)
-            }
         }
         .frame(maxWidth: .infinity)
         .background(Color.Bandito.bg)
@@ -388,9 +429,8 @@ struct ThreadView: View {
             await loadChanges()
         }
         .onDisappear {
-            jumpTask?.cancel()
-            highlightTask?.cancel()
-            scroll.alive = false
+            sessions.onScreen = false
+            session.leave()
             let top = list.topRowID()
             router.threadPlaces[agent.id] = ThreadScroll.place(atBottom: atBottom, topRowID: top)
         }
@@ -403,7 +443,8 @@ struct ThreadView: View {
         .task(id: connectCardCount) {
             if connectCardCount > 0, server.supports("agent_connect") { await MentionServices.shared.ensure(server) }
         }
-        .banditoSheet(item: $connectSheet, dismissOnOutsideClick: false) { item in
+        .banditoSheet(item: Binding(get: { connectSheet }, set: { connectSheet = $0 }), dismissOnOutsideClick: false) {
+            item in
             IntegrationEditor(
                 server: server, target: item.target,
                 existingNames: MentionServices.shared.snapshot(for: server)?.integrations.map(\.name) ?? [],
@@ -429,7 +470,20 @@ struct ThreadView: View {
             }
             readNewReply()
         }
-        .onChange(of: agent.id) { _, _ in readAloud.reset() }
+        .onChange(of: agent.id) { _, _ in agentChanged() }
+    }
+
+    /// Another agent is shown in this view: the place of the one left is kept, as leaving the chat keeps it, and the new
+    /// one is shown where it was left. The list already has the new rows (the body switched the session).
+    private func agentChanged() {
+        readAloud.reset()
+        // The list's reports go to this agent's chat from now on.
+        attachList()
+        if let left = sessions.takeLeft() {
+            router.threadPlaces[left.agentID] = ThreadScroll.place(
+                atBottom: left.session.atBottom, topRowID: left.session.scroll.topRow)
+        }
+        restore()
     }
 
     /// A new last item: the echo of the person's own message (and the answer to it) is looked at; else the bottom is
@@ -764,9 +818,85 @@ struct ThreadView: View {
 }
 
 /// A row to scroll to. The token makes a second request for the same row a new value.
-private struct ScrollRequest: Equatable {
+fileprivate struct ScrollRequest: Equatable {
     var id: String
     var token: Int
+}
+
+/// What one agent's chat holds while it is on screen: the scroll, the flags of the bottom and the "down" button, the
+/// banners, the row to bring on screen. Made fresh for each agent the view shows.
+@MainActor
+@Observable
+final class ThreadSession {
+    var sendError: UserFacingMessage?
+    /// Failures of interrupt, approval and history loading.
+    var actionError: UserFacingMessage?
+    /// The sheet of keys a connect card opened (see `ThreadView.connectService`).
+    var connectSheet: AgentConnectRules.SheetItem?
+    var loadingOlder = false
+    /// Files changed since the last checkpoint; `nil` until loaded or when the server lacks `changes`.
+    var changes: ChangesDiff?
+    /// Whether the newest message is on screen.
+    var atBottom = true
+    /// The "down" button shows (see `ThreadScroll.showsJump`), and how many messages came in while the person is above.
+    var jumpVisible = false
+    var unseen = 0
+    /// A row to bring on screen (a quoted message, a form), and the row that flashes after it.
+    fileprivate var scrollRequest: ScrollRequest?
+    var highlightedID: String?
+    /// The scroll position, kept outside the observed state: a scroll must not redraw the header and the composer.
+    @ObservationIgnored let scroll = ThreadScrollMemory()
+    /// Which messages arrived after the chat opened (see `ThreadArrival`).
+    @ObservationIgnored let arrival = ThreadArrival()
+    @ObservationIgnored var jumpTask: Task<Void, Never>?
+    @ObservationIgnored var highlightTask: Task<Void, Never>?
+
+    /// The chat is gone from the screen: its planned work stops.
+    func leave() {
+        jumpTask?.cancel()
+        highlightTask?.cancel()
+        scroll.alive = false
+    }
+}
+
+/// The session of the agent a `ThreadView` shows, and the one it showed before until its place is kept.
+@MainActor
+final class ThreadSessions {
+    private var agentID: String?
+    private var current: ThreadSession?
+    private var left: (agentID: String, session: ThreadSession)?
+    /// The view is on screen: a new session starts alive.
+    var onScreen = false
+
+    /// Makes `id` the agent shown, with a fresh session when it is another one. Called by the body only.
+    @discardableResult
+    func enter(_ id: String) -> ThreadSession {
+        if let current, agentID == id { return current }
+        if let current, let agentID {
+            current.leave()
+            left = (agentID, current)
+        }
+        let session = ThreadSession()
+        session.scroll.alive = onScreen
+        current = session
+        agentID = id
+        return session
+    }
+
+    /// The session of `id`: the current one, or for an agent no longer shown one that nothing reads.
+    func lookup(_ id: String) -> ThreadSession {
+        if let current, agentID == id { return current }
+        if agentID == nil { return enter(id) }
+        let stray = ThreadSession()
+        stray.scroll.alive = false
+        return stray
+    }
+
+    /// The agent left by the last switch, once.
+    func takeLeft() -> (agentID: String, session: ThreadSession)? {
+        defer { left = nil }
+        return left
+    }
 }
 
 /// The scroll state of one thread view that must not redraw it: the rows and lines last made, the metrics, and the
@@ -781,6 +911,8 @@ final class ThreadScrollMemory {
     var containerHeight = 0.0
     /// The metrics the list last reported.
     var metrics: ThreadScrollMetrics?
+    /// The row on top of what shows, as of the last move.
+    var topRow: String?
     var nearTop = false
     /// The row on top when older rows were asked for: set while they are being put above it.
     var anchorRow: String?
