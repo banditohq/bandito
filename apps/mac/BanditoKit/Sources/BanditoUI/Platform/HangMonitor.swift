@@ -70,7 +70,12 @@ public enum HangMonitor {
         /// of the two, so the part of a long stretch that falls in a frame is counted in that frame.
         var meterFrom: UInt64 = 0
         var lastTake: UInt64 = 0
+        /// While `metering`: busy stretches of `longStretch` or more that ended since the last `takeLongStretches`.
+        var longStretches = 0
     }
+
+    /// A busy stretch this long (nanoseconds) is counted by the smoothness check: a freeze anyone sees.
+    nonisolated static let longStretch: UInt64 = 100_000_000
 
     private nonisolated static let state = OSAllocatedUnfairLock(initialState: Shared())
     private nonisolated static let log = Logger(subsystem: "dev.bandito", category: "perf")
@@ -117,7 +122,10 @@ public enum HangMonitor {
                     let at = now()
                     let wasBusy = shared.tracker.busySince != nil
                     let hang = shared.tracker.sleep(at: at)
-                    if shared.metering, wasBusy { shared.busyAccum &+= at &- max(shared.meterFrom, shared.lastTake) }
+                    if shared.metering, wasBusy {
+                        shared.busyAccum &+= at &- max(shared.meterFrom, shared.lastTake)
+                        if shared.tracker.lastLength >= longStretch { shared.longStretches += 1 }
+                    }
                     return hang.map { ($0, shared.screen, shared.action, shared.actionAt) }
                 }
                 if let result { MainActor.assumeIsolated { finished(result.0, result.1, result.2, result.3) } }
@@ -141,12 +149,21 @@ public enum HangMonitor {
         }
     }
 
-    /// QA scenarios: starts or stops adding up the time the main thread is busy (a lock and an add per wake-up).
+    /// The performance scenarios (QA and the smoothness check): starts or stops adding up the time the main thread is busy (a lock and an add per wake-up).
     static func meter(_ on: Bool) {
         state.withLock {
             $0.metering = on
             $0.busyAccum = 0
+            $0.longStretches = 0
             $0.lastTake = now()
+        }
+    }
+
+    /// The busy stretches of 100 ms or more that ended since the last call, and back to zero.
+    static func takeLongStretches() -> Int {
+        state.withLock { shared in
+            defer { shared.longStretches = 0 }
+            return shared.longStretches
         }
     }
 

@@ -6,7 +6,8 @@ import AppKit
 enum WindowActions {
     static func showMainWindow() {
         NSApp.activate()
-        NSApp.windows.first { $0.canBecomeMain && !$0.isMiniaturized }?.makeKeyAndOrderFront(nil)
+        NSApp.windows.first { $0.canBecomeMain && !$0.isMiniaturized && $0.identifier != PerfCheck.windowIdentifier }?
+            .makeKeyAndOrderFront(nil)
     }
 
     /// SwiftUI's own way to open the Settings scene, handed over by the root view (`SettingsOpenerBridge`).

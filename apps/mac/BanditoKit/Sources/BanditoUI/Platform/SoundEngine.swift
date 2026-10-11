@@ -124,8 +124,12 @@ public final class SoundEngine {
 /// What the app calls to play a sound. It reads the person's settings and the window, then plays through `SoundEngine`.
 @MainActor
 public enum SoundPlayer {
+    /// While true, no sound plays: the smoothness check drives a demo copy of the app, silently.
+    public static var isMuted = false
+
     /// Plays `event` if the settings and the window allow it now (see `SoundRules.shouldPlay`).
     public static func play(_ event: SoundEvent) {
+        guard !isMuted else { return }
         let settings = SoundSettings(defaults: .standard)
         guard SoundRules.shouldPlay(
             event, settings: settings, windowActive: windowActive, windowVisible: windowVisible)

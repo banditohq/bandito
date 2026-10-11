@@ -11,6 +11,7 @@ struct FileBrowser: View {
     @Environment(Router.self) private var router
     @Environment(Keymap.self) private var keymap
     @State private var model = FolderModel()
+    @Environment(\.scenarioRequests) private var scenario
     /// The details panel as the user left it. Shown when the window is wide enough to dock it beside the list.
     @State private var previewVisible = true
     /// The details panel opened by its button in a narrow window, where it floats over the list.
@@ -52,6 +53,13 @@ struct FileBrowser: View {
     }
 
     var body: some View {
+        browser
+            .onChange(of: scenario?.filesLayout) { _, layout in
+                if let layout, model.layout != layout { model.layout = layout }
+            }
+    }
+
+    private var browser: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 FilesToolbar(

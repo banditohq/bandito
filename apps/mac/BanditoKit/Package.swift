@@ -23,7 +23,9 @@ let package = Package(
         .package(url: "https://github.com/royalapplications/royalvnc", revision: "92d4427c73817d8f849bb289ff190aa4b40c44ea"),
     ],
     targets: [
-        .target(name: "BanditoKit", dependencies: ["BanditoL10n"]),
+        // The demo daemon's catalogs (copies of `daemon/src/*.json`, kept equal by a test): the smoothness check runs
+        // the app against it, with no server.
+        .target(name: "BanditoKit", dependencies: ["BanditoL10n"], resources: [.copy("Resources/DemoDaemon")]),
         .target(name: "BanditoDesign", resources: [.process("Colors.xcassets"), .copy("Fonts")]),
         .target(name: "BanditoL10n", resources: [.process("Resources")]),
         .target(

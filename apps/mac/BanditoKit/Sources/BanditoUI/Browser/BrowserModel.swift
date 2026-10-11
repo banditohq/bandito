@@ -140,6 +140,21 @@ final class BrowserModel {
         Task { await closeClient() }
     }
 
+    /// The pictures of the demo browser's pages, by tab id; nil for a real browser. See `showDemo`.
+    @ObservationIgnored private var demoPages: [String: CGImage]?
+
+    /// Shows a browser that is not there: the smoothness check's demo daemon has no Chrome, so its tabs and their
+    /// pictures are given here. Switching tabs then works as with a running browser, without a connection.
+    func showDemo(tabs: [BrowserTab], pictures: [String: CGImage]) {
+        demoPages = pictures
+        status = BrowserStatus(running: true, cdp: "relay")
+        self.tabs = tabs
+        if let first = tabs.first {
+            selection = .page(first.id)
+            setFrame(pictures[first.id])
+        }
+    }
+
     /// Starts the browser on the server, then connects to its first page.
     func start() async {
         gaveUp = false
@@ -271,7 +286,7 @@ final class BrowserModel {
     /// One poll: the status, the tabs every few polls, a reconnect when the page connection is down, and a
     /// keep-alive while the browser is on screen and the app is the active one.
     func refresh() async {
-        guard isSupported else { return }
+        guard isSupported, demoPages == nil else { return }
         do {
             let fresh = try await server.browserStatus()
             errorText = nil
@@ -348,6 +363,12 @@ final class BrowserModel {
 
     /// Shows a page of the browser.
     func selectPage(_ id: String) async {
+        if let demoPages {
+            // The smoothness check's demo browser: the page's picture is at hand, nothing is connected.
+            selection = .page(id)
+            setFrame(demoPages[id])
+            return
+        }
         selection = .page(id)
         clientTabID = nil
         await closeClient()
@@ -969,6 +990,11 @@ final class BrowserStore {
         let model = BrowserModel(server: server)
         models[server.id] = model
         return model
+    }
+
+    /// Drops the model of a server that is gone (the demo servers of the smoothness check).
+    func forget(serverID: UUID) {
+        models[serverID] = nil
     }
 }
 

@@ -21,9 +21,18 @@ public final class Telemetry: @unchecked Sendable {
     public static let shared = Telemetry(
         defaults: .standard, http: URLSessionHTTPClient(), baseURL: AccountClient.defaultBaseURL)
 
-    /// Counts one use of a feature in the shared instance.
+    /// Counts one use of a feature in the shared instance. Nothing while `isPaused`.
     public static func count(_ event: TelemetryEvent) {
+        guard !isPaused else { return }
         shared.count(event)
+    }
+
+    private static let pauseLock = NSLock()
+    nonisolated(unsafe) private static var pausedValue = false
+    /// While true, nothing is counted: the smoothness check drives a demo copy of the app, which is not a use.
+    public static var isPaused: Bool {
+        get { pauseLock.withLock { pausedValue } }
+        set { pauseLock.withLock { pausedValue = newValue } }
     }
 
     /// The counts of this many days are kept at most (the oldest go first when a pulse cannot reach the server).

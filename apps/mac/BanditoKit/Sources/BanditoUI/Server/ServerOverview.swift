@@ -18,6 +18,7 @@ struct ServerOverview: View {
     @State private var actionError: UserFacingMessage?
     /// The metric whose detail is open, if any.
     @State private var detail: OverviewMetric?
+    @Environment(\.scenarioRequests) private var scenario
     /// Two columns of cards or one. Starts narrow; changes only when the measured page width crosses the threshold.
     @State private var isWide = false
 
@@ -100,6 +101,9 @@ struct ServerOverview: View {
         .onPreferenceChange(PageWidthKey.self) { width in
             let wide = Self.isTwoColumns(width: width)
             if wide != isWide { isWide = wide }
+        }
+        .onChange(of: scenario?.overviewMetric) { _, metric in
+            if detail != metric { detail = metric }
         }
         .task(id: server?.id) {
             guard let server else { return }

@@ -2265,6 +2265,58 @@ public enum L10n {
         public static var title: String { L10n.tr("palette.title") }
     }
 
+    public enum PerfCheck {
+        public static var again: String { L10n.tr("perfCheck.again") }
+        public static var copied: String { L10n.tr("perfCheck.copied") }
+        public static var copy: String { L10n.tr("perfCheck.copy") }
+        public static var failed: String { L10n.tr("perfCheck.failed") }
+        public static var intro: String { L10n.tr("perfCheck.intro") }
+        public static var menu: String { L10n.tr("perfCheck.menu") }
+        public static var met: String { L10n.tr("perfCheck.met") }
+        public static var missed: String { L10n.tr("perfCheck.missed") }
+        public static func ms(value: String) -> String { L10n.tr("perfCheck.ms", value) }
+        public static func percent(value: String) -> String { L10n.tr("perfCheck.percent", value) }
+        public static func progress(index: String, total: String) -> String { L10n.tr("perfCheck.progress", index, total) }
+        public static func running(page: String) -> String { L10n.tr("perfCheck.running", page) }
+        public static func screen(fps: String) -> String { L10n.tr("perfCheck.screen", fps) }
+        public static var target: String { L10n.tr("perfCheck.target") }
+        public static var title: String { L10n.tr("perfCheck.title") }
+
+        public enum Column {
+            public static var frame: String { L10n.tr("perfCheck.column.frame") }
+            public static var freezes: String { L10n.tr("perfCheck.column.freezes") }
+            public static var over16: String { L10n.tr("perfCheck.column.over16") }
+            public static var over8: String { L10n.tr("perfCheck.column.over8") }
+            public static var page: String { L10n.tr("perfCheck.column.page") }
+            public static var target: String { L10n.tr("perfCheck.column.target") }
+            public static var worst: String { L10n.tr("perfCheck.column.worst") }
+        }
+
+        public enum Page {
+            public static var browser: String { L10n.tr("perfCheck.page.browser") }
+            public static var files: String { L10n.tr("perfCheck.page.files") }
+            public static var inspector: String { L10n.tr("perfCheck.page.inspector") }
+            public static var market: String { L10n.tr("perfCheck.page.market") }
+            public static var modes: String { L10n.tr("perfCheck.page.modes") }
+            public static var newAgent: String { L10n.tr("perfCheck.page.newAgent") }
+            public static var overlays: String { L10n.tr("perfCheck.page.overlays") }
+            public static var screen: String { L10n.tr("perfCheck.page.screen") }
+            public static var server: String { L10n.tr("perfCheck.page.server") }
+            public static var settings: String { L10n.tr("perfCheck.page.settings") }
+            public static var switchAgents: String { L10n.tr("perfCheck.page.switchAgents") }
+            public static var team: String { L10n.tr("perfCheck.page.team") }
+            public static var terminals: String { L10n.tr("perfCheck.page.terminals") }
+            public static var thread: String { L10n.tr("perfCheck.page.thread") }
+            public static var threadFast: String { L10n.tr("perfCheck.page.threadFast") }
+            public static var typing: String { L10n.tr("perfCheck.page.typing") }
+        }
+
+        public enum Summary {
+            public static var all: String { L10n.tr("perfCheck.summary.all") }
+            public static func some(count: Int) -> String { L10n.tr("perfCheck.summary.some", count) }
+        }
+    }
+
     public enum Ports {
         public static var allInterfaces: String { L10n.tr("ports.allInterfaces") }
         public static var columnAddress: String { L10n.tr("ports.columnAddress") }

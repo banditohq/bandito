@@ -72,6 +72,20 @@ public final class AppModel {
         load()
     }
 
+    /// Servers that are never saved: no list in the defaults, no token in the Keychain. The smoothness check (Help
+    /// menu) runs its demo copy of the app on such a model, with demo daemons.
+    init(ephemeral servers: [ServerModel], defaults: UserDefaults) {
+        self.defaults = defaults
+        oauth = OAuthSignIn(defaults: defaults)
+        device = DeviceSignIn()
+        isEphemeral = true
+        self.servers = servers
+        selectedServerID = servers.first?.id
+    }
+
+    /// The list is not saved and touches no Keychain (see `init(ephemeral:defaults:)`).
+    @ObservationIgnored private var isEphemeral = false
+
     /// Takes `bandito://oauth/callback` from the browser: hands the code to the server that began the sign-in and
     /// brings that server to the front. Returns false when `url` is not a sign-in callback.
     @discardableResult
@@ -414,6 +428,7 @@ public final class AppModel {
     }
 
     public func add(_ config: ServerConfig) {
+        guard !isEphemeral else { return }
         // A server whose token cannot be stored could never authenticate: refuse it instead of adding a dead entry.
         guard Keychain.setToken(config.token, for: config.id) else {
             lastError = "Could not save the device token in the Keychain. The server was not added."
@@ -434,6 +449,7 @@ public final class AppModel {
     }
 
     public func remove(_ id: UUID) {
+        guard !isEphemeral else { return }
         guard let i = servers.firstIndex(where: { $0.id == id }) else { return }
         let s = servers.remove(at: i)
         keyRepair[id] = nil
@@ -502,6 +518,7 @@ public final class AppModel {
     }
 
     private func save() {
+        guard !isEphemeral else { return }
         // Tokens never go to UserDefaults.
         let configs = servers.map { s -> ServerConfig in
             var c = s.config

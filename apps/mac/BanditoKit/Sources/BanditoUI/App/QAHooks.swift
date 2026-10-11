@@ -44,8 +44,12 @@ enum QACommand: Equatable {
     case workbench(String)
     /// The double-click of a title strip (`TitleBarZoom.doubleClick`), without a mouse: zooms or restores the window.
     case zoom
-    /// A performance scenario (`perf thread|inspector|market|switch|typing [result path]`, see `PerfScenarios`).
+    /// A performance scenario in the smoothness check's window (`perf <scenario> [result path]`, see `PerfScenarios`).
     case perf(PerfScenario, path: String?)
+    /// Every scenario in a row, as the Help menu's smoothness check runs them (`perf check [summary path]`).
+    case perfCheck(path: String?)
+    /// Answers the first-run notice about statistics with "Don't send", so a fresh QA copy has no sheet in front.
+    case dismissConsent
 
     static func parse(_ text: String) -> QACommand? {
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -77,9 +81,14 @@ enum QACommand: Equatable {
             return .zoom
         case ("perf", let rest?):
             let words = rest.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
-            guard let name = words.first, let scenario = PerfScenario(rawValue: String(name)) else { return nil }
+            guard let name = words.first.map(String.init) else { return nil }
             let path = words.count > 1 ? String(words[1]).trimmingCharacters(in: .whitespaces) : nil
-            return .perf(scenario, path: path?.isEmpty == false ? path : nil)
+            let given = path?.isEmpty == false ? path : nil
+            if name == "check" { return .perfCheck(path: given) }
+            guard let scenario = PerfScenario(rawValue: name) else { return nil }
+            return .perf(scenario, path: given)
+        case ("dismiss-consent", nil):
+            return .dismissConsent
         default:
             return nil
         }
@@ -103,6 +112,7 @@ enum QAHooks {
     private static var started = false
     private static var router: Router?
     private static var onboarding: OnboardingModel?
+    private static var telemetry: TelemetryCenter?
     private static var observer: NSObjectProtocol?
     private static weak var app: AppModel?
 
@@ -129,11 +139,12 @@ enum QAHooks {
 
     /// Called once when the main window appears: applies the launch arguments and starts listening for commands.
     /// Does nothing outside a QA copy (`QABuild`), so the development build `dev.bandito.mac.debug` gets no hooks.
-    static func start(router: Router, onboarding: OnboardingModel) {
+    static func start(router: Router, onboarding: OnboardingModel, telemetry: TelemetryCenter) {
         guard QABuild.isRunningQA, !started else { return }
         started = true
         self.router = router
         self.onboarding = onboarding
+        self.telemetry = telemetry
         applyLaunchArguments(to: router)
         observeCommands()
     }
@@ -174,7 +185,11 @@ enum QAHooks {
         case .zoom:
             TitleBarZoom.doubleClick()
         case .perf(let scenario, let path):
-            PerfScenarios.start(scenario, path: path, router: router, app: app)
+            PerfCheck.runQA([scenario], summaryPath: nil, singlePath: path)
+        case .perfCheck(let path):
+            PerfCheck.runQA(PerfScenario.allCases, summaryPath: path, singlePath: nil)
+        case .dismissConsent:
+            telemetry?.answerNotice(sendStatistics: false)
         }
     }
 
@@ -251,7 +266,11 @@ enum QAHooks {
     /// Sets the content size of the main window and centres it. False when there is no such window yet.
     @discardableResult
     private static func resizeMainWindow(_ size: QASize) -> Bool {
-        guard let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.isVisible && !$0.isMiniaturized }) else {
+        guard
+            let window = NSApp.windows.first(where: {
+                $0.canBecomeMain && $0.isVisible && !$0.isMiniaturized && $0.identifier != PerfCheck.windowIdentifier
+            })
+        else {
             return false
         }
         window.setContentSize(NSSize(width: size.width, height: size.height))

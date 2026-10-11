@@ -422,6 +422,26 @@
 			<string>≈ %1$lld минуты</string>
 		</dict>
 	</dict>
+	<key>perfCheck.summary.some</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld страницы не соответствуют цели.</string>
+			<key>many</key>
+			<string>%1$lld страниц не соответствуют цели.</string>
+			<key>one</key>
+			<string>%1$lld страница не соответствует цели.</string>
+			<key>other</key>
+			<string>%1$lld страницы не соответствуют цели.</string>
+		</dict>
+	</dict>
 	<key>schedule.step.hours</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

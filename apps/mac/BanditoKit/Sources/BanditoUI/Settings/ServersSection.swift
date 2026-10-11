@@ -11,6 +11,9 @@ struct ServersSection: View {
     @State private var removing: ServerModel?
     /// The server whose settings page is open; nil shows the list.
     @State private var detail: UUID?
+    @Environment(\.settingsNavigation) private var ownNavigation
+
+    private var navigationRequests: SettingsNavigation { ownNavigation ?? .shared }
 
     var body: some View {
         if let server = app.servers.first(where: { $0.id == detail }) {
@@ -18,7 +21,7 @@ struct ServersSection: View {
         } else {
             list
                 .onAppear(perform: takeRequestedServer)
-                .onChange(of: SettingsNavigation.shared.requestedServer) { _, _ in takeRequestedServer() }
+                .onChange(of: navigationRequests.requestedServer) { _, _ in takeRequestedServer() }
         }
     }
 
@@ -103,9 +106,9 @@ struct ServersSection: View {
 
     /// Opens the settings page of the server the Server screen asked for.
     private func takeRequestedServer() {
-        guard let id = SettingsNavigation.shared.requestedServer else { return }
+        guard let id = navigationRequests.requestedServer else { return }
         detail = id
-        SettingsNavigation.shared.requestedServer = nil
+        navigationRequests.requestedServer = nil
     }
 
     /// The human address under the name: `user@host`, `host:port`, or "This Mac". Never the id or the token.

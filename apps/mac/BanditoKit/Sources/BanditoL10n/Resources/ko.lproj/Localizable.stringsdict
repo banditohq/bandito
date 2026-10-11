@@ -296,6 +296,20 @@
 			<string>약 ≈ %1$lld분</string>
 		</dict>
 	</dict>
+	<key>perfCheck.summary.some</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>%1$lld개 페이지가 목표에 못 미칩니다.</string>
+		</dict>
+	</dict>
 	<key>schedule.step.hours</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

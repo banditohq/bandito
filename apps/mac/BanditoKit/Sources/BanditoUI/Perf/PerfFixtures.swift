@@ -1,9 +1,9 @@
-#if DEBUG
 import BanditoKit
 import Foundation
 
 /// Synthetic data for the QA performance scenarios (`perf thread`, `perf switch`): long threads of every kind of row,
-/// built in memory. The same input always gives the same rows, so two runs are comparable. Debug builds only.
+/// built in memory. The same input always gives the same rows, so two runs are comparable. The smoothness check
+/// (Help menu) uses them too.
 enum PerfFixtures {
     static let threadAgentID = "qa-perf-thread"
 
@@ -178,13 +178,26 @@ enum PerfFixtures {
         return Array(items.prefix(count))
     }
 
-    /// An agent for the scenarios. `index` varies name, runtime and avatar.
+    /// An agent for the scenarios. `index` varies role, runtime, status and the preview of its last message.
     static func agent(id: String, name: String, index: Int) -> Agent {
         let runtimes: [RuntimeKind] = [.claude, .codex, .grok]
+        let roles = ["Builder", "Reviewer", "On call", "Auditor", "Docs", "Lead", "Designer", "Tester"]
+        let statuses: [AgentStatus] = [.idle, .working, .idle, .needsYou, .idle, .working, .idle, .error]
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
         return Agent(
-            id: id, name: name, role: "QA \(index)", runtime: runtimes[index % runtimes.count], cwd: "/tmp/qa-perf",
-            createdAt: 1_700_000_000_000 + Int64(index), updatedAt: 1_700_000_000_000 + Int64(index),
-            status: index % 4 == 0 ? .working : .idle)
+            id: id, name: name, role: roles[index % roles.count], runtime: runtimes[index % runtimes.count],
+            cwd: "/Users/demo/Projects/bandito-site", createdAt: 1_700_000_000_000 + Int64(index),
+            updatedAt: 1_700_000_000_000 + Int64(index), contextTokens: 12_000 + index * 3_100,
+            lastTurnAt: now - Int64(index) * 300_000,
+            lastMessage: LastMessage(role: "assistant", text: sentences[index % sentences.count], ts: now - Int64(index) * 300_000),
+            status: statuses[index % statuses.count])
     }
+
+    /// Names of the demo agents (the smoothness check shows forty of them).
+    static let names = [
+        "Forge", "Scout", "Watch", "Night Owl", "Quill", "Atlas", "Echo", "Pixel", "Harbor", "Juniper", "Kite", "Lumen",
+        "Maple", "Nova", "Orbit", "Pike", "Quartz", "Raven", "Sable", "Tide", "Umber", "Vale", "Wren", "Yarrow", "Zephyr",
+        "Birch", "Cinder", "Delta", "Ember", "Flint", "Grove", "Haze", "Iris", "Jade", "Knot", "Larch", "Moss", "Nettle",
+        "Onyx", "Pebble",
+    ]
 }
-#endif
