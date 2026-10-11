@@ -818,7 +818,10 @@ mod share_tests {
         assert_eq!(schedules.len(), 1);
         assert_eq!(schedules[0].cron, "0 9 * * *");
         assert_eq!(schedules[0].prompt, "Morning digest");
-        assert!(schedules[0].enabled);
+        assert!(
+            !schedules[0].enabled,
+            "a shared bot's schedules start off: the owner turns them on"
+        );
     }
 
     #[tokio::test]
@@ -926,6 +929,89 @@ mod share_tests {
         .await
         .unwrap();
         assert_eq!(plain["starter"], Value::Null);
+    }
+
+    #[tokio::test]
+    async fn the_agent_gets_only_the_connected_services_the_payload_names() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let notion = connect(&store, "notion", None, true);
+        connect(&store, "github", None, true);
+        let made = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot()}),
+        )
+        .await
+        .unwrap();
+        let id = made["agent"]["id"].as_str().unwrap();
+        let agent = store.agent_get(id).unwrap().unwrap();
+        assert_eq!(
+            agent.integrations,
+            Some(vec![notion.id.clone()]),
+            "notion only, not every integration"
+        );
+
+        let mut no_services = bot();
+        no_services["services"] = json!([]);
+        let none = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": no_services}),
+        )
+        .await
+        .unwrap();
+        let id = none["agent"]["id"].as_str().unwrap();
+        assert_eq!(
+            store.agent_get(id).unwrap().unwrap().integrations,
+            Some(vec![]),
+            "no integration at all"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_capabilities_may_only_narrow_the_payloads() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let narrowed = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot(), "capabilities": ["files"]}),
+        )
+        .await
+        .unwrap();
+        let id = narrowed["agent"]["id"].as_str().unwrap();
+        assert_eq!(
+            store.agent_get(id).unwrap().unwrap().capabilities,
+            Some(vec![Capability::Files])
+        );
+
+        let as_is = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot()}),
+        )
+        .await
+        .unwrap();
+        let id = as_is["agent"]["id"].as_str().unwrap();
+        assert_eq!(
+            store.agent_get(id).unwrap().unwrap().capabilities,
+            Some(vec![Capability::Browser, Capability::Files]),
+            "without the parameter, the payload's own list"
+        );
+
+        for wanted in [json!(["terminal"]), json!(["files", "files"])] {
+            let err = call(
+                &app,
+                "agents.create_from_shared",
+                json!({"share_id": SHARE, "version": 1, "payload": bot(), "capabilities": wanted}),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{wanted}");
+            assert_eq!(err.message, "invalid: capabilities", "{wanted}");
+        }
+        assert_eq!(store.agent_list().unwrap().len(), 2, "a refused request makes no agent");
     }
 
     #[tokio::test]

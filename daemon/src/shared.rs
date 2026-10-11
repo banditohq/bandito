@@ -15,6 +15,10 @@ use std::path::{Path, PathBuf};
 /// The integrations catalog: the ids of the services a shared bot may name, and their urls.
 const INTEGRATIONS_JSON: &str = include_str!("integrations_catalog.json");
 
+/// Serializes the installs of shared skills, as `CREATE_LOCK` serializes the agent creations: two installs of one name
+/// never interleave their folder writes.
+static SHARED_INSTALL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// The only payload schema this daemon reads and writes.
 pub const SCHEMA: u32 = 1;
 pub const BOT_NAME_MAX: usize = 32;
@@ -85,6 +89,9 @@ pub enum ShareError {
     Invalid(String),
     /// A folder or file cannot be used. `reason` is the stable code in `error.data.reason` (`COMMANDS_ERROR`).
     Refused { reason: &'static str, message: String },
+    /// A payload is wrong at a known path (a name that collides with another, a path too long or too deep). The RPC
+    /// message is `invalid: <field>`, and `data.path` names the path.
+    InvalidAt { field: String, path: String },
 }
 
 impl ShareError {
@@ -1408,6 +1415,187 @@ mod tests {
             "a block with no lines"
         );
         assert_eq!(description_from("name: x"), None, "no description key");
+    }
+
+    /// The `(field, path)` of a payload refused at a path, as `parse_skill` answers it.
+    fn skill_invalid_at(v: Value) -> (String, String) {
+        match parse_skill(v) {
+            Err(ShareError::InvalidAt { field, path }) => (field, path),
+            other => panic!("expected a refusal that names a path, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn paths_that_differ_only_in_case_are_refused_with_the_one_that_collides() {
+        let mut same_file = skill();
+        same_file["files"]["skill.md"] = json!("another");
+        assert_eq!(
+            skill_invalid_at(same_file),
+            ("files".to_string(), "skill.md".to_string())
+        );
+
+        // `scripts/run.sh` and `Scripts/x` put two spellings of one folder in the same skill.
+        let mut same_folder = skill();
+        same_folder["files"]["Scripts/x"] = json!("x");
+        assert_eq!(
+            skill_invalid_at(same_folder),
+            ("files".to_string(), "scripts/run.sh".to_string())
+        );
+    }
+
+    #[test]
+    fn a_file_and_a_folder_of_another_file_are_refused_in_any_case() {
+        let mut v = skill();
+        v["files"]["DOCS"] = json!("a file where a folder is");
+        let (field, path) = skill_invalid_at(v);
+        assert_eq!(field, "files");
+        assert_eq!(path, "docs/notes.md");
+    }
+
+    #[test]
+    fn executables_are_matched_to_the_files_exactly() {
+        let v = with(skill(), "executable", json!(["Scripts/run.sh"]));
+        assert_eq!(skill_invalid(v), "executable");
+    }
+
+    #[test]
+    fn a_path_over_200_characters_or_8_levels_deep_is_refused_with_its_path() {
+        let long_ok = format!("docs/{}.md", "x".repeat(192));
+        assert_eq!(long_ok.len(), 200);
+        let mut ok = skill();
+        ok["files"][long_ok.as_str()] = json!("x");
+        assert!(parse_skill(ok).is_ok(), "200 characters is the limit");
+
+        let long = format!("docs/{}.md", "x".repeat(193));
+        let mut v = skill();
+        v["files"][long.as_str()] = json!("x");
+        assert_eq!(skill_invalid_at(v), ("files".to_string(), long));
+
+        let eight = "a/b/c/d/e/f/g/h.md";
+        let mut ok8 = skill();
+        ok8["files"][eight] = json!("x");
+        assert!(parse_skill(ok8).is_ok(), "8 levels is the limit");
+        let nine = "a/b/c/d/e/f/g/h/i.md";
+        let mut v9 = skill();
+        v9["files"][nine] = json!("x");
+        assert_eq!(skill_invalid_at(v9), ("files".to_string(), nine.to_string()));
+    }
+
+    #[test]
+    fn a_block_scalar_with_a_wide_space_is_read_without_a_panic() {
+        // The first line's indentation is 3 bytes; the second line's leading whitespace ends inside the U+3000.
+        assert_eq!(
+            description_from("description: |\n   first\n  \u{3000}текст"),
+            Some("first\n\u{3000}текст".to_string())
+        );
+    }
+
+    #[test]
+    fn an_unknown_key_is_named_in_at_most_64_characters() {
+        let long = "k".repeat(100);
+        let mut v = bot();
+        v[long.as_str()] = json!(1);
+        assert_eq!(invalid(v), "k".repeat(64));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_file_is_refused_by_its_size_before_it_is_read() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = TempDir::new().unwrap();
+        let dir = own_skill(home.path(), "release-notes");
+        let big = dir.join("docs/huge.md");
+        fs::write(&big, repeat_chars('h', SKILL_BYTES_MAX + 1)).unwrap();
+        // Unreadable: a read would fail with `io`, so only a size check made first gives `too_large`.
+        fs::set_permissions(&big, fs::Permissions::from_mode(0o000)).unwrap();
+        let result = skill_from_folder(home.path(), "release-notes", Some("MIT"));
+        fs::set_permissions(&big, fs::Permissions::from_mode(0o644)).unwrap();
+        match result {
+            Err(ShareError::Refused { reason, message }) => {
+                assert_eq!(reason, "too_large");
+                assert!(message.contains("docs/huge.md"), "{message}");
+            }
+            other => panic!("expected too_large before any read, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_folder_of_more_than_fifty_files_is_refused_while_it_is_walked() {
+        let home = TempDir::new().unwrap();
+        let dir = own_skill(home.path(), "release-notes");
+        for i in 0..SKILL_FILES_MAX {
+            fs::write(dir.join(format!("docs/f{i}.md")), "x").unwrap();
+        }
+        match skill_from_folder(home.path(), "release-notes", Some("MIT")) {
+            Err(ShareError::InvalidAt { field, path }) => {
+                assert_eq!(field, "files");
+                assert!(path.starts_with("docs/f"), "{path}");
+            }
+            other => panic!("expected the file count refused with a path, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_file_nine_levels_deep_is_refused_while_it_is_walked() {
+        let home = TempDir::new().unwrap();
+        let dir = own_skill(home.path(), "release-notes");
+        fs::create_dir_all(dir.join("a/b/c/d/e/f/g/h")).unwrap();
+        fs::write(dir.join("a/b/c/d/e/f/g/h/i.md"), "x").unwrap();
+        match skill_from_folder(home.path(), "release-notes", Some("MIT")) {
+            Err(ShareError::InvalidAt { field, path }) => {
+                assert_eq!(field, "files");
+                assert_eq!(path, "a/b/c/d/e/f/g/h/i.md");
+            }
+            other => panic!("expected the depth refused with its path, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_install_waits_for_another_install_under_the_same_lock() {
+        let base = TempDir::new().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let holder = std::thread::spawn(move || {
+            let _held = SHARED_INSTALL_LOCK.lock().unwrap();
+            tx.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(400));
+        });
+        rx.recv().unwrap();
+        let started = std::time::Instant::now();
+        install_shared(base.path(), "release-notes", SHARE, 1, &payload()).unwrap();
+        assert!(
+            started.elapsed() >= std::time::Duration::from_millis(200),
+            "the install waited for the lock"
+        );
+        holder.join().unwrap();
+    }
+
+    #[test]
+    fn two_installs_of_one_name_at_once_leave_one_whole_copy() {
+        let base = TempDir::new().unwrap();
+        let root = base.path().to_path_buf();
+        let writers: Vec<_> = (0..2u32)
+            .map(|t| {
+                let root = root.clone();
+                std::thread::spawn(move || {
+                    for i in 0..10u32 {
+                        let mut p = payload();
+                        p.files.insert("docs/notes.md".into(), format!("writer {t} round {i}"));
+                        install_shared(&root, "release-notes", SHARE, i + 1, &p).expect("the install goes through");
+                    }
+                })
+            })
+            .collect();
+        for w in writers {
+            w.join().unwrap();
+        }
+        let folder = base.path().join(".claude/skills/release-notes");
+        assert!(folder.join("SKILL.md").is_file());
+        assert!(marker_of(&folder)["version"].as_u64().is_some());
+        let names: Vec<String> = fs::read_dir(base.path().join(".claude/skills"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["release-notes".to_string()], "no temporary folder is left");
     }
 
     /// The marker's file name, as the skills module names it.

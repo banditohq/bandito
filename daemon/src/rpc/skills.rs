@@ -75,6 +75,11 @@ pub(super) fn share_error(e: ShareError) -> RpcError {
         ShareError::Invalid(field) => {
             RpcError::with_data(INVALID_PARAMS, format!("invalid: {field}"), json!({ "field": field }))
         }
+        ShareError::InvalidAt { field, path } => RpcError::with_data(
+            INVALID_PARAMS,
+            format!("invalid: {field}"),
+            json!({ "field": field, "path": path }),
+        ),
         ShareError::Refused { reason, message } => {
             RpcError::with_data(COMMANDS_ERROR, message, json!({ "reason": reason }))
         }
@@ -607,6 +612,26 @@ mod share_tests {
         .unwrap_err();
         assert_eq!(err.code, COMMANDS_ERROR);
         assert_eq!(reason(&err), "not_yours");
+    }
+
+    #[tokio::test]
+    async fn skills_install_shared_names_the_path_that_collides() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let mut p = payload();
+        p["files"]["Scripts/x"] = json!("x");
+        let err = call(
+            &r,
+            home.path(),
+            "skills.install_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": p}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert_eq!(err.message, "invalid: files");
+        assert_eq!(err.data.as_ref().unwrap()["path"], "scripts/run.sh");
+        assert!(!home.path().join(".claude").exists());
     }
 
     #[test]
