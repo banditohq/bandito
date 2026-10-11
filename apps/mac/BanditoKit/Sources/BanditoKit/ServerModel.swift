@@ -465,9 +465,20 @@ public final class ServerModel: Identifiable {
     /// for notifications, so events that were already seen never notify twice.
     public var onLiveEvent: ((Event) -> Void)?
 
+    /// Counts the `telegram.changed` events this model applied. The Telegram section reads the status again on each
+    /// change of this number.
+    public internal(set) var telegramRevision = 0
+    /// True when the daemon answered `method not found` to the Telegram RPCs (a daemon from before 0.1.8). The Settings
+    /// window then leaves the Telegram section out. Set by `checkTelegramSupport()`.
+    public internal(set) var telegramUnsupported = false
+
     /// Fold one event into the model (also used by tests).
     public func apply(_ e: Event) {
         if e.seq > lastSeq { lastSeq = e.seq }
+        if case .telegramChanged = e.body {
+            telegramRevision &+= 1
+            return
+        }
         if case .usageLimits(let runtime, let windows) = e.body {
             recordUsage(runtime: runtime, windows: windows)
         }

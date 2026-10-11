@@ -2606,6 +2606,7 @@ public enum L10n {
             public static var notifications: String { L10n.tr("settings.nav.notifications") }
             public static var servers: String { L10n.tr("settings.nav.servers") }
             public static var sounds: String { L10n.tr("settings.nav.sounds") }
+            public static var telegram: String { L10n.tr("settings.nav.telegram") }
             public static var terminalFiles: String { L10n.tr("settings.nav.terminalFiles") }
             public static var updates: String { L10n.tr("settings.nav.updates") }
             public static var usage: String { L10n.tr("settings.nav.usage") }
@@ -2661,6 +2662,52 @@ public enum L10n {
                 public static var mechanics: String { L10n.tr("settings.sounds.sets.mechanics") }
                 public static var retro: String { L10n.tr("settings.sounds.sets.retro") }
                 public static var soft: String { L10n.tr("settings.sounds.sets.soft") }
+            }
+        }
+
+        public enum Telegram {
+            public static var answerAll: String { L10n.tr("settings.telegram.answerAll") }
+            public static var answerFromTelegram: String { L10n.tr("settings.telegram.answerFromTelegram") }
+            public static var answerNone: String { L10n.tr("settings.telegram.answerNone") }
+            public static var answers: String { L10n.tr("settings.telegram.answers") }
+            public static var answersHint: String { L10n.tr("settings.telegram.answersHint") }
+            public static var approvals: String { L10n.tr("settings.telegram.approvals") }
+            public static var approvalsHint: String { L10n.tr("settings.telegram.approvalsHint") }
+            public static var bot: String { L10n.tr("settings.telegram.bot") }
+            public static var chats: String { L10n.tr("settings.telegram.chats") }
+            public static var checking: String { L10n.tr("settings.telegram.checking") }
+            public static var connect: String { L10n.tr("settings.telegram.connect") }
+            public static var intro: String { L10n.tr("settings.telegram.intro") }
+            public static var linkAction: String { L10n.tr("settings.telegram.linkAction") }
+            public static var linkHint: String { L10n.tr("settings.telegram.linkHint") }
+            public static func linkedAt(date: String) -> String { L10n.tr("settings.telegram.linkedAt", date) }
+            public static var noChats: String { L10n.tr("settings.telegram.noChats") }
+            public static var removeConfirmMessage: String { L10n.tr("settings.telegram.removeConfirmMessage") }
+            public static var removeConfirmTitle: String { L10n.tr("settings.telegram.removeConfirmTitle") }
+            public static var removeHint: String { L10n.tr("settings.telegram.removeHint") }
+            public static var removeToken: String { L10n.tr("settings.telegram.removeToken") }
+            public static var stateRunning: String { L10n.tr("settings.telegram.stateRunning") }
+            public static var stateStopped: String { L10n.tr("settings.telegram.stateStopped") }
+            public static var step1: String { L10n.tr("settings.telegram.step1") }
+            public static var step2: String { L10n.tr("settings.telegram.step2") }
+            public static var tokenPlaceholder: String { L10n.tr("settings.telegram.tokenPlaceholder") }
+            public static var unlink: String { L10n.tr("settings.telegram.unlink") }
+
+            public enum Error {
+                public static var conflict: String { L10n.tr("settings.telegram.error.conflict") }
+                public static var invalidToken: String { L10n.tr("settings.telegram.error.invalidToken") }
+                public static var network: String { L10n.tr("settings.telegram.error.network") }
+                public static var unauthorized: String { L10n.tr("settings.telegram.error.unauthorized") }
+            }
+
+            public enum Link {
+                public static var expired: String { L10n.tr("settings.telegram.link.expired") }
+                public static func expiresIn(time: String) -> String { L10n.tr("settings.telegram.link.expiresIn", time) }
+                public static var intro: String { L10n.tr("settings.telegram.link.intro") }
+                public static var `open`: String { L10n.tr("settings.telegram.link.open") }
+                public static var preparing: String { L10n.tr("settings.telegram.link.preparing") }
+                public static var renew: String { L10n.tr("settings.telegram.link.renew") }
+                public static var waiting: String { L10n.tr("settings.telegram.link.waiting") }
             }
         }
 
