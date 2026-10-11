@@ -153,6 +153,25 @@ private final class Rig {
         #expect(server.cancelled == ["state-1"])
     }
 
+    @Test func aLoopbackSignInIsNotKeptOnDiskAndAStoredOneIsDroppedAtStart() async throws {
+        let rig = Rig()
+        defer { rig.tearDown() }
+        let server = FakeServer()
+        server.beginAnswer = .success(loopbackBegun)
+        await rig.oauth.begin(server: server, target: .draft(linear), name: "Linear")
+        #expect(rig.defaults.data(forKey: OAuthSignIn.storeKey) == nil)
+        // A record from some earlier run that says loopback is removed when the app starts.
+        let stale = OAuthSignIn.Pending(
+            state: "old", serverID: UUID(), name: "Linear", startedAt: Date(), loopback: true)
+        rig.defaults.set(try JSONEncoder().encode(stale), forKey: OAuthSignIn.storeKey)
+        _ = rig.restarted()
+        #expect(rig.defaults.data(forKey: OAuthSignIn.storeKey) == nil)
+        // A scheme sign-in is still kept.
+        let kept = FakeServer()
+        await rig.oauth.begin(server: kept, target: .draft(linear), name: "Linear")
+        #expect(rig.defaults.data(forKey: OAuthSignIn.storeKey) != nil)
+    }
+
     @Test func aSchemeSignInStartsNoListener() async {
         let rig = Rig()
         defer { rig.tearDown() }

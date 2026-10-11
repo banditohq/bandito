@@ -34,6 +34,8 @@ public final class OAuthSignIn {
         var serverID: UUID
         var name: String
         var startedAt: Date
+        /// Answered on the loopback listener, which a restart does not bring back: never kept on disk.
+        var loopback: Bool?
     }
 
     /// The daemon forgets a sign-in after ten minutes; so does the app.
@@ -117,7 +119,7 @@ public final class OAuthSignIn {
                     return
                 }
             }
-            let record = Pending(state: begun.state, serverID: server.oauthServerID, name: name, startedAt: now())
+            let record = Pending(state: begun.state, serverID: server.oauthServerID, name: name, startedAt: now(), loopback: begun.usesLoopback)
             remember(record)
             authorizeURL = url
             phase = .waiting(name: name)
@@ -234,6 +236,8 @@ public final class OAuthSignIn {
 
     private func remember(_ record: Pending) {
         pending = record
+        // A loopback sign-in has no listener after a restart; a stored one would only wait for nobody.
+        guard record.loopback != true else { return }
         if let data = try? JSONEncoder().encode(record) { defaults.set(data, forKey: Self.storeKey) }
     }
 
@@ -290,7 +294,12 @@ public final class OAuthSignIn {
 
     private static func load(_ defaults: UserDefaults) -> Pending? {
         guard let data = defaults.data(forKey: storeKey) else { return nil }
-        return try? JSONDecoder().decode(Pending.self, from: data)
+        guard let record = try? JSONDecoder().decode(Pending.self, from: data), record.loopback != true else {
+            // Unreadable, or a loopback sign-in whose listener died with the last run.
+            defaults.removeObject(forKey: storeKey)
+            return nil
+        }
+        return record
     }
 
     /// The address to open: https (plain http only for this Mac), nothing else, so a bad answer cannot make the
