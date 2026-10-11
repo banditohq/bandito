@@ -15,8 +15,8 @@ use tokio::sync::oneshot;
 /// What the tasks of the turns share: which turns have a task, and when a chat last got an action.
 #[derive(Default)]
 pub(super) struct Typing {
-    /// Turn id to the stop switch of its task. Dropping the sender ends the task.
-    turns: HashMap<String, oneshot::Sender<()>>,
+    /// Turn id to its chat and the stop switch of its task. Dropping the sender ends the task.
+    turns: HashMap<String, (i64, oneshot::Sender<()>)>,
     /// Chat to when its last action went out. One action per chat per gap, whichever turn asks.
     last: HashMap<i64, Instant>,
 }
@@ -39,7 +39,7 @@ impl Typing {
 
     /// Forgets the tasks that have ended.
     fn prune(&mut self) {
-        self.turns.retain(|_, stop| !stop.is_closed());
+        self.turns.retain(|_, (_, stop)| !stop.is_closed());
     }
 }
 
@@ -60,7 +60,7 @@ impl Telegram {
             if typing.turns.contains_key(turn_id) {
                 return;
             }
-            typing.turns.insert(turn_id.to_string(), stop);
+            typing.turns.insert(turn_id.to_string(), (chat, stop));
         }
         let job = Job {
             api: self.api.clone(),
@@ -76,6 +76,13 @@ impl Telegram {
     /// Ends the "typing…" of a turn, whichever way the turn ended.
     pub(super) fn stop_typing(&self, turn_id: &str) {
         self.typing_state().turns.remove(turn_id);
+    }
+
+    /// Ends the "typing…" of every turn a chat started (the chat is unlinked).
+    pub(super) fn stop_chat_typing(&self, chat: i64) {
+        let mut typing = self.typing_state();
+        typing.turns.retain(|_, (turn_chat, _)| *turn_chat != chat);
+        typing.last.remove(&chat);
     }
 
     /// Ends every "typing…" (the token is removed, or the poll stops).

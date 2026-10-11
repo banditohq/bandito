@@ -599,6 +599,7 @@ impl Telegram {
             st.held.remove(&chat_id);
             st.notices.retain(|(chat, _), _| *chat != chat_id);
         }
+        self.stop_chat_typing(chat_id);
         self.changed();
         Ok(())
     }

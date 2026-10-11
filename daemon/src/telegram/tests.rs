@@ -1549,11 +1549,8 @@ fn every_string_the_code_asks_for_exists_and_none_is_unused() {
 
 #[tokio::test]
 async fn messages_to_one_chat_are_spaced() {
-    let rig = rig_with(Timing {
-        send_gap: Duration::from_millis(150),
-        ..fast()
-    })
-    .await;
+    let send_gap = Duration::from_millis(150);
+    let rig = rig_with(Timing { send_gap, ..fast() }).await;
     rig.link(OWNER);
     rig.link(2);
     for _ in 0..3 {
@@ -1563,9 +1560,12 @@ async fn messages_to_one_chat_are_spaced() {
     let calls = rig.fake.calls_full("sendMessage");
     let mine: Vec<_> = calls.iter().filter(|c| c.body["chat_id"] == OWNER).collect();
     assert_eq!(mine.len(), 3);
+    // The fake stamps each request when it arrives, and a request leaves a little after the bot decided to send it
+    // (curl starts), so the arrivals may come closer than the gap; 0.8 of the gap still shows the spacing.
+    let least = send_gap.mul_f64(0.8);
     for pair in mine.windows(2) {
         let gap = pair[1].at - pair[0].at;
-        assert!(gap >= Duration::from_millis(140), "{gap:?}");
+        assert!(gap >= least, "{gap:?} < {least:?}");
     }
 }
 
@@ -2239,6 +2239,32 @@ async fn a_failed_action_is_forgotten_but_a_refused_token_ends_the_task() {
     rig.fake.wait_calls("sendChatAction", 2).await;
     tokio::time::sleep(Duration::from_millis(400)).await;
     assert_eq!(rig.fake.calls("sendChatAction").len(), 2);
+}
+
+#[tokio::test]
+async fn unlinking_a_chat_in_telegram_stops_its_typing() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    telegram_turn(&mut rig, "bye soon").await;
+    rig.fake.wait_calls("sendChatAction", 1).await;
+    rig.tg.handle_update(msg(OWNER, "/unlink")).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let stopped = rig.fake.calls("sendChatAction").len();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(rig.fake.calls("sendChatAction").len(), stopped);
+}
+
+#[tokio::test]
+async fn unlinking_a_chat_in_the_app_stops_its_typing() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    telegram_turn(&mut rig, "bye soon").await;
+    rig.fake.wait_calls("sendChatAction", 1).await;
+    rig.tg.unlink(OWNER).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let stopped = rig.fake.calls("sendChatAction").len();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(rig.fake.calls("sendChatAction").len(), stopped);
 }
 
 #[test]
