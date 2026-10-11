@@ -30,21 +30,26 @@ Each catalog card shows the icon, the name, the publisher, two lines about the s
 ## Filters and categories
 
 <!-- id: market-filters; covers: -->
-The sidebar lists All (Все), Connected (Подключённые), and the categories of the catalog: Development (Разработка),
-Productivity (Продуктивность), Data (Данные), Web (Веб), Design (Дизайн) and Other (Другое). A category shows its
-services whether or not they are connected. Only the categories the catalog has are listed.
+The Services page under All (Все) is one long list in blocks: Connected (Подключённые) first, when something is connected,
+then one block per category: Development (Разработка), Productivity (Продуктивность), Data (Данные), Web (Веб), Design
+(Дизайн) and Other (Другое). Each block has its header with a coloured bar, the name and the number of services; the
+header stays at the top while its block scrolls under it. A category block lists its services whether or not they are
+connected. A category with no services has no block and no row in the sidebar. The cards fill the width of the page
+with the same margin at both sides: two to four columns, by the width of the window.
 Где: Marketplace → sidebar → All (Все), Connected (Подключённые), a category
-1. Click Connected (Подключённые) to hide the services that are not connected.
-2. Click a category to see only its services.
-3. With no connected service, the page says Nothing is connected yet (Ничего ещё не подключено).
-4. Clicking a row in the sidebar also closes the page of a service.
+1. Click a category in the sidebar: the page scrolls to its block (without animation when Reduce Motion is on). Click All (Все) to go back to the top.
+2. While you scroll, the sidebar lights the row of the block in view; each category has a small dot in the colour of its block.
+3. Click Connected (Подключённые) to see only the connected services in one list. Click a category or All (Все) to return to the blocks.
+4. With no connected service, the Connected (Подключённые) list says Nothing is connected yet (Ничего ещё не подключено).
+5. Clicking a row in the sidebar also closes the page of a service.
+6. Bots and Skills keep their filters: the rows of the sidebar show only what they filter by.
 
 ## Search
 
 <!-- id: market-search; covers: -->
 The search field at the top right finds services by name and by description. It ignores case and spaces at the ends. Its focus shows as a cream ring around the field. Catalog services show their logo on the brand-colour tile.
 Где: Marketplace → search field (Поиск)
-1. Type part of the name or the description. A search with no match says Nothing found (Ничего не нашлось).
+1. Type part of the name or the description. The results are one plain list without blocks. A search with no match says Nothing found (Ничего не нашлось). Click a category in the sidebar to clear the search and jump to its block.
 
 ## A service's page
 

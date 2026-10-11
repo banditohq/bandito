@@ -143,7 +143,8 @@ private func connection(
 
     @Test func sidebarCategoriesFollowTheFixedOrderThenUnknownOnes() {
         let cat = [categorized("a", "web"), categorized("b", "zeta"), categorized("c", "dev"), categorized("d", nil), categorized("e", "dev")]
-        #expect(MarketCategory.present(in: cat) == ["dev", "web", "zeta"])
+        // A service without a category counts as Other once the catalog has categories.
+        #expect(MarketCategory.present(in: cat) == ["dev", "web", "other", "zeta"])
         #expect(MarketFilter.rows(categories: ["dev"]).map(\.id) == ["all", "connected", "category:dev"])
         #expect(MarketCategory.present(in: []).isEmpty)
     }
