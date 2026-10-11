@@ -1670,10 +1670,16 @@
 "screen.clipboardOff" = "Off";
 "screen.clipboardShared" = "Shared";
 "screen.connecting" = "Connecting to the screen…";
+"screen.didNotStart" = "The screen did not start. Try again.";
 "screen.error" = "Could not connect to the screen";
 "screen.fullscreen" = "Full screen";
 "screen.hint" = "Click the screen or press Take control. The agent waits until you let go.";
 "screen.latency" = "%1$@ ms";
+"screen.missingComponent" = "The server has no %1$@, so the screen cannot start. Install it and try again.";
+"screen.needsUpdate" = "This server runs an old version of Bandito. Update the server to start the screen.";
+"screen.noAddress" = "The server did not say how to reach the screen. Try again.";
+"screen.noFrame" = "The screen did not answer";
+"screen.openUpdates" = "Open updates";
 "screen.quality" = "Quality";
 "screen.qualityAuto" = "Auto";
 "screen.qualityFaster" = "Faster";
@@ -1683,6 +1689,7 @@
 "screen.sharedSub" = "Workplace screen";
 "screen.sleepHint" = "The screen wakes on demand. After 30 minutes nobody uses it, neither you nor agents, and it sleeps to free the server's memory.";
 "screen.start" = "Start screen";
+"screen.starting" = "Starting the screen…";
 "screen.title" = "Server screen";
 "screen.transfer" = "Transfer";
 "screen.unsupported" = "The server screen works on Linux servers";

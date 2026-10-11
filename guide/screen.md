@@ -78,6 +78,39 @@ The screen wakes when someone uses it. After 30 minutes without anyone using it,
 Где: Server screen → hint line → The screen wakes on demand. After 30 minutes nobody uses it, neither you nor agents, and it sleeps again.
 1. To wake it, click Start screen (Запустить экран).
 
+## Starting the screen (Starting the screen…)
+
+<!-- id: screen-start; covers: -->
+While the server starts the screen, the button turns into a spinner with the words Starting the screen… (Запускаем экран…). When the screen runs, the page says Connecting to the screen… (Подключаем экран…) until the first picture comes.
+Где: Server screen → page, where the Start screen button was
+1. Wait. Do not click again: the spinner means the start is in progress.
+2. When the picture arrives, the screen shows. Nothing else to do.
+
+## Start failed (Retry)
+
+<!-- id: screen-start-failed; covers: -->
+If the screen does not start, the page says why under the icon: a sentence in red, such as The server has no Xvfb, or The screen did not start. Try again. (Повторить) is under it.
+Где: Server screen → page → sentence and Retry (Повторить)
+1. Read the sentence. If the server lacks a program, install it on the server and try again.
+2. Click Retry (Повторить). The app starts the screen again.
+3. The Details (Подробнее) line under the sentence has the technical text, for a report.
+
+## Screen did not answer (The screen did not answer)
+
+<!-- id: screen-no-frame; covers: -->
+The screen started, but its first picture did not come within 20 seconds. The page says The screen did not answer (Экран не ответил) with Retry (Повторить).
+Где: Server screen → page → The screen did not answer (Экран не ответил) and Retry (Повторить)
+1. Click Retry (Повторить). The app starts the screen again and connects.
+2. If it still does not answer, stop the screen on the server and start it again, or write to support with the server's journal.
+
+## Server needs an update (This server runs an old version of Bandito)
+
+<!-- id: screen-needs-update; covers: -->
+On a Linux server with an old daemon the screen is not in its features, so it cannot start. The page says This server runs an old version of Bandito. Update the server to start the screen. (На этом сервере старая версия Bandito — обновите сервер, чтобы запускать экран.) instead of the start button.
+Где: Server screen → page, where the start button is; the button Open updates (Открыть обновления)
+1. Click Open updates (Открыть обновления). Server → Updates opens.
+2. Click Update server (Обновить сервер) there, and come back to the Server screen when it is done.
+
 ## Trackpad on the screen (Pinch, Double tap)
 
 <!-- id: screen-gestures; covers: -->

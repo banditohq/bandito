@@ -1670,10 +1670,16 @@
 "screen.clipboardOff" = "关闭";
 "screen.clipboardShared" = "共享";
 "screen.connecting" = "正在连接屏幕…";
+"screen.didNotStart" = "屏幕未能启动，请重试。";
 "screen.error" = "无法连接屏幕";
 "screen.fullscreen" = "全屏";
 "screen.hint" = "点击屏幕或按下“接管控制”。松开之前，代理会等待。";
 "screen.latency" = "%1$@ 毫秒";
+"screen.missingComponent" = "服务器缺少 %1$@，因此无法启动屏幕。请安装后重试。";
+"screen.needsUpdate" = "此服务器上的 Bandito 版本较旧。请更新服务器以启动屏幕。";
+"screen.noAddress" = "服务器没有告知如何连接屏幕，请重试。";
+"screen.noFrame" = "屏幕没有响应";
+"screen.openUpdates" = "打开更新";
 "screen.quality" = "画质";
 "screen.qualityAuto" = "自动";
 "screen.qualityFaster" = "更快";
@@ -1683,6 +1689,7 @@
 "screen.sharedSub" = "工作区屏幕";
 "screen.sleepHint" = "屏幕会按需唤醒。如果 30 分钟内无人使用（包括用户和代理），它会进入休眠以释放服务器内存。";
 "screen.start" = "启动屏幕";
+"screen.starting" = "正在启动屏幕…";
 "screen.title" = "服务器屏幕";
 "screen.transfer" = "传输";
 "screen.unsupported" = "服务器屏幕仅适用于 Linux 服务器";
