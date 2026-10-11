@@ -899,7 +899,7 @@ struct Composer: View {
                         .lineLimit(2)
                 }
             }
-            ActionRow {
+            ActionRow(hugging: true) {
                 Button(L10n.Common.cancel) { mention.connectPrompt = nil }
                     .banditoButton(.quiet())
                 Button(L10n.Mention.connectAndSend) { connectService(item) }

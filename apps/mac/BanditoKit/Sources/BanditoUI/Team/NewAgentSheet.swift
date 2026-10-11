@@ -970,7 +970,7 @@ struct NewAgentSheet: View {
                     .foregroundStyle(blockerText == nil ? Color.Bandito.text3 : BanditoPalette.peach)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                ActionRow {
+                ActionRow(hugging: true) {
                     Button(L10n.AgentSheet.cancel) { router.sheet = nil }
                         .banditoButton(.quiet(size: .regular))
                     Button(L10n.AgentSheet.create) { create() }
