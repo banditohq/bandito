@@ -92,9 +92,12 @@ struct MarketFootRow<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { content }
-            VStack(alignment: .leading, spacing: 6) { content }
+        FirstFit(count: 2) { index, _ in
+            if index == 0 {
+                HStack(spacing: 8) { content }
+            } else {
+                VStack(alignment: .leading, spacing: 6) { content }
+            }
         }
     }
 }

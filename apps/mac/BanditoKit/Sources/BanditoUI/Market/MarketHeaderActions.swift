@@ -44,6 +44,7 @@ struct MarketHeaderActions<Search: View>: View {
             }
             .hidden()
             .allowsHitTesting(false)
+            .disabled(true)
             .accessibilityHidden(true)
         }
     }

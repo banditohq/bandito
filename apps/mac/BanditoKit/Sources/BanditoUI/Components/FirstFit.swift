@@ -11,6 +11,9 @@ import SwiftUI
 /// The builder gets the candidate's index and whether it is built to be measured: a measured copy is never shown, so
 /// fields, popovers and overlays that do not change its width can be left out of it (a field with the same width in a
 /// placeholder), and actions in it never run.
+///
+/// Until the widths are known (the first layout, or a picture made in one pass) it is a `ViewThatFits`, so the first
+/// frame is already the right candidate.
 struct FirstFit<Candidate: View>: View {
     let count: Int
     var alignment: Alignment = .leading
@@ -22,7 +25,15 @@ struct FirstFit<Candidate: View>: View {
     @Environment(\.locale) private var locale
 
     var body: some View {
-        candidate(chosen ?? max(count - 1, 0), false)
+        Group {
+            if let chosen {
+                candidate(chosen, false)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    ForEach(0..<count, id: \.self) { index in candidate(index, false) }
+                }
+            }
+        }
             .frame(maxWidth: .infinity, alignment: alignment)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 sizes.available = width
@@ -41,6 +52,8 @@ struct FirstFit<Candidate: View>: View {
                 }
                 .hidden()
                 .allowsHitTesting(false)
+                // A measured copy never acts: its buttons' keyboard shortcuts stay with the shown candidate.
+                .disabled(true)
                 .accessibilityHidden(true)
             }
             // Another language: the widths are measured again, and the compact candidate stands until they are.
@@ -51,6 +64,8 @@ struct FirstFit<Candidate: View>: View {
     }
 
     private func choose() {
+        // Until everything is measured the `ViewThatFits` stands.
+        guard sizes.available != nil, sizes.widths.count >= count else { return }
         let index = FirstFitRule.index(available: sizes.available, widths: sizes.widths, count: count)
         if chosen != index { chosen = index }
     }

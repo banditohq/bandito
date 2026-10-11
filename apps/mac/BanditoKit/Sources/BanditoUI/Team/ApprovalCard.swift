@@ -134,22 +134,25 @@ struct ApprovalCard: View {
     /// Deny and Approve with the "always allow here" checkbox.
     private var standardActions: some View {
         // Wide: the checkbox sits beside the buttons. Narrow: the checkbox takes a line of its own above them.
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                denyButton
-                approveButton
-                Spacer(minLength: 8)
-                rememberBox
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                rememberBox
-                ActionRow {
+        FirstFit(count: 2) { index, _ in
+            if index == 0 {
+                HStack(spacing: 10) {
                     denyButton
                     approveButton
+                    Spacer(minLength: 8)
+                    rememberBox
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    rememberBox
+                    ActionRow {
+                        denyButton
+                        approveButton
+                    }
                 }
             }
         }
-        // ViewThatFits takes all the height on offer; the card is only as tall as its chosen variant.
+        // Before it is measured it is a ViewThatFits, which takes all the height on offer.
         .fixedSize(horizontal: false, vertical: true)
     }
 
