@@ -52,6 +52,8 @@ public struct RPCError: Error, Sendable, Equatable, LocalizedError {
     public static let changesError = -32022
     /// Host operation failed; `data.reason` is `forbidden`, `not_found` or `io`.
     public static let hostError = -32023
+    /// Skill folder or file operation refused; `data.reason` says why (see docs/ARCHITECTURE.md#sharing).
+    public static let commandsError = -32027
     /// Workspace operation failed; `data.reason` says why (see `WorkspaceFailure`).
     public static let workspaceError = -32028
     /// Client-side: the connection closed before an answer.
@@ -250,6 +252,20 @@ public actor RPCClient {
     public func call(_ method: String, jsonParams: Data, timeout: Duration = .seconds(30)) async throws {
         let text = String(decoding: jsonParams, as: UTF8.self)
         _ = try await perform(method, paramsJSON: text, timeout: timeout)
+    }
+
+    /// Like `call(_:jsonParams:)`, and returns the `result` as JSON bytes with its keys exactly as the daemon sent them.
+    /// `call` decodes with the snake_case conversion, which would rewrite the keys of a shared payload (`system_prompt`,
+    /// the names of its files). Decode the bytes with a plain `JSONDecoder` when the keys are data.
+    public func callRawResult(_ method: String, jsonParams: Data, timeout: Duration = .seconds(30)) async throws -> Data {
+        let text = String(decoding: jsonParams, as: UTF8.self)
+        let data = try await perform(method, paramsJSON: text, timeout: timeout)
+        guard let box = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let result = box["r"],
+            let bytes = try? JSONSerialization.data(withJSONObject: result, options: .fragmentsAllowed)
+        else {
+            throw RPCError(code: -32603, message: "the answer to \(method) does not match")
+        }
+        return bytes
     }
 
     /// Call a method whose result the caller doesn't need.

@@ -156,6 +156,14 @@ struct MainWindow: View {
             if let server = app.currentServer {
                 ScheduleEditor(server: server, agentID: agentID, existing: existing)
             }
+        case .share(let subject):
+            if let server = app.currentServer {
+                ShareSheet(subject: subject, server: server)
+            }
+        case .installShared(let shareID):
+            InstallSharedSheet(shareID: shareID, server: app.currentServer)
+        case .myShares:
+            MySharesView(servers: app.servers)
         }
     }
 }

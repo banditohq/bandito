@@ -113,6 +113,12 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     case schedule(agentID: String, existing: Schedule?)
     /// Import agents, skills and commands from Claude Code and Codex on this Mac.
     case importer
+    /// Publish a bot or a skill of this server as a link (see `ShareSheet`).
+    case share(ShareSubject)
+    /// Install a bot or skill someone shared, by its id (a `bandito://install` link or a pasted link).
+    case installShared(shareID: String)
+    /// The bots and skills this account shared: visibility, update, delete (see `MySharesView`).
+    case myShares
 
     public var id: String {
         switch self {
@@ -121,6 +127,10 @@ public enum Sheet: Identifiable, Hashable, Sendable {
         case .addServer: "addServer"
         case .account: "account"
         case .schedule(let agentID, let existing): "schedule-\(agentID)-\(existing?.id ?? "new")"
+        case .share(.bot(let agentID)): "share-bot-\(agentID)"
+        case .share(.skill(let name)): "share-skill-\(name)"
+        case .installShared(let shareID): "install-\(shareID)"
+        case .myShares: "myShares"
         }
     }
 }

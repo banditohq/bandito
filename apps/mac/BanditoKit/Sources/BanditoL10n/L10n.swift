@@ -2766,6 +2766,148 @@ public enum L10n {
         }
     }
 
+    public enum Share {
+        public static var menu: String { L10n.tr("share.menu") }
+
+        public enum Capability {
+            public static var browser: String { L10n.tr("share.capability.browser") }
+            public static var files: String { L10n.tr("share.capability.files") }
+            public static var screen: String { L10n.tr("share.capability.screen") }
+            public static var team: String { L10n.tr("share.capability.team") }
+            public static var terminal: String { L10n.tr("share.capability.terminal") }
+        }
+
+        public enum Daemon {
+            public static var badPath: String { L10n.tr("share.daemon.badPath") }
+            public static var catalogSkill: String { L10n.tr("share.daemon.catalogSkill") }
+            public static var existsNotOurs: String { L10n.tr("share.daemon.existsNotOurs") }
+            public static func invalid(field: String) -> String { L10n.tr("share.daemon.invalid", field) }
+            public static var io: String { L10n.tr("share.daemon.io") }
+            public static var licenseRequired: String { L10n.tr("share.daemon.licenseRequired") }
+            public static var noSkill: String { L10n.tr("share.daemon.noSkill") }
+            public static var notUtf8: String { L10n.tr("share.daemon.notUtf8") }
+            public static var notYours: String { L10n.tr("share.daemon.notYours") }
+            public static var tooLarge: String { L10n.tr("share.daemon.tooLarge") }
+            public static var unsafePath: String { L10n.tr("share.daemon.unsafePath") }
+        }
+
+        public enum Done {
+            public static var close: String { L10n.tr("share.done.close") }
+            public static var copied: String { L10n.tr("share.done.copied") }
+            public static var copy: String { L10n.tr("share.done.copy") }
+            public static var qrHint: String { L10n.tr("share.done.qrHint") }
+            public static var title: String { L10n.tr("share.done.title") }
+        }
+
+        public enum Field {
+            public static var license: String { L10n.tr("share.field.license") }
+            public static var name: String { L10n.tr("share.field.name") }
+            public static var summary: String { L10n.tr("share.field.summary") }
+        }
+
+        public enum Install {
+            public static var addBot: String { L10n.tr("share.install.addBot") }
+            public static var addSkill: String { L10n.tr("share.install.addSkill") }
+            public static var anonymous: String { L10n.tr("share.install.anonymous") }
+            public static func by(author: String) -> String { L10n.tr("share.install.by", author) }
+            public static var capabilities: String { L10n.tr("share.install.capabilities") }
+            public static var doneBot: String { L10n.tr("share.install.doneBot") }
+            public static var doneSkill: String { L10n.tr("share.install.doneSkill") }
+            public static func files(count: Int) -> String { L10n.tr("share.install.files", count) }
+            public static var installing: String { L10n.tr("share.install.installing") }
+            public static var license: String { L10n.tr("share.install.license") }
+            public static var loading: String { L10n.tr("share.install.loading") }
+            public static func missingServices(names: String) -> String { L10n.tr("share.install.missingServices", names) }
+            public static var noCapabilities: String { L10n.tr("share.install.noCapabilities") }
+            public static var openBot: String { L10n.tr("share.install.openBot") }
+            public static var partial: String { L10n.tr("share.install.partial") }
+            public static var prompt: String { L10n.tr("share.install.prompt") }
+            public static var report: String { L10n.tr("share.install.report") }
+            public static var reported: String { L10n.tr("share.install.reported") }
+            public static var riskyCapability: String { L10n.tr("share.install.riskyCapability") }
+            public static var role: String { L10n.tr("share.install.role") }
+            public static func schedulesCount(count: Int) -> String { L10n.tr("share.install.schedulesCount", count) }
+            public static func schedulesOff(count: Int) -> String { L10n.tr("share.install.schedulesOff", count) }
+            public static func scripts(count: Int) -> String { L10n.tr("share.install.scripts", count) }
+            public static var scriptsAck: String { L10n.tr("share.install.scriptsAck") }
+            public static func servicesCount(count: Int) -> String { L10n.tr("share.install.servicesCount", count) }
+            public static func unknownServices(names: String) -> String { L10n.tr("share.install.unknownServices", names) }
+            public static func version(number: String) -> String { L10n.tr("share.install.version", number) }
+            public static var warning: String { L10n.tr("share.install.warning") }
+        }
+
+        public enum Kind {
+            public static var bot: String { L10n.tr("share.kind.bot") }
+            public static var skill: String { L10n.tr("share.kind.skill") }
+        }
+
+        public enum Mine {
+            public static var delete: String { L10n.tr("share.mine.delete") }
+            public static var deleteText: String { L10n.tr("share.mine.deleteText") }
+            public static func deleteTitle(title: String) -> String { L10n.tr("share.mine.deleteTitle", title) }
+            public static var empty: String { L10n.tr("share.mine.empty") }
+            public static var hidden: String { L10n.tr("share.mine.hidden") }
+            public static func installs(count: Int) -> String { L10n.tr("share.mine.installs", count) }
+            public static var loading: String { L10n.tr("share.mine.loading") }
+            public static var noSource: String { L10n.tr("share.mine.noSource") }
+            public static var signIn: String { L10n.tr("share.mine.signIn") }
+            public static var title: String { L10n.tr("share.mine.title") }
+            public static var update: String { L10n.tr("share.mine.update") }
+        }
+
+        public enum Preview {
+            public static var collapse: String { L10n.tr("share.preview.collapse") }
+            public static var expand: String { L10n.tr("share.preview.expand") }
+            public static var title: String { L10n.tr("share.preview.title") }
+        }
+
+        public enum Problem {
+            public static var generic: String { L10n.tr("share.problem.generic") }
+            public static var hidden: String { L10n.tr("share.problem.hidden") }
+            public static var invalid: String { L10n.tr("share.problem.invalid") }
+            public static var network: String { L10n.tr("share.problem.network") }
+            public static var notFound: String { L10n.tr("share.problem.notFound") }
+            public static var payload: String { L10n.tr("share.problem.payload") }
+            public static var rate: String { L10n.tr("share.problem.rate") }
+            public static func secret(field: String) -> String { L10n.tr("share.problem.secret", field) }
+            public static func summaryTooLong(limit: String) -> String { L10n.tr("share.problem.summaryTooLong", limit) }
+            public static var tooMany: String { L10n.tr("share.problem.tooMany") }
+            public static var unauthorized: String { L10n.tr("share.problem.unauthorized") }
+        }
+
+        public enum Publish {
+            public static var button: String { L10n.tr("share.publish.button") }
+            public static var publishing: String { L10n.tr("share.publish.publishing") }
+        }
+
+        public enum Report {
+            public static var malicious: String { L10n.tr("share.report.malicious") }
+            public static var offensive: String { L10n.tr("share.report.offensive") }
+            public static var other: String { L10n.tr("share.report.other") }
+            public static var secrets: String { L10n.tr("share.report.secrets") }
+            public static var spam: String { L10n.tr("share.report.spam") }
+        }
+
+        public enum Sheet {
+            public static var loading: String { L10n.tr("share.sheet.loading") }
+            public static var title: String { L10n.tr("share.sheet.title") }
+        }
+
+        public enum SignIn {
+            public static var button: String { L10n.tr("share.signIn.button") }
+            public static var hint: String { L10n.tr("share.signIn.hint") }
+            public static var text: String { L10n.tr("share.signIn.text") }
+        }
+
+        public enum Visibility {
+            public static var everyone: String { L10n.tr("share.visibility.everyone") }
+            public static var everyoneHint: String { L10n.tr("share.visibility.everyoneHint") }
+            public static var link: String { L10n.tr("share.visibility.link") }
+            public static var linkHint: String { L10n.tr("share.visibility.linkHint") }
+            public static var title: String { L10n.tr("share.visibility.title") }
+        }
+    }
+
     public enum Sidebar {
         public static var agentRail: String { L10n.tr("sidebar.agentRail") }
         public static var agents: String { L10n.tr("sidebar.agents") }

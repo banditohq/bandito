@@ -232,6 +232,8 @@ struct MyBotCard: View {
     let languageCode: String
     var onOpen: () -> Void
 
+    @Environment(Router.self) private var router
+
     var body: some View {
         MarketCardFrame {
             VStack(alignment: .leading, spacing: 10) {
@@ -252,7 +254,19 @@ struct MyBotCard: View {
                     Spacer(minLength: 0)
                 }
                 Spacer(minLength: 0)
-                HStack {
+                HStack(spacing: 8) {
+                    Menu {
+                        Button(L10n.Share.menu) { router.sheet = .share(.bot(agentID: bot.agent.id)) }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.Bandito.text2)
+                            .frame(width: 30, height: 26)
+                    }
+                    .menuStyle(.button)
+                    .menuIndicator(.hidden)
+                    .banditoButton(.icon(size: 30, label: L10n.Share.menu))
+                    .fixedSize()
                     Spacer(minLength: 0)
                     Button(L10n.Market.MyBots.open, action: onOpen)
                         .banditoButton(.lightPill())
