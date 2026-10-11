@@ -99,6 +99,27 @@ pub struct Plan {
     pub label: String,
 }
 
+/// One quick-reply button: the label on it, and the text sent as the person's message when it is pressed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuickButton {
+    pub label: String,
+    pub reply: String,
+}
+
+/// A link button next to the quick replies (https only).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuickLink {
+    pub label: String,
+    pub url: String,
+}
+
+/// "2 of 6" next to the quick replies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuickProgress {
+    pub done: u32,
+    pub total: u32,
+}
+
 /// The typed body of an event. Serialized as `{"kind": "...", "payload": {...}}`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "payload")]
@@ -138,6 +159,10 @@ pub enum EventBody {
         /// for a new chapter, or paused). The turn that takes it carries its seq in `turn.started.message_seq`.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         queued: bool,
+        /// True when the person sent this by pressing a quick-reply button the agent offered
+        /// (see docs/ARCHITECTURE.md#quick-replies); the thread marks it, and so does the agent's prompt.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        via_button: bool,
     },
     /// A message shown as waiting (`message.user` with `queued: true`) will not get a turn: the queue was lost
     /// (a crash, a stop, a restart) or the session could not start. `reason`: `crash`, `stopped`, `failed`,
@@ -169,6 +194,10 @@ pub enum EventBody {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         diff: Option<String>,
         reason: String,
+        /// What the answer is about, for an approval the daemon asks itself (`agent.create`, see
+        /// docs/ARCHITECTURE.md#agents-creating-agents); a client draws a card from it. Left out for the runtimes' own.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        input: Option<Value>,
     },
     /// The runtime took the request back (its CLI cancelled it): nobody answered it, so no decision.
     #[serde(rename = "approval.withdrawn")]
@@ -265,6 +294,36 @@ pub enum EventBody {
         /// The name of the integration, on `connected`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         integration: Option<String>,
+    },
+    /// Buttons the agent offers under its last message (the tool `reply_buttons`, see
+    /// docs/ARCHITECTURE.md#quick-replies). The newest one replaces the older ones.
+    #[serde(rename = "agent.quick_replies")]
+    AgentQuickReplies {
+        buttons: Vec<QuickButton>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        link: Option<QuickLink>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        progress: Option<QuickProgress>,
+    },
+    /// In the feed of the agent that created another one (see docs/ARCHITECTURE.md#agents-creating-agents).
+    /// `approved_by`: `user` when the person pressed Create on the card, `policy` when the agent runs in `never`.
+    #[serde(rename = "agent.spawned")]
+    AgentSpawned {
+        agent_id: String,
+        name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        role: Option<String>,
+        runtime: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+        approved_by: DecidedBy,
+    },
+    /// In the feed of the agent that another one created.
+    #[serde(rename = "agent.created_by")]
+    AgentCreatedBy {
+        by_agent_id: String,
+        by_name: String,
+        approved_by: DecidedBy,
     },
     /// A reaction on a message, by seq. No `emoji` means the reaction was taken off.
     #[serde(rename = "reaction")]
@@ -379,6 +438,83 @@ mod tests {
             serde_json::to_value(&body).unwrap(),
             serde_json::json!({"kind": "telegram.changed"})
         );
+    }
+
+    #[test]
+    fn quick_replies_and_the_creation_events_roundtrip() {
+        let replies = EventBody::AgentQuickReplies {
+            buttons: vec![QuickButton {
+                label: "Done".into(),
+                reply: "Connected".into(),
+            }],
+            link: Some(QuickLink {
+                label: "Open".into(),
+                url: "https://example.com".into(),
+            }),
+            progress: Some(QuickProgress { done: 2, total: 6 }),
+        };
+        assert!(replies.is_persisted());
+        assert_eq!(
+            serde_json::to_value(&replies).unwrap(),
+            serde_json::json!({"kind": "agent.quick_replies", "payload": {
+                "buttons": [{"label": "Done", "reply": "Connected"}],
+                "link": {"label": "Open", "url": "https://example.com"},
+                "progress": {"done": 2, "total": 6},
+            }})
+        );
+        let bare = EventBody::AgentQuickReplies {
+            buttons: Vec::new(),
+            link: None,
+            progress: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&bare).unwrap(),
+            serde_json::json!({"kind": "agent.quick_replies", "payload": {"buttons": []}})
+        );
+        let spawned = EventBody::AgentSpawned {
+            agent_id: "a2".into(),
+            name: "Mailer".into(),
+            role: None,
+            runtime: "claude".into(),
+            model: None,
+            approved_by: DecidedBy::User,
+        };
+        let created_by = EventBody::AgentCreatedBy {
+            by_agent_id: "a1".into(),
+            by_name: "Forge".into(),
+            approved_by: DecidedBy::Policy,
+        };
+        for body in [replies, bare, spawned, created_by] {
+            let (kind, payload) = body.to_parts();
+            assert_eq!(EventBody::from_parts(&kind, payload).unwrap(), body);
+        }
+    }
+
+    #[test]
+    fn an_approval_carries_its_input_only_when_it_has_one() {
+        let mut body = EventBody::ApprovalRequested {
+            approval_id: "p1".into(),
+            call_id: "c1".into(),
+            tool: "agent.create".into(),
+            title: "Create agent".into(),
+            command: None,
+            diff: None,
+            reason: "agent: create".into(),
+            input: None,
+        };
+        assert!(serde_json::to_value(&body).unwrap()["payload"].get("input").is_none());
+        if let EventBody::ApprovalRequested { input, .. } = &mut body {
+            *input = Some(serde_json::json!({"name": "Mailer"}));
+        }
+        assert_eq!(
+            serde_json::to_value(&body).unwrap()["payload"]["input"],
+            serde_json::json!({"name": "Mailer"})
+        );
+        // An event stored before the field existed still reads.
+        let old: EventBody = serde_json::from_value(serde_json::json!({"kind": "approval.requested", "payload": {
+            "approval_id": "p", "call_id": "c", "tool": "Bash", "title": "ls", "reason": "r"}}))
+        .unwrap();
+        assert!(matches!(old, EventBody::ApprovalRequested { input: None, .. }));
     }
 
     #[test]

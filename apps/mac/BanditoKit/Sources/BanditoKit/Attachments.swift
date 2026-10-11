@@ -65,10 +65,15 @@ public struct AgentSendRequest: Encodable, Sendable, Equatable {
     public var replyTo: Int64?
     /// The `@` mentions in `text`; left out when there are none or the daemon lacks the `mentions` feature.
     public var mentions: [Mention]?
+    /// The text is the reply of a quick-reply button the agent shows (feature `quick_replies`); left out otherwise. The
+    /// daemon believes it only when the text is one of the buttons shown now.
+    public var viaButton: Bool?
 
     public init(
-        agentId: String, text: String, attachments: [String]?, replyTo: Int64? = nil, mentions: [Mention]? = nil
+        agentId: String, text: String, attachments: [String]?, replyTo: Int64? = nil, mentions: [Mention]? = nil,
+        viaButton: Bool? = nil
     ) {
+        self.viaButton = viaButton
         self.agentId = agentId
         self.text = text
         self.attachments = attachments

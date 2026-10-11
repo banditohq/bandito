@@ -685,7 +685,7 @@ public final class ServerModel: Identifiable {
             switch e.body {
             case .agentStatus(let status, _):
                 agents[i].status = status
-            case .approvalRequested(let approvalId, _, _, _, _, _, _):
+            case .approvalRequested(let approvalId, _, _, _, _, _, _, _):
                 if agents[i].reportsPendingApprovalIds {
                     agents[i].pendingApprovalIds.insert(approvalId)
                 } else {
@@ -943,12 +943,13 @@ public final class ServerModel: Identifiable {
     /// keeps the `@Name` words and nothing more.
     public func send(
         _ text: String, to agentId: String, replyTo: Int64? = nil, attachments: [AgentAttachment] = [],
-        mentions: [Mention] = []
+        mentions: [Mention] = [], viaButton: Bool = false
     ) async throws {
         let request = AgentSendRequest(
             agentId: agentId, text: text, attachments: attachments.isEmpty ? nil : attachments.map(\.path),
             replyTo: supports("attachments") ? replyTo : nil,
-            mentions: mentions.isEmpty || !supports("mentions") ? nil : mentions)
+            mentions: mentions.isEmpty || !supports("mentions") ? nil : mentions,
+            viaButton: viaButton && supports("quick_replies") ? true : nil)
         try await rpc().call("agents.send", request)
     }
 

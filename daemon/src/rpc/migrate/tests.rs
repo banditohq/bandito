@@ -173,6 +173,7 @@ fn make_history(s: &Server, id: &str) -> (i64, i64) {
             reply_to,
             attachments,
             mentions: vec![],
+            via_button: false,
             queued,
         }
     };
@@ -244,6 +245,7 @@ fn make_history(s: &Server, id: &str) -> (i64, i64) {
                 command: None,
                 diff: None,
                 reason: "risky".into(),
+                input: None,
             },
         )
         .unwrap();

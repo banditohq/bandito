@@ -66,6 +66,11 @@ pub trait CrewBackend: Send + Sync {
         let _ = params;
         bail!("react is not available here")
     }
+    /// Shows quick-reply buttons under the agent's last message (`messages.agent.quick_replies`).
+    async fn reply_buttons(&self, params: Value) -> Result<Value> {
+        let _ = params;
+        bail!("reply_buttons is not available here")
+    }
     /// One `schedules.agent.*` RPC method with its parameters. Returns the daemon's result.
     async fn schedules(&self, method: &str, params: Value) -> Result<Value>;
     /// One `team.*` RPC method (the main agent's tools) with its parameters. Returns the daemon's result.
@@ -152,11 +157,20 @@ impl CrewBackend for DaemonBackend {
         call_agent(&self.sock, &self.token, "messages.agent.react", params).await
     }
 
+    async fn reply_buttons(&self, params: Value) -> Result<Value> {
+        call_agent(&self.sock, &self.token, "messages.agent.quick_replies", params).await
+    }
+
     async fn schedules(&self, method: &str, params: Value) -> Result<Value> {
         call_agent(&self.sock, &self.token, method, params).await
     }
 
     async fn team(&self, method: &str, params: Value) -> Result<Value> {
+        // A creation waits for the person's answer to the card, with a margin.
+        if method == "team.create" {
+            let limit = crate::rpc::team_create::APPROVAL_LIMIT + Duration::from_secs(60);
+            return call_agent_waiting(&self.sock, &self.token, method, params, limit).await;
+        }
         // An assignment that waits lasts as long as the other agent's turn does, with a margin.
         if method == "team.assign" && params.get("wait").and_then(Value::as_bool) == Some(true) {
             let limit = crate::team::WAIT_LIMIT + Duration::from_secs(60);
@@ -324,6 +338,7 @@ fn tools_list(on: &[Capability], lead: bool) -> Vec<Value> {
         ask_form_tool(),
         request_connection_tool(),
         react_tool(),
+        reply_buttons_tool(),
     ];
     tools.extend(screen_tools());
     tools.extend(browser_tool_defs());
@@ -334,7 +349,7 @@ fn tools_list(on: &[Capability], lead: bool) -> Vec<Value> {
 }
 
 /// The tools of the main agent: they need the crew capability, and being the main agent.
-const TEAM_TOOLS: [&str; 3] = ["team_list", "team_assign", "team_status"];
+const TEAM_TOOLS: [&str; 4] = ["team_list", "team_assign", "team_status", "crew_create_agent"];
 
 /// Whether an agent with these capabilities (and the main-agent role, or not) is served the tool.
 fn allowed_tool(tool: &str, on: &[Capability], lead: bool) -> bool {
@@ -464,6 +479,50 @@ fn react_tool() -> Value {
     })
 }
 
+fn reply_buttons_tool() -> Value {
+    json!({
+        "name": "reply_buttons",
+        "description": "Show buttons under your last message so the person answers with one click instead of typing. Use it when you wait for the person to confirm an outside step (connect a mailbox, sign in, check something: a button like \"Done, it is connected\") or when you offer choices (options 1/2). Each button sends its `reply` as the person's message. The newest set replaces the older one, and the buttons vanish when the person writes something themselves. Add `link` for a page they have to open first (https only), and `progress` to show \"2 of 6\" in a multi-step setup. Write your message first, then call this.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "buttons": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 4,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "label": { "type": "string", "description": "Text on the button, at most 40 characters, one line" },
+                            "reply": { "type": "string", "description": "What is sent as the person's message when they press it: one line, at most 200 characters. The button shows it in small print under the label when it differs from the label, so make it say what the person means" },
+                        },
+                        "required": ["label", "reply"],
+                    },
+                },
+                "link": {
+                    "type": "object",
+                    "description": "A button that opens a page (https only)",
+                    "properties": {
+                        "label": { "type": "string", "description": "At most 40 characters" },
+                        "url": { "type": "string", "description": "An https address" },
+                    },
+                    "required": ["label", "url"],
+                },
+                "progress": {
+                    "type": "object",
+                    "description": "Where the person is in a multi-step setup",
+                    "properties": {
+                        "done": { "type": "integer", "minimum": 0 },
+                        "total": { "type": "integer", "minimum": 1, "maximum": 99 },
+                    },
+                    "required": ["done", "total"],
+                },
+            },
+            "required": ["buttons"],
+        },
+    })
+}
+
 fn history_day_tool() -> Value {
     json!({
         "name": "history_day",
@@ -493,6 +552,8 @@ async fn call_tool(params: &Value, backend: &dyn CrewBackend, on: &[Capability],
         "ask_form" => Ok(tool_result(ask_form(&args, backend).await)),
         "request_connection" => Ok(tool_result(request_connection(&args, backend).await)),
         "react" => Ok(tool_result(react(&args, backend).await)),
+        "reply_buttons" => Ok(tool_result(reply_buttons(&args, backend).await)),
+        "crew_create_agent" => Ok(tool_result(create_agent(&args, backend).await)),
         "team_list" => Ok(tool_result(team_list(backend).await)),
         "team_assign" => Ok(tool_result(team_assign(&args, backend).await)),
         "team_status" => Ok(tool_result(team_status(&args, backend).await)),
@@ -576,6 +637,66 @@ async fn react(args: &Value, backend: &dyn CrewBackend) -> Result<String, String
     Ok(format!("Reacted with {emoji}."))
 }
 
+/// `reply_buttons`: checked here first, so a mistake comes back as a tool error the agent can fix.
+async fn reply_buttons(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    crate::chat::check_quick_replies(args)?;
+    backend
+        .reply_buttons(args.clone())
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    Ok("Buttons shown. Now finish your turn: the person's choice arrives as their next message.".into())
+}
+
+/// `crew_create_agent`: the fields are forwarded; the daemon checks them all, so the answer names what to fix.
+async fn create_agent(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    let name = text_arg(args, "name").ok_or("crew_create_agent needs \"name\"")?;
+    let instructions =
+        text_arg(args, "instructions").ok_or("crew_create_agent needs \"instructions\": what the agent is for")?;
+    let mut params = json!({ "name": name, "instructions": instructions });
+    for key in ["role", "runtime", "model", "effort", "folder"] {
+        match args.get(key) {
+            None | Some(Value::Null) => {}
+            Some(Value::String(text)) => params[key] = json!(text),
+            Some(_) => return Err(format!("{key} must be text")),
+        }
+    }
+    for key in ["capabilities", "integrations"] {
+        match args.get(key) {
+            None | Some(Value::Null) => {}
+            Some(Value::Array(list)) if list.iter().all(Value::is_string) => params[key] = json!(list),
+            Some(_) => return Err(format!("{key} must be a list of names")),
+        }
+    }
+    match args.get("schedules") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(list)) if list.iter().all(Value::is_object) => params["schedules"] = json!(list),
+        Some(_) => return Err("schedules must be a list of {every | at+days | cron, prompt, title?}".into()),
+    }
+    let made = backend
+        .team("team.create", params)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    let text = |key: &str| made.get(key).and_then(Value::as_str).unwrap_or_default().to_string();
+    let mut out = format!(
+        "Created agent {} (id {}, {}{}).",
+        text("name"),
+        text("agent_id"),
+        text("runtime"),
+        made["model"].as_str().map(|m| format!(" {m}")).unwrap_or_default()
+    );
+    let schedules = made["schedule_ids"].as_array().map_or(0, Vec::len);
+    if schedules > 0 {
+        out.push_str(&format!(" {schedules} schedule(s) set."));
+    }
+    if let Some(warnings) = made["warnings"].as_array() {
+        for w in warnings.iter().filter_map(Value::as_str) {
+            out.push_str(&format!("\nWarning: {w}"));
+        }
+    }
+    out.push_str(&format!("\n{}", text("next")));
+    Ok(out)
+}
+
 async fn crew_send(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
     let to = args.get("to").and_then(Value::as_str).filter(|s| !s.trim().is_empty());
     let message = args
@@ -610,6 +731,49 @@ fn team_tool_defs() -> Vec<Value> {
                     "wait": { "type": "boolean", "description": "Wait for the agent to finish and return its answer. Default false." },
                 },
                 "required": ["task"],
+            },
+        }),
+        json!({
+            "name": "crew_create_agent",
+            "description": "You are the main agent of the crew. Create a new agent when the person asks for one (\"make an agent that checks my mail every 5 minutes\" means this tool, not a schedule of yours). The person sees a card in the chat and presses Create; it is refused if you ask for more than you have yourself (capabilities, services) or for a runtime or model this server lacks. Afterwards set its regular runs with schedule_create (agent_id) and hand it its first task with team_assign.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Short name, 1-32 characters: letters, digits, spaces, - and _" },
+                    "role": { "type": "string", "description": "What it is, a few words (e.g. mail watcher)" },
+                    "instructions": { "type": "string", "description": "Its standing instructions: what it does, how, and what it must not do" },
+                    "runtime": { "type": "string", "enum": ["claude", "codex", "grok"], "description": "Default: your own runtime" },
+                    "model": { "type": "string", "description": "A model the runtime offers; leave out for its default" },
+                    "effort": { "type": "string", "enum": ["low", "medium", "high", "xhigh", "max"] },
+                    "capabilities": {
+                        "type": "array",
+                        "items": { "type": "string", "enum": ["terminal", "files", "browser", "team", "screen"] },
+                        "description": "What it may use; only what you have. Leave out for the same as yours; give the least it needs.",
+                    },
+                    "integrations": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Connected services it may use, by catalog id (gmail, github, composio...); only ones you can use. If the service is not connected yet, call request_connection first.",
+                    },
+                    "schedules": {
+                        "type": "array",
+                        "description": "Regular runs for it, as for schedule_create",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "every": { "type": "string", "description": "5m to 60m, 1h to 12h, or 1d" },
+                                "at": { "type": "string", "description": "HH:MM" },
+                                "days": { "type": "array", "items": { "type": "string", "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] } },
+                                "cron": { "type": "string" },
+                                "prompt": { "type": "string", "description": "What it does on each run" },
+                                "title": { "type": "string" },
+                            },
+                            "required": ["prompt"],
+                        },
+                    },
+                    "folder": { "type": "string", "description": "\"new\" (default): a folder of its own; or the absolute path of an existing folder" },
+                },
+                "required": ["name", "instructions"],
             },
         }),
         json!({
@@ -1199,6 +1363,8 @@ mod tests {
         /// Every form the agent asked, and every reaction it put (as sent to the daemon).
         forms: Mutex<Vec<Value>>,
         reactions: Mutex<Vec<Value>>,
+        /// Every set of quick replies the agent showed (as sent to the daemon).
+        buttons: Mutex<Vec<Value>>,
         /// Method and parameters of every schedules call.
         schedule_calls: Mutex<Vec<(String, Value)>>,
         /// What schedules calls answer; `{}` when unset.
@@ -1261,6 +1427,14 @@ mod tests {
                 anyhow::bail!("{e}");
             }
             self.reactions.lock().unwrap().push(params);
+            Ok(json!({}))
+        }
+
+        async fn reply_buttons(&self, params: Value) -> Result<Value> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.buttons.lock().unwrap().push(params);
             Ok(json!({}))
         }
 
@@ -1472,6 +1646,7 @@ mod tests {
                 "ask_form",
                 "request_connection",
                 "react",
+                "reply_buttons",
                 "screen_screenshot",
                 "screen_click",
                 "screen_move",
@@ -1948,6 +2123,7 @@ mod tests {
                 "ask_form",
                 "request_connection",
                 "react",
+                "reply_buttons",
                 "schedule_list",
                 "schedule_create",
                 "schedule_delete",
@@ -1962,6 +2138,7 @@ mod tests {
                 "ask_form",
                 "request_connection",
                 "react",
+                "reply_buttons",
                 "schedule_list",
                 "schedule_create",
                 "schedule_delete",
@@ -2260,5 +2437,194 @@ mod tests {
         );
         let err = parse_capabilities(Some("browser,shell")).unwrap_err().to_string();
         assert!(err.contains("unknown capability shell"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn reply_buttons_is_a_tool_of_every_agent_and_forwards_checked_buttons() {
+        // No capability and no main-agent role is needed.
+        assert!(listed(&[]).await.iter().any(|n| n == "reply_buttons"));
+        let backend = MockBackend::default();
+        let args = json!({
+            "buttons": [{ "label": "Connected", "reply": "The mailbox is connected" }, { "label": "Later", "reply": "Not now" }],
+            "link": { "label": "Open Gmail settings", "url": "https://mail.google.com/mail/u/0/#settings" },
+            "progress": { "done": 2, "total": 6 },
+        });
+        let r = replies_with(
+            &format!("{}\n", tool_call("reply_buttons", args.clone())),
+            &backend,
+            &[],
+        )
+        .await
+        .remove(0);
+        assert_eq!(r["result"]["isError"], json!(false));
+        assert_eq!(backend.buttons.lock().unwrap().as_slice(), &[args]);
+    }
+
+    #[tokio::test]
+    async fn bad_buttons_are_a_tool_error_and_reach_no_one() {
+        let backend = MockBackend::default();
+        for args in [
+            json!({}),
+            json!({ "buttons": [] }),
+            json!({ "buttons": [{ "label": "x".repeat(41), "reply": "y" }] }),
+            json!({ "buttons": [{ "label": "ok", "reply": "y".repeat(201) }] }),
+            json!({ "buttons": [{ "label": "ok", "reply": "y" }], "link": { "label": "go", "url": "http://insecure.example" } }),
+            json!({ "buttons": [{ "label": "ok", "reply": "y" }], "progress": { "done": 5, "total": 2 } }),
+        ] {
+            let r = replies_with(
+                &format!("{}\n", tool_call("reply_buttons", args.clone())),
+                &backend,
+                &[],
+            )
+            .await
+            .remove(0);
+            assert_eq!(r["result"]["isError"], json!(true), "{args}");
+        }
+        assert!(backend.buttons.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn crew_create_agent_is_for_the_main_agent_with_the_crew_capability() {
+        let plain = listed(&ALL_CAPABILITIES).await;
+        assert!(!plain.iter().any(|n| n == "crew_create_agent"), "{plain:?}");
+        assert!(
+            lead_listed(&ALL_CAPABILITIES)
+                .await
+                .iter()
+                .any(|n| n == "crew_create_agent")
+        );
+        let no_team: Vec<Capability> = ALL_CAPABILITIES
+            .into_iter()
+            .filter(|c| *c != Capability::Team)
+            .collect();
+        assert!(!lead_listed(&no_team).await.iter().any(|n| n == "crew_create_agent"));
+        // A plain agent that calls it anyway gets an unknown tool, and the daemon is not asked.
+        let backend = MockBackend::default();
+        let call = tool_call("crew_create_agent", json!({ "name": "X", "instructions": "y" }));
+        let r = replies_with(&format!("{call}\n"), &backend, &ALL_CAPABILITIES)
+            .await
+            .remove(0);
+        assert_eq!(r["error"]["code"], json!(INVALID_PARAMS));
+        assert!(backend.team_calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn crew_create_agent_forwards_the_request_and_tells_what_to_do_next() {
+        let backend = MockBackend {
+            team_reply: Some(json!({
+                "agent_id": "a9", "name": "Mailer", "runtime": "claude", "model": "sonnet",
+                "schedule_ids": ["s1"], "warnings": [], "next": "Hand it its first task with team_assign.",
+            })),
+            ..Default::default()
+        };
+        let args = json!({
+            "name": "Mailer", "role": "mail watcher", "instructions": "Watch the mail.",
+            "capabilities": ["browser"], "integrations": ["gmail"],
+            "schedules": [{ "every": "5m", "prompt": "Check the mail" }],
+            "folder": "new",
+        });
+        let call = tool_call("crew_create_agent", args.clone());
+        let r = lead_replies(&format!("{call}\n"), &backend, &ALL_CAPABILITIES)
+            .await
+            .remove(0);
+        assert_eq!(r["result"]["isError"], json!(false));
+        let text = tool_text(&r);
+        assert!(
+            text.starts_with("Created agent Mailer (id a9, claude sonnet)."),
+            "{text}"
+        );
+        assert!(text.contains("1 schedule(s) set"), "{text}");
+        assert!(text.ends_with("Hand it its first task with team_assign."), "{text}");
+        let calls = backend.team_calls.lock().unwrap();
+        assert_eq!(calls[0].0, "team.create");
+        assert_eq!(calls[0].1, args);
+    }
+
+    #[tokio::test]
+    async fn crew_create_agent_mistakes_and_refusals_come_back_as_tool_errors() {
+        let backend = MockBackend::default();
+        for args in [
+            json!({ "instructions": "y" }),
+            json!({ "name": "X" }),
+            json!({ "name": "X", "instructions": "y", "capabilities": "browser" }),
+            json!({ "name": "X", "instructions": "y", "integrations": [1] }),
+            json!({ "name": "X", "instructions": "y", "schedules": ["every 5m"] }),
+            json!({ "name": "X", "instructions": "y", "runtime": 3 }),
+        ] {
+            let call = tool_call("crew_create_agent", args.clone());
+            let r = lead_replies(&format!("{call}\n"), &backend, &ALL_CAPABILITIES)
+                .await
+                .remove(0);
+            assert_eq!(r["result"]["isError"], json!(true), "{args}");
+        }
+        assert!(backend.team_calls.lock().unwrap().is_empty());
+        // The daemon's refusal is shown to the agent as it came.
+        let refusing = MockBackend {
+            fail: Some("not_allowed: capabilities — you cannot give what you do not have: browser".into()),
+            ..Default::default()
+        };
+        let call = tool_call("crew_create_agent", json!({ "name": "X", "instructions": "y" }));
+        let r = lead_replies(&format!("{call}\n"), &refusing, &ALL_CAPABILITIES)
+            .await
+            .remove(0);
+        assert_eq!(r["result"]["isError"], json!(true));
+        assert!(
+            tool_text(&r).starts_with("not_allowed: capabilities"),
+            "{}",
+            tool_text(&r)
+        );
+    }
+
+    #[tokio::test]
+    async fn schedule_create_and_list_can_name_another_agent() {
+        let backend = MockBackend {
+            schedule_reply: Some(json!({ "id": "s1", "human_en": "every 5 minutes", "agent_name": "Mailer" })),
+            ..Default::default()
+        };
+        let call = tool_call(
+            "schedule_create",
+            json!({ "agent_id": "Mailer", "every": "5m", "prompt": "Check the mail" }),
+        );
+        let r = replies(&format!("{call}\n"), &backend).await.remove(0);
+        assert!(
+            tool_text(&r).starts_with("Scheduled for Mailer s1: every 5 minutes."),
+            "{}",
+            tool_text(&r)
+        );
+        {
+            let calls = backend.schedule_calls.lock().unwrap();
+            assert_eq!(calls[0].0, "schedules.agent.create");
+            assert_eq!(calls[0].1["for_agent"], json!("Mailer"));
+            assert_eq!(calls[0].1.get("agent_id"), None, "the daemon fills agent_id in itself");
+        }
+        // Without agent_id nothing about another agent is sent.
+        let own = MockBackend {
+            schedule_reply: Some(json!({ "id": "s2", "human_en": "every hour" })),
+            ..Default::default()
+        };
+        let call = tool_call("schedule_create", json!({ "every": "1h", "prompt": "x" }));
+        replies(&format!("{call}\n"), &own).await;
+        assert_eq!(own.schedule_calls.lock().unwrap()[0].1.get("for_agent"), None);
+        // List: another agent's runs show whose they are.
+        let listing = MockBackend {
+            schedule_reply: Some(
+                json!([{ "id": "s1", "agent_name": "Mailer", "title": "Mail", "human_en": "every 5 minutes", "enabled": true }]),
+            ),
+            ..Default::default()
+        };
+        let call = tool_call("schedule_list", json!({ "agent_id": "Mailer" }));
+        let r = replies(&format!("{call}\n"), &listing).await.remove(0);
+        assert!(
+            tool_text(&r).starts_with("s1 | Mailer | Mail | every 5 minutes | on"),
+            "{}",
+            tool_text(&r)
+        );
+        assert_eq!(
+            listing.schedule_calls.lock().unwrap()[0].1,
+            json!({ "for_agent": "Mailer" })
+        );
+        let bad = tool_call("schedule_list", json!({ "agent_id": 3 }));
+        let r = replies(&format!("{bad}\n"), &listing).await.remove(0);
+        assert_eq!(r["result"]["isError"], json!(true));
     }
 }

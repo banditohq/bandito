@@ -73,6 +73,8 @@ pub struct Inbound {
     pub attachments: Vec<Attachment>,
     /// `@` mentions of the message (a human's message only), checked by `agents.send`.
     pub mentions: Vec<Mention>,
+    /// The person pressed a quick-reply button the agent offered (checked by `agents.send` against the buttons shown).
+    pub via_button: bool,
 }
 
 impl Inbound {
@@ -88,6 +90,7 @@ impl Inbound {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         }
     }
 
@@ -103,6 +106,7 @@ impl Inbound {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         }
     }
 }
@@ -269,12 +273,22 @@ const CHAT_GUIDE: &str = "Когда вам нужно несколько отв
 Если для задачи нужен сервис из каталога Bandito (почта, Slack, GitHub, Notion и т. п.), не просите человека искать идентификаторы и ключи: вызовите инструмент request_connection — человек увидит в чате карточку с кнопкой «Подключить».
 Можно ставить реакции на сообщения человека инструментом react (например 👍 — принял, 👀 — смотрю), вместо коротких ответов.";
 
+/// Put in the system prompt of every agent: do what was asked, say what is missing, offer buttons
+/// (see docs/ARCHITECTURE.md#quick-replies).
+const PRINCIPLES: &str = "Do exactly what the person asked. If there is no tool for the request, say at once what is missing and offer the options as buttons (reply_buttons); never swap the request for a similar action. When you wait for the person to confirm an outside step (connect, sign in, check) or you offer choices, use reply_buttons.";
+
+/// Added to the main agent's prompt: it creates agents (see docs/ARCHITECTURE.md#agents-creating-agents).
+const LEAD_CREATES: &str = "You can create agents, and \"create an agent that does X\" always means a new agent, not a schedule of your own. To create one: crew_create_agent (name, instructions, and services or capabilities it needs), then schedule_create with agent_id for its regular runs, then team_assign to hand it the first task. Never say you cannot create agents.";
+
 /// Put in the system prompt of the main agent of the crew (see docs/ARCHITECTURE.md#lead-agent).
 const LEAD_BRIEFING: &str = "Вы главный в команде. Делите большие задачи между агентами (team_list, team_assign), следите за ходом (team_status с wait=true, а не опросом в цикле), собирайте итог и отвечайте человеку. Сами делайте только то, что никому не подходит. Агенты команды — это не встроенный инструмент Agent (субагенты): задачи им отправляйте только через team_assign.";
 
 /// Put in the system prompt of every other agent when the crew has a main one. `{name}` is replaced by its name.
 const LEAD_NOTICE: &str =
     "Главный в команде — {name}. Задачи от него выполняйте как от человека и отвечайте ему кратко итогом.";
+
+/// Put before a message the person sent by pressing a button the agent had offered with `reply_buttons`.
+const BUTTON_NOTE: &str = "[The person pressed a button that you offered with reply_buttons; the text below is that button's reply, not words they typed.]";
 
 /// Put before a message from the main agent, so the runtime knows who wrote it. `{name}` is replaced by its name.
 const FROM_LEAD: &str = "Сообщение от главного в команде ({name}):";
@@ -663,6 +677,7 @@ impl Supervisor {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
@@ -715,7 +730,15 @@ impl Supervisor {
     /// expired then). `remember` is ignored for these: no rule is created.
     pub async fn ask_external(&self, agent_id: &str, spec: ApprovalSpec, limit: Duration) -> Result<Decision> {
         let (approval_id, mut answer) = self.call(agent_id, |reply| Cmd::AskExternal { spec, reply }).await?;
-        match tokio::time::timeout(limit, &mut answer).await {
+        // If this call is dropped while the question waits (the agent's connection closed, its turn was cancelled),
+        // the question is denied, so no card is left that nothing waits for.
+        let mut guard = DenyOnDrop {
+            actor: self.actor(agent_id).ok(),
+            approval_id: approval_id.clone(),
+        };
+        let outcome = tokio::time::timeout(limit, &mut answer).await;
+        guard.disarm();
+        match outcome {
             Ok(Ok(decision)) => Ok(decision),
             Ok(Err(_)) => Ok(Decision::Deny),
             Err(_) => {
@@ -918,6 +941,43 @@ impl Drop for ExpireOnDrop {
         handle.spawn(async move {
             let (reply, _) = oneshot::channel();
             let _ = actor.send(Cmd::ExpireForm { form_id, reply }).await;
+        });
+    }
+}
+
+/// Denies a question of the daemon's own (`ask_external`) when the call that waits for it is dropped.
+struct DenyOnDrop {
+    actor: Option<mpsc::Sender<Cmd>>,
+    approval_id: String,
+}
+
+impl DenyOnDrop {
+    fn disarm(&mut self) {
+        self.actor = None;
+    }
+}
+
+impl Drop for DenyOnDrop {
+    fn drop(&mut self) {
+        let Some(actor) = self.actor.take() else {
+            return;
+        };
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let approval_id = std::mem::take(&mut self.approval_id);
+        handle.spawn(async move {
+            let (reply, _) = oneshot::channel();
+            // Already answered or gone: the actor says no, and that is fine.
+            let _ = actor
+                .send(Cmd::Resolve {
+                    approval_id,
+                    decision: Decision::Deny,
+                    by: DecidedBy::Policy,
+                    remember: false,
+                    reply,
+                })
+                .await;
         });
     }
 }
@@ -1216,6 +1276,7 @@ impl Actor {
                 attachments: msg.attachments.clone(),
                 mentions: msg.mentions.clone(),
                 queued,
+                via_button: msg.via_button,
             },
         );
         ev.seq
@@ -1399,9 +1460,11 @@ impl Actor {
             ));
         }
         blocks.push(CHAT_GUIDE.to_string());
+        blocks.push(PRINCIPLES.to_string());
         blocks.push(SCHEDULE_BRIEFING.to_string());
         if agent.lead {
             blocks.push(LEAD_BRIEFING.to_string());
+            blocks.push(LEAD_CREATES.to_string());
         } else if let Some(lead) = self.hub.store.agent_lead()? {
             blocks.push(LEAD_NOTICE.replace("{name}", &lead.name));
         }
@@ -1605,6 +1668,7 @@ impl Actor {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         match self.start_turn(msg, None).await {
             Ok(()) => true,
@@ -1744,6 +1808,9 @@ impl Actor {
         );
         if let Some(name) = self.lead_sender(&msg) {
             prompt = format!("{}\n\n{prompt}", FROM_LEAD.replace("{name}", &name));
+        }
+        if msg.via_button {
+            prompt = format!("{BUTTON_NOTE}\n\n{prompt}");
         }
         let turn_id = new_id();
         self.turn = Some(turn_id.clone());
@@ -2340,7 +2407,7 @@ impl Actor {
             }
             Verdict::Deny(reason) => self.refuse(&req, &reason, agent_message.as_deref()).await,
             Verdict::Ask(reason) => {
-                let a = self.record(&req, &reason)?;
+                let a = self.record(&req, &reason, false)?;
                 self.pending.insert(
                     a,
                     PendingApproval {
@@ -2359,7 +2426,7 @@ impl Actor {
     /// Refuse a call: it is recorded and closed as the policy's doing, and the CLI is told, with `message` when there is
     /// one. Whatever fails while recording, the CLI still gets its answer, so the call never waits for nothing.
     async fn refuse(&mut self, req: &ApprovalRequest, reason: &str, message: Option<&str>) -> Result<()> {
-        let recorded = self.record(req, reason).and_then(|a| {
+        let recorded = self.record(req, reason, false).and_then(|a| {
             self.hub.store.approval_resolve(&a, Decision::Deny)?;
             Ok(a)
         });
@@ -2457,7 +2524,7 @@ impl Actor {
             input: spec.input,
         };
         self.redactor.redact_approval(&mut req);
-        let approval_id = self.record(&req, &spec.reason)?;
+        let approval_id = self.record(&req, &spec.reason, true)?;
         let (answer, received) = oneshot::channel();
         self.pending.insert(
             approval_id.clone(),
@@ -2472,8 +2539,9 @@ impl Actor {
         Ok((approval_id, received))
     }
 
-    /// Store an approval and emit `approval.requested`. Returns its id.
-    fn record(&self, req: &ApprovalRequest, reason: &str) -> Result<String> {
+    /// Store an approval and emit `approval.requested`. Returns its id. `show_input`: the event carries the input
+    /// too (the daemon's own questions, which a client draws a card for).
+    fn record(&self, req: &ApprovalRequest, reason: &str, show_input: bool) -> Result<String> {
         let reason = self.redactor.redact(reason);
         let payload = json!({
             "command": req.command,
@@ -2496,6 +2564,7 @@ impl Actor {
                 command: req.command.clone(),
                 diff: req.diff.clone(),
                 reason: reason.into_owned(),
+                input: show_input.then(|| req.input.clone()),
             },
         );
         Ok(a.id)
@@ -3981,6 +4050,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
             queued: true,
         };
         let lost = w.store.append_event(&w.agent, queued("lost")).unwrap().seq;
@@ -4119,6 +4189,7 @@ mod tests {
                 reply_to: None,
                 attachments: Vec::new(),
                 mentions: Vec::new(),
+                via_button: false,
                 queued: false,
             }
         );
@@ -4201,6 +4272,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -4323,6 +4395,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -4426,11 +4499,45 @@ mod tests {
             .expect("lead prompt");
         assert!(lead_prompt.contains("team_assign"));
         assert!(!lead_prompt.contains("Главный в команде — "));
+        // The main agent knows it creates agents, and in which order.
+        assert!(lead_prompt.contains(LEAD_CREATES));
+        assert!(lead_prompt.contains("crew_create_agent"));
+        assert!(lead_prompt.contains("schedule_create with agent_id"));
+        assert!(lead_prompt.contains("team_assign to hand it the first task"));
+        assert!(lead_prompt.contains("always means a new agent, not a schedule of your own"));
         let plain = all
             .iter()
             .find(|p| p.contains("Главный в команде — Forge. Задачи от него выполняйте как от человека"))
             .expect("plain agent prompt");
         assert!(!plain.contains("Вы главный"));
+        // Everyone is told to do what was asked, to say what is missing, and to use buttons; only the main agent
+        // is told about creating agents.
+        for prompt in [lead_prompt, plain] {
+            assert!(prompt.contains(PRINCIPLES));
+            assert!(prompt.contains("Do exactly what the person asked"));
+            assert!(prompt.contains("never swap the request for a similar action"));
+            assert!(prompt.contains("reply_buttons"));
+        }
+        assert!(!plain.contains("crew_create_agent"));
+    }
+
+    #[tokio::test]
+    async fn a_button_press_is_marked_in_the_thread_and_in_what_the_agent_reads() {
+        let mut w = world(ApprovalMode::Risky);
+        let mut msg = Inbound::user("Connected");
+        msg.via_button = true;
+        w.sup.send(&w.agent, msg).await.unwrap();
+        // The agent reads that it is a press of its own button, then the reply.
+        w.wait_log(&format!("send {BUTTON_NOTE}\n\nConnected")).await;
+        let marked = w.store.events_since(0, 100, Some(&w.agent)).unwrap().into_iter().any(
+            |e| matches!(e.body, EventBody::MessageUser { via_button: true, ref text, .. } if text == "Connected"),
+        );
+        assert!(marked, "the thread marks it");
+        w.push(done()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+        // A message typed by the person is neither marked nor prefixed.
+        w.sup.send(&w.agent, Inbound::user("typed")).await.unwrap();
+        w.wait_log("send typed").await;
     }
 
     #[tokio::test]
@@ -5435,6 +5542,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         w.sup.send(&w.agent, wrap_up).await.unwrap();
         w.wait_log("send wrap up").await;

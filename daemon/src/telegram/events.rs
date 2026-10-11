@@ -17,6 +17,18 @@ use std::time::Duration;
 
 /// Most characters of what an approval wants that a card shows.
 const CARD_DETAIL_CHARS: usize = 600;
+/// Most characters (as sent, after escaping) of a creation card's summary. Telegram takes 4096 in a message; a
+/// summary that does not fit whole is not shown cut: the card then has no Allow, the person decides in the app.
+const CREATE_DETAIL_CHARS: usize = 3200;
+
+/// True for a request to create an agent whose whole summary does not fit in a Telegram message. Such a card has no
+/// Allow or Deny: a person must not allow what they could not read (docs/ARCHITECTURE.md#agents-creating-agents).
+pub(super) fn needs_the_app(approval: &Approval) -> bool {
+    approval.tool == "agent.create"
+        && approval.payload["command"]
+            .as_str()
+            .is_none_or(|c| escape_html(c).chars().count() > CREATE_DETAIL_CHARS)
+}
 /// A message passed to an agent is looked for in its thread this long.
 const SENT_KEEP: Duration = Duration::from_secs(600);
 
@@ -216,10 +228,16 @@ impl Telegram {
     pub(super) async fn send_card(&self, chat: &TgChat, approval: &Approval) {
         let lang = &chat.language;
         let html = self.card_html(lang, approval, None);
-        let markup = json!({ "inline_keyboard": [[
-            { "text": tr(lang, "btn_allow", &[]), "callback_data": format!("a:{}:y", approval.id) },
-            { "text": tr(lang, "btn_deny", &[]), "callback_data": format!("a:{}:n", approval.id) },
-        ]] });
+        let markup = if needs_the_app(approval) {
+            json!({ "inline_keyboard": [[
+                { "text": tr(lang, "btn_open_app", &[]), "callback_data": format!("a:{}:o", approval.id) },
+            ]] })
+        } else {
+            json!({ "inline_keyboard": [[
+                { "text": tr(lang, "btn_allow", &[]), "callback_data": format!("a:{}:y", approval.id) },
+                { "text": tr(lang, "btn_deny", &[]), "callback_data": format!("a:{}:n", approval.id) },
+            ]] })
+        };
         if let Some(message_id) = self.send_html(chat.chat_id, &html, Some(markup), true).await
             && let Err(e) =
                 self.store()
@@ -245,7 +263,9 @@ impl Telegram {
             .unwrap_or(&approval.title);
         let redactor = Redactor::new(store.secrets_all().unwrap_or_default());
         let wanted = redactor.redact(wanted);
-        let shown = if wanted.chars().count() > CARD_DETAIL_CHARS {
+        // A creation shows its summary whole, or (when it does not fit) a start of it and the way to the app.
+        let whole = approval.tool == "agent.create" && !needs_the_app(approval);
+        let shown = if !whole && wanted.chars().count() > CARD_DETAIL_CHARS {
             format!("{}…", truncate_chars(&wanted, CARD_DETAIL_CHARS - 1))
         } else {
             wanted.to_string()
@@ -258,6 +278,9 @@ impl Telegram {
         let mut html = format!("🔐 {ask}");
         if !shown.trim().is_empty() {
             html.push_str(&format!("\n<pre>{}</pre>", escape_html(&shown)));
+        }
+        if needs_the_app(approval) {
+            html.push_str(&format!("\n\n{}", tr(lang, "approval_full_in_app", &[])));
         }
         if let Some(line) = closing {
             html.push_str(&format!("\n\n{line}"));

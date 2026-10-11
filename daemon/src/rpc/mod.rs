@@ -49,6 +49,7 @@ pub mod secrets;
 pub mod settings;
 pub mod setup;
 pub mod skills;
+pub mod team_create;
 pub mod telegram;
 pub mod templates;
 pub mod term;
@@ -113,6 +114,8 @@ pub fn features() -> Vec<&'static str> {
         "sharing",
         "telegram",
         "agent_connect",
+        "agent_create",
+        "quick_replies",
         "agent_migrate",
         "server_settings",
     ];
@@ -165,6 +168,8 @@ pub struct App {
     pub telegram: Arc<crate::telegram::Telegram>,
     /// The agents' requests to connect a catalog service that wait for the person (see docs/ARCHITECTURE.md#connect-requests).
     pub connects: connect::Requests,
+    /// The agents' requests to create an agent that wait for the person (see docs/ARCHITECTURE.md#agents-creating-agents).
+    pub creations: team_create::Creations,
     /// The agent archives waiting to be read and the uploads being received (see docs/ARCHITECTURE.md#agent-migration).
     pub migrate: crate::migrate::Registry,
 }
@@ -212,6 +217,7 @@ impl App {
             device: crate::mcp_oauth::device::DeviceFlows::default(),
             telegram,
             connects: connect::Requests::default(),
+            creations: team_create::Creations::default(),
             migrate: crate::migrate::Registry::default(),
         })
     }
@@ -277,9 +283,11 @@ const AGENT_METHODS: &[&str] = &[
     "team.list",
     "team.assign",
     "team.status",
+    "team.create",
     "forms.agent.ask",
     "integrations.agent.request",
     "messages.agent.react",
+    "messages.agent.quick_replies",
     "history.day",
     "history.search",
     "browser.agent.back",
@@ -671,6 +679,10 @@ struct SendParams {
     /// `@` mentions in the text (feature `mentions`; see docs/ARCHITECTURE.md#mentions).
     #[serde(default)]
     mentions: Vec<crate::mentions::Mention>,
+    /// The text is the reply of a quick-reply button (feature `quick_replies`). Believed only when it is one of the
+    /// buttons the agent shows now.
+    #[serde(default)]
+    via_button: bool,
 }
 #[derive(Deserialize)]
 struct SinceParams {
@@ -723,6 +735,24 @@ struct TeamAssignParams {
     wait: bool,
 }
 /// A failed team call reaches the main agent as a plain message it can act on.
+/// Whether `text` is the reply of a button in the newest set of quick replies of the agent, and the person has not
+/// written anything since that set was shown.
+fn is_shown_reply(store: &Store, agent_id: &str, text: &str) -> Result<bool, RpcError> {
+    let Some(shown) = store.last_event_of_kind(agent_id, "agent.quick_replies")? else {
+        return Ok(false);
+    };
+    let EventBody::AgentQuickReplies { buttons, .. } = &shown.body else {
+        return Ok(false);
+    };
+    if store
+        .last_user_message_seq(agent_id)?
+        .is_some_and(|seq| seq > shown.seq)
+    {
+        return Ok(false);
+    }
+    Ok(buttons.iter().any(|b| b.reply == text.trim()))
+}
+
 fn team_error(e: anyhow::Error) -> RpcError {
     RpcError::new(SERVER_ERROR, format!("{e:#}"))
 }
@@ -1185,6 +1215,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             | "forms.agent.ask"
             | "messages.react"
             | "messages.agent.react"
+            | "messages.agent.quick_replies"
             | "attachments.upload"
     ) {
         return chat::dispatch(app, peer, method, p).await;
@@ -1480,6 +1511,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 reply_to,
                 attachments,
                 mentions,
+                via_button,
             } = params(p)?;
             // Files alone are a message: the prompt then says there is no text (see `chat::runtime_text`).
             if text.trim().is_empty() && attachments.is_empty() {
@@ -1492,6 +1524,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let agent = store.agent_get(&agent_id)?;
             let prepared = prepare_message(agent.as_ref(), &text)?;
             let mut msg = prepared.into_inbound(Source::User);
+            // Marked as a button press only when it is exactly one of the buttons the agent shows now: a client cannot
+            // pass its own words off as an answer the agent asked for, or the reverse.
+            msg.via_button = via_button && is_shown_reply(store, &agent_id, &text)?;
             if let Some(seq) = reply_to {
                 // A reply quotes a message of this thread: the person's or the agent's.
                 match store.event_at(&agent_id, seq)?.map(|e| e.body) {
@@ -1582,6 +1617,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let TeamAgentParams { agent_id, agent } = params(p)?;
             ok(team::status(store, &agent_id, &agent).map_err(team_error)?)
         }
+        "team.create" => team_create::create(app, p).await,
         "team.assign" => {
             let TeamAssignParams {
                 agent_id,
@@ -2225,6 +2261,226 @@ mod crew_tests {
             .unwrap();
         assert_eq!(v["name"], json!("Scout"));
     }
+
+    #[tokio::test]
+    async fn quick_replies_are_an_agent_call_that_shows_buttons_in_its_own_feed() {
+        let (app, forge, scout) = app_with_crew();
+        let buttons = |of: &str| -> Vec<EventBody> {
+            app.sup
+                .hub()
+                .store
+                .events_since(0, 100, Some(of))
+                .unwrap()
+                .into_iter()
+                .map(|e| e.body)
+                .filter(|b| matches!(b, EventBody::AgentQuickReplies { .. }))
+                .collect()
+        };
+        // Not for the owner's CLI or an app.
+        let err = dispatch(
+            &app,
+            &Peer::Local,
+            "messages.agent.quick_replies",
+            json!({ "agent_id": forge, "buttons": [{ "label": "Yes", "reply": "yes" }] }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.message, "messages.agent.quick_replies is only for agents");
+
+        let first = json!({
+            "buttons": [{ "label": "Done", "reply": "The mailbox is connected" }],
+            "link": { "label": "Open settings", "url": "https://mail.google.com/mail/u/0/#settings" },
+            "progress": { "done": 2, "total": 6 },
+        });
+        let v = dispatch(&app, &Peer::Agent(forge.clone()), "messages.agent.quick_replies", first)
+            .await
+            .unwrap();
+        assert_eq!(v, json!({ "shown": 1 }));
+        // A second set is another event: the client shows the newest and drops the older one.
+        dispatch(
+            &app,
+            &Peer::Agent(forge.clone()),
+            "messages.agent.quick_replies",
+            json!({ "buttons": [{ "label": "1", "reply": "Option 1" }, { "label": "2", "reply": "Option 2" }] }),
+        )
+        .await
+        .unwrap();
+        let shown = buttons(&forge);
+        assert_eq!(shown.len(), 2);
+        let EventBody::AgentQuickReplies {
+            buttons: last,
+            link,
+            progress,
+        } = &shown[1]
+        else {
+            panic!("not quick replies");
+        };
+        assert_eq!(last.iter().map(|b| b.label.as_str()).collect::<Vec<_>>(), ["1", "2"]);
+        assert!(link.is_none() && progress.is_none());
+        let EventBody::AgentQuickReplies { progress, link, .. } = &shown[0] else {
+            panic!("not quick replies");
+        };
+        assert_eq!(progress.map(|p| (p.done, p.total)), Some((2, 6)));
+        assert_eq!(link.as_ref().map(|l| l.label.as_str()), Some("Open settings"));
+        // The buttons are in the feed of the agent that showed them, not in another's.
+        assert!(buttons(&scout).is_empty());
+
+        // A bad set shows nothing, and another agent's id does not move it to that agent.
+        for bad in [
+            json!({ "buttons": [] }),
+            json!({ "buttons": [{ "label": "x".repeat(41), "reply": "y" }] }),
+            json!({ "buttons": [{ "label": "go", "reply": "y" }], "link": { "label": "l", "url": "javascript:alert(1)" } }),
+        ] {
+            let err = dispatch(&app, &Peer::Agent(forge.clone()), "messages.agent.quick_replies", bad)
+                .await
+                .unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS);
+        }
+        let err = dispatch(
+            &app,
+            &Peer::Agent(forge.clone()),
+            "messages.agent.quick_replies",
+            json!({ "agent_id": scout, "buttons": [{ "label": "Yes", "reply": "yes" }] }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
+        assert_eq!(buttons(&forge).len(), 2);
+        assert!(buttons(&scout).is_empty());
+    }
+
+    #[test]
+    fn the_new_features_are_announced_and_a_creation_may_hold_the_connection() {
+        let list = features();
+        assert!(list.contains(&"agent_create") && list.contains(&"quick_replies"));
+        assert!(waits_long("team.create", &json!({})));
+        assert!(allowed(&Peer::Agent("a".into()), "team.create"));
+        assert!(allowed(&Peer::Agent("a".into()), "messages.agent.quick_replies"));
+        assert!(!allowed(&Peer::Local, "team.create"));
+        assert!(!allowed(&Peer::Local, "messages.agent.quick_replies"));
+    }
+
+    #[tokio::test]
+    async fn a_send_is_marked_as_a_button_press_only_when_it_is_a_button_shown_now() {
+        let mut runtimes = crate::supervisor::Runtimes::default();
+        runtimes.insert(Arc::new(Silent::default()));
+        let (app, forge, _) = crew_app(runtimes);
+        let show = |labels: &[(&str, &str)]| {
+            let buttons: Vec<Value> = labels
+                .iter()
+                .map(|(label, reply)| json!({ "label": label, "reply": reply }))
+                .collect();
+            let app = app.clone();
+            let forge = forge.clone();
+            async move {
+                dispatch(
+                    &app,
+                    &Peer::Agent(forge),
+                    "messages.agent.quick_replies",
+                    json!({ "buttons": buttons }),
+                )
+                .await
+                .unwrap();
+            }
+        };
+        let send = |text: &str, via_button: bool| {
+            let app = app.clone();
+            let forge = forge.clone();
+            let text = text.to_string();
+            let before = app
+                .sup
+                .hub()
+                .store
+                .events_since(0, 1000, Some(&forge))
+                .unwrap()
+                .into_iter()
+                .filter(|e| {
+                    matches!(
+                        e.body,
+                        EventBody::MessageUser {
+                            source: Source::User,
+                            ..
+                        }
+                    )
+                })
+                .count();
+            async move {
+                dispatch(
+                    &app,
+                    &Peer::Local,
+                    "agents.send",
+                    json!({ "agent_id": forge, "text": text, "via_button": via_button }),
+                )
+                .await
+                .unwrap();
+                // The message is in the thread once its echo is stored: the next call must see it there.
+                let user_messages = || {
+                    app.sup
+                        .hub()
+                        .store
+                        .events_since(0, 1000, Some(&forge))
+                        .unwrap()
+                        .into_iter()
+                        .filter(|e| {
+                            matches!(
+                                e.body,
+                                EventBody::MessageUser {
+                                    source: Source::User,
+                                    ..
+                                }
+                            )
+                        })
+                        .count()
+                };
+                for _ in 0..200 {
+                    if user_messages() > before {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }
+        };
+        let marks = || -> Vec<(String, bool)> {
+            app.sup
+                .hub()
+                .store
+                .events_since(0, 1000, Some(&forge))
+                .unwrap()
+                .into_iter()
+                .filter_map(|e| match e.body {
+                    EventBody::MessageUser {
+                        text,
+                        via_button,
+                        source: Source::User,
+                        ..
+                    } => Some((text.trim().to_string(), via_button)),
+                    _ => None,
+                })
+                .collect()
+        };
+        // No buttons shown yet: the claim is not believed.
+        send("Connected", true).await;
+        // A button of the set that is shown: marked. Its reply with a space around it is the same reply.
+        show(&[("Done", "Connected"), ("Later", "Not now")]).await;
+        send(" Not now ", true).await;
+        // Words that are not a button's reply, claimed as one: sent as the person's own.
+        show(&[("Done", "Connected")]).await;
+        send("Delete everything", true).await;
+        // A button's reply typed without the claim is the person's own message.
+        send("Connected", false).await;
+        // After the person wrote, the set is not shown any more: a claim of it is not believed either.
+        send("Connected", true).await;
+        assert_eq!(
+            marks(),
+            vec![
+                ("Connected".to_string(), false),
+                ("Not now".to_string(), true),
+                ("Delete everything".to_string(), false),
+                ("Connected".to_string(), false),
+                ("Connected".to_string(), false),
+            ]
+        );
+    }
 }
 
 #[cfg(test)]
@@ -2273,6 +2529,7 @@ mod history_tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
             queued: false,
         }
     }
@@ -2572,6 +2829,7 @@ async fn recv_event(rx: &mut Option<broadcast::Receiver<Event>>) -> Result<Event
 fn waits_long(method: &str, params: &Value) -> bool {
     method == "forms.agent.ask"
         || method == "integrations.agent.request"
+        || method == "team.create"
         || (method == "team.assign" && params.get("wait").and_then(Value::as_bool) == Some(true))
 }
 
@@ -4137,6 +4395,7 @@ mod pause_and_logs_tests {
                     reply_to: None,
                     attachments: Vec::new(),
                     mentions: Vec::new(),
+                    via_button: false,
                     queued: false,
                 },
             )
@@ -4155,6 +4414,7 @@ mod pause_and_logs_tests {
                     reply_to: None,
                     attachments: Vec::new(),
                     mentions: Vec::new(),
+                    via_button: false,
                     queued: false,
                 },
             )

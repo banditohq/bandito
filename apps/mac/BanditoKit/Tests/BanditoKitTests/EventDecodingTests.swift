@@ -23,7 +23,7 @@ import Testing
         )
         #expect(e.seq == 6)
         #expect(e.agentId == "a1")
-        guard case .approvalRequested(let id, _, let tool, _, let command, let diff, let reason) = e.body else {
+        guard case .approvalRequested(let id, _, let tool, _, let command, let diff, let reason, _) = e.body else {
             Issue.record("wrong body \(e.body)")
             return
         }

@@ -575,6 +575,11 @@ impl Telegram {
         let data = press["data"].as_str().unwrap_or_default();
         let mut parts = data.splitn(3, ':');
         match (parts.next(), parts.next(), parts.next()) {
+            (Some("a"), Some(approval), Some("o")) if !approval.is_empty() => {
+                // "Open in the app": nothing is decided here, the button only says where.
+                self.answer_callback(id, Some(&tr(&chat.language, "approval_full_in_app", &[])))
+                    .await;
+            }
             (Some("a"), Some(approval), Some(answer @ ("y" | "n"))) if !approval.is_empty() => {
                 self.press_approval(&chat, id, message_id, approval, answer == "y")
                     .await;
@@ -601,6 +606,12 @@ impl Telegram {
             self.answer_callback(callback_id, Some(&tr(lang, "approval_already", &[])))
                 .await;
             self.close_cards(approval_id, super::events::closed_from(&approval))
+                .await;
+            return;
+        }
+        // A summary that does not fit here is decided in the app, whatever button is pressed.
+        if super::events::needs_the_app(&approval) {
+            self.answer_callback(callback_id, Some(&tr(lang, "approval_full_in_app", &[])))
                 .await;
             return;
         }

@@ -166,6 +166,31 @@ public enum L10n {
         public static func unknown(service: String) -> String { L10n.tr("agentConnect.unknown", service) }
     }
 
+    public enum AgentCreate {
+        public static func allowed(name: String) -> String { L10n.tr("agentCreate.allowed", name) }
+        public static var approvals: String { L10n.tr("agentCreate.approvals") }
+        public static var canUse: String { L10n.tr("agentCreate.canUse") }
+        public static func chars(count: Int) -> String { L10n.tr("agentCreate.chars", count) }
+        public static var create: String { L10n.tr("agentCreate.create") }
+        public static var decline: String { L10n.tr("agentCreate.decline") }
+        public static func declined(name: String) -> String { L10n.tr("agentCreate.declined", name) }
+        public static func expired(name: String) -> String { L10n.tr("agentCreate.expired", name) }
+        public static var folder: String { L10n.tr("agentCreate.folder") }
+        public static var folderNew: String { L10n.tr("agentCreate.folderNew") }
+        public static var instructions: String { L10n.tr("agentCreate.instructions") }
+        public static func lines(count: Int) -> String { L10n.tr("agentCreate.lines", count) }
+        public static var nothingExtra: String { L10n.tr("agentCreate.nothingExtra") }
+        public static var role: String { L10n.tr("agentCreate.role") }
+        public static var runsOn: String { L10n.tr("agentCreate.runsOn") }
+        public static var schedules: String { L10n.tr("agentCreate.schedules") }
+        public static var scrollHint: String { L10n.tr("agentCreate.scrollHint") }
+        public static var services: String { L10n.tr("agentCreate.services") }
+        public static var servicesAll: String { L10n.tr("agentCreate.servicesAll") }
+        public static var servicesNone: String { L10n.tr("agentCreate.servicesNone") }
+        public static func wants(name: String) -> String { L10n.tr("agentCreate.wants", name) }
+        public static var why: String { L10n.tr("agentCreate.why") }
+    }
+
     public enum AgentSheet {
         public static var advanced: String { L10n.tr("agentSheet.advanced") }
         public static var advancedCollapsed: String { L10n.tr("agentSheet.advancedCollapsed") }
@@ -2334,6 +2359,11 @@ public enum L10n {
         public static var signOut: String { L10n.tr("profile.signOut") }
     }
 
+    public enum QuickReplies {
+        public static var group: String { L10n.tr("quickReplies.group") }
+        public static func progress(done: String, total: String) -> String { L10n.tr("quickReplies.progress", done, total) }
+    }
+
     public enum Recommend {
 
         public enum Reason {
@@ -3683,11 +3713,14 @@ public enum L10n {
 
     public enum Thread {
         public static var aTeammate: String { L10n.tr("thread.aTeammate") }
+        public static func agentCreated(name: String) -> String { L10n.tr("thread.agentCreated", name) }
+        public static func agentCreatedUnasked(name: String) -> String { L10n.tr("thread.agentCreatedUnasked", name) }
         public static var attach: String { L10n.tr("thread.attach") }
         public static func chapterNotSaved(chapter: String) -> String { L10n.tr("thread.chapterNotSaved", chapter) }
         public static var chapterNotSavedHelp: String { L10n.tr("thread.chapterNotSavedHelp") }
         public static var copy: String { L10n.tr("thread.copy") }
         public static var copyMarkdown: String { L10n.tr("thread.copyMarkdown") }
+        public static func createdBy(name: String) -> String { L10n.tr("thread.createdBy", name) }
         public static var dictate: String { L10n.tr("thread.dictate") }
         public static func duration(runtime: String) -> String { L10n.tr("thread.duration", runtime) }
         public static var hintNewLine: String { L10n.tr("thread.hintNewLine") }
@@ -3718,6 +3751,7 @@ public enum L10n {
         public static var stop: String { L10n.tr("thread.stop") }
         public static var stopped: String { L10n.tr("thread.stopped") }
         public static var today: String { L10n.tr("thread.today") }
+        public static var viaButton: String { L10n.tr("thread.viaButton") }
         public static var yesterday: String { L10n.tr("thread.yesterday") }
 
         public enum BrowserRun {

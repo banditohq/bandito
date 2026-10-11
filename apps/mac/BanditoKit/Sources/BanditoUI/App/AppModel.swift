@@ -276,9 +276,10 @@ public final class AppModel {
     static func notice(for event: Event, in server: ServerModel) -> AgentNotice? {
         let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
         switch event.body {
-        case .approvalRequested(let approvalID, _, _, let title, let command, _, _):
+        case .approvalRequested(let approvalID, _, let tool, let title, let command, _, _, _):
             return .approval(
-                agentID: event.agentId, agentName: name, approvalID: approvalID, title: title, command: command)
+                agentID: event.agentId, agentName: name, approvalID: approvalID, title: title, command: command,
+                reviewOnly: tool == AgentCreateSummary.tool)
         case .turnCompleted(_, .ok, _, _):
             return .finished(agentID: event.agentId, agentName: name)
         case .error(let message):
