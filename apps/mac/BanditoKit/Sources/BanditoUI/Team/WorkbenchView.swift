@@ -596,12 +596,14 @@ enum WorkbenchTerminals {
                     router.showInWorkbench(tab, agentID: agent.id)
                 }
             }
-            if reuseExisting, let existing = inFolder(agent.cwd, of: controller) {
+            if reuseExisting, let existing = inFolder(agent.cwd, workspace: agent.workspaceId, of: controller) {
                 show(.terminal(sessionID: existing))
                 return
             }
             // The id comes from the open itself. On failure the panel says so; no other session is shown in its place.
-            if let opened = await controller.openNew(cwd: agent.cwd, afterFocused: false) {
+            if let opened = await controller.openNew(
+                cwd: agent.cwd, afterFocused: false, workspace: agent.workspaceId)
+            {
                 show(.terminal(sessionID: opened))
             } else {
                 router.setWorkbenchNotice(
@@ -611,8 +613,8 @@ enum WorkbenchTerminals {
     }
 
     /// The running session in `folder` that was made last, if any.
-    private static func inFolder(_ folder: String, of controller: TerminalController) -> String? {
-        let running = controller.sessions.values.filter { $0.exit == nil }.map(\.info)
+    private static func inFolder(_ folder: String, workspace: String, of controller: TerminalController) -> String? {
+        let running = controller.sessions.values.filter { $0.exit == nil }.map(\.info).filter { $0.workspace == workspace }
         return TerminalNames.newestSession(in: folder, among: running)?.id
     }
 }

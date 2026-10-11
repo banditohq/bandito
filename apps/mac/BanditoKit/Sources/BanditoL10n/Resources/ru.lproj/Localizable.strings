@@ -629,6 +629,8 @@
 "files.error.permissionDenied" = "Нет доступа";
 "files.error.tooLarge" = "Файл слишком большой";
 "files.favorites" = "ИЗБРАННОЕ";
+"files.folderShared" = "Общая";
+"files.folderSharedHelp" = "Видна и на самом сервере, или в другом рабочем месте";
 "files.forward" = "Вперёд";
 "files.forwardHelp" = "Вперёд (⌘])";
 "files.hidden" = "Показывать скрытые файлы";
@@ -697,6 +699,8 @@
 "files.upload.failed" = "Не удалось загрузить %1$@: %2$@";
 "files.upload.hint" = "Перетащите файлы сюда";
 "files.upload.title" = "%1$@ загружается с Mac в %2$@";
+"files.workplaceGroup" = "РАБОЧЕЕ МЕСТО: %1$@";
+"files.workplaceNoFolders" = "Папок пока нет";
 "folderPicker.choose" = "Выбрать %1$@";
 "folderPicker.clone" = "Склонировать по ссылке";
 "folderPicker.cloneGo" = "Клонировать";
@@ -1787,6 +1791,11 @@
 "screen.agentControls" = "Агент управляет";
 "screen.askTakeControl" = "Взять управление, чтобы кликнуть здесь?";
 "screen.asleep" = "Экран спит";
+"screen.card.asleep" = "Спит";
+"screen.card.checking" = "Проверяем…";
+"screen.card.running" = "Экран включён";
+"screen.card.unavailable" = "Пока недоступен";
+"screen.card.unavailableHint" = "На сервере старая версия Bandito: экран этого рабочего места показать нельзя. Обновите сервер.";
 "screen.clipboard" = "Буфер обмена";
 "screen.clipboardOff" = "Выкл";
 "screen.clipboardShared" = "Общий";
@@ -1818,6 +1827,7 @@
 "screen.unsupported" = "Экран сервера работает на Linux-серверах";
 "screen.unsupportedText" = "На Linux-сервере здесь виден его рабочий стол: агенты работают в нём с приложениями, а вы можете смотреть и вмешиваться. Маку это не нужно — его экран у вас перед глазами.";
 "screen.who" = "Кто здесь";
+"screen.workplaceUnavailable" = "На сервере старая версия Bandito: экран отдельного рабочего места показать нельзя. Обновите сервер, чтобы открыть его.";
 "screen.workplaces" = "Экраны рабочих мест";
 "screen.youWatch" = "Вы смотрите";
 "search.noResults" = "Ничего не найдено";
@@ -2622,6 +2632,7 @@
 "terminals.layouts.mainRight" = "Главное и два справа";
 "terminals.layouts.one" = "Одно окно";
 "terminals.newFailed" = "Не удалось открыть терминал: %1$@";
+"terminals.newIn" = "Новый терминал: %1$@";
 "terminals.noRoom" = "На экране нет места. Сначала сверните или закройте панель.";
 "terminals.noServer" = "Сервер не выбран";
 "terminals.pane.close" = "Закрыть и завершить";
@@ -2875,6 +2886,8 @@
 "workspace.move.title" = "Перевести агента в «%1$@»?";
 "workspace.network.internet" = "Интернет";
 "workspace.network.offline" = "Нет";
+"workspace.picker.onServer" = "На сервере";
+"workspace.picker.starting" = "Запускаем…";
 "workspace.row.cpu" = "Процессор";
 "workspace.row.disk" = "Диск";
 "workspace.row.folders" = "Папки";

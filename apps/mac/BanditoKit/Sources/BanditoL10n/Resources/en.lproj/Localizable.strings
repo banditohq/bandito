@@ -629,6 +629,8 @@
 "files.error.permissionDenied" = "No permission";
 "files.error.tooLarge" = "The file is too large";
 "files.favorites" = "FAVORITES";
+"files.folderShared" = "Shared";
+"files.folderSharedHelp" = "Also visible on the server itself or in another workplace";
 "files.forward" = "Forward";
 "files.forwardHelp" = "Forward (⌘])";
 "files.hidden" = "Show hidden files";
@@ -697,6 +699,8 @@
 "files.upload.failed" = "Could not upload %1$@: %2$@";
 "files.upload.hint" = "Drop files here";
 "files.upload.title" = "%1$@ uploads from this Mac to %2$@";
+"files.workplaceGroup" = "WORKPLACE: %1$@";
+"files.workplaceNoFolders" = "No folders yet";
 "folderPicker.choose" = "Choose %1$@";
 "folderPicker.clone" = "Clone from a link";
 "folderPicker.cloneGo" = "Clone";
@@ -1787,6 +1791,11 @@
 "screen.agentControls" = "Agent is controlling";
 "screen.askTakeControl" = "Take control to click here?";
 "screen.asleep" = "The screen is asleep";
+"screen.card.asleep" = "Asleep";
+"screen.card.checking" = "Checking…";
+"screen.card.running" = "Screen on";
+"screen.card.unavailable" = "Not available yet";
+"screen.card.unavailableHint" = "This server's Bandito is too old to show the screen of this workplace. Update the server.";
 "screen.clipboard" = "Clipboard";
 "screen.clipboardOff" = "Off";
 "screen.clipboardShared" = "Shared";
@@ -1818,6 +1827,7 @@
 "screen.unsupported" = "The server screen works on Linux servers";
 "screen.unsupportedText" = "On a Linux server Bandito shows its desktop here: agents use apps on it, and you can watch or take over. A Mac does not need it — its screen is right in front of you.";
 "screen.who" = "Who is here";
+"screen.workplaceUnavailable" = "This server's Bandito is too old to show the screen of a separate workplace. Update the server to open it.";
 "screen.workplaces" = "Screens of workplaces";
 "screen.youWatch" = "You are watching";
 "search.noResults" = "Nothing found";
@@ -2622,6 +2632,7 @@
 "terminals.layouts.mainRight" = "Main and two on the right";
 "terminals.layouts.one" = "One window";
 "terminals.newFailed" = "Could not open a terminal: %1$@";
+"terminals.newIn" = "New terminal in %1$@";
 "terminals.noRoom" = "No room on screen. Collapse or close a pane first.";
 "terminals.noServer" = "No server selected";
 "terminals.pane.close" = "Close and end the process";
@@ -2875,6 +2886,8 @@
 "workspace.move.title" = "Move the agent to %1$@?";
 "workspace.network.internet" = "Internet";
 "workspace.network.offline" = "None";
+"workspace.picker.onServer" = "On the server";
+"workspace.picker.starting" = "Starting…";
 "workspace.row.cpu" = "CPU";
 "workspace.row.disk" = "Disk";
 "workspace.row.folders" = "Folders";

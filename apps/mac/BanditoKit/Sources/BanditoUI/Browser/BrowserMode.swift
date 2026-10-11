@@ -29,8 +29,11 @@ private struct BrowserContent: View {
     @Environment(Keymap.self) private var keymap
 
     var body: some View {
-        let model = BrowserStore.shared.model(for: server)
+        let selection = WorkspaceSelections.shared.selection(mode: "browser", server: server)
+        let workspaceID = selection.selectedID
+        let model = BrowserStore.shared.model(for: server, workspace: workspaceID)
         BrowserMainArea(model: model)
+            .id(workspaceID)
             // ⌘⇧C takes the browser from the agent, or gives it back when the user holds it.
             .keymapShortcut("browser.takeControl", keymap: keymap) {
                 Task {
@@ -43,16 +46,31 @@ private struct BrowserContent: View {
             }
             .keymapShortcut("browser.newTab", keymap: keymap) { Task { await model.newTab() } }
             .keymapShortcut("browser.closeTab", keymap: keymap) { Task { await model.closeCurrentTab() } }
-            .task(id: server.id) {
+            .task(id: workspaceID) {
                 model.attach()
+            }
+            // Choosing another workplace lets the browser shown go (its page connection closes), and shows the other.
+            .onChange(of: workspaceID) { old, _ in
+                BrowserStore.shared.model(for: server, workspace: old).detach()
+            }
+            // The list of workplaces: read now and every few seconds while the mode is on screen.
+            .task(id: server.id) {
+                while !Task.isCancelled {
+                    if selection.directory.shouldPoll { await selection.refresh() }
+                    try? await Task.sleep(for: .seconds(5))
+                }
             }
             // ⌘[ and ⌘] (and the Go menu) walk the page's history while Browser mode is on screen.
             .onAppear {
+                // The handle follows the chosen workplace: it looks the browser up when it is used.
+                let shown: @MainActor () -> BrowserModel = {
+                    BrowserStore.shared.model(for: server, workspace: selection.selectedID)
+                }
                 router.browserHistory = BrowserHistoryHandle(
-                    canBack: { model.canGoBack },
-                    canForward: { model.canGoForward },
-                    back: { Task { await model.goBack() } },
-                    forward: { Task { await model.goForward() } })
+                    canBack: { shown().canGoBack },
+                    canForward: { shown().canGoForward },
+                    back: { Task { await shown().goBack() } },
+                    forward: { Task { await shown().goForward() } })
             }
             .onDisappear {
                 model.detach()
@@ -741,15 +759,27 @@ struct BrowserSidebar: View {
 
     var body: some View {
         if let server = app.currentServer, server.supports("browser") {
-            BrowserSidebarContent(model: BrowserStore.shared.model(for: server))
+            BrowserSidebarHost(server: server)
         } else {
             SidebarPlaceholder(mode: .browser)
         }
     }
 }
 
+/// Picks the model of the chosen workplace for the sidebar. The picker sits above the tabs and does not rebuild with them.
+private struct BrowserSidebarHost: View {
+    let server: ServerModel
+
+    var body: some View {
+        let selection = WorkspaceSelections.shared.selection(mode: "browser", server: server)
+        BrowserSidebarContent(
+            model: BrowserStore.shared.model(for: server, workspace: selection.selectedID), selection: selection)
+    }
+}
+
 private struct BrowserSidebarContent: View {
     @Bindable var model: BrowserModel
+    let selection: WorkspaceSelection
     @State private var ports: [ListeningPort] = []
     /// The first-visit hint, closed once for good.
     @AppStorage("browser.sidebarHintClosed") private var hintClosed = false
@@ -757,6 +787,7 @@ private struct BrowserSidebarContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
+                WorkspacePicker(selection: selection)
                 HStack(spacing: 6) {
                     SectionLabel(L10n.Browser.tabs)
                     Spacer(minLength: 6)

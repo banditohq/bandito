@@ -52,7 +52,9 @@ Makes the window of the app take the whole screen. The screen view fills the win
 The side panel shows who is connected to the screen now, and the screens of the agents' workplaces.
 Где: Server screen → side panel → Who is here (Кто здесь), Screens of workplaces (Экраны рабочих мест)
 1. Read the names under Who is here (Кто здесь).
-2. Under Screens of workplaces (Экраны рабочих мест), see the screens that agents use. Click one to open it.
+2. Under Screens of workplaces (Экраны рабочих мест), every workplace has a card: the shared server (Общий сервер) and each container. A card shows a preview of the last picture, the name, and the state: Screen on (Экран включён), Asleep (Спит), or Not available yet (Пока недоступен). A container that is not running also says so.
+3. Click a card to show that workplace's screen in the main area. The choice is kept for the server. Only the chosen screen is connected; the others wake only when you open them.
+4. A card says Not available yet (Пока недоступен) when the server's Bandito is too old to show the screen of a separate workplace. Open Server → Updates and update the server.
 
 ## Shared clipboard (Clipboard)
 

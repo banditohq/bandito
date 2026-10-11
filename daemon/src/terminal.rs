@@ -75,6 +75,8 @@ pub struct TermInfo {
     pub state: TermState,
     /// Total bytes of output produced so far (not only the retained part).
     pub offset: u64,
+    /// The workspace the terminal runs in: `shared` (the server) or the id of a container workspace.
+    pub workspace: String,
 }
 
 /// Parameters for [`TerminalManager::open`].
@@ -90,6 +92,23 @@ pub struct OpenSpec {
     /// Added to the terminal's environment on top of the inherited whitelist.
     #[serde(default)]
     pub env: Vec<(String, String)>,
+    /// `Some` runs the program inside a workspace's container (`docker exec -it`); `None` runs it on the server.
+    #[serde(default)]
+    pub container: Option<ContainerTarget>,
+}
+
+/// Where a container terminal runs. The terminal's own process is the `docker exec` client on the server, so its PTY,
+/// resize and hang-up work as for any terminal; `command` and `cwd` of the terminal name what runs inside.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContainerTarget {
+    /// The workspace id, shown as `TermInfo.workspace`.
+    pub workspace_id: String,
+    /// The container's name (`workspace::container_name`).
+    pub name: String,
+    /// The `docker` client program.
+    pub docker: PathBuf,
+    /// The folder inside the container (absolute).
+    pub cwd: String,
 }
 
 /// Retained output starting at `start`. `data` ends at the terminal's current offset.
@@ -195,6 +214,7 @@ struct Session {
     _root: crate::host::RootGuard,
     cwd: String,
     command: Vec<String>,
+    workspace: String,
     created_at: i64,
     scrollback: usize,
     /// Set by the reaper right after the child is reaped. From then on the pid may be
@@ -381,8 +401,21 @@ impl TerminalManager {
         // Marks the terminal's processes for `host.processes`; added last, so `env` cannot override it.
         let mut env = spec.env.clone();
         env.push(("BANDITO_TERM_ID".into(), id.clone()));
-        let mut child =
-            spawn_child(&command, &spec.cwd, &env, &slave).with_context(|| format!("failed to start {program}"))?;
+        // A container terminal runs the `docker exec` client here; the program and folder it names run inside.
+        let (spawn_command, session_cwd, workspace) = match &spec.container {
+            None => (
+                command.clone(),
+                spec.cwd.to_string_lossy().into_owned(),
+                crate::store::SHARED_WORKSPACE.to_string(),
+            ),
+            Some(target) => (
+                container_command(target, &command, &env),
+                target.cwd.clone(),
+                target.workspace_id.clone(),
+            ),
+        };
+        let mut child = spawn_child(&spawn_command, &spec.cwd, &env, &slave)
+            .with_context(|| format!("failed to start {}", spawn_command[0]))?;
         // Only the child may hold the slave now; EOF on the master means it is gone.
         drop(slave);
 
@@ -393,8 +426,9 @@ impl TerminalManager {
             id,
             pid,
             _root: root,
-            cwd: spec.cwd.to_string_lossy().into_owned(),
+            cwd: session_cwd,
             command,
+            workspace,
             created_at: now_ms(),
             scrollback: self.shared.limits.scrollback,
             exited: Arc::clone(&exited),
@@ -454,6 +488,7 @@ impl Session {
             created_at: self.created_at,
             state: inner.state.clone(),
             offset: inner.offset(),
+            workspace: self.workspace.clone(),
         }
     }
 
@@ -828,6 +863,36 @@ fn program_name(program: &str) -> String {
 }
 
 /// The user's shell as a login shell: `$SHELL`, else `/bin/bash`, else `/bin/sh`.
+/// The `docker exec -it` command that runs `command` in `target`'s container. The values of the terminal's variables
+/// are not in the arguments: `-e NAME` takes each from the environment of the docker client (see `spawn_child`).
+fn container_command(target: &ContainerTarget, command: &[String], env: &[(String, String)]) -> Vec<String> {
+    let mut names: Vec<String> = ["TERM", "COLORTERM", "BANDITO_TERM"].map(String::from).into();
+    for (k, _) in env {
+        if !names.contains(k) {
+            names.push(k.clone());
+        }
+    }
+    let mut out = vec![target.docker.to_string_lossy().into_owned()];
+    out.extend(crate::workspace::exec_tty_args(
+        &target.name,
+        &target.cwd,
+        &names,
+        &command[0],
+        &command[1..],
+    ));
+    out
+}
+
+/// The shell of a container terminal: bash when the image has it, else sh. Images other than Bandito's own need not
+/// have bash.
+pub fn container_shell() -> Vec<String> {
+    vec![
+        "sh".into(),
+        "-c".into(),
+        "if command -v bash >/dev/null 2>&1; then exec bash -l; else exec sh; fi".into(),
+    ]
+}
+
 fn default_command() -> Vec<String> {
     let shell = match std::env::var("SHELL") {
         Ok(shell) if !shell.is_empty() => shell,
@@ -871,6 +936,7 @@ mod tests {
             cols,
             rows,
             env: Vec::new(),
+            container: None,
         }
     }
 

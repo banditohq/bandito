@@ -97,3 +97,12 @@ A page shows its picture as it loads. When no picture comes for 10 seconds, the 
 Где: Browser → page area, after 10 seconds without a picture
 1. Click Retry (Повторить) to connect to the page again.
 2. If the picture still does not come, check that the server is running (Server → Daemon log, see [server.md](server.md)).
+
+## Browser of each workplace (Workplace)
+
+<!-- id: browser-workplace; covers: -->
+Each workplace of the server has its own Chrome, with its own sign-ins and tabs: the shared server (Общий сервер) and every container. When the server has more than one workplace, the sidebar shows a Workplace (Рабочее место) list above the tabs.
+Где: Browser → sidebar → Workplace (Рабочее место)
+1. Click a workplace. The tabs, the address bar, the page and the start page's recent addresses are now those of that workplace. The choice is kept for the server.
+2. Under the name you see Running (Работает), Stopped (Остановлено), or Docker is not answering (Docker не отвечает). A stopped container has Start (Запустить): click it to start the container.
+3. A workplace whose browser is off shows Start browser (Запустить браузер) in the page area.

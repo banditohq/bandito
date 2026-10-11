@@ -38,6 +38,11 @@ private struct TerminalsSidebarList: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
+                        // Where a new terminal opens. Shown only when the daemon can open one in a container and the
+                        // server has more than one workplace.
+                        if controller.supportsWorkplaces {
+                            WorkspacePicker(selection: controller.selection)
+                        }
                         // The section has its own "+", like the tabs of the browser. With no terminals the main area
                         // says so; the list itself stays silent.
                         HStack(spacing: 6) {
@@ -49,9 +54,9 @@ private struct TerminalsSidebarList: View {
                                 Image(systemName: "plus")
                                     .font(.system(size: 11, weight: .semibold))
                             }
-                            .banditoButton(.icon(size: 22, label: L10n.Keys.newTerminal))
+                            .banditoButton(.icon(size: 22, label: newTerminalLabel))
                             .focusable(false)
-                            .help(L10n.Keys.newTerminal)
+                            .help(newTerminalLabel)
                         }
                         .padding(.horizontal, 10)
                         .padding(.top, 14)
@@ -121,6 +126,13 @@ private struct TerminalsSidebarList: View {
         }
     }
 
+    /// "New terminal", or "New terminal in <workplace>" when the chosen workplace is a container.
+    private var newTerminalLabel: String {
+        guard controller.supportsWorkplaces, let chosen = controller.selection.selected, chosen.kind == .container
+        else { return L10n.Keys.newTerminal }
+        return L10n.Terminals.newIn(name: chosen.name)
+    }
+
     /// One terminal. On screen, a click focuses it; collapsed, a click brings it back.
     @ViewBuilder
     private func row(id: String, collapsed entry: TerminalWorkspace.Collapsed?, now: Date) -> some View {
@@ -148,11 +160,16 @@ private struct TerminalsSidebarList: View {
                         .font(BanditoFont.text(size: 13, weight: 500))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
-                    Text(session?.info.cwd ?? "")
-                        .font(BanditoFont.mono(size: 11.5, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .lineLimit(1)
-                        .truncationMode(.head)
+                    HStack(spacing: 5) {
+                        if let place = controller.workspaceLabel(for: id) {
+                            WorkspaceChip(text: place)
+                        }
+                        Text(session?.info.cwd ?? "")
+                            .font(BanditoFont.mono(size: 11.5, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if entry != nil {

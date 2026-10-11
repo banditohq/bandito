@@ -83,6 +83,7 @@ pub fn features() -> Vec<&'static str> {
         "commands",
         "skills",
         "workspaces",
+        "terminal_workspaces",
         "browser",
         "browser_agent_tabs",
         "update",

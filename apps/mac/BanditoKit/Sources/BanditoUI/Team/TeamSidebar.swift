@@ -87,12 +87,15 @@ struct TeamSidebar: View {
                     ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
                             ThreadReader(server: server, agentID: agent.id) { facts in
                                 let status = server.status(of: agent.id)
+                                let place = WorkspacePickerLogic.label(
+                                    workspaceID: agent.workspaceId,
+                                    workspaces: WorkspaceDirectories.shared.directory(for: server).workspaces)
                                 Memo(key: SidebarRowKey(
                                     agent: agent, facts: facts, status: status, selected: shown == agent.id,
-                                    isLead: lead == agent.id, pinned: pins.isPinned(agent.id))) {
+                                    isLead: lead == agent.id, pinned: pins.isPinned(agent.id), place: place)) {
                                     teamRow(
                                         agent, facts: facts, status: status, server: server, selected: shown == agent.id,
-                                        isLead: lead == agent.id)
+                                        isLead: lead == agent.id, place: place)
                                 }
                                 .equatable()
                             }
@@ -111,6 +114,16 @@ struct TeamSidebar: View {
             .padding(.bottom, 12)
         }
         .background(Color.Bandito.surface1)
+        // The names of the containers label the agents that run in them. Read only while some agent does.
+        .task(id: "\(agents.contains { $0.workspaceId != Workspace.sharedID }) \(server.supports("workspaces"))") {
+            guard agents.contains(where: { $0.workspaceId != Workspace.sharedID }), server.supports("workspaces")
+            else { return }
+            let directory = WorkspaceDirectories.shared.directory(for: server)
+            while !Task.isCancelled {
+                if directory.shouldPoll { await directory.refresh() }
+                try? await Task.sleep(for: .seconds(15))
+            }
+        }
         .confirmationDialog(
             pendingDelete.map { L10n.Agent.Delete.confirm(name: $0.name) } ?? "",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
@@ -217,14 +230,15 @@ struct TeamSidebar: View {
     // MARK: team
 
     private func teamRow(
-        _ agent: Agent, facts: SidebarThreadFacts, status: AgentStatus, server: ServerModel, selected: Bool, isLead: Bool
+        _ agent: Agent, facts: SidebarThreadFacts, status: AgentStatus, server: ServerModel, selected: Bool, isLead: Bool,
+        place: String?
     ) -> some View {
         return Button {
             router.selectAgent(agent.id, on: server)
         } label: {
             AgentRow(
                 agent: agent, server: server, facts: facts, status: status, isSelected: selected,
-                lastActivity: TeamTime.label(ms: facts.lastActivityMs), isLead: isLead)
+                lastActivity: TeamTime.label(ms: facts.lastActivityMs), isLead: isLead, place: place)
                 .contentShape(Rectangle())
         }
         .banditoButton(.row(cornerRadius: 10))
@@ -373,6 +387,7 @@ private struct SidebarRowKey: Equatable {
     var selected: Bool
     var isLead: Bool
     var pinned: Bool
+    var place: String?
 }
 
 /// One agent in the team list: avatar with its status dot, name, role, the time of the last event and a preview.
@@ -389,10 +404,12 @@ struct AgentRow: View {
     var lastActivity = ""
     /// The server's main agent: a crown on the avatar.
     var isLead = false
+    /// The name of the container the agent runs in; nil for the shared server.
+    var place: String?
 
     init(
         agent: Agent, server: ServerModel? = nil, facts: SidebarThreadFacts, status: AgentStatus,
-        isSelected: Bool = false, lastActivity: String = "", isLead: Bool = false
+        isSelected: Bool = false, lastActivity: String = "", isLead: Bool = false, place: String? = nil
     ) {
         self.agent = agent
         self.server = server
@@ -401,6 +418,7 @@ struct AgentRow: View {
         self.isSelected = isSelected
         self.lastActivity = lastActivity
         self.isLead = isLead
+        self.place = place
     }
 
     /// A row made from the whole thread (pictures of the row in tests).
@@ -440,6 +458,7 @@ struct AgentRow: View {
                             .help(L10n.Inspector.statePaused)
                     }
                     if !agent.role.isEmpty { Chip(text: agent.role) }
+                    if let place { WorkspaceChip(text: place) }
                     Spacer(minLength: 4)
                     if !lastActivity.isEmpty {
                         Text(lastActivity)

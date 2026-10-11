@@ -629,6 +629,8 @@
 "files.error.permissionDenied" = "권한이 없어요";
 "files.error.tooLarge" = "파일이 너무 커요";
 "files.favorites" = "즐겨찾기";
+"files.folderShared" = "공유";
+"files.folderSharedHelp" = "서버 자체나 다른 작업 장소에서도 보입니다";
 "files.forward" = "앞으로";
 "files.forwardHelp" = "앞으로 (⌘])";
 "files.hidden" = "숨김 파일 보기";
@@ -697,6 +699,8 @@
 "files.upload.failed" = "%1$@을(를) 업로드할 수 없었어요: %2$@";
 "files.upload.hint" = "여기에 파일을 놓으세요";
 "files.upload.title" = "%1$@이(가) 이 Mac에서 %2$@(으)로 업로드 중이에요";
+"files.workplaceGroup" = "작업 장소: %1$@";
+"files.workplaceNoFolders" = "아직 폴더가 없습니다";
 "folderPicker.choose" = "%1$@ 선택";
 "folderPicker.clone" = "링크에서 클론";
 "folderPicker.cloneGo" = "클론";
@@ -1787,6 +1791,11 @@
 "screen.agentControls" = "에이전트가 조작 중이에요";
 "screen.askTakeControl" = "여기를 클릭하려면 제어를 가져올까요?";
 "screen.asleep" = "화면이 절전 중이에요";
+"screen.card.asleep" = "대기 중";
+"screen.card.checking" = "확인하는 중…";
+"screen.card.running" = "화면 켜짐";
+"screen.card.unavailable" = "아직 사용할 수 없음";
+"screen.card.unavailableHint" = "서버의 Bandito가 오래되어 이 작업 장소의 화면을 표시할 수 없습니다. 서버를 업데이트하세요.";
 "screen.clipboard" = "클립보드";
 "screen.clipboardOff" = "끄기";
 "screen.clipboardShared" = "공용";
@@ -1818,6 +1827,7 @@
 "screen.unsupported" = "서버 화면은 Linux 서버에서 동작해요";
 "screen.unsupportedText" = "Linux 서버에서는 Bandito가 여기에 서버의 데스크톱을 보여줘요. 에이전트는 그 위에서 앱을 쓰고, 나는 지켜보거나 직접 조작할 수 있어요. Mac은 필요하지 않아요. 화면이 바로 눈앞에 있으니까요.";
 "screen.who" = "지금 여기 있는 사람";
+"screen.workplaceUnavailable" = "서버의 Bandito가 오래되어 별도 작업 장소의 화면을 표시할 수 없습니다. 서버를 업데이트하면 열 수 있습니다.";
 "screen.workplaces" = "작업 장소 화면";
 "screen.youWatch" = "지켜보는 중이에요";
 "search.noResults" = "결과가 없어요";
@@ -2622,6 +2632,7 @@
 "terminals.layouts.mainRight" = "메인 하나와 오른쪽 두 개";
 "terminals.layouts.one" = "창 하나";
 "terminals.newFailed" = "터미널을 열 수 없었어요: %1$@";
+"terminals.newIn" = "%1$@에서 새 터미널";
 "terminals.noRoom" = "화면에 공간이 없어요. 먼저 패널을 접거나 닫아 주세요.";
 "terminals.noServer" = "선택된 서버가 없어요";
 "terminals.pane.close" = "닫고 프로세스 종료";
@@ -2875,6 +2886,8 @@
 "workspace.move.title" = "에이전트를 %1$@(으)로 옮길까요?";
 "workspace.network.internet" = "인터넷";
 "workspace.network.offline" = "없음";
+"workspace.picker.onServer" = "서버에서 실행";
+"workspace.picker.starting" = "시작하는 중…";
 "workspace.row.cpu" = "CPU";
 "workspace.row.disk" = "디스크";
 "workspace.row.folders" = "폴더";

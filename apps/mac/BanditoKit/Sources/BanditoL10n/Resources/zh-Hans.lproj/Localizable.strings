@@ -629,6 +629,8 @@
 "files.error.permissionDenied" = "没有权限";
 "files.error.tooLarge" = "文件过大";
 "files.favorites" = "收藏";
+"files.folderShared" = "共享";
+"files.folderSharedHelp" = "在服务器本身或其他工作区中也可见";
 "files.forward" = "前进";
 "files.forwardHelp" = "前进 (⌘])";
 "files.hidden" = "显示隐藏文件";
@@ -697,6 +699,8 @@
 "files.upload.failed" = "无法上传 %1$@：%2$@";
 "files.upload.hint" = "将文件拖放到此处";
 "files.upload.title" = "%1$@ 正在从这台 Mac 上传到 %2$@";
+"files.workplaceGroup" = "工作区：%1$@";
+"files.workplaceNoFolders" = "暂无文件夹";
 "folderPicker.choose" = "选择 %1$@";
 "folderPicker.clone" = "从链接克隆";
 "folderPicker.cloneGo" = "克隆";
@@ -1787,6 +1791,11 @@
 "screen.agentControls" = "代理正在控制";
 "screen.askTakeControl" = "接管控制以在此处点击？";
 "screen.asleep" = "屏幕处于休眠状态";
+"screen.card.asleep" = "休眠中";
+"screen.card.checking" = "正在检查…";
+"screen.card.running" = "屏幕已开启";
+"screen.card.unavailable" = "暂不可用";
+"screen.card.unavailableHint" = "服务器上的 Bandito 版本较旧，无法显示此工作区的屏幕。请更新服务器。";
 "screen.clipboard" = "剪贴板";
 "screen.clipboardOff" = "关闭";
 "screen.clipboardShared" = "共享";
@@ -1818,6 +1827,7 @@
 "screen.unsupported" = "服务器屏幕仅适用于 Linux 服务器";
 "screen.unsupportedText" = "在 Linux 服务器上，Bandito 会在这里显示其桌面：代理在其中使用应用，可以观看或接管。Mac 不需要这项功能，它的屏幕就在面前。";
 "screen.who" = "此处的人员";
+"screen.workplaceUnavailable" = "服务器上的 Bandito 版本较旧，无法显示独立工作区的屏幕。请更新服务器后再打开。";
 "screen.workplaces" = "工作区屏幕";
 "screen.youWatch" = "正在观看";
 "search.noResults" = "未找到结果";
@@ -2622,6 +2632,7 @@
 "terminals.layouts.mainRight" = "主窗格加右侧两个";
 "terminals.layouts.one" = "单个窗口";
 "terminals.newFailed" = "无法打开终端：%1$@";
+"terminals.newIn" = "在 %1$@ 中新建终端";
 "terminals.noRoom" = "屏幕上没有空间。请先折叠或关闭一个窗格。";
 "terminals.noServer" = "未选择服务器";
 "terminals.pane.close" = "关闭并结束进程";
@@ -2875,6 +2886,8 @@
 "workspace.move.title" = "将代理迁移到 %1$@？";
 "workspace.network.internet" = "互联网";
 "workspace.network.offline" = "无";
+"workspace.picker.onServer" = "在服务器上";
+"workspace.picker.starting" = "正在启动…";
 "workspace.row.cpu" = "CPU";
 "workspace.row.disk" = "磁盘";
 "workspace.row.folders" = "文件夹";

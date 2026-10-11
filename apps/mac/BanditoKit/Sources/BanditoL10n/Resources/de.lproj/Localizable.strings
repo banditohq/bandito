@@ -629,6 +629,8 @@
 "files.error.permissionDenied" = "Keine Berechtigung";
 "files.error.tooLarge" = "Die Datei ist zu groß";
 "files.favorites" = "FAVORITEN";
+"files.folderShared" = "Geteilt";
+"files.folderSharedHelp" = "Auch auf dem Server selbst oder in einem anderen Arbeitsplatz sichtbar";
 "files.forward" = "Vor";
 "files.forwardHelp" = "Vorwärts (⌘])";
 "files.hidden" = "Versteckte Dateien anzeigen";
@@ -697,6 +699,8 @@
 "files.upload.failed" = "%1$@ konnte nicht hochgeladen werden: %2$@";
 "files.upload.hint" = "Dateien hierher ziehen";
 "files.upload.title" = "%1$@ lädt von diesem Mac nach %2$@ hoch";
+"files.workplaceGroup" = "ARBEITSPLATZ: %1$@";
+"files.workplaceNoFolders" = "Noch keine Ordner";
 "folderPicker.choose" = "%1$@ auswählen";
 "folderPicker.clone" = "Per Link klonen";
 "folderPicker.cloneGo" = "Klonen";
@@ -1787,6 +1791,11 @@
 "screen.agentControls" = "Agent steuert";
 "screen.askTakeControl" = "Steuerung übernehmen, um hier zu klicken?";
 "screen.asleep" = "Der Bildschirm schläft";
+"screen.card.asleep" = "Schläft";
+"screen.card.checking" = "Wird geprüft …";
+"screen.card.running" = "Bildschirm läuft";
+"screen.card.unavailable" = "Noch nicht verfügbar";
+"screen.card.unavailableHint" = "Das Bandito auf dem Server ist zu alt, um den Bildschirm dieses Arbeitsplatzes zu zeigen. Aktualisieren Sie den Server.";
 "screen.clipboard" = "Zwischenablage";
 "screen.clipboardOff" = "Aus";
 "screen.clipboardShared" = "Gemeinsam";
@@ -1818,6 +1827,7 @@
 "screen.unsupported" = "Der Serverbildschirm funktioniert auf Linux-Servern";
 "screen.unsupportedText" = "Auf einem Linux-Server zeigt Bandito hier dessen Desktop: Agenten arbeiten darin mit Programmen, und Sie können zusehen oder eingreifen. Der Mac braucht das nicht — sein Bildschirm ist direkt vor Ihnen.";
 "screen.who" = "Wer ist hier";
+"screen.workplaceUnavailable" = "Das Bandito auf dem Server ist zu alt, um den Bildschirm eines eigenen Arbeitsplatzes zu zeigen. Aktualisieren Sie den Server, um ihn zu öffnen.";
 "screen.workplaces" = "Bildschirme der Arbeitsplätze";
 "screen.youWatch" = "Sie schauen zu";
 "search.noResults" = "Nichts gefunden";
@@ -2622,6 +2632,7 @@
 "terminals.layouts.mainRight" = "Hauptfenster und zwei rechts";
 "terminals.layouts.one" = "Ein Fenster";
 "terminals.newFailed" = "Terminal konnte nicht geöffnet werden: %1$@";
+"terminals.newIn" = "Neues Terminal in %1$@";
 "terminals.noRoom" = "Auf dem Bildschirm ist kein Platz. Verkleinern oder schließen Sie zuerst einen Bereich.";
 "terminals.noServer" = "Kein Server ausgewählt";
 "terminals.pane.close" = "Schließen und Prozess beenden";
@@ -2875,6 +2886,8 @@
 "workspace.move.title" = "Agenten nach %1$@ verlegen?";
 "workspace.network.internet" = "Internet";
 "workspace.network.offline" = "Keins";
+"workspace.picker.onServer" = "Auf dem Server";
+"workspace.picker.starting" = "Wird gestartet …";
 "workspace.row.cpu" = "CPU";
 "workspace.row.disk" = "Speicher";
 "workspace.row.folders" = "Ordner";

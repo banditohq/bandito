@@ -6,6 +6,9 @@ import Foundation
 enum ScreenStartPhase: Equatable, Sendable {
     /// The daemon does not list the `screen` feature (an older daemon). The area says so and opens Server → Updates.
     case needsUpdate
+    /// The daemon cannot give this workplace a screen (an older daemon refuses the workplace id): the area says so
+    /// and opens Server → Updates.
+    case workplaceUnavailable
     /// The screen is asleep and nothing is wrong: the start button.
     case idle
     /// The `screen.start` call is in flight. A spinner replaces the button.
@@ -54,12 +57,15 @@ enum ScreenStartRules {
         var missing: [String] = []
         /// The install of the missing programs is running.
         var installing: Bool = false
+        /// The daemon refused the id of this workplace (see `ScreenCardRules`).
+        var workplaceUnavailable: Bool = false
     }
 
     /// The first rule that holds wins: an old daemon first, then a call in flight, then an install, then a picture,
     /// then the missing programs, then a failure, then the waiting states, then the start button.
     static func phase(_ facts: Facts) -> ScreenStartPhase {
         guard facts.supported else { return .needsUpdate }
+        if facts.workplaceUnavailable { return .workplaceUnavailable }
         if facts.startInFlight { return .starting }
         if facts.installing { return .installing }
         if facts.running, facts.hasFrame { return .running }

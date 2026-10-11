@@ -22,19 +22,50 @@ private struct ScreenContent: View {
     let server: ServerModel
 
     var body: some View {
-        let model = ScreenStore.shared.model(for: server)
-        ScreenMainArea(model: model)
-            .task(id: server.id) {
+        let selection = WorkspaceSelections.shared.selection(mode: "screen", server: server)
+        ScreenWorkspaceArea(server: server, selection: selection)
+    }
+}
+
+/// The screen of the chosen workplace. Choosing another one detaches the screen shown (its VNC connection closes) and
+/// attaches the other; the sidebar and the mode do not rebuild, only the area that shows the picture does.
+private struct ScreenWorkspaceArea: View {
+    let server: ServerModel
+    let selection: WorkspaceSelection
+
+    var body: some View {
+        let workspaceID = selection.selectedID
+        let model = ScreenStore.shared.model(for: server, workspace: workspaceID)
+        ScreenMainArea(model: model, title: title)
+            .id(workspaceID)
+            .task(id: workspaceID) {
                 model.attach()
+            }
+            .onChange(of: workspaceID) { old, _ in
+                ScreenStore.shared.model(for: server, workspace: old).detach()
             }
             .onDisappear {
                 model.detach()
             }
+            // The list of workplaces: read now and every few seconds while the mode is on screen.
+            .task(id: server.id) {
+                while !Task.isCancelled {
+                    if selection.directory.shouldPoll { await selection.refresh() }
+                    try? await Task.sleep(for: .seconds(5))
+                }
+            }
+    }
+
+    private var title: String {
+        guard let workspace = selection.selected, workspace.kind == .container else { return L10n.Screen.shared }
+        return workspace.name
     }
 }
 
 private struct ScreenMainArea: View {
     @Bindable var model: ScreenModel
+    /// The name of the workplace on the toolbar.
+    let title: String
 
     var body: some View {
         Group {
@@ -45,7 +76,7 @@ private struct ScreenMainArea: View {
                 if model.server.info?.os == "linux" { ScreenNeedsUpdate() } else { ScreenUnsupported() }
             } else {
                 VStack(spacing: 0) {
-                    ScreenToolbar(model: model)
+                    ScreenToolbar(model: model, title: title)
                     ScreenCanvas(model: model)
                 }
             }
@@ -59,14 +90,16 @@ private struct ScreenMainArea: View {
 
 private struct ScreenToolbar: View {
     @Bindable var model: ScreenModel
+    let title: String
     @Environment(Keymap.self) private var keymap
 
     var body: some View {
         let holder = model.status?.controller ?? .none
         HStack(spacing: 10) {
-            Text(L10n.Screen.shared)
+            Text(title)
                 .font(BanditoFont.text(size: 14, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
+                .lineLimit(1)
             Spacer(minLength: 8)
 
             SegmentedPicker(
@@ -177,6 +210,8 @@ private struct ScreenCanvas: View {
             }
         case .needsUpdate:
             ScreenNeedsUpdate()
+        case .workplaceUnavailable:
+            ScreenWorkplaceUnavailable()
         case .idle:
             ScreenAsleep(model: model)
         case .starting:
@@ -346,6 +381,30 @@ private struct ScreenNeedsUpdate: View {
     }
 }
 
+/// The daemon does not know screens of separate workplaces (an older daemon). The update fixes it.
+private struct ScreenWorkplaceUnavailable: View {
+    @Environment(Router.self) private var router
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "display")
+                .font(.system(size: 34))
+                .foregroundStyle(Color.Bandito.text3)
+            Text(L10n.Screen.workplaceUnavailable)
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
+            Button(L10n.Screen.openUpdates) {
+                router.select(mode: .server)
+                router.serverSection = .updates
+            }
+            .banditoButton(.signal())
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 /// The "Who is here" card: who holds the screen, and what a click does.
 private struct WhoIsHere: View {
     @Bindable var model: ScreenModel
@@ -390,7 +449,8 @@ struct ScreenSidebar: View {
 
     var body: some View {
         if let server = app.currentServer, server.supports("screen") {
-            ScreenSidebarContent(model: ScreenStore.shared.model(for: server))
+            ScreenSidebarContent(
+                server: server, selection: WorkspaceSelections.shared.selection(mode: "screen", server: server))
         } else if let os = app.currentServer?.info?.os, os != "linux" {
             // Not an old daemon: this system has no server screen. The main area says why; the sidebar stays empty.
             Color.clear
@@ -401,51 +461,25 @@ struct ScreenSidebar: View {
 }
 
 private struct ScreenSidebarContent: View {
-    @Bindable var model: ScreenModel
+    let server: ServerModel
+    let selection: WorkspaceSelection
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(L10n.Screen.workplaces)
-                .padding(.horizontal, 18)
-                .padding(.top, 14)
-                .padding(.bottom, 8)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    SectionLabel(L10n.Screen.workplaces)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 14)
+                        .padding(.bottom, 8)
 
-            screenCard
-                .padding(.horizontal, 8)
+                    ScreenCardList(server: server, selection: selection)
+                        .padding(.horizontal, 8)
 
-            SectionLabel(L10n.Screen.transfer)
-                .padding(.horizontal, 18)
-                .padding(.top, 18)
-                .padding(.bottom, 8)
-
-            VStack(spacing: 12) {
-                HStack {
-                    Text(L10n.Screen.clipboard)
-                        .font(BanditoFont.text(size: 13, weight: 400))
-                        .foregroundStyle(Color.Bandito.text2)
-                    Spacer(minLength: 8)
-                    SegmentedPicker(
-                        selection: $model.clipboard,
-                        options: [
-                            (ScreenClipboard.shared, L10n.Screen.clipboardShared),
-                            (ScreenClipboard.off, L10n.Screen.clipboardOff),
-                        ]
-                    )
-                    .frame(width: 150)
-                }
-                HStack {
-                    Text(L10n.Screen.quality)
-                        .font(BanditoFont.text(size: 13, weight: 400))
-                        .foregroundStyle(Color.Bandito.text2)
-                    Spacer(minLength: 8)
-                    Text(qualityName)
-                        .font(BanditoFont.text(size: 13, weight: 600))
-                        .foregroundStyle(Color.Bandito.text)
+                    ScreenTransferSection(model: ScreenStore.shared.model(for: server, workspace: selection.selectedID))
                 }
             }
-            .padding(.horizontal, 18)
-
-            Spacer(minLength: 12)
+            .scrollIndicators(.never)
 
             Text(L10n.Screen.sleepHint)
                 .font(BanditoFont.text(size: 12, weight: 400))
@@ -461,34 +495,78 @@ private struct ScreenSidebarContent: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.Bandito.surface1)
     }
+}
 
-    /// The workplace screen: a thumbnail, its name, and the state of the connection.
-    private var screenCard: some View {
-        HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 7)
-                .fill(LinearGradient(colors: [Color(red: 0.23, green: 0.16, blue: 0.1), Color(red: 0.11, green: 0.16, blue: 0.23)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 52, height: 34)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 7).strokeBorder(Color.Bandito.text.opacity(0.1))
-                }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(L10n.Screen.shared)
+/// A card for every workplace: its screen's preview and state. A click shows that screen in the main area. The states
+/// of the other workplaces are read here, every few seconds, while the app is the active one.
+private struct ScreenCardList: View {
+    let server: ServerModel
+    let selection: WorkspaceSelection
+
+    var body: some View {
+        let directory = selection.directory
+        let overview = ScreenOverviews.shared.overview(for: server)
+        // Before the list is read (or on a server without workplaces) the shared workplace alone is shown.
+        let workspaces = directory.workspaces.isEmpty
+            ? [Workspace(id: Workspace.sharedID, name: L10n.Workspace.Shared.title, kind: .shared)]
+            : directory.workspaces
+        let cards = ScreenCardData.make(
+            workspaces: workspaces, states: overview.states, selectedID: selection.selectedID)
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(cards) { card in
+                ScreenCard(
+                    data: card, preview: ScreenPreviews.shared.box(server: server.id, workspace: card.id),
+                    onSelect: { selection.select(card.id) }
+                )
+                .equatable()
+            }
+        }
+        .task(id: workspaces.map(\.id)) {
+            while !Task.isCancelled {
+                if AppActivity.isActive || overview.states.isEmpty { await overview.poll(workspaces) }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+}
+
+/// Clipboard and quality of the shown screen.
+private struct ScreenTransferSection: View {
+    @Bindable var model: ScreenModel
+
+    var body: some View {
+        SectionLabel(L10n.Screen.transfer)
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 8)
+
+        VStack(spacing: 12) {
+            HStack {
+                Text(L10n.Screen.clipboard)
+                    .font(BanditoFont.text(size: 13, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                Spacer(minLength: 8)
+                SegmentedPicker(
+                    selection: $model.clipboard,
+                    options: [
+                        (ScreenClipboard.shared, L10n.Screen.clipboardShared),
+                        (ScreenClipboard.off, L10n.Screen.clipboardOff),
+                    ]
+                )
+                .frame(width: 150)
+            }
+            HStack {
+                Text(L10n.Screen.quality)
+                    .font(BanditoFont.text(size: 13, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                Spacer(minLength: 8)
+                Text(qualityName)
                     .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
-                Text(L10n.Screen.sharedSub)
-                    .font(BanditoFont.text(size: 11.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
             }
-            Spacer(minLength: 0)
-            StatusDot(status: model.status?.running == true ? .idle : .offline, size: 8)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color.Bandito.signal.opacity(0.08), in: RoundedRectangle(cornerRadius: 11))
-        .overlay {
-            RoundedRectangle(cornerRadius: 11).strokeBorder(Color.Bandito.signal.opacity(0.25))
-        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 12)
     }
 
     private var qualityName: String {
