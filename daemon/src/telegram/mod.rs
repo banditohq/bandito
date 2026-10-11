@@ -4,14 +4,15 @@
 //!
 //! Layout: `api` (the Bot API over `curl`, the token never in an argument), `format` (markdown to Telegram HTML),
 //! `strings` (the texts in nine languages), `handlers` (what a message, a press or a membership change does),
-//! `events` (what the daemon's own events do), and this file (state, the poll loop, sending, the calls of the app).
-//! No lock is held across an `.await`.
+//! `events` (what the daemon's own events do), `typing` (the "typing…" of a turn a chat started), and this file (state,
+//! the poll loop, sending, the calls of the app). No lock is held across an `.await`.
 
 mod api;
 mod events;
 mod format;
 mod handlers;
 mod strings;
+mod typing;
 
 #[cfg(test)]
 mod fake;
@@ -32,6 +33,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use strings::tr;
 use tokio::task::JoinHandle;
+use typing::Shared as TypingShared;
 
 /// The secret that holds the bot's token. Hidden from the secrets calls and given to no agent
 /// (`integrations::TELEGRAM_SECRET_PREFIX`).
@@ -60,6 +62,10 @@ const MAX_UNIMPORTANT_QUEUE: usize = 30;
 const MESSAGE_KEEP_MS: i64 = 7 * 24 * 3600 * 1000;
 /// Entries a bookkeeping map may hold before it is emptied (a runaway sender must not grow memory).
 const MAP_LIMIT: usize = 2000;
+/// The "typing…" of a turn is sent this often, and one chat gets at most one action per this gap.
+const TYPING_EVERY: Duration = Duration::from_secs(4);
+/// The "typing…" of a turn goes on this long at most.
+const TYPING_MAX: Duration = Duration::from_secs(600);
 
 /// Delays of the bot. The defaults are the real ones; the tests shorten them.
 #[derive(Debug, Clone)]
@@ -83,6 +89,10 @@ pub struct Timing {
     pub retry_cap: Duration,
     /// How long a text waits for the person to choose an agent.
     pub pending_ttl: Duration,
+    /// Between two "typing…" actions of a turn, and the least time between two in one chat.
+    pub typing_every: Duration,
+    /// Longest a turn shows "typing…".
+    pub typing_max: Duration,
 }
 
 impl Default for Timing {
@@ -98,6 +108,8 @@ impl Default for Timing {
             link_ttl: Duration::from_secs(600),
             retry_cap: Duration::from_secs(30),
             pending_ttl: Duration::from_secs(600),
+            typing_every: TYPING_EVERY,
+            typing_max: TYPING_MAX,
         }
     }
 }
@@ -114,6 +126,7 @@ impl Timing {
             backoff_max: Duration::from_millis(100),
             send_gap: Duration::from_millis(5),
             retry_cap: Duration::from_millis(50),
+            typing_every: Duration::from_millis(100),
             ..Self::default()
         }
     }
@@ -357,6 +370,8 @@ pub struct Telegram {
     tasks: Mutex<Tasks>,
     /// Woken when a line of messages moves.
     line_moved: tokio::sync::Notify,
+    /// The "typing…" tasks of the turns that chats started.
+    typing: TypingShared,
 }
 
 impl Telegram {
@@ -381,6 +396,7 @@ impl Telegram {
             state: Mutex::new(State::default()),
             tasks: Mutex::new(Tasks::default()),
             line_moved: tokio::sync::Notify::new(),
+            typing: TypingShared::default(),
         })
     }
 
@@ -621,6 +637,7 @@ impl Telegram {
         if let Some(old) = tasks.poller.take() {
             old.abort();
         }
+        self.stop_all_typing();
         let mut st = self.lock();
         st.generation += 1;
         st.running = false;

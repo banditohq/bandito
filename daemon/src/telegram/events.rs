@@ -79,25 +79,34 @@ impl Telegram {
     // ---- turns ----
 
     fn on_turn_started(&self, agent: &str, turn_id: String, source: Source, message_seq: Option<i64>) {
-        let mut st = self.lock();
-        st.last_answer.remove(agent);
-        st.last_turn.remove(agent);
-        if source != Source::User {
-            return;
-        }
-        match message_seq {
-            // It takes a message that waited: if that was ours, the turn is ours.
-            Some(seq) => {
-                if let Some(chat) = st.queued.remove(&(agent.to_string(), seq)) {
-                    st.turn_chats.insert(turn_id, chat);
+        // The chat whose message started the turn, if one did; its "typing…" starts once the lock is free.
+        let from_chat = {
+            let mut st = self.lock();
+            st.last_answer.remove(agent);
+            st.last_turn.remove(agent);
+            if source != Source::User {
+                return;
+            }
+            let mut from_chat = None;
+            match message_seq {
+                // It takes a message that waited: if that was ours, the turn is ours.
+                Some(seq) => {
+                    if let Some(chat) = st.queued.remove(&(agent.to_string(), seq)) {
+                        st.turn_chats.insert(turn_id.clone(), chat);
+                        from_chat = Some(chat);
+                    }
+                }
+                // Its message is echoed right after this event.
+                None => {
+                    st.last_turn.insert(agent.to_string(), turn_id.clone());
                 }
             }
-            // Its message is echoed right after this event.
-            None => {
-                st.last_turn.insert(agent.to_string(), turn_id);
-            }
+            st.bound();
+            from_chat
+        };
+        if let Some(chat) = from_chat {
+            self.start_typing(&turn_id, chat);
         }
-        st.bound();
     }
 
     fn on_message_user(&self, agent: &str, text: &str, source: Source, queued: bool, seq: i64) {
@@ -118,17 +127,25 @@ impl Telegram {
         if list.is_empty() {
             st.sent.remove(agent);
         }
+        let mut from_chat = None;
         if queued {
             if seq > 0 {
                 st.queued.insert((agent.to_string(), seq), sent.chat_id);
             }
         } else if let Some(turn) = st.last_turn.remove(agent) {
-            st.turn_chats.insert(turn, sent.chat_id);
+            st.turn_chats.insert(turn.clone(), sent.chat_id);
+            from_chat = Some((turn, sent.chat_id));
         }
         st.bound();
+        drop(st);
+        if let Some((turn, chat)) = from_chat {
+            self.start_typing(&turn, chat);
+        }
     }
 
     async fn on_turn_completed(&self, agent_id: &str, turn_id: &str, status: TurnStatus) {
+        // Whatever the status, the turn no longer shows "typing…".
+        self.stop_typing(turn_id);
         let (origin, text) = {
             let mut st = self.lock();
             (st.turn_chats.remove(turn_id), st.last_answer.remove(agent_id))
