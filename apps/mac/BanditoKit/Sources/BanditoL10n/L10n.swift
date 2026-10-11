@@ -251,6 +251,27 @@ public enum L10n {
         public static var name: String { L10n.tr("app.name") }
     }
 
+    public enum AppUpdate {
+        public static func available(version: String) -> String { L10n.tr("appUpdate.available", version) }
+        public static var availableHint: String { L10n.tr("appUpdate.availableHint") }
+        public static var checkNow: String { L10n.tr("appUpdate.checkNow") }
+        public static var checking: String { L10n.tr("appUpdate.checking") }
+        public static var close: String { L10n.tr("appUpdate.close") }
+        public static var downloading: String { L10n.tr("appUpdate.downloading") }
+        public static var failed: String { L10n.tr("appUpdate.failed") }
+        public static var failedHint: String { L10n.tr("appUpdate.failedHint") }
+        public static var install: String { L10n.tr("appUpdate.install") }
+        public static var installing: String { L10n.tr("appUpdate.installing") }
+        public static var later: String { L10n.tr("appUpdate.later") }
+        public static func percent(percent: String) -> String { L10n.tr("appUpdate.percent", percent) }
+        public static var preparing: String { L10n.tr("appUpdate.preparing") }
+        public static var retry: String { L10n.tr("appUpdate.retry") }
+        public static var settingsIdle: String { L10n.tr("appUpdate.settingsIdle") }
+        public static var settingsTitle: String { L10n.tr("appUpdate.settingsTitle") }
+        public static var upToDate: String { L10n.tr("appUpdate.upToDate") }
+        public static var whatsNew: String { L10n.tr("appUpdate.whatsNew") }
+    }
+
     public enum Approval {
         public static func always(command: String, path: String) -> String { L10n.tr("approval.always", command, path) }
         public static var alwaysHere: String { L10n.tr("approval.alwaysHere") }
