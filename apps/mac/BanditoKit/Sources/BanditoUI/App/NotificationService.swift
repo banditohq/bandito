@@ -7,7 +7,11 @@ import os
 public enum AgentNotice: Equatable, Sendable {
     /// The agent waits for an approval. `command` is the full command, which the notification never shows
     /// (only the approval's short title), so multi-line or long commands are reviewed in the app.
-    case approval(agentID: String, agentName: String, approvalID: String, title: String, command: String? = nil)
+    /// `reviewOnly`: the request must be read on its own card (a creation of an agent), so the notification never
+    /// offers Allow, whatever its text looks like.
+    case approval(
+        agentID: String, agentName: String, approvalID: String, title: String, command: String? = nil,
+        reviewOnly: Bool = false)
     /// The agent finished a turn.
     case finished(agentID: String, agentName: String)
     /// The agent's turn failed.
@@ -17,7 +21,7 @@ public enum AgentNotice: Equatable, Sendable {
 
     public var agentID: String {
         switch self {
-        case .approval(let id, _, _, _, _), .finished(let id, _), .failed(let id, _, _), .resolveFailed(let id): id
+        case .approval(let id, _, _, _, _, _), .finished(let id, _), .failed(let id, _, _), .resolveFailed(let id): id
         }
     }
 
@@ -105,19 +109,20 @@ public struct NotificationContent: Equatable, Sendable {
     }
 
     /// The category for an approval. No command means the plain one (Allow and Deny).
-    public static func approvalCategoryID(command: String?) -> String {
+    public static func approvalCategoryID(command: String?, reviewOnly: Bool = false) -> String {
+        if reviewOnly { return approvalReviewCategory }
         guard let command, needsReview(command) else { return approvalCategory }
         return approvalReviewCategory
     }
 
     public static func make(_ notice: AgentNotice) -> NotificationContent {
         switch notice {
-        case .approval(let agentID, let agentName, let approvalID, let title, let command):
-            let reviewed = command.map(needsReview) ?? false
+        case .approval(let agentID, let agentName, let approvalID, let title, let command, let reviewOnly):
+            let reviewed = reviewOnly || (command.map(needsReview) ?? false)
             return NotificationContent(
                 title: L10n.Notify.needsApproval(name: agentName),
                 body: reviewed ? reviewBody(command ?? "") : title,
-                categoryID: approvalCategoryID(command: command), agentID: agentID, approvalID: approvalID)
+                categoryID: approvalCategoryID(command: command, reviewOnly: reviewOnly), agentID: agentID, approvalID: approvalID)
         case .finished(let agentID, let agentName):
             return NotificationContent(
                 title: L10n.Notify.finished(name: agentName), body: "",

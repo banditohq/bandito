@@ -145,9 +145,29 @@ import Testing
     @Test func aCreationIsAllowedOnItsOwnCardOnly() {
         #expect(Self.row().mustBeReadOnItsCard)
         #expect(!Self.row(tool: "Bash").mustBeReadOnItsCard)
-        // The notification of a creation has no Allow: its summary is several lines, so it is reviewed in the app.
+        // The notification of a creation has no Allow, whatever its text looks like: it is named, not guessed from lines.
         #expect(
-            NotificationContent.approvalCategoryID(command: Self.row().command) == NotificationContent.approvalReviewCategory)
+            NotificationContent.approvalCategoryID(command: "short", reviewOnly: true)
+                == NotificationContent.approvalReviewCategory)
+        #expect(NotificationContent.approvalCategoryID(command: "short") == NotificationContent.approvalCategory)
+        let notice = AgentNotice.approval(
+            agentID: "a", agentName: "Forge", approvalID: "p", title: "t", command: "one line", reviewOnly: true)
+        #expect(NotificationContent.make(notice).categoryID == NotificationContent.approvalReviewCategory)
+        // The notice an event makes carries the tool: a creation is review-only, a command is not.
+        func event(_ tool: String) -> Event {
+            Event(
+                seq: 1, agentId: "a", ts: 1,
+                body: .approvalRequested(
+                    approvalId: "p", callId: "c", tool: tool, title: "t", command: "short", diff: nil, reason: "r"))
+        }
+        let server = ServerModel(config: ServerConfig(name: "s", endpoint: .defaultLocal))
+        guard case .approval(_, _, _, _, _, let creation)? = AppModel.notice(for: event(AgentCreateSummary.tool), in: server),
+            case .approval(_, _, _, _, _, let plain)? = AppModel.notice(for: event("Bash"), in: server)
+        else {
+            Issue.record("no notice")
+            return
+        }
+        #expect(creation && !plain)
     }
 
     @Test func theFoldedLinesSayWhatHappened() {

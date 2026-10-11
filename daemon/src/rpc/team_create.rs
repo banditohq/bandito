@@ -407,23 +407,22 @@ async fn plan(app: &App, p: &CreateParams) -> Result<Plan, RpcError> {
         return Err(not_allowed("team", "only the main agent of the crew can create agents"));
     }
     let name = p.name.trim().to_string();
+    let crew_names: Vec<String> = store
+        .agent_list()
+        .map_err(server)?
+        .into_iter()
+        .map(|a| a.name)
+        .collect();
+    // Hidden characters first (they would also fail the plain rules, with a worse message), then the plain rules.
     if crate::sanitize::has_hidden(&name) {
-        return Err(invalid(
-            "invalid: name has invisible or control characters (a line break, a zero-width or direction mark)",
-        ));
+        return Err(invalid(crate::sanitize::name_problem(&name, &[]).unwrap_or_default()));
     }
     crate::store::validate_name(&name).map_err(|e| invalid(format!("invalid: name: {e:#}")))?;
-    if crate::sanitize::mixes_scripts(&name) {
-        return Err(invalid(
-            "invalid: name mixes letters of different alphabets in one word (it could pass for another name)",
-        ));
+    // Same-looking names count as the same name: compared in Rust (Unicode case folding and lookalikes), not by SQLite.
+    if let Some(why) = crate::sanitize::name_problem(&name, &crew_names) {
+        return Err(invalid(why));
     }
-    if store.agent_by_name(&name).map_err(server)?.is_some() {
-        return Err(invalid(format!(
-            "there is already an agent named {name}: pick another name"
-        )));
-    }
-    let crew = store.agent_list().map_err(server)?.len();
+    let crew = crew_names.len();
     if crew >= MAX_CREW {
         return Err(invalid(format!(
             "the crew already has {crew} agents: ask the person to remove some"
@@ -1640,5 +1639,36 @@ mod tests {
             INVALID_PARAMS
         );
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[tokio::test]
+    async fn a_new_name_may_not_look_like_a_teammate_s_in_any_case_or_alphabet() {
+        let w = world(json!({ "approval_mode": "never" }));
+        let store = &w.app.sup.hub().store;
+        new_agent(store, "COPEX", json!({}));
+        new_agent(store, "Ärger", json!({}));
+        for (name, like) in [
+            ("СОРЕХ", "COPEX"),
+            ("copex", "COPEX"),
+            ("ärger", "Ärger"),
+            ("ÄRGER", "Ärger"),
+            ("scout", "Scout"),
+        ] {
+            let err = create_as(&w, &w.lead, req(json!({ "name": name }))).await.unwrap_err();
+            assert_eq!(err.message, format!("invalid: name (looks like {like})"), "{name}");
+        }
+        // Another name is fine, and the check is not SQLite's ASCII-only case folding.
+        create_as(&w, &w.lead, req(json!({ "name": "Почта" }))).await.unwrap();
+        // Lookalike letters of the compatibility kind, and invisible ones.
+        for name in [
+            "Ｍailer",
+            "𝐌ailer",
+            "Mail\u{FE0F}er",
+            "Mail\u{3164}er",
+            "Mail\u{2800}er",
+        ] {
+            let err = create_as(&w, &w.lead, req(json!({ "name": name }))).await.unwrap_err();
+            assert!(err.message.starts_with("invalid: name"), "{name:?}: {}", err.message);
+        }
     }
 }
