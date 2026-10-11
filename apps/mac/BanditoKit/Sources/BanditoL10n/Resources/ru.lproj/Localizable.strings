@@ -2392,6 +2392,13 @@
 "thread.copyMarkdown" = "Копировать как Markdown";
 "thread.dictate" = "Диктовка";
 "thread.duration" = "%1$@ с";
+"thread.empty.start" = "С чего начнём?";
+"thread.empty.suggest.capabilities" = "Что ты умеешь и чем можешь помочь?";
+"thread.empty.suggest.dayPlan" = "Составь план на сегодня по моим задачам";
+"thread.empty.suggest.fixErrors" = "Найди и почини ошибки в проекте";
+"thread.empty.suggest.listProject" = "Расскажи, что лежит в папке проекта";
+"thread.empty.suggest.meetTeam" = "Познакомься с командой и расскажи, кто чем занят";
+"thread.empty.suggest.news" = "Найди в интернете свежие новости по моей теме";
 "thread.hintNewLine" = "⇧↵ новая строка";
 "thread.hintSearch" = "⌘K поиск";
 "thread.hintSend" = "↵ отправить";

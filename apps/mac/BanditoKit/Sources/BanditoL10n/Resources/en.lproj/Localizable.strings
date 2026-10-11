@@ -2392,6 +2392,13 @@
 "thread.copyMarkdown" = "Copy as Markdown";
 "thread.dictate" = "Dictate";
 "thread.duration" = "%1$@ s";
+"thread.empty.start" = "What shall we start with?";
+"thread.empty.suggest.capabilities" = "What can you do and how can you help?";
+"thread.empty.suggest.dayPlan" = "Make a plan for today from my tasks";
+"thread.empty.suggest.fixErrors" = "Find and fix the errors in the project";
+"thread.empty.suggest.listProject" = "Tell me what is in the project folder";
+"thread.empty.suggest.meetTeam" = "Meet the team and tell me who is doing what";
+"thread.empty.suggest.news" = "Find fresh news on the internet about my topic";
 "thread.hintNewLine" = "⇧↵ new line";
 "thread.hintSearch" = "⌘K search";
 "thread.hintSend" = "↵ send";
