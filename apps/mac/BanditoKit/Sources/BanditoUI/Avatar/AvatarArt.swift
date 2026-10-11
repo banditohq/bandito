@@ -94,15 +94,15 @@ struct TileMood<Content: View>: View {
             posed(
                 AvatarPose.make(
                     mood: mood, time: Date().timeIntervalSinceReferenceDate, phase: phase, reduceMotion: still))
-                .opacity(!paused && layerShown ? 0 : 1)
+                .opacity(!still && layerShown ? 0 : 1)
             #if os(macOS)
             // While the mood moves, Core Animation moves a picture of the tile (see `LayerMotion`).
-            if !paused {
+            if !still {
                 AvatarMotion(
                     spec: AvatarMotionSpec(
                         body: .tile(key: pictureKey), tintKey: pictureKey, size: size, mood: mood, phase: phase),
                     tint: tint, picture: TileMoodPictures.shared.picture(key: pictureKey, size: size) { content },
-                    onShown: { shown in if layerShown != shown { layerShown = shown } })
+                    running: !paused, onShown: { shown in if layerShown != shown { layerShown = shown } })
             }
             #endif
         }

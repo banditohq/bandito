@@ -224,18 +224,30 @@ struct CodeBlockView: View {
             .padding(.trailing, 6)
             .padding(.top, 6)
 
-            ScrollView(.horizontal) {
-                Text(code.isEmpty ? " " : code)
-                    .font(BanditoFont.mono(size: 12.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text)
-                    .lineSpacing(2)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: true, vertical: true)
+            let text = Text(code.isEmpty ? " " : code)
+                .font(BanditoFont.mono(size: 12.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text)
+                .lineSpacing(2)
+                .textSelection(.enabled)
+            // A scroll view of its own only for code with a long line: one per block cost more than the code itself, in
+            // every message drawn. Short lines fit the bubble; in a very narrow chat they wrap rather than hide.
+            if CodeBlockLayout.needsScroll(code) {
+                ScrollView(.horizontal) {
+                    text
+                        .fixedSize(horizontal: true, vertical: true)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)
+                        .padding(.bottom, 12)
+                }
+                .scrollIndicators(.automatic)
+            } else {
+                text
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 12)
                     .padding(.top, 4)
                     .padding(.bottom, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .scrollIndicators(.automatic)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -268,6 +280,17 @@ struct CodeBlockView: View {
         }
         .banditoButton(.row(cornerRadius: 7))
         .help(L10n.Thread.copy)
+    }
+}
+
+/// Whether a code block scrolls sideways. Pure.
+enum CodeBlockLayout {
+    /// The longest line that fits a narrow bubble without a scroll (12.5 pt mono is about 7.5 pt a character; an agent's
+    /// bubble in the narrowest window is about 400 pt).
+    static let fittingLine = 48
+
+    static func needsScroll(_ code: String) -> Bool {
+        code.split(separator: "\n", omittingEmptySubsequences: false).contains { $0.count > fittingLine }
     }
 }
 

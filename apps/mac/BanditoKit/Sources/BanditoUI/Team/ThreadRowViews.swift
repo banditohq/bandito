@@ -267,11 +267,10 @@ enum BubbleLook {
     static var userTint: Color { Color.Bandito.text.opacity(0.13) }
     static var userBorder: Color { Color.Bandito.text.opacity(0.08) }
 
-    /// The agent's bubble: the surface, with an edge that fades from top to bottom.
-    static var agentBorder: LinearGradient {
-        LinearGradient(
-            colors: [Color.Bandito.text.opacity(0.08), Color.Bandito.text.opacity(0.03)],
-            startPoint: .top, endPoint: .bottom)
+    /// The agent's bubble: the surface, with a quiet solid edge. It faded from top to bottom once; a gradient stroke
+    /// is painted by the processor over the whole bubble, and it doubled what a message cost to show.
+    static var agentBorder: Color {
+        Color.Bandito.text.opacity(0.06)
     }
 }
 

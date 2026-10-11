@@ -144,11 +144,14 @@ struct AvatarMotion: NSViewRepresentable {
     let tint: Color
     /// The picture of a tile body; nil for the raccoon.
     let picture: CGImage?
+    /// The mood moves; false rests the avatar (scrolled out of view, a sleeping one in an inactive window).
+    var running = true
     var onShown: (Bool) -> Void
 
     func makeNSView(context: Context) -> AvatarMotionView {
         let view = AvatarMotionView(frame: NSRect(x: 0, y: 0, width: spec.size, height: spec.size))
         view.onShown = onShown
+        view.running = running
         view.configure(spec: spec, tint: NSColor(tint).cgColor, picture: picture)
         return view
     }
@@ -156,6 +159,7 @@ struct AvatarMotion: NSViewRepresentable {
     func updateNSView(_ view: AvatarMotionView, context: Context) {
         view.onShown = onShown
         view.configure(spec: spec, tint: NSColor(tint).cgColor, picture: picture)
+        view.running = running
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: AvatarMotionView, context: Context) -> CGSize? {
@@ -167,6 +171,13 @@ struct AvatarMotion: NSViewRepresentable {
 /// dots of a thinking agent, the rising "z" of a sleeping one.
 final class AvatarMotionView: MotionLayerView {
     private var spec: AvatarMotionSpec?
+    /// Whether the mood's animations run; off, the avatar rests.
+    var running = true {
+        didSet {
+            guard running != oldValue else { return }
+            if running, window != nil { startMotion() } else if !running { stopMotion() }
+        }
+    }
     private let body = MotionLayerView.still(CALayer())
     private let tile = MotionLayerView.still(CALayer())
     private let mask = MotionLayerView.still(CAShapeLayer())
@@ -211,7 +222,8 @@ final class AvatarMotionView: MotionLayerView {
         let size = spec.size
         let rect = CGRect(x: 0, y: 0, width: size, height: size)
         let unit = size / DesignGrid.edge
-        let resting = AvatarPose.make(mood: spec.mood, time: MotionKeyframes.now, phase: spec.phase)
+        // The rest pose (open eyes, no hop); the animations move from it.
+        let resting = AvatarPose.make(mood: spec.mood, time: MotionKeyframes.now, phase: spec.phase, reduceMotion: true)
         for layer in [body, tile, mask, eyeShift, eyes, eyeDots, eyeStrokes] { layer.frame = rect }
         body.opacity = Float(resting.opacity)
         switch spec.body {
@@ -267,9 +279,10 @@ final class AvatarMotionView: MotionLayerView {
             letter.foregroundColor = NSColor(Color.Bandito.info).cgColor
             letter.alignmentMode = .center
             letter.bounds = CGRect(x: 0, y: 0, width: fontSize * 1.2, height: fontSize * 1.4)
-            letter.isHidden = !resting.showsZ
-            letter.position = Self.zPoint(progress: resting.zProgresses[index], size: size)
-            letter.opacity = Float(AvatarMarks.zOpacity(resting.zProgresses[index]))
+            // A sleeping avatar's "z" exist at rest too, faded out: the animation shows them.
+            letter.isHidden = spec.mood != .sleeping
+            letter.position = Self.zPoint(progress: 0, size: size)
+            letter.opacity = 0
         }
         let scale = window?.backingScaleFactor ?? 2
         for layer in [tile, mask, eyeDots, eyeStrokes] + dots + zs as [CALayer] { layer.contentsScale = scale }
@@ -280,9 +293,14 @@ final class AvatarMotionView: MotionLayerView {
         CGPoint(x: size / 2 + size * 0.36 + size * 0.2 * progress, y: size / 2 - size * 0.36 - size * 0.42 * progress)
     }
 
+    private func stopMotion() {
+        for layer in [body, eyeShift, eyes] + dots + zs as [CALayer] { layer.removeAllAnimations() }
+    }
+
     override func startMotion() {
         guard let spec else { return }
-        for layer in [body, eyeShift, eyes] + dots + zs as [CALayer] { layer.removeAllAnimations() }
+        stopMotion()
+        guard running else { return }
         let start = MotionKeyframes.now
         let unit = spec.size / DesignGrid.edge
         let mood = spec.mood

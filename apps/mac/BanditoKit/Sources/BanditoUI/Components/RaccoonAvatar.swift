@@ -100,14 +100,17 @@ public struct RaccoonAvatar: View {
                 pose: AvatarPose.make(
                     mood: mood, time: Date().timeIntervalSinceReferenceDate, phase: phase, reduceMotion: still),
                 size: size)
-                .opacity(!paused && layerShown ? 0 : 1)
+                .opacity(!still && layerShown ? 0 : 1)
             #if os(macOS)
-            if !paused {
+            // The layers stay while the avatar scrolls away and back; only their animation stops (`running`), so a
+            // scroll of the sidebar makes and drops no views.
+            if !still {
                 AvatarMotion(
                     spec: AvatarMotionSpec(
                         body: .raccoon(resolved), tintKey: customHex ?? resolved.color.rawValue, size: size, mood: mood,
                         phase: phase),
-                    tint: tint, picture: nil, onShown: { shown in if layerShown != shown { layerShown = shown } })
+                    tint: tint, picture: nil, running: !paused,
+                    onShown: { shown in if layerShown != shown { layerShown = shown } })
             }
             #endif
         }
