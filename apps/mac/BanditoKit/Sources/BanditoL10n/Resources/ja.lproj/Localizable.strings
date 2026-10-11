@@ -133,12 +133,6 @@
 "agentSheet.statusSignedInPlain" = "サインイン済み";
 "agentSheet.statusUnknown" = "確認できません";
 "agentSheet.title" = "新規エージェント";
-"agentSheet.toolBrowser" = "ブラウザ";
-"agentSheet.toolFiles" = "プロジェクトのファイル";
-"agentSheet.toolScreen" = "サーバー画面";
-"agentSheet.toolTeam" = "チームへのメッセージ";
-"agentSheet.toolTerminal" = "ターミナル";
-"agentSheet.tools" = "できること";
 "agentSheet.windowResets" = "リセット";
 "agentSheet.workplace" = "作業場所";
 "agentSheet.workplaceContainer" = "コンテナ";
@@ -1209,8 +1203,6 @@
 "message.copyAsText" = "テキストとしてコピー";
 "message.more" = "その他";
 "message.react" = "リアクション";
-"message.reactMore" = "その他…";
-"message.reactPickerHint" = "パネルから絵文字を選んでください";
 "message.reactionMine" = "リアクションを外す";
 "message.reactionOf" = "%1$@のリアクション";
 "message.reactionSame" = "同じリアクションをする";

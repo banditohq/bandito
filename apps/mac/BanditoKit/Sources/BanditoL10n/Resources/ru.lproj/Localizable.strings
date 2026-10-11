@@ -133,12 +133,6 @@
 "agentSheet.statusSignedInPlain" = "Вход выполнен";
 "agentSheet.statusUnknown" = "Не удалось проверить";
 "agentSheet.title" = "Новый агент";
-"agentSheet.toolBrowser" = "Браузер";
-"agentSheet.toolFiles" = "Файлы проекта";
-"agentSheet.toolScreen" = "Экран сервера";
-"agentSheet.toolTeam" = "Писать команде";
-"agentSheet.toolTerminal" = "Терминал";
-"agentSheet.tools" = "Что ему можно";
 "agentSheet.windowResets" = "Сброс";
 "agentSheet.workplace" = "Рабочее место";
 "agentSheet.workplaceContainer" = "Контейнер";
@@ -1209,8 +1203,6 @@
 "message.copyAsText" = "Копировать как текст";
 "message.more" = "Ещё";
 "message.react" = "Реакция";
-"message.reactMore" = "Ещё…";
-"message.reactPickerHint" = "Выберите эмодзи в панели";
 "message.reactionMine" = "Снять реакцию";
 "message.reactionOf" = "Реакция: %1$@";
 "message.reactionSame" = "Поставить такую же реакцию";

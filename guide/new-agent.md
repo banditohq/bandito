@@ -53,7 +53,7 @@ The CLI that runs the agent. Claude Code, Codex and Grok run on the server with 
 <!-- id: na-model-effort; covers: -->
 The model is the one the CLI runs; the default is the runtime's own. Effort sets how long the agent thinks.
 Где: New agent sheet → Model (Модель); Effort (Усилие) is under Advanced (Дополнительно)
-1. Leave Default (По умолчанию) to use the runtime's default model, or type any model name the CLI accepts.
+1. A new Claude Code agent starts on Haiku: the server's haiku model, or else the newest Haiku it lists. The other runtimes start on their own default model. Pick another model to change it, or Default (По умолчанию) to use the runtime's default. Once you pick, the sheet keeps your choice. You can also type any model name the CLI accepts.
 2. Choose the effort: Low (Низкое) is fast and cheap for small edits; Medium (Среднее) is enough for everyday work; High (Высокое) for hard tasks; Very high (Очень) for big rewrites; Max (Максимум) only when nothing else worked. The levels offered depend on the runtime.
 
 ## If the limit runs out (Если лимит кончится)
@@ -113,9 +113,9 @@ Sets when the agent asks you before it acts. Pushes, deploys, deletes and writes
 ## What it may do (Что ему можно)
 
 <!-- id: na-tools; covers: -->
-A summary of the tools the agent gets: Terminal (Терминал), Project files (Файлы проекта), Browser (Браузер) and Message the team (Писать команде) are on; Server screen (Экран сервера) is off. The row is informational in this build: the tools cannot be switched here.
+The tools the agent may use: Terminal (Терминал), Project files (Файлы проекта), Browser (Браузер), Message the team (Писать команде) and Server screen (Экран сервера). All are on at first. Server screen works on Linux servers only: on another server its chip is dimmed, and hovering it says so.
 Где: New agent sheet → What it may do (Что ему можно)
-1. Read the list. It only shows what the agent gets; the list does not switch anything in this build.
+1. Click a tool to switch it off or on. An on tool has a check; an off one has a dashed outline and a plus.
 
 ## Instructions (Инструкции)
 

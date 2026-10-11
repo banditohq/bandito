@@ -148,8 +148,12 @@ import Testing
 
     // MARK: reactions
 
-    @Test func theSixUsualReactionsAreValid() {
-        #expect(ReactionRules.common == ["👍", "❤️", "😂", "🔥", "👀", "✅"])
+    @Test func theSixteenReactionsAreTheSetInOrder() {
+        #expect(ReactionRules.common == [
+            "👍", "❤️", "😂", "🎉", "🔥", "👀", "🙏", "✅",
+            "🤔", "👏", "🚀", "💯", "😅", "😮", "👎", "❌",
+        ])
+        #expect(Set(ReactionRules.common).count == 16)
         for emoji in ReactionRules.common {
             #expect(ReactionRules.isValid(emoji), "\(emoji)")
         }
@@ -163,14 +167,6 @@ import Testing
         // A family is one cluster, but 18 bytes.
         #expect(!ReactionRules.isValid("👨‍👩‍👧"))
         #expect(ReactionRules.isValid("👨🏽"))
-    }
-
-    @Test func theSystemPickerTextYieldsTheFirstEmoji() {
-        #expect(ReactionRules.firstEmoji(in: "🎉") == "🎉")
-        #expect(ReactionRules.firstEmoji(in: "x🎉") == "🎉")
-        #expect(ReactionRules.firstEmoji(in: "abc 1 ") == nil)
-        #expect(ReactionRules.firstEmoji(in: "") == nil)
-        #expect(ReactionRules.firstEmoji(in: "❤️") == "❤️")
     }
 
     // MARK: forms

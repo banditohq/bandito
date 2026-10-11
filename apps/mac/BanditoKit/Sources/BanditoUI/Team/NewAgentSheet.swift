@@ -43,6 +43,21 @@ struct NewAgentSheet: View {
         return { Task { try? await server.refreshRuntimeModels(refresh: true) } }
     }
 
+    /// The capabilities this server cannot give, each with the reason its chip shows (see `AgentCapability.unavailable`).
+    private var unavailableCapabilities: [AgentCapability: String] {
+        AgentCapability.unavailable(infoKnown: server?.info != nil, supports: { server?.supports($0) ?? false })
+    }
+
+    /// Sets the model the runtime starts on, while the person has not chosen one and the field is empty.
+    private func applyStartingModel() {
+        let models = server?.runtimeModels[draft.runtime.rawValue]?.models ?? []
+        let next = NewAgentModelRules.startingModel(
+            current: draft.model, chosen: draft.modelChosen, runtime: draft.runtime, models: models)
+        if next != draft.model {
+            draft.model = next
+        }
+    }
+
     /// Updates this Mac's server to the app's daemon (the model picker's "Обновить"). Only for this Mac's own server.
     private var updateThisMac: (() -> Void)? {
         guard let server, server.isThisMacServer else { return nil }
@@ -99,6 +114,14 @@ struct NewAgentSheet: View {
         // so a daemon that answers late (or is updated while the sheet is open) is picked up.
         .onChange(of: server?.supports("agent_own_folder") ?? false, initial: true) { _, optional in
             draft.folderOptional = optional
+        }
+        // The model a runtime starts on, until the person picks one (see NewAgentModelRules). Asked again when the
+        // runtime changes and when its list comes, so a list that arrives late sets it too, once.
+        .onChange(of: draft.runtime, initial: true) { _, _ in applyStartingModel() }
+        .onChange(of: server?.runtimeModels[draft.runtime.rawValue]) { _, _ in applyStartingModel() }
+        // A server without the screen gets no screen capability in the draft, so none is sent for it.
+        .onChange(of: unavailableCapabilities, initial: true) { _, unavailable in
+            draft.capabilities.subtract(unavailable.keys)
         }
         // The containers are loaded once the sheet opens. A chosen container that is gone by then becomes a new one.
         // A failed load keeps the choice: an empty list is not proof that the container is gone.
@@ -245,6 +268,8 @@ struct NewAgentSheet: View {
                     runtime: draft.runtime, selection: $draft.model,
                     models: server?.runtimeModels[draft.runtime.rawValue],
                     status: server?.runtimeModelsStatus ?? .unknown,
+                    // Picking (even "Default") is the person's choice: the starting model never replaces it.
+                    onCommit: { _ in draft.modelChosen = true },
                     onRetry: retryModels, onUpdate: updateThisMac)
             }
             advancedSection
@@ -261,7 +286,7 @@ struct NewAgentSheet: View {
             }
 
             labeled(L10n.Capability.title) {
-                CapabilityChips(enabled: $draft.capabilities)
+                CapabilityChips(enabled: $draft.capabilities, unavailable: unavailableCapabilities)
             }
 
             if !integrations.isEmpty {
@@ -552,7 +577,7 @@ struct NewAgentSheet: View {
     /// The project folder as one field: a click anywhere on it opens the folder picker. The clear icon shows only
     /// when a folder is chosen and the server takes an agent without one (the agent then works in its own folder).
     private var folderField: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 10) {
             Button {
                 pickerOpen.toggle()
             } label: {
@@ -650,10 +675,6 @@ struct NewAgentSheet: View {
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
                 .offset(y: -8)
-
-            labeled(L10n.AgentSheet.tools, hint: nil) {
-                FlowTags(tags: toolTags)
-            }
         }
     }
 
@@ -772,16 +793,6 @@ struct NewAgentSheet: View {
         case .shared, .new: L10n.Workspace.Choice.newOne
         case .existing(let id): containers.first { $0.id == id }?.name ?? L10n.Workspace.Choice.newOne
         }
-    }
-
-    private var toolTags: [FlowTags.Tag] {
-        [
-            .init(text: "✓ " + L10n.AgentSheet.toolTerminal, on: true),
-            .init(text: "✓ " + L10n.AgentSheet.toolFiles, on: true),
-            .init(text: "✓ " + L10n.AgentSheet.toolBrowser, on: true),
-            .init(text: "✓ " + L10n.AgentSheet.toolTeam, on: true),
-            .init(text: "+ " + L10n.AgentSheet.toolScreen, on: false),
-        ]
     }
 
     // MARK: Footer
@@ -1107,80 +1118,5 @@ struct FieldBox: ViewModifier {
             .frame(height: 40)
             .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line))
-    }
-}
-
-/// Wrapping row of informative tags ("What it may do"). Whole chips move to the next line; a chip's text never wraps.
-private struct FlowTags: View {
-    struct Tag: Identifiable {
-        let text: String
-        let on: Bool
-        var id: String { text }
-    }
-
-    let tags: [Tag]
-
-    var body: some View {
-        WrapLayout(spacing: 6, lineSpacing: 6) {
-            ForEach(tags) { tag in
-                Text(tag.text)
-                    .font(BanditoFont.text(size: 12, weight: 400))
-                    .foregroundStyle(tag.on ? Color.Bandito.text : Color.Bandito.text3)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        tag.on ? Color.Bandito.text.opacity(0.07) : Color.clear,
-                        in: Capsule())
-                    .overlay(
-                        Capsule().strokeBorder(
-                            tag.on ? Color.Bandito.text.opacity(0.12) : Color.Bandito.text.opacity(0.14),
-                            style: StrokeStyle(lineWidth: 1, dash: tag.on ? [] : [3, 2])))
-            }
-        }
-    }
-}
-
-/// Lays subviews out left to right and moves a whole subview to the next line when it does not fit.
-private struct WrapLayout: Layout {
-    var spacing: CGFloat
-    var lineSpacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var lineHeight: CGFloat = 0
-        var widest: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > maxWidth {
-                x = 0
-                y += lineHeight + lineSpacing
-                lineHeight = 0
-            }
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-            widest = max(widest, x - spacing)
-        }
-        return CGSize(width: min(widest, maxWidth), height: y + lineHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var lineHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX {
-                x = bounds.minX
-                y += lineHeight + lineSpacing
-                lineHeight = 0
-            }
-            view.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-        }
     }
 }

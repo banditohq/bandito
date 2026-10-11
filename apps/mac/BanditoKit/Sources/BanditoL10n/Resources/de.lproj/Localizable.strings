@@ -133,12 +133,6 @@
 "agentSheet.statusSignedInPlain" = "Angemeldet";
 "agentSheet.statusUnknown" = "Prüfung fehlgeschlagen";
 "agentSheet.title" = "Neuer Agent";
-"agentSheet.toolBrowser" = "Browser";
-"agentSheet.toolFiles" = "Projektdateien";
-"agentSheet.toolScreen" = "Serverbildschirm";
-"agentSheet.toolTeam" = "Team anschreiben";
-"agentSheet.toolTerminal" = "Terminal";
-"agentSheet.tools" = "Was er darf";
 "agentSheet.windowResets" = "Setzt zurück";
 "agentSheet.workplace" = "Arbeitsplatz";
 "agentSheet.workplaceContainer" = "Container";
@@ -1209,8 +1203,6 @@
 "message.copyAsText" = "Als Text kopieren";
 "message.more" = "Mehr";
 "message.react" = "Reagieren";
-"message.reactMore" = "Mehr …";
-"message.reactPickerHint" = "Wählen Sie ein Emoji im Fenster";
 "message.reactionMine" = "Reaktion entfernen";
 "message.reactionOf" = "Reaktion von %1$@";
 "message.reactionSame" = "Genauso reagieren";
