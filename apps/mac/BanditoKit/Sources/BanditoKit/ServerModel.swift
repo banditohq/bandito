@@ -335,12 +335,24 @@ public final class ServerModel: Identifiable {
 
     /// Agents that need a human first, then by name.
     public var sortedAgents: [Agent] {
-        agents.sorted { a, b in
-            let na = needsPerson(a.id)
-            let nb = needsPerson(b.id)
-            if na != nb { return na }
-            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
-        }
+        // Whether each agent needs a person is found once, not in every comparison: `needsPerson(_:)` looks the agent
+        // up by id, and a sort of forty agents asked it hundreds of times (a few milliseconds at every agent switch).
+        let keyed = agents.map { agent in (agent: agent, needs: needsPerson(agent)) }
+        return keyed.sorted { a, b in
+            if a.needs != b.needs { return a.needs }
+            return a.agent.name.localizedCaseInsensitiveCompare(b.agent.name) == .orderedAscending
+        }.map(\.agent)
+    }
+
+    /// `needsPerson(_:)` for an agent at hand.
+    private func needsPerson(_ agent: Agent) -> Bool {
+        let status = agent.status ?? threads[agent.id]?.status ?? .idle
+        if status == .needsYou { return true }
+        let pending =
+            agent.reportsPendingApprovalIds
+            ? agent.pendingApprovalIds.count
+            : max(agent.pendingApprovals, threads[agent.id]?.pendingApprovals.count ?? 0)
+        return pending > 0
     }
 
     /// The status the team shows for an agent, whether or not its thread is loaded: the newest `agent.status` the app

@@ -934,7 +934,7 @@ struct ThreadItemsView: View {
 
     var body: some View {
         let _ = PerfCounters.hit("ThreadItemsView")
-        let allRows = ThreadRows.build(items)
+        let allRows = virtual?.rows(of: items) ?? ThreadRows.build(items)
         let plan = virtual?.prepare(allRows)
         let rows = plan.map { Array(allRows[$0.range]) } ?? allRows
         var rowChat = chat

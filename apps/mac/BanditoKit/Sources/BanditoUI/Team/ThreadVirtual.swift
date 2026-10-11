@@ -1,3 +1,4 @@
+import BanditoKit
 import Foundation
 
 #if os(macOS)
@@ -316,6 +317,19 @@ final class ThreadVirtualHost {
     var window = ThreadVirtualWindow()
     let bridge = ThreadScrollBridge()
     let ticker = ThreadVirtualTicker()
+
+    /// The items the rows were last built from, and those rows. A scroll redraws the rows at every step of the range;
+    /// building the rows of a long thread again each time (days, tool groups) was a millisecond a frame for nothing.
+    private var builtFrom: [ThreadItem] = []
+    private var built: [ThreadRow] = []
+
+    /// The rows of `items`, built again only when the items changed.
+    func rows(of items: [ThreadItem]) -> [ThreadRow] {
+        if items.count == builtFrom.count, !built.isEmpty || items.isEmpty, items == builtFrom { return built }
+        builtFrom = items
+        built = ThreadRows.build(items)
+        return built
+    }
 
     /// Takes the rows of the thread, and gives the plan for drawing them.
     func prepare(_ rows: [ThreadRow]) -> ThreadVirtualPlan {

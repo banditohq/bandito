@@ -95,6 +95,7 @@ struct MainWindow: View {
                 TourLayer(anchors: anchors)
             }
         }
+        .environment(\.tourActive, onboarding.tourRequested)
         .task {
             // Only with a session: without one nobody can ask for pending devices, and no device key is needed yet.
             guard hub.signedIn else { return }
@@ -220,23 +221,77 @@ private struct ModeArea: View {
 }
 
 /// The main area's backdrop: the warm background, a faint signal glow hanging over the top edge, and a slight
-/// darkening toward the bottom. Static: nothing here animates or redraws per frame.
+/// darkening toward the bottom. Static: nothing here animates or redraws per frame. The gradients are Core Animation
+/// layers: drawn by SwiftUI they were painted by the processor into the window's picture, again whenever the content
+/// beside them changed (a mode switch repainted a radial gradient the size of the window, about 10 ms).
 private struct ContentBackdrop: View {
     var body: some View {
+        #if os(macOS)
+        BackdropLayers()
+        #else
         ZStack {
             Color.Bandito.bg
             RadialGradient(
                 colors: [Color.Bandito.signal.opacity(0.09), Color.Bandito.signal.opacity(0)],
-                center: UnitPoint(x: 0.5, y: -0.05),
-                startRadius: 0,
-                endRadius: 700)
+                center: UnitPoint(x: 0.5, y: -0.05), startRadius: 0, endRadius: BackdropLayers.glowRadius)
             LinearGradient(
-                colors: [Color.black.opacity(0), Color.black.opacity(0.18)],
-                startPoint: .top,
-                endPoint: .bottom)
+                colors: [Color.black.opacity(0), Color.black.opacity(0.18)], startPoint: .top, endPoint: .bottom)
+        }
+        #endif
+    }
+}
+
+#if os(macOS)
+/// The backdrop as layers: the background colour, the radial glow, the darkening.
+private struct BackdropLayers: NSViewRepresentable {
+    /// The radius of the glow, in points.
+    static let glowRadius: CGFloat = 700
+
+    func makeNSView(context: Context) -> BackdropView { BackdropView() }
+    func updateNSView(_ view: BackdropView, context: Context) {}
+
+    final class BackdropView: NSView {
+        private let glow = CAGradientLayer()
+        private let shade = CAGradientLayer()
+
+        init() {
+            super.init(frame: .zero)
+            wantsLayer = true
+            let signal = NSColor(Color.Bandito.signal)
+            layer?.backgroundColor = NSColor(Color.Bandito.bg).cgColor
+            glow.type = .radial
+            glow.colors = [signal.withAlphaComponent(0.09).cgColor, signal.withAlphaComponent(0).cgColor]
+            shade.colors = [NSColor.black.withAlphaComponent(0).cgColor, NSColor.black.withAlphaComponent(0.18).cgColor]
+            // Top to bottom (the view's layer is not flipped: y grows upward).
+            shade.startPoint = CGPoint(x: 0.5, y: 1)
+            shade.endPoint = CGPoint(x: 0.5, y: 0)
+            for gradient in [glow, shade] {
+                gradient.actions = ["bounds": NSNull(), "position": NSNull(), "startPoint": NSNull(), "endPoint": NSNull()]
+                layer?.addSublayer(gradient)
+            }
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError("not used") }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func layout() {
+            super.layout()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            shade.frame = bounds
+            glow.frame = bounds
+            // The centre hangs just above the top edge (unit y 1.05 from the bottom); the end point sets the radius.
+            let width = max(bounds.width, 1)
+            let height = max(bounds.height, 1)
+            glow.startPoint = CGPoint(x: 0.5, y: 1.05)
+            glow.endPoint = CGPoint(x: 0.5 + BackdropLayers.glowRadius / width, y: 1.05 + BackdropLayers.glowRadius / height)
+            CATransaction.commit()
         }
     }
 }
+#endif
 
 /// The arrow at the edge of the main area while a swipe is under way: it grows and brightens as the swipe nears the
 /// distance that commits it, and says where the swipe goes (a page back, a folder back, the team home).

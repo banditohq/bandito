@@ -16,7 +16,27 @@ struct TourAnchorKey: PreferenceKey {
 extension View {
     /// Marks this view as the target of tour step `anchor`. Without it on screen, the step is skipped.
     func tourAnchor(_ anchor: TourAnchor) -> some View {
-        anchorPreference(key: TourAnchorKey.self, value: .bounds) { [anchor: $0] }
+        modifier(TourAnchorReport(anchor: anchor))
+    }
+}
+
+extension EnvironmentValues {
+    /// The tour runs: the targets report their frames. Off, they report nothing, so no layout of the window carries the
+    /// anchors up the tree (that merge ran through every view at every change).
+    @Entry var tourActive = false
+}
+
+/// Reports the frame of a tour target while the tour runs.
+private struct TourAnchorReport: ViewModifier {
+    let anchor: TourAnchor
+    @Environment(\.tourActive) private var active
+
+    func body(content: Content) -> some View {
+        if active {
+            content.anchorPreference(key: TourAnchorKey.self, value: .bounds) { [anchor: $0] }
+        } else {
+            content
+        }
     }
 }
 
