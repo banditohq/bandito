@@ -350,127 +350,98 @@
     "publisher": "Atlassian",
     "official": true,
     "homepage": "https://www.atlassian.com",
-    "description_en": "Jira and Confluence through Atlassian's Rovo MCP server, with an API token.",
-    "description_ru": "Jira и Confluence через сервер Atlassian Rovo MCP, по API-токену.",
-    "long_en": "Atlassian's Rovo MCP server connects an agent to your Jira and Confluence. Signing in with an API token works only if your organization's admin has allowed it.",
-    "long_ru": "Сервер Atlassian Rovo MCP подключает агента к вашим Jira и Confluence. Вход по API-токену работает, только если администратор организации его разрешил.",
+    "description_en": "Jira and Confluence through Atlassian's Rovo MCP server.",
+    "description_ru": "Jira и Confluence через сервер Atlassian Rovo MCP.",
+    "long_en": "Atlassian's Rovo MCP server connects an agent to your Jira and Confluence. You sign in with your Atlassian account in the browser, and the agent sees what that account can see.",
+    "long_ru": "Сервер Atlassian Rovo MCP подключает агента к вашим Jira и Confluence. Вы входите в браузере под своим аккаунтом Atlassian, и агент видит то, что доступно этому аккаунту.",
     "abilities_en": [
       "Work with Jira and Confluence content from the agent",
-      "Access limited by the scopes of the token",
-      "Authentication by a personal API token or a service account key"
+      "Access limited by the permissions of your account",
+      "Sign in in the browser, with no token to copy"
     ],
     "abilities_ru": [
       "Работать с содержимым Jira и Confluence из агента",
-      "Доступ ограничен правами токена",
-      "Вход по персональному API-токену или ключу сервисного аккаунта"
+      "Доступ ограничен правами вашего аккаунта",
+      "Вход в браузере, без токена для копирования"
     ],
-    "needs_en": "An Atlassian API token, and your organization admin must enable API token authentication. The header value is Base64 of email:token.",
-    "needs_ru": "API-токен Atlassian; администратор организации должен включить вход по токену. Значение заголовка — Base64 от «почта:токен».",
+    "needs_en": "An Atlassian account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Atlassian: войдите в браузере после нажатия «Подключить».",
     "kind": "http",
     "url": "https://mcp.atlassian.com/v2/mcp",
-    "headers_keys": [
-      {
-        "key": "Authorization",
-        "label_en": "Base64 of email:api_token",
-        "label_ru": "Base64 от «почта:токен»",
-        "secret": true,
-        "value_template": "Basic {secret}"
-      }
-    ],
-    "docs_url": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/configuring-authentication-via-api-token/",
+    "auth": "oauth",
+    "docs_url": "https://support.atlassian.com/rovo/docs/getting-started-with-the-atlassian-remote-mcp-server/",
     "icon": "atlassian",
     "accent": "#0052CC",
     "l10n": {
       "de": {
-        "description": "Jira und Confluence über den Rovo-MCP-Server von Atlassian, mit einem API-Token.",
-        "long": "Der Rovo-MCP-Server von Atlassian verbindet den Agenten mit Ihrem Jira und Confluence. Die Anmeldung mit einem API-Token funktioniert nur, wenn der Administrator Ihrer Organisation sie erlaubt hat.",
+        "description": "Jira und Confluence über den MCP-Server Rovo von Atlassian.",
+        "long": "Der Rovo-MCP-Server von Atlassian verbindet den Agenten mit Ihren Jira- und Confluence-Inhalten. Sie melden sich im Browser mit Ihrem Atlassian-Konto an, und der Agent sieht, was dieses Konto sehen kann.",
         "abilities": [
-          "Mit Inhalten aus Jira und Confluence arbeiten",
-          "Der Zugriff richtet sich nach den Berechtigungen des Tokens",
-          "Anmeldung mit einem persönlichen API-Token oder einem Schlüssel für ein Dienstkonto"
+          "Aus dem Agenten heraus mit Jira- und Confluence-Inhalten arbeiten",
+          "Zugriff im Rahmen der Rechte Ihres Kontos",
+          "Anmeldung im Browser, ohne Token zum Kopieren"
         ],
-        "needs": "Ein API-Token von Atlassian; der Administrator Ihrer Organisation muss die Anmeldung mit einem Token aktivieren. Der Wert des Headers ist Base64 von „E-Mail:Token“.",
-        "labels": {
-          "Authorization": "Base64 von E-Mail:API-Token"
-        }
+        "needs": "Ein Atlassian-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
       },
       "es": {
-        "description": "Jira y Confluence a través del servidor MCP Rovo de Atlassian, con un token de API.",
-        "long": "El servidor MCP Rovo de Atlassian conecta al agente con tu Jira y Confluence. Iniciar sesión con un token de API solo funciona si el administrador de tu organización lo ha permitido.",
+        "description": "Jira y Confluence a través del servidor MCP Rovo de Atlassian.",
+        "long": "El servidor MCP Rovo de Atlassian conecta un agente con tu Jira y tu Confluence. Inicias sesión con tu cuenta de Atlassian en el navegador, y el agente ve lo que esa cuenta puede ver.",
         "abilities": [
           "Trabajar con contenido de Jira y Confluence desde el agente",
-          "Acceso limitado por los permisos del token",
-          "Autenticación con un token de API personal o una clave de cuenta de servicio"
+          "Acceso limitado a los permisos de tu cuenta",
+          "Inicio de sesión en el navegador, sin token que copiar"
         ],
-        "needs": "Un token de API de Atlassian; el administrador de tu organización debe activar la autenticación por token de API. El valor del encabezado es Base64 de correo:token.",
-        "labels": {
-          "Authorization": "Base64 de correo:token de API"
-        }
+        "needs": "Una cuenta de Atlassian. Inicia sesión en el navegador después de pulsar Conectar."
       },
       "fr": {
-        "description": "Jira et Confluence via le serveur MCP Rovo d'Atlassian, avec un jeton d'API.",
-        "long": "Le serveur MCP Rovo d'Atlassian relie l'agent à vos Jira et Confluence. La connexion par jeton d'API ne fonctionne que si l'administrateur de votre organisation l'a autorisée.",
+        "description": "Jira et Confluence via le serveur MCP Rovo d'Atlassian.",
+        "long": "Le serveur MCP Rovo d'Atlassian connecte un agent à vos Jira et Confluence. Vous vous connectez avec votre compte Atlassian dans le navigateur, et l'agent voit ce que ce compte peut voir.",
         "abilities": [
-          "Travailler avec le contenu de Jira et Confluence depuis l'agent",
-          "Accès limité par les droits du jeton",
-          "Authentification par jeton d'API personnel ou clé de compte de service"
+          "Travailler avec les contenus Jira et Confluence depuis l'agent",
+          "Accès limité aux droits de votre compte",
+          "Connexion dans le navigateur, sans jeton à copier"
         ],
-        "needs": "Un jeton d'API Atlassian ; l'administrateur de votre organisation doit activer l'authentification par jeton d'API. La valeur de l'en-tête est le Base64 de « e-mail:jeton ».",
-        "labels": {
-          "Authorization": "Base64 de « e-mail:jeton d'API »"
-        }
+        "needs": "Un compte Atlassian. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
       },
       "ja": {
-        "description": "Atlassian の Rovo MCP サーバーを通じて、API トークンで Jira と Confluence を扱います。",
-        "long": "Atlassian の Rovo MCP サーバーは、エージェントを Jira と Confluence につなぎます。API トークンでのサインインは、組織の管理者が許可している場合にだけ使えます。",
+        "description": "Atlassian の Rovo MCP サーバーで Jira と Confluence を扱います。",
+        "long": "Atlassian の Rovo MCP サーバーは、エージェントを Jira と Confluence につなぎます。ブラウザで Atlassian アカウントにサインインすると、エージェントはそのアカウントで見えるものを扱えます。",
         "abilities": [
-          "エージェントから Jira と Confluence の内容を扱う",
-          "アクセス範囲はトークンの権限で制限される",
-          "個人用 API トークンまたはサービスアカウントのキーで認証"
+          "エージェントから Jira と Confluence のコンテンツを扱う",
+          "アカウントの権限の範囲でアクセスする",
+          "ブラウザでサインイン。コピーするトークンは不要"
         ],
-        "needs": "Atlassian の API トークン。組織の管理者が API トークンでの認証を有効にしている必要があります。ヘッダーの値は「メール:トークン」を Base64 でエンコードしたものです。",
-        "labels": {
-          "Authorization": "「メール:API トークン」の Base64"
-        }
+        "needs": "Atlassian のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
       },
       "ko": {
-        "description": "Atlassian의 Rovo MCP 서버로 API 토큰을 이용해 Jira와 Confluence를 다뤄요.",
-        "long": "Atlassian Rovo MCP 서버는 에이전트를 Jira와 Confluence에 연결해요. API 토큰으로 로그인하는 것은 조직 관리자가 허용한 경우에만 동작해요.",
+        "description": "Atlassian의 Rovo MCP 서버로 Jira와 Confluence를 다뤄요.",
+        "long": "Atlassian Rovo MCP 서버는 에이전트를 Jira와 Confluence에 연결해요. 브라우저에서 Atlassian 계정으로 로그인하면, 에이전트는 그 계정이 볼 수 있는 내용을 다뤄요.",
         "abilities": [
-          "에이전트에서 Jira와 Confluence 내용 다루기",
-          "토큰 권한에 따라 접근이 제한돼요",
-          "개인 API 토큰 또는 서비스 계정 키로 인증"
+          "에이전트에서 Jira와 Confluence 콘텐츠 다루기",
+          "내 계정 권한 범위 안에서만 접근",
+          "브라우저에서 로그인, 복사할 토큰 없음"
         ],
-        "needs": "Atlassian API 토큰이 필요해요. 조직 관리자가 API 토큰 인증을 켜 두어야 해요. 헤더 값은 「이메일:토큰」을 Base64로 인코딩한 값이에요.",
-        "labels": {
-          "Authorization": "「이메일:API 토큰」의 Base64"
-        }
+        "needs": "Atlassian 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
       },
       "pt-BR": {
-        "description": "Jira e Confluence pelo servidor MCP Rovo da Atlassian, com um token de API.",
-        "long": "O servidor MCP Rovo da Atlassian conecta o agente ao seu Jira e Confluence. Entrar com um token de API só funciona se o administrador da sua organização tiver permitido.",
+        "description": "Jira e Confluence pelo servidor MCP Rovo da Atlassian.",
+        "long": "O servidor MCP Rovo da Atlassian conecta um agente ao seu Jira e ao seu Confluence. Você entra com sua conta Atlassian no navegador, e o agente vê o que essa conta consegue ver.",
         "abilities": [
-          "Trabalhar com conteúdo do Jira e do Confluence pelo agente",
-          "Acesso limitado pelas permissões do token",
-          "Autenticação por token de API pessoal ou chave de conta de serviço"
+          "Trabalhar com o conteúdo do Jira e do Confluence pelo agente",
+          "Acesso limitado às permissões da sua conta",
+          "Entrada no navegador, sem token para copiar"
         ],
-        "needs": "Um token de API da Atlassian; o administrador da sua organização precisa ativar a autenticação por token de API. O valor do cabeçalho é o Base64 de e-mail:token.",
-        "labels": {
-          "Authorization": "Base64 de e-mail:token de API"
-        }
+        "needs": "Uma conta no Atlassian. Entre no navegador depois de clicar em Conectar."
       },
       "zh-Hans": {
-        "description": "通过 Atlassian 的 Rovo MCP 服务器，使用 API 令牌连接 Jira 和 Confluence。",
-        "long": "Atlassian 的 Rovo MCP 服务器让智能体连接你的 Jira 和 Confluence。只有当组织管理员允许时，才能使用 API 令牌登录。",
+        "description": "通过 Atlassian 的 Rovo MCP 服务器处理 Jira 和 Confluence。",
+        "long": "Atlassian 的 Rovo MCP 服务器把智能体连接到你的 Jira 和 Confluence。你在浏览器中用 Atlassian 账号登录，智能体能看到该账号可以看到的内容。",
         "abilities": [
-          "让智能体处理 Jira 和 Confluence 的内容",
-          "访问范围受令牌权限限制",
-          "通过个人 API 令牌或服务账户密钥进行身份验证"
+          "在智能体中处理 Jira 和 Confluence 的内容",
+          "访问范围受你的账号权限限制",
+          "在浏览器中登录，无需复制令牌"
         ],
-        "needs": "一个 Atlassian API 令牌；组织管理员必须启用 API 令牌身份验证。请求头的值为“邮箱:令牌”的 Base64 编码。",
-        "labels": {
-          "Authorization": "“邮箱:API 令牌”的 Base64"
-        }
+        "needs": "一个 Atlassian 账号。点击“连接”后在浏览器中登录。"
       }
     }
   },
@@ -481,10 +452,10 @@
     "publisher": "Stripe",
     "official": true,
     "homepage": "https://stripe.com",
-    "description_en": "Stripe's API and documentation search, with an agent API key.",
-    "description_ru": "API Stripe и поиск по документации, с агентским ключом API.",
-    "long_en": "Stripe's MCP server lets an agent read and change data in your Stripe account and search Stripe's documentation. For example: list recent failed payments, or find how to set up a subscription. Use a test-mode key first.",
-    "long_ru": "MCP-сервер Stripe позволяет агенту читать и менять данные вашего аккаунта Stripe и искать по документации. Например: показать последние неудачные платежи или найти, как настроить подписку. Сначала используйте ключ тестового режима.",
+    "description_en": "Stripe's API and documentation search, with your Stripe account.",
+    "description_ru": "API Stripe и поиск по документации, с вашим аккаунтом Stripe.",
+    "long_en": "Stripe's MCP server lets an agent read and change data in your Stripe account and search Stripe's documentation. For example: list recent failed payments, or find how to set up a subscription.",
+    "long_ru": "MCP-сервер Stripe позволяет агенту читать и менять данные вашего аккаунта Stripe и искать по документации. Например: показать последние неудачные платежи или найти, как настроить подписку.",
     "abilities_en": [
       "Read Stripe objects: customers, payments, invoices, subscriptions",
       "Create and update objects, such as products, prices and payment links",
@@ -497,120 +468,91 @@
       "Искать по документации Stripe",
       "Рискованные действия, например возврат, требуют вашего подтверждения в Stripe"
     ],
-    "needs_en": "A Stripe agent API key with only the permissions the agent needs. Stripe stops accepting full-access secret keys on 31 October 2026.",
-    "needs_ru": "Агентский ключ API Stripe с минимально нужными правами. С 31 октября 2026 Stripe перестаёт принимать ключи с полным доступом.",
+    "needs_en": "A Stripe account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Stripe: войдите в браузере после нажатия «Подключить».",
     "kind": "http",
     "url": "https://mcp.stripe.com",
-    "headers_keys": [
-      {
-        "key": "Authorization",
-        "label_en": "Stripe agent API key",
-        "label_ru": "Агентский ключ API Stripe",
-        "secret": true,
-        "value_template": "Bearer {secret}"
-      }
-    ],
+    "auth": "oauth",
     "docs_url": "https://docs.stripe.com/mcp",
     "icon": "stripe",
     "accent": "#635BFF",
     "l10n": {
       "de": {
-        "description": "Stripe-API und Dokumentationssuche, mit einem Agenten-API-Schlüssel.",
-        "long": "Der MCP-Server von Stripe erlaubt dem Agenten, Daten in Ihrem Stripe-Konto zu lesen und zu ändern, und die Stripe-Dokumentation zu durchsuchen. Zum Beispiel: die letzten fehlgeschlagenen Zahlungen anzeigen oder herausfinden, wie ein Abo eingerichtet wird. Verwenden Sie zuerst einen Schlüssel für den Testmodus.",
+        "description": "API-Zugriff und Dokumentationssuche von Stripe, mit Ihrem Stripe-Konto.",
+        "long": "Der MCP-Server von Stripe erlaubt dem Agenten, Daten Ihres Stripe-Kontos zu lesen und zu ändern und die Dokumentation von Stripe zu durchsuchen. Zum Beispiel: die letzten fehlgeschlagenen Zahlungen anzeigen oder nachsehen, wie ein Abo eingerichtet wird.",
         "abilities": [
           "Stripe-Objekte lesen: Kunden, Zahlungen, Rechnungen, Abos",
           "Objekte wie Produkte, Preise und Zahlungslinks anlegen und ändern",
           "Stripe-Dokumentation durchsuchen",
           "Riskante Aktionen wie Erstattungen brauchen Ihre Bestätigung in Stripe"
         ],
-        "needs": "Ein Agenten-API-Schlüssel von Stripe mit nur den Berechtigungen, die der Agent braucht. Ab dem 31. Oktober 2026 nimmt Stripe keine Schlüssel mit vollem Zugriff mehr an.",
-        "labels": {
-          "Authorization": "Agenten-API-Schlüssel von Stripe"
-        }
+        "needs": "Ein Stripe-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
       },
       "es": {
-        "description": "API de Stripe y búsqueda en la documentación, con una clave de API para agentes.",
-        "long": "El servidor MCP de Stripe permite al agente leer y cambiar datos de tu cuenta de Stripe y buscar en la documentación de Stripe. Por ejemplo: listar los pagos fallidos recientes, o averiguar cómo configurar una suscripción. Usa primero una clave del modo de prueba.",
+        "description": "API de Stripe y búsqueda en la documentación, con tu cuenta de Stripe.",
+        "long": "El servidor MCP de Stripe permite al agente leer y cambiar datos de tu cuenta de Stripe y buscar en la documentación de Stripe. Por ejemplo: listar los pagos fallidos recientes, o averiguar cómo configurar una suscripción.",
         "abilities": [
           "Leer objetos de Stripe: clientes, pagos, facturas, suscripciones",
           "Crear y actualizar objetos, como productos, precios y enlaces de pago",
           "Buscar en la documentación de Stripe",
           "Las acciones de riesgo, como los reembolsos, necesitan tu confirmación en Stripe"
         ],
-        "needs": "Una clave de API de Stripe para agentes, solo con los permisos que necesita el agente. A partir del 31 de octubre de 2026, Stripe deja de aceptar claves secretas con acceso completo.",
-        "labels": {
-          "Authorization": "Clave de API de agente de Stripe"
-        }
+        "needs": "Una cuenta de Stripe. Inicia sesión en el navegador después de pulsar Conectar."
       },
       "fr": {
-        "description": "API Stripe et recherche dans la documentation, avec une clé d'API pour agent.",
-        "long": "Le serveur MCP de Stripe permet à l'agent de lire et de modifier les données de votre compte Stripe, et de rechercher dans la documentation Stripe. Par exemple : lister les paiements récents échoués, ou savoir comment configurer un abonnement. Commencez par une clé du mode test.",
+        "description": "API Stripe et recherche dans la documentation, avec votre compte Stripe.",
+        "long": "Le serveur MCP de Stripe permet à l'agent de lire et de modifier les données de votre compte Stripe, et de chercher dans la documentation de Stripe. Par exemple : lister les paiements échoués récemment, ou trouver comment mettre en place un abonnement.",
         "abilities": [
           "Lire les objets Stripe : clients, paiements, factures, abonnements",
           "Créer et mettre à jour des objets, comme les produits, les prix et les liens de paiement",
           "Rechercher dans la documentation Stripe",
           "Les actions sensibles, comme un remboursement, demandent votre confirmation dans Stripe"
         ],
-        "needs": "Une clé d'API Stripe pour agent, avec seulement les droits dont l'agent a besoin. Stripe n'acceptera plus les clés secrètes à accès complet à partir du 31 octobre 2026.",
-        "labels": {
-          "Authorization": "Clé d'API d'agent Stripe"
-        }
+        "needs": "Un compte Stripe. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
       },
       "ja": {
-        "description": "Stripe の API とドキュメント検索を、エージェント用 API キーで利用します。",
-        "long": "Stripe の MCP サーバーを使うと、エージェントが Stripe アカウントのデータを読み取り、変更し、Stripe のドキュメントを検索できます。例: 最近失敗した支払いを一覧にする、定期購読の設定方法を調べる。最初はテストモードのキーを使ってください。",
+        "description": "Stripe の API とドキュメント検索を、Stripe アカウントで使います。",
+        "long": "Stripe の MCP サーバーを使うと、エージェントが Stripe アカウントのデータを読み取り、変更し、Stripe のドキュメントを検索できます。例: 最近失敗した支払いを一覧にする、サブスクリプションの設定方法を探す。",
         "abilities": [
           "Stripe のオブジェクトを読む: 顧客、支払い、請求書、定期購読",
           "商品、価格、支払いリンクなどのオブジェクトを作成・更新",
           "Stripe のドキュメントを検索",
           "返金などのリスクの高い操作には Stripe での確認が必要"
         ],
-        "needs": "必要な権限だけを持つ Stripe のエージェント用 API キー。2026 年 10 月 31 日以降、Stripe はフルアクセスのシークレットキーを受け付けなくなります。",
-        "labels": {
-          "Authorization": "Stripe のエージェント用 API キー"
-        }
+        "needs": "Stripe のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
       },
       "ko": {
-        "description": "Stripe API와 문서 검색을 에이전트 API 키로 이용해요.",
-        "long": "Stripe MCP 서버를 쓰면 에이전트가 Stripe 계정의 데이터를 읽고 변경하고, Stripe 문서를 검색할 수 있어요. 예를 들어 최근 실패한 결제를 보거나, 구독을 설정하는 방법을 찾을 수 있어요. 먼저 테스트 모드 키를 사용하세요.",
+        "description": "Stripe API와 문서 검색을 내 Stripe 계정으로 써요.",
+        "long": "Stripe MCP 서버를 쓰면 에이전트가 Stripe 계정의 데이터를 읽고 바꾸고, Stripe 문서를 검색할 수 있어요. 예를 들어 최근 실패한 결제를 보거나, 구독을 설정하는 방법을 찾을 수 있어요.",
         "abilities": [
           "Stripe 객체 읽기: 고객, 결제, 청구서, 구독",
           "상품, 가격, 결제 링크 같은 객체 만들기와 업데이트",
           "Stripe 문서 검색",
           "환불 같은 위험한 작업은 Stripe에서 확인이 필요해요"
         ],
-        "needs": "에이전트가 필요한 권한만 가진 Stripe 에이전트 API 키가 필요해요. Stripe는 2026년 10월 31일부터 전체 권한 비밀 키를 받지 않아요.",
-        "labels": {
-          "Authorization": "Stripe 에이전트 API 키"
-        }
+        "needs": "Stripe 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
       },
       "pt-BR": {
-        "description": "API do Stripe e pesquisa na documentação, com uma chave de API de agente.",
-        "long": "O servidor MCP do Stripe permite que o agente leia e altere dados da sua conta Stripe e pesquise na documentação do Stripe. Por exemplo: listar os pagamentos recusados recentes, ou descobrir como configurar uma assinatura. Use primeiro uma chave do modo de teste.",
+        "description": "API do Stripe e busca na documentação, com a sua conta Stripe.",
+        "long": "O servidor MCP do Stripe permite que o agente leia e altere dados da sua conta Stripe e pesquise a documentação do Stripe. Por exemplo: listar os pagamentos recusados recentes, ou descobrir como configurar uma assinatura.",
         "abilities": [
           "Ler objetos do Stripe: clientes, pagamentos, faturas, assinaturas",
           "Criar e atualizar objetos, como produtos, preços e links de pagamento",
           "Pesquisar na documentação do Stripe",
           "Ações de risco, como reembolsos, precisam da sua confirmação no Stripe"
         ],
-        "needs": "Uma chave de API de agente do Stripe, apenas com as permissões que o agente precisa. A partir de 31 de outubro de 2026, o Stripe deixa de aceitar chaves secretas com acesso total.",
-        "labels": {
-          "Authorization": "Chave de API de agente do Stripe"
-        }
+        "needs": "Uma conta no Stripe. Entre no navegador depois de clicar em Conectar."
       },
       "zh-Hans": {
-        "description": "通过智能体 API 密钥使用 Stripe 的 API 并搜索其文档。",
-        "long": "Stripe 的 MCP 服务器让智能体可以读取和修改你 Stripe 账户中的数据，并搜索 Stripe 文档。例如：列出最近失败的付款，或查找如何设置订阅。请先使用测试模式的密钥。",
+        "description": "Stripe 的 API 和文档搜索，使用你的 Stripe 账号。",
+        "long": "Stripe 的 MCP 服务器让智能体读取和修改你 Stripe 账号中的数据，并搜索 Stripe 文档。例如：列出最近失败的付款，或查找如何设置订阅。",
         "abilities": [
           "读取 Stripe 对象：客户、付款、发票、订阅",
           "创建并更新对象，如商品、价格和付款链接",
           "搜索 Stripe 文档",
           "退款等高风险操作需要你在 Stripe 中确认"
         ],
-        "needs": "一个仅具有智能体所需权限的 Stripe 智能体 API 密钥。自 2026 年 10 月 31 日起，Stripe 将不再接受拥有完全访问权限的密钥。",
-        "labels": {
-          "Authorization": "Stripe 智能体 API 密钥"
-        }
+        "needs": "一个 Stripe 账号。点击“连接”后在浏览器中登录。"
       }
     }
   },
@@ -621,8 +563,8 @@
     "publisher": "Supabase",
     "official": true,
     "homepage": "https://supabase.com",
-    "description_en": "Manage Supabase projects and query their databases, with an access token.",
-    "description_ru": "Управление проектами Supabase и запросы к их базам, по токену доступа.",
+    "description_en": "Manage Supabase projects and query their databases, through your Supabase account.",
+    "description_ru": "Управление проектами Supabase и запросы к их базам через ваш аккаунт Supabase.",
     "long_en": "Supabase's MCP server lets an agent work with your projects: look at tables, run queries and read the docs. Limit it to one project and turn on read-only mode before pointing it at real data.",
     "long_ru": "MCP-сервер Supabase позволяет агенту работать с вашими проектами: смотреть таблицы, выполнять запросы и читать документацию. Прежде чем подключать реальные данные, ограничьте его одним проектом и включите режим только чтения.",
     "abilities_en": [
@@ -637,26 +579,17 @@
       "Режим только чтения: read_only=true в адресе",
       "Выбирать группы инструментов параметром features"
     ],
-    "needs_en": "A Supabase personal access token (Dashboard, Account, Access tokens). Edit the address: your project_ref, and read_only=true.",
-    "needs_ru": "Персональный токен доступа Supabase (Dashboard, Account, Access tokens). Допишите в адрес свой project_ref и read_only=true.",
+    "needs_en": "A Supabase account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Supabase: войдите в браузере после нажатия «Подключить».",
     "kind": "http",
-    "url": null,
-    "url_hint": "https://mcp.supabase.com/mcp?project_ref=<PROJECT_REF>&read_only=true",
-    "headers_keys": [
-      {
-        "key": "Authorization",
-        "label_en": "Supabase access token",
-        "label_ru": "Токен доступа Supabase",
-        "secret": true,
-        "value_template": "Bearer {secret}"
-      }
-    ],
+    "url": "https://mcp.supabase.com/mcp",
+    "auth": "oauth",
     "docs_url": "https://supabase.com/docs/guides/getting-started/mcp",
     "icon": "database",
     "accent": "#3ECF8E",
     "l10n": {
       "de": {
-        "description": "Supabase-Projekte verwalten und ihre Datenbanken abfragen, mit einem Zugriffstoken.",
+        "description": "Supabase-Projekte verwalten und deren Datenbanken abfragen, über Ihr Supabase-Konto.",
         "long": "Der MCP-Server von Supabase erlaubt dem Agenten, mit Ihren Projekten zu arbeiten: Tabellen ansehen, Abfragen ausführen und die Dokumentation lesen. Beschränken Sie ihn auf ein Projekt und schalten Sie den Nur-Lese-Modus ein, bevor Sie ihn auf echte Daten richten.",
         "abilities": [
           "Tabellen ansehen und SQL ausführen",
@@ -664,13 +597,10 @@
           "Nur-Lese-Modus mit read_only=true in der Adresse",
           "Werkzeuggruppen mit dem Parameter features wählen"
         ],
-        "needs": "Ein persönliches Zugriffstoken von Supabase (Dashboard, Account, Access tokens). Ergänzen Sie die Adresse um Ihre project_ref und read_only=true.",
-        "labels": {
-          "Authorization": "Zugriffstoken von Supabase"
-        }
+        "needs": "Ein Supabase-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
       },
       "es": {
-        "description": "Gestiona proyectos de Supabase y consulta sus bases de datos, con un token de acceso.",
+        "description": "Gestiona proyectos de Supabase y consulta sus bases de datos, a través de tu cuenta de Supabase.",
         "long": "El servidor MCP de Supabase permite al agente trabajar con tus proyectos: ver tablas, ejecutar consultas y leer la documentación. Limítalo a un solo proyecto y activa el modo de solo lectura antes de conectarlo a datos reales.",
         "abilities": [
           "Revisar tablas y ejecutar SQL",
@@ -678,13 +608,10 @@
           "Modo de solo lectura con read_only=true en la dirección",
           "Elegir grupos de herramientas con el parámetro features"
         ],
-        "needs": "Un token de acceso personal de Supabase (Dashboard, Account, Access tokens). Edita la dirección: tu project_ref y read_only=true.",
-        "labels": {
-          "Authorization": "Token de acceso de Supabase"
-        }
+        "needs": "Una cuenta de Supabase. Inicia sesión en el navegador después de pulsar Conectar."
       },
       "fr": {
-        "description": "Gérez vos projets Supabase et interrogez leurs bases de données, avec un jeton d'accès.",
+        "description": "Gérer les projets Supabase et interroger leurs bases de données, via votre compte Supabase.",
         "long": "Le serveur MCP de Supabase permet à l'agent de travailler avec vos projets : consulter les tables, exécuter des requêtes et lire la documentation. Limitez-le à un seul projet et activez le mode lecture seule avant de le connecter à des données réelles.",
         "abilities": [
           "Consulter les tables et exécuter du SQL",
@@ -692,13 +619,10 @@
           "Mode lecture seule avec read_only=true dans l'adresse",
           "Choisir les groupes d'outils avec le paramètre features"
         ],
-        "needs": "Un jeton d'accès personnel Supabase (Dashboard, Account, Access tokens). Modifiez l'adresse : votre project_ref, et read_only=true.",
-        "labels": {
-          "Authorization": "Jeton d'accès Supabase"
-        }
+        "needs": "Un compte Supabase. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
       },
       "ja": {
-        "description": "Supabase のプロジェクトを管理し、データベースに問い合わせます。アクセストークンを使います。",
+        "description": "Supabase のプロジェクトを管理し、データベースに問い合わせます。Supabase アカウントを使います。",
         "long": "Supabase の MCP サーバーを使うと、エージェントがプロジェクトを扱えます。テーブルを見る、クエリを実行する、ドキュメントを読むなどです。実際のデータに接続する前に、1 つのプロジェクトに限定し、読み取り専用モードをオンにしてください。",
         "abilities": [
           "テーブルを確認し SQL を実行",
@@ -706,13 +630,10 @@
           "アドレスに read_only=true を付けると読み取り専用",
           "features パラメーターでツール群を選ぶ"
         ],
-        "needs": "Supabase の個人用アクセストークン（Dashboard、Account、Access tokens）。アドレスを編集してください: 自分の project_ref と read_only=true。",
-        "labels": {
-          "Authorization": "Supabase のアクセストークン"
-        }
+        "needs": "Supabase のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
       },
       "ko": {
-        "description": "Supabase 프로젝트를 관리하고 데이터베이스를 조회해요. 액세스 토큰을 사용해요.",
+        "description": "Supabase 프로젝트를 관리하고 데이터베이스를 조회해요. 내 Supabase 계정으로 연결해요.",
         "long": "Supabase MCP 서버를 쓰면 에이전트가 프로젝트를 다룰 수 있어요. 테이블을 보고, 쿼리를 실행하고, 문서를 읽을 수 있어요. 실제 데이터에 연결하기 전에 한 프로젝트로 제한하고 읽기 전용 모드를 켜세요.",
         "abilities": [
           "테이블 살펴보기와 SQL 실행",
@@ -720,13 +641,10 @@
           "주소에 read_only=true를 넣으면 읽기 전용",
           "features 매개변수로 도구 묶음 고르기"
         ],
-        "needs": "Supabase 개인 액세스 토큰이 필요해요(Dashboard, Account, Access tokens). 주소를 고쳐 주세요: 내 project_ref와 read_only=true.",
-        "labels": {
-          "Authorization": "Supabase 액세스 토큰"
-        }
+        "needs": "Supabase 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
       },
       "pt-BR": {
-        "description": "Gerencie projetos do Supabase e consulte os bancos de dados, com um token de acesso.",
+        "description": "Gerencie projetos do Supabase e consulte os bancos deles, pela sua conta Supabase.",
         "long": "O servidor MCP do Supabase permite que o agente trabalhe com seus projetos: ver tabelas, executar consultas e ler a documentação. Limite-o a um projeto e ative o modo somente leitura antes de apontá-lo para dados reais.",
         "abilities": [
           "Ver tabelas e executar SQL",
@@ -734,13 +652,10 @@
           "Modo somente leitura com read_only=true no endereço",
           "Escolher grupos de ferramentas com o parâmetro features"
         ],
-        "needs": "Um token de acesso pessoal do Supabase (Dashboard, Account, Access tokens). Edite o endereço: seu project_ref e read_only=true.",
-        "labels": {
-          "Authorization": "Token de acesso do Supabase"
-        }
+        "needs": "Uma conta no Supabase. Entre no navegador depois de clicar em Conectar."
       },
       "zh-Hans": {
-        "description": "使用访问令牌管理 Supabase 项目并查询其数据库。",
+        "description": "管理 Supabase 项目并查询其数据库，通过你的 Supabase 账号。",
         "long": "Supabase 的 MCP 服务器让智能体可以处理你的项目：查看数据表、运行查询并阅读文档。在将其连接到真实数据之前，请将其限定为一个项目，并开启只读模式。",
         "abilities": [
           "查看数据表并运行 SQL",
@@ -748,10 +663,7 @@
           "地址中加入 read_only=true 即为只读模式",
           "通过 features 参数选择工具组"
         ],
-        "needs": "一个 Supabase 个人访问令牌（Dashboard、Account、Access tokens）。请编辑地址：填入你的 project_ref，并加上 read_only=true。",
-        "labels": {
-          "Authorization": "Supabase 访问令牌"
-        }
+        "needs": "一个 Supabase 账号。点击“连接”后在浏览器中登录。"
       }
     }
   },
@@ -762,127 +674,98 @@
     "publisher": "Cloudflare",
     "official": true,
     "homepage": "https://www.cloudflare.com",
-    "description_en": "The Cloudflare API from an agent, with an API token.",
-    "description_ru": "API Cloudflare из агента, по API-токену.",
-    "long_en": "Cloudflare's API MCP server lets an agent work with your Cloudflare account through the API. Create a token with only the permissions the task needs.",
-    "long_ru": "MCP-сервер Cloudflare API позволяет агенту работать с вашим аккаунтом Cloudflare через API. Создайте токен только с нужными задаче правами.",
+    "description_en": "The Cloudflare API from an agent, through your Cloudflare account.",
+    "description_ru": "API Cloudflare из агента, через ваш аккаунт Cloudflare.",
+    "long_en": "Cloudflare's API MCP server lets an agent work with your Cloudflare account through the API. You sign in with your Cloudflare account in the browser, and the agent can do what that account can do.",
+    "long_ru": "MCP-сервер Cloudflare API позволяет агенту работать с вашим аккаунтом Cloudflare через API. Вы входите в браузере под своим аккаунтом Cloudflare, и агент может делать то, что может этот аккаунт.",
     "abilities_en": [
       "Call the Cloudflare API on your account",
-      "Access limited by the permissions of the token",
-      "User tokens and account tokens both work"
+      "Access limited by the permissions of your account",
+      "Sign in in the browser, with no token to copy"
     ],
     "abilities_ru": [
       "Вызывать API Cloudflare от имени вашего аккаунта",
-      "Доступ ограничен правами токена",
-      "Подходят и пользовательские токены, и токены аккаунта"
+      "Доступ ограничен правами вашего аккаунта",
+      "Вход в браузере, без токена для копирования"
     ],
-    "needs_en": "A Cloudflare API token.",
-    "needs_ru": "API-токен Cloudflare.",
+    "needs_en": "A Cloudflare account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Cloudflare: войдите в браузере после нажатия «Подключить».",
     "kind": "http",
     "url": "https://mcp.cloudflare.com/mcp",
-    "headers_keys": [
-      {
-        "key": "Authorization",
-        "label_en": "Cloudflare API token",
-        "label_ru": "API-токен Cloudflare",
-        "secret": true,
-        "value_template": "Bearer {secret}"
-      }
-    ],
+    "auth": "oauth",
     "docs_url": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
     "icon": "cloud",
     "accent": "#F38020",
     "l10n": {
       "de": {
-        "description": "Die Cloudflare-API für den Agenten, mit einem API-Token.",
-        "long": "Der API-MCP-Server von Cloudflare erlaubt dem Agenten, über die API mit Ihrem Cloudflare-Konto zu arbeiten. Erstellen Sie ein Token nur mit den Berechtigungen, die die Aufgabe braucht.",
+        "description": "Die API von Cloudflare aus einem Agenten heraus, über Ihr Cloudflare-Konto.",
+        "long": "Der API-MCP-Server von Cloudflare erlaubt dem Agenten, über die API mit Ihrem Cloudflare-Konto zu arbeiten. Sie melden sich im Browser mit Ihrem Cloudflare-Konto an, und der Agent kann alles, was dieses Konto kann.",
         "abilities": [
           "Die Cloudflare-API für Ihr Konto aufrufen",
-          "Der Zugriff richtet sich nach den Berechtigungen des Tokens",
-          "Benutzer-Tokens und Konto-Tokens funktionieren beide"
+          "Zugriff im Rahmen der Rechte Ihres Kontos",
+          "Anmeldung im Browser, ohne Token zum Kopieren"
         ],
-        "needs": "Ein API-Token von Cloudflare.",
-        "labels": {
-          "Authorization": "API-Token von Cloudflare"
-        }
+        "needs": "Ein Cloudflare-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
       },
       "es": {
-        "description": "La API de Cloudflare desde un agente, con un token de API.",
-        "long": "El servidor MCP de la API de Cloudflare permite al agente trabajar con tu cuenta de Cloudflare a través de la API. Crea un token solo con los permisos que necesite la tarea.",
+        "description": "La API de Cloudflare desde un agente, a través de tu cuenta de Cloudflare.",
+        "long": "El servidor MCP de la API de Cloudflare permite al agente trabajar con tu cuenta de Cloudflare a través de la API. Inicias sesión con tu cuenta de Cloudflare en el navegador, y el agente puede hacer lo que esa cuenta puede hacer.",
         "abilities": [
           "Llamar a la API de Cloudflare en tu cuenta",
-          "Acceso limitado por los permisos del token",
-          "Funcionan tanto los tokens de usuario como los de cuenta"
+          "Acceso limitado a los permisos de tu cuenta",
+          "Inicio de sesión en el navegador, sin token que copiar"
         ],
-        "needs": "Un token de API de Cloudflare.",
-        "labels": {
-          "Authorization": "Token de API de Cloudflare"
-        }
+        "needs": "Una cuenta de Cloudflare. Inicia sesión en el navegador después de pulsar Conectar."
       },
       "fr": {
-        "description": "L'API Cloudflare pour l'agent, avec un jeton d'API.",
-        "long": "Le serveur MCP de l'API Cloudflare permet à l'agent de travailler avec votre compte Cloudflare via l'API. Créez un jeton avec seulement les droits dont la tâche a besoin.",
+        "description": "L'API Cloudflare depuis un agent, via votre compte Cloudflare.",
+        "long": "Le serveur MCP de l'API Cloudflare permet à l'agent de travailler avec votre compte Cloudflare via l'API. Vous vous connectez avec votre compte Cloudflare dans le navigateur, et l'agent peut faire ce que ce compte peut faire.",
         "abilities": [
-          "Appeler l'API Cloudflare pour votre compte",
-          "Accès limité par les droits du jeton",
-          "Les jetons utilisateur et les jetons de compte fonctionnent tous les deux"
+          "Appeler l'API Cloudflare sur votre compte",
+          "Accès limité aux droits de votre compte",
+          "Connexion dans le navigateur, sans jeton à copier"
         ],
-        "needs": "Un jeton d'API Cloudflare.",
-        "labels": {
-          "Authorization": "Jeton d'API Cloudflare"
-        }
+        "needs": "Un compte Cloudflare. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
       },
       "ja": {
-        "description": "エージェントから Cloudflare API を、API トークンで利用します。",
-        "long": "Cloudflare の API 用 MCP サーバーを使うと、エージェントが API を通じて Cloudflare アカウントを操作できます。作業に必要な権限だけを持つトークンを作成してください。",
+        "description": "エージェントから Cloudflare API を使います。Cloudflare アカウントで接続します。",
+        "long": "Cloudflare API の MCP サーバーを使うと、エージェントが API を通じて Cloudflare アカウントを操作できます。ブラウザで Cloudflare アカウントにサインインすると、エージェントはそのアカウントができることを行えます。",
         "abilities": [
-          "アカウントの Cloudflare API を呼び出す",
-          "アクセス範囲はトークンの権限で制限される",
-          "ユーザートークンとアカウントトークンのどちらも使える"
+          "アカウントで Cloudflare API を呼び出す",
+          "アカウントの権限の範囲でアクセスする",
+          "ブラウザでサインイン。コピーするトークンは不要"
         ],
-        "needs": "Cloudflare の API トークン。",
-        "labels": {
-          "Authorization": "Cloudflare の API トークン"
-        }
+        "needs": "Cloudflare のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
       },
       "ko": {
-        "description": "에이전트에서 API 토큰으로 Cloudflare API를 이용해요.",
-        "long": "Cloudflare API MCP 서버를 쓰면 에이전트가 API를 통해 Cloudflare 계정을 다룰 수 있어요. 작업에 필요한 권한만 가진 토큰을 만드세요.",
+        "description": "에이전트에서 Cloudflare API를 써요. 내 Cloudflare 계정으로 연결해요.",
+        "long": "Cloudflare API MCP 서버를 쓰면 에이전트가 API로 내 Cloudflare 계정을 다룰 수 있어요. 브라우저에서 Cloudflare 계정으로 로그인하면, 에이전트는 그 계정이 할 수 있는 일을 할 수 있어요.",
         "abilities": [
-          "내 계정의 Cloudflare API 호출",
-          "토큰 권한에 따라 접근이 제한돼요",
-          "사용자 토큰과 계정 토큰 모두 쓸 수 있어요"
+          "내 계정에서 Cloudflare API 호출",
+          "내 계정 권한 범위 안에서만 접근",
+          "브라우저에서 로그인, 복사할 토큰 없음"
         ],
-        "needs": "Cloudflare API 토큰이 필요해요.",
-        "labels": {
-          "Authorization": "Cloudflare API 토큰"
-        }
+        "needs": "Cloudflare 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
       },
       "pt-BR": {
-        "description": "A API da Cloudflare a partir de um agente, com um token de API.",
-        "long": "O servidor MCP da API da Cloudflare permite que o agente trabalhe com sua conta Cloudflare pela API. Crie um token apenas com as permissões que a tarefa precisa.",
+        "description": "A API da Cloudflare a partir de um agente, pela sua conta Cloudflare.",
+        "long": "O servidor MCP da API da Cloudflare permite que o agente trabalhe com sua conta Cloudflare pela API. Você entra com sua conta Cloudflare no navegador, e o agente pode fazer o que essa conta pode fazer.",
         "abilities": [
           "Chamar a API da Cloudflare na sua conta",
-          "Acesso limitado pelas permissões do token",
-          "Tokens de usuário e tokens de conta funcionam"
+          "Acesso limitado às permissões da sua conta",
+          "Entrada no navegador, sem token para copiar"
         ],
-        "needs": "Um token de API da Cloudflare.",
-        "labels": {
-          "Authorization": "Token de API da Cloudflare"
-        }
+        "needs": "Uma conta no Cloudflare. Entre no navegador depois de clicar em Conectar."
       },
       "zh-Hans": {
-        "description": "通过 API 令牌，让智能体使用 Cloudflare API。",
-        "long": "Cloudflare 的 API MCP 服务器让智能体通过 API 操作你的 Cloudflare 账户。请只创建带有任务所需权限的令牌。",
+        "description": "从智能体调用 Cloudflare API，通过你的 Cloudflare 账号。",
+        "long": "Cloudflare API 的 MCP 服务器让智能体通过 API 处理你的 Cloudflare 账号。你在浏览器中用 Cloudflare 账号登录，智能体即可执行该账号能做的操作。",
         "abilities": [
-          "在你的账户上调用 Cloudflare API",
-          "访问范围受令牌权限限制",
-          "用户令牌和账户令牌均可使用"
+          "以你的账号调用 Cloudflare API",
+          "访问范围受你的账号权限限制",
+          "在浏览器中登录，无需复制令牌"
         ],
-        "needs": "一个 Cloudflare API 令牌。",
-        "labels": {
-          "Authorization": "Cloudflare API 令牌"
-        }
+        "needs": "一个 Cloudflare 账号。点击“连接”后在浏览器中登录。"
       }
     }
   },
@@ -1133,8 +1016,8 @@
       "Поиск мест рядом",
       "Краткие сводки по результатам поиска"
     ],
-    "needs_en": "Node.js (npx) on the server, and a Brave Search API key from the developer dashboard.",
-    "needs_ru": "Node.js (npx) на сервере и ключ Brave Search API из кабинета разработчика.",
+    "needs_en": "Node.js (npx) on the server, and a Brave Search API key from the developer dashboard. The key is at https://api-dashboard.search.brave.com/app/keys.",
+    "needs_ru": "Node.js (npx) на сервере и ключ Brave Search API из кабинета разработчика. Ключ — на странице https://api-dashboard.search.brave.com/app/keys.",
     "kind": "stdio",
     "command": "npx",
     "args": [
@@ -1163,7 +1046,7 @@
           "Suche nach Orten in der Nähe",
           "Zusammenfassungen der Suchergebnisse"
         ],
-        "needs": "Node.js (npx) auf dem Server und ein Schlüssel für die Brave Search API aus dem Entwicklerportal.",
+        "needs": "Node.js (npx) auf dem Server und ein Schlüssel für die Brave Search API aus dem Entwicklerportal. Den Schlüssel finden Sie auf https://api-dashboard.search.brave.com/app/keys.",
         "labels": {
           "BRAVE_API_KEY": "Schlüssel für die Brave Search API"
         }
@@ -1177,7 +1060,7 @@
           "Búsqueda de lugares cercanos",
           "Resúmenes de los resultados de búsqueda"
         ],
-        "needs": "Node.js (npx) en el servidor y una clave de API de Brave Search del panel de desarrollador.",
+        "needs": "Node.js (npx) en el servidor y una clave de API de Brave Search del panel de desarrollador. La clave está en https://api-dashboard.search.brave.com/app/keys.",
         "labels": {
           "BRAVE_API_KEY": "Clave de API de Brave Search"
         }
@@ -1191,7 +1074,7 @@
           "Recherche de lieux à proximité",
           "Résumés des résultats de recherche"
         ],
-        "needs": "Node.js (npx) sur le serveur, et une clé d'API Brave Search depuis le tableau de bord développeur.",
+        "needs": "Node.js (npx) sur le serveur, et une clé d'API Brave Search depuis le tableau de bord développeur. La clé se trouve sur https://api-dashboard.search.brave.com/app/keys.",
         "labels": {
           "BRAVE_API_KEY": "Clé d'API Brave Search"
         }
@@ -1205,7 +1088,7 @@
           "近くの場所の検索",
           "検索結果の要約"
         ],
-        "needs": "サーバーに Node.js (npx) があること、そして開発者ダッシュボードで取得した Brave Search API キー。",
+        "needs": "サーバーに Node.js (npx) があること、そして開発者ダッシュボードで取得した Brave Search API キー。 キーは https://api-dashboard.search.brave.com/app/keys にあります。",
         "labels": {
           "BRAVE_API_KEY": "Brave Search API キー"
         }
@@ -1219,7 +1102,7 @@
           "주변 장소 검색",
           "검색 결과 요약"
         ],
-        "needs": "서버에 Node.js(npx)가 있어야 하고, 개발자 대시보드에서 받은 Brave Search API 키가 필요해요.",
+        "needs": "서버에 Node.js(npx)가 있어야 하고, 개발자 대시보드에서 받은 Brave Search API 키가 필요해요. 키는 https://api-dashboard.search.brave.com/app/keys에서 받을 수 있어요.",
         "labels": {
           "BRAVE_API_KEY": "Brave Search API 키"
         }
@@ -1233,7 +1116,7 @@
           "Pesquisa de lugares próximos",
           "Resumos dos resultados da pesquisa"
         ],
-        "needs": "Node.js (npx) no servidor e uma chave de API do Brave Search, do painel de desenvolvedor.",
+        "needs": "Node.js (npx) no servidor e uma chave de API do Brave Search, do painel de desenvolvedor. A chave fica em https://api-dashboard.search.brave.com/app/keys.",
         "labels": {
           "BRAVE_API_KEY": "Chave de API do Brave Search"
         }
@@ -1247,7 +1130,7 @@
           "本地地点搜索",
           "搜索结果摘要"
         ],
-        "needs": "服务器上的 Node.js （npx），以及从开发者后台获取的 Brave Search API 密钥。",
+        "needs": "服务器上的 Node.js （npx），以及从开发者后台获取的 Brave Search API 密钥。 密钥在 https://api-dashboard.search.brave.com/app/keys 获取。",
         "labels": {
           "BRAVE_API_KEY": "Brave Search API 密钥"
         }
@@ -1408,20 +1291,12 @@
       "Составить карту и обойти сайт (firecrawl_map, firecrawl_crawl)",
       "Исследовательский агент (firecrawl_agent)"
     ],
-    "needs_en": "A Firecrawl API key. Without one, only scrape and search work, with a rate limit.",
-    "needs_ru": "Ключ API Firecrawl. Без ключа работают только scrape и поиск, с ограничением частоты.",
+    "needs_en": "A Firecrawl account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Firecrawl: войдите в браузере после нажатия «Подключить».",
     "kind": "http",
-    "url": "https://mcp.firecrawl.dev/v2/mcp",
-    "headers_keys": [
-      {
-        "key": "Authorization",
-        "label_en": "Firecrawl API key",
-        "label_ru": "Ключ API Firecrawl",
-        "secret": true,
-        "value_template": "Bearer {secret}"
-      }
-    ],
-    "docs_url": "https://github.com/firecrawl/firecrawl-mcp-server",
+    "url": "https://mcp.firecrawl.dev/v2/mcp-oauth",
+    "auth": "oauth",
+    "docs_url": "https://docs.firecrawl.dev/mcp-server/oauth",
     "icon": "web",
     "accent": "#F9542E",
     "l10n": {
@@ -1434,10 +1309,7 @@
           "Eine Website kartieren und durchlaufen (firecrawl_map, firecrawl_crawl)",
           "Ein Recherche-Agent (firecrawl_agent)"
         ],
-        "needs": "Ein API-Schlüssel von Firecrawl. Ohne Schlüssel funktionieren nur Auslesen und Suche, mit einer Begrenzung der Anfragen.",
-        "labels": {
-          "Authorization": "Firecrawl-API-Schlüssel"
-        }
+        "needs": "Ein Firecrawl-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
       },
       "es": {
         "description": "Extrae, busca y recorre sitios web con Firecrawl.",
@@ -1448,10 +1320,7 @@
           "Mapear y recorrer un sitio (firecrawl_map, firecrawl_crawl)",
           "Un agente de investigación (firecrawl_agent)"
         ],
-        "needs": "Una clave de API de Firecrawl. Sin ella, solo funcionan la extracción y la búsqueda, con un límite de frecuencia.",
-        "labels": {
-          "Authorization": "Clave de API de Firecrawl"
-        }
+        "needs": "Una cuenta de Firecrawl. Inicia sesión en el navegador después de pulsar Conectar."
       },
       "fr": {
         "description": "Extraire, rechercher et parcourir des sites web avec Firecrawl.",
@@ -1462,10 +1331,7 @@
           "Cartographier et parcourir un site (firecrawl_map, firecrawl_crawl)",
           "Un agent de recherche (firecrawl_agent)"
         ],
-        "needs": "Une clé d'API Firecrawl. Sans clé, seuls l'extraction et la recherche fonctionnent, avec une limite de débit.",
-        "labels": {
-          "Authorization": "Clé d'API Firecrawl"
-        }
+        "needs": "Un compte Firecrawl. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
       },
       "ja": {
         "description": "Firecrawl でウェブサイトを取得、検索、巡回します。",
@@ -1476,10 +1342,7 @@
           "サイトをマップ化して巡回 (firecrawl_map, firecrawl_crawl)",
           "調査用エージェント (firecrawl_agent)"
         ],
-        "needs": "Firecrawl の API キー。キーがなければ、取得と検索だけが利用でき、呼び出し頻度に制限があります。",
-        "labels": {
-          "Authorization": "Firecrawl の API キー"
-        }
+        "needs": "Firecrawl のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
       },
       "ko": {
         "description": "Firecrawl로 웹사이트를 스크레이핑하고, 검색하고, 크롤링해요.",
@@ -1490,10 +1353,7 @@
           "사이트 맵 만들기와 크롤링 (firecrawl_map, firecrawl_crawl)",
           "리서치 에이전트 (firecrawl_agent)"
         ],
-        "needs": "Firecrawl API 키가 필요해요. 키가 없으면 스크레이핑과 검색만 되고, 요청 횟수에 제한이 있어요.",
-        "labels": {
-          "Authorization": "Firecrawl API 키"
-        }
+        "needs": "Firecrawl 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
       },
       "pt-BR": {
         "description": "Extraia, pesquise e percorra sites com o Firecrawl.",
@@ -1504,10 +1364,7 @@
           "Mapear e percorrer um site (firecrawl_map, firecrawl_crawl)",
           "Um agente de pesquisa (firecrawl_agent)"
         ],
-        "needs": "Uma chave de API do Firecrawl. Sem ela, só funcionam a extração e a pesquisa, com limite de requisições.",
-        "labels": {
-          "Authorization": "Chave de API do Firecrawl"
-        }
+        "needs": "Uma conta no Firecrawl. Entre no navegador depois de clicar em Conectar."
       },
       "zh-Hans": {
         "description": "使用 Firecrawl 抓取、搜索和爬取网站。",
@@ -1518,10 +1375,7 @@
           "绘制网站地图并爬取 （firecrawl_map, firecrawl_crawl）",
           "研究型智能体 （firecrawl_agent）"
         ],
-        "needs": "一个 Firecrawl API 密钥。没有密钥时只能抓取和搜索，并有频率限制。",
-        "labels": {
-          "Authorization": "Firecrawl API 密钥"
-        }
+        "needs": "一个 Firecrawl 账号。点击“连接”后在浏览器中登录。"
       }
     }
   },
@@ -3031,29 +2885,11 @@
       "Запрашивать Prometheus и Loki",
       "Смотреть источники данных"
     ],
-    "needs_en": "Grafana (cloud or self-hosted) and a service account token. For reading, give the token the Viewer role only.",
-    "needs_ru": "Grafana (облачная или своя) и токен service account. Для чтения дайте токену только роль Viewer.",
-    "kind": "stdio",
-    "command": "uvx",
-    "args": [
-      "mcp-grafana==2.0.2"
-    ],
-    "env_keys": [
-      {
-        "key": "GRAFANA_URL",
-        "label_en": "Grafana address",
-        "label_ru": "Адрес Grafana",
-        "secret": true,
-        "value_template": "{secret}"
-      },
-      {
-        "key": "GRAFANA_SERVICE_ACCOUNT_TOKEN",
-        "label_en": "Service account token",
-        "label_ru": "Токен service account",
-        "secret": true,
-        "value_template": "{secret}"
-      }
-    ],
+    "needs_en": "A Grafana account. Sign in in the browser after you press Connect. Grafana Cloud. For your own Grafana, use Own integration.",
+    "needs_ru": "Аккаунт Grafana: войдите в браузере после нажатия «Подключить». Grafana Cloud; для своей Grafana — Своя интеграция.",
+    "kind": "http",
+    "url": "https://mcp.grafana.com/mcp",
+    "auth": "oauth",
     "docs_url": "https://github.com/grafana/mcp-grafana",
     "icon": "grafana",
     "accent": "#F46800",
@@ -3067,11 +2903,7 @@
           "Prometheus und Loki abfragen",
           "Datenquellen ansehen"
         ],
-        "needs": "Grafana (Cloud oder eigene Installation) und ein Token für ein Service Account. Zum Lesen geben Sie dem Token nur die Rolle Viewer.",
-        "labels": {
-          "GRAFANA_URL": "Adresse von Grafana",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Token des Service Accounts"
-        }
+        "needs": "Ein Grafana-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an. Grafana Cloud. Für eine eigene Grafana-Installation nehmen Sie Eigene Integration."
       },
       "es": {
         "description": "Dashboards, alertas, fuentes de datos y consultas en Grafana, a través del servidor MCP de Grafana.",
@@ -3082,11 +2914,7 @@
           "Consultar Prometheus y Loki",
           "Revisar fuentes de datos"
         ],
-        "needs": "Grafana (en la nube o propia) y un token de service account. Para leer, dale al token solo el rol Viewer.",
-        "labels": {
-          "GRAFANA_URL": "Dirección de Grafana",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Token de service account"
-        }
+        "needs": "Una cuenta de Grafana. Inicia sesión en el navegador después de pulsar Conectar. Grafana Cloud. Para tu propio Grafana, usa Integración propia."
       },
       "fr": {
         "description": "Tableaux de bord, alertes, sources de données et requêtes dans Grafana, via le serveur MCP de Grafana.",
@@ -3097,11 +2925,7 @@
           "Interroger Prometheus et Loki",
           "Consulter les sources de données"
         ],
-        "needs": "Grafana (Cloud ou auto-hébergé) et un jeton de service account. Pour la lecture, donnez au jeton le seul rôle Viewer.",
-        "labels": {
-          "GRAFANA_URL": "Adresse de Grafana",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Jeton du service account"
-        }
+        "needs": "Un compte Grafana. Connectez-vous dans le navigateur après avoir cliqué sur Connecter. Grafana Cloud. Pour votre propre Grafana, utilisez Intégration personnalisée."
       },
       "ja": {
         "description": "Grafana のダッシュボード、アラート、データソース、クエリを、Grafana の MCP サーバー経由で扱います。",
@@ -3112,11 +2936,7 @@
           "Prometheus と Loki にクエリ",
           "データソースを確認"
         ],
-        "needs": "Grafana（クラウドまたは自前のもの）と service account のトークン。読み取りだけなら、トークンには Viewer ロールのみを付与してください。",
-        "labels": {
-          "GRAFANA_URL": "Grafana のアドレス",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "service account のトークン"
-        }
+        "needs": "Grafana のアカウント。「接続」を押したあと、ブラウザでサインインしてください。 Grafana Cloud 向けです。自分で運用する Grafana は独自の連携を使ってください。"
       },
       "ko": {
         "description": "Grafana의 대시보드, 알림, 데이터 소스, 쿼리를 Grafana 공식 MCP 서버로 다뤄요.",
@@ -3127,11 +2947,7 @@
           "Prometheus와 Loki 쿼리",
           "데이터 소스 보기"
         ],
-        "needs": "Grafana(클라우드 또는 자체 설치)와 service account 토큰. 읽기만 하려면 토큰에 Viewer 역할만 주세요.",
-        "labels": {
-          "GRAFANA_URL": "Grafana 주소",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "service account 토큰"
-        }
+        "needs": "Grafana 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요. Grafana Cloud용이에요. 직접 운영하는 Grafana는 직접 추가를 쓰세요."
       },
       "pt-BR": {
         "description": "Dashboards, alertas, fontes de dados e consultas no Grafana, pelo servidor MCP do Grafana.",
@@ -3142,11 +2958,7 @@
           "Consultar Prometheus e Loki",
           "Ver fontes de dados"
         ],
-        "needs": "Grafana (na nuvem ou próprio) e um token de service account. Para leitura, dê ao token somente o papel Viewer.",
-        "labels": {
-          "GRAFANA_URL": "Endereço do Grafana",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Token do service account"
-        }
+        "needs": "Uma conta no Grafana. Entre no navegador depois de clicar em Conectar. Grafana Cloud. Para o seu próprio Grafana, use Integração própria."
       },
       "zh-Hans": {
         "description": "通过 Grafana 官方 MCP 服务器处理 Grafana 的仪表板、告警、数据源和查询。",
@@ -3157,11 +2969,7 @@
           "查询 Prometheus 和 Loki",
           "查看数据源"
         ],
-        "needs": "Grafana（云端或自建）以及一个服务账号（service account）令牌。如只做读取，请只给该令牌 Viewer 角色。",
-        "labels": {
-          "GRAFANA_URL": "Grafana 地址",
-          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "服务账号令牌"
-        }
+        "needs": "一个 Grafana 账号。点击“连接”后在浏览器中登录。 适用于 Grafana Cloud。自建的 Grafana 请使用自定义集成。"
       }
     }
   },
@@ -5040,23 +4848,11 @@
       "Смотреть и читать глоссарии",
       "Показывать поддерживаемые языки и стили письма"
     ],
-    "needs_en": "A DeepL API key from deepl.com. The README does not say whether there is a free plan; the plans are on that site. Node.js for npx.",
-    "needs_ru": "Ключ DeepL API с deepl.com. В README не сказано, есть ли бесплатный тариф; тарифы — на том же сайте. Node.js для npx.",
-    "kind": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "deepl-mcp-server@1.3.13"
-    ],
-    "env_keys": [
-      {
-        "key": "DEEPL_API_KEY",
-        "label_en": "DeepL API key",
-        "label_ru": "Ключ DeepL API",
-        "secret": true,
-        "value_template": "{secret}"
-      }
-    ],
+    "needs_en": "A DeepL account. Sign in in the browser after you press Connect. A DeepL Pro subscription is needed.",
+    "needs_ru": "Аккаунт DeepL: войдите в браузере после нажатия «Подключить». Нужна подписка DeepL Pro.",
+    "kind": "http",
+    "url": "https://mcp.deepl.com/v1/mcp",
+    "auth": "oauth",
     "docs_url": "https://github.com/DeepL/deepl-mcp-server",
     "icon": "deepl",
     "accent": "#5B9BD5",
@@ -5070,10 +4866,7 @@
           "Glossare anzeigen und lesen",
           "Unterstützte Sprachen und Schreibstile anzeigen"
         ],
-        "needs": "Ein DeepL-API-Schlüssel von deepl.com. Die README sagt nicht, ob es einen kostenlosen Tarif gibt; die Tarife stehen dort. Node.js für npx.",
-        "labels": {
-          "DEEPL_API_KEY": "DeepL-API-Schlüssel"
-        }
+        "needs": "Ein DeepL-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an. Ein DeepL-Pro-Abo ist nötig."
       },
       "es": {
         "description": "Traducción, reformulación, glosarios y reglas de estilo en DeepL, mediante el servidor MCP oficial de DeepL.",
@@ -5084,10 +4877,7 @@
           "Ver y leer glosarios",
           "Mostrar los idiomas y estilos de escritura compatibles"
         ],
-        "needs": "Una clave de la API de DeepL de deepl.com. El README no indica si hay un plan gratuito; los planes están en esa web. Node.js para npx.",
-        "labels": {
-          "DEEPL_API_KEY": "Clave de la API de DeepL"
-        }
+        "needs": "Una cuenta de DeepL. Inicia sesión en el navegador después de pulsar Conectar. Se necesita una suscripción de DeepL Pro."
       },
       "fr": {
         "description": "Traduction, reformulation, glossaires et règles de style dans DeepL, via le serveur MCP officiel de DeepL.",
@@ -5098,10 +4888,7 @@
           "Lister et lire les glossaires",
           "Afficher les langues et styles d'écriture pris en charge"
         ],
-        "needs": "Une clé d'API DeepL depuis deepl.com. Le README ne dit pas s'il existe une offre gratuite ; les forfaits sont sur ce site. Node.js pour npx.",
-        "labels": {
-          "DEEPL_API_KEY": "Clé d'API DeepL"
-        }
+        "needs": "Un compte DeepL. Connectez-vous dans le navigateur après avoir cliqué sur Connecter. Un abonnement DeepL Pro est nécessaire."
       },
       "ja": {
         "description": "DeepL の翻訳、言い換え、用語集、文体ルールを、DeepL 公式の MCP サーバー経由で利用できます。",
@@ -5112,10 +4899,7 @@
           "用語集を一覧表示して読む",
           "対応言語と文章スタイルを表示する"
         ],
-        "needs": "deepl.com で取得した DeepL API キー。README には無料プランがあるかの記載がないため、プランは同サイトで確認してください。npx 用の Node.js。",
-        "labels": {
-          "DEEPL_API_KEY": "DeepL API キー"
-        }
+        "needs": "DeepL のアカウント。「接続」を押したあと、ブラウザでサインインしてください。 DeepL Pro のサブスクリプションが必要です。"
       },
       "ko": {
         "description": "DeepL의 번역, 문장 다듬기, 용어집, 문체 규칙을 DeepL 공식 MCP 서버로 사용해요.",
@@ -5126,10 +4910,7 @@
           "용어집 목록 보기와 읽기",
           "지원 언어와 글쓰기 스타일 보기"
         ],
-        "needs": "deepl.com에서 발급받은 DeepL API 키. README에는 무료 요금제 여부가 없으니 요금제는 해당 사이트에서 확인하세요. npx용 Node.js.",
-        "labels": {
-          "DEEPL_API_KEY": "DeepL API 키"
-        }
+        "needs": "DeepL 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요. DeepL Pro 구독이 필요해요."
       },
       "pt-BR": {
         "description": "Tradução, reescrita, glossários e regras de estilo no DeepL, pelo servidor MCP oficial do DeepL.",
@@ -5140,10 +4921,7 @@
           "Listar e ler glossários",
           "Mostrar idiomas e estilos de escrita disponíveis"
         ],
-        "needs": "Uma chave da API do DeepL, obtida em deepl.com. O README não diz se há plano gratuito; os planos estão nesse site. Node.js para o npx.",
-        "labels": {
-          "DEEPL_API_KEY": "Chave da API do DeepL"
-        }
+        "needs": "Uma conta no DeepL. Entre no navegador depois de clicar em Conectar. É preciso uma assinatura do DeepL Pro."
       },
       "zh-Hans": {
         "description": "DeepL 的翻译、改写、术语表和风格规则，通过 DeepL 官方 MCP 服务器提供。",
@@ -5154,10 +4932,7 @@
           "列出并读取术语表",
           "显示支持的语言和写作风格"
         ],
-        "needs": "在 deepl.com 获取的 DeepL API 密钥。README 没有说明是否有免费套餐，请在该网站查看套餐。npx 需要 Node.js。",
-        "labels": {
-          "DEEPL_API_KEY": "DeepL API 密钥"
-        }
+        "needs": "一个 DeepL 账号。点击“连接”后在浏览器中登录。 需要 DeepL Pro 订阅。"
       }
     }
   },
@@ -5312,10 +5087,10 @@
     "publisher": "Tavily",
     "official": true,
     "homepage": "https://www.tavily.com",
-    "description_en": "Web search and page extraction for agents, through Tavily's own MCP package.",
-    "description_ru": "Поиск в вебе и извлечение страниц для агентов через собственный MCP-пакет Tavily.",
-    "long_en": "Tavily's MCP server lets an agent search the web for current sources and extract the readable text of pages. For example: find three recent articles about a regulation change and pull out their key paragraphs. The server runs on your computer and uses your Tavily key for each call.",
-    "long_ru": "MCP-сервер Tavily позволяет агенту искать в вебе актуальные источники и извлекать читаемый текст страниц. Например: найти три свежие статьи об изменении закона и выписать их ключевые абзацы. Сервер работает на вашем компьютере и использует ваш ключ Tavily для каждого вызова.",
+    "description_en": "Web search and page extraction for agents, through Tavily's own MCP server.",
+    "description_ru": "Поиск в вебе и извлечение страниц для агентов через собственный MCP-сервер Tavily.",
+    "long_en": "Tavily's MCP server lets an agent search the web for current sources and extract the readable text of pages. For example: find three recent articles about a regulation change and pull out their key paragraphs. The server runs at Tavily, and each call uses your Tavily account.",
+    "long_ru": "MCP-сервер Tavily позволяет агенту искать в вебе актуальные источники и извлекать читаемый текст страниц. Например: найти три свежие статьи об изменении закона и выписать их ключевые абзацы. Сервер работает у Tavily, и каждый вызов идёт через ваш аккаунт Tavily.",
     "abilities_en": [
       "Search the web for current sources",
       "Extract the readable text of pages",
@@ -5326,117 +5101,84 @@
       "Извлекать читаемый текст страниц",
       "Возвращать результаты со ссылками"
     ],
-    "needs_en": "A Tavily API key from app.tavily.com (a free account exists; the docs give no quota). Node.js for npx.",
-    "needs_ru": "Ключ Tavily API с app.tavily.com (есть бесплатный аккаунт; квоты в доках не указаны). Node.js для npx.",
-    "kind": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "tavily-mcp@0.2.22"
-    ],
-    "env_keys": [
-      {
-        "key": "TAVILY_API_KEY",
-        "label_en": "Tavily API key",
-        "label_ru": "Ключ Tavily API",
-        "secret": true,
-        "value_template": "{secret}"
-      }
-    ],
+    "needs_en": "A Tavily account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Tavily: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.tavily.com/mcp/",
+    "auth": "oauth",
     "docs_url": "https://docs.tavily.com/documentation/mcp",
     "icon": "search",
     "accent": "#8B93A7",
     "l10n": {
       "de": {
-        "description": "Websuche und Seitenauszug für Agenten über das eigene MCP-Paket von Tavily.",
-        "long": "Der MCP-Server von Tavily lässt den Agenten aktuelle Quellen im Web suchen und den lesbaren Text von Seiten auslesen. Zum Beispiel: drei aktuelle Artikel zu einer Gesetzesänderung finden und ihre Kernabsätze herausziehen. Der Server läuft auf Ihrem Rechner und nutzt bei jedem Aufruf Ihren Tavily-Schlüssel.",
+        "description": "Websuche und Auszug von Seiten für Agenten, über den eigenen MCP-Server von Tavily.",
+        "long": "Der MCP-Server von Tavily erlaubt dem Agenten, im Web nach aktuellen Quellen zu suchen und den lesbaren Text von Seiten auszulesen. Zum Beispiel: drei aktuelle Artikel zu einer Gesetzesänderung finden und ihre wichtigsten Absätze herausziehen. Der Server läuft bei Tavily, und jeder Aufruf läuft über Ihr Tavily-Konto.",
         "abilities": [
           "Aktuelle Quellen im Web suchen",
           "Den lesbaren Text von Seiten auslesen",
           "Ergebnisse mit Links zurückgeben"
         ],
-        "needs": "Ein Tavily-API-Schlüssel von app.tavily.com (es gibt ein kostenloses Konto; Kontingente stehen nicht in der Doku). Node.js für npx.",
-        "labels": {
-          "TAVILY_API_KEY": "Tavily-API-Schlüssel"
-        }
+        "needs": "Ein Tavily-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
       },
       "es": {
-        "description": "Búsqueda web y extracción de páginas para agentes mediante el paquete MCP oficial de Tavily.",
-        "long": "El servidor MCP de Tavily permite al agente buscar fuentes actuales en la web y extraer el texto legible de las páginas. Por ejemplo: encontrar tres artículos recientes sobre un cambio normativo y sacar sus párrafos clave. El servidor se ejecuta en su equipo y usa su clave de Tavily en cada llamada.",
+        "description": "Búsqueda web y extracción de páginas para agentes, a través del servidor MCP propio de Tavily.",
+        "long": "El servidor MCP de Tavily permite al agente buscar en la web fuentes actuales y extraer el texto legible de las páginas. Por ejemplo: encontrar tres artículos recientes sobre un cambio normativo y extraer sus párrafos clave. El servidor funciona en Tavily y cada llamada pasa por tu cuenta de Tavily.",
         "abilities": [
           "Buscar fuentes actuales en la web",
           "Extraer el texto legible de las páginas",
           "Devolver resultados con enlaces"
         ],
-        "needs": "Una clave de la API de Tavily de app.tavily.com (hay cuenta gratuita; la documentación no indica cuotas). Node.js para npx.",
-        "labels": {
-          "TAVILY_API_KEY": "Clave de la API de Tavily"
-        }
+        "needs": "Una cuenta de Tavily. Inicia sesión en el navegador después de pulsar Conectar."
       },
       "fr": {
-        "description": "Recherche web et extraction de pages pour les agents, avec le paquet MCP officiel de Tavily.",
-        "long": "Le serveur MCP de Tavily permet à l'agent de chercher des sources récentes sur le web et d'extraire le texte lisible des pages. Par exemple : trouver trois articles récents sur un changement de réglementation et en extraire les paragraphes clés. Le serveur tourne sur votre ordinateur et utilise votre clé Tavily à chaque appel.",
+        "description": "Recherche web et extraction de pages pour les agents, via le serveur MCP propre à Tavily.",
+        "long": "Le serveur MCP de Tavily permet à l'agent de chercher sur le web des sources récentes et d'extraire le texte lisible des pages. Par exemple : trouver trois articles récents sur une modification de réglementation et en extraire les paragraphes clés. Le serveur fonctionne chez Tavily, et chaque appel passe par votre compte Tavily.",
         "abilities": [
           "Chercher des sources récentes sur le web",
           "Extraire le texte lisible des pages",
           "Renvoyer les résultats avec leurs liens"
         ],
-        "needs": "Une clé d'API Tavily depuis app.tavily.com (un compte gratuit existe ; la doc ne donne pas de quotas). Node.js pour npx.",
-        "labels": {
-          "TAVILY_API_KEY": "Clé d'API Tavily"
-        }
+        "needs": "Un compte Tavily. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
       },
       "ja": {
-        "description": "エージェント向けの Web 検索とページ抽出を、Tavily 公式の MCP パッケージで提供します。",
-        "long": "Tavily の MCP サーバーは、エージェントが最新の情報源を Web で検索し、ページの読めるテキストを取り出せるようにします。例: ある法改正に関する最近の記事を3本見つけ、要点の段落を抜き出す。サーバーはお使いのコンピューターで動き、呼び出しごとに Tavily のキーを使います。",
+        "description": "エージェント向けのウェブ検索とページ抽出を、Tavily 独自の MCP サーバーで提供します。",
+        "long": "Tavily の MCP サーバーを使うと、エージェントが最新の情報源をウェブで検索し、ページの読める本文を取り出せます。例: 法改正に関する最近の記事を 3 本見つけ、要点の段落を抜き出す。サーバーは Tavily 側で動き、各呼び出しは Tavily アカウントを通ります。",
         "abilities": [
           "最新の情報源を Web で検索する",
           "ページの読めるテキストを抽出する",
           "リンク付きで結果を返す"
         ],
-        "needs": "app.tavily.com で取得した Tavily API キー（無料アカウントがあります。割り当て量はドキュメントに記載がありません）。npx 用の Node.js。",
-        "labels": {
-          "TAVILY_API_KEY": "Tavily API キー"
-        }
+        "needs": "Tavily のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
       },
       "ko": {
-        "description": "에이전트를 위한 웹 검색과 페이지 추출을 Tavily 공식 MCP 패키지로 제공해요.",
-        "long": "Tavily MCP 서버를 쓰면 에이전트가 최신 출처를 웹에서 검색하고 페이지의 읽을 수 있는 텍스트를 가져올 수 있어요. 예: 특정 규정 변경에 관한 최근 기사 세 편을 찾아 핵심 단락을 뽑기. 서버는 사용자의 컴퓨터에서 실행되며 호출마다 Tavily 키를 사용해요.",
+        "description": "에이전트를 위한 웹 검색과 페이지 추출을 Tavily 자체 MCP 서버로 해요.",
+        "long": "Tavily MCP 서버를 쓰면 에이전트가 최신 출처를 웹에서 검색하고 페이지의 읽을 수 있는 본문을 뽑아요. 예를 들어 법 개정에 관한 최근 기사 세 편을 찾아 핵심 문단을 뽑을 수 있어요. 서버는 Tavily에서 돌고, 호출마다 내 Tavily 계정을 거쳐요.",
         "abilities": [
           "최신 출처를 웹에서 검색",
           "페이지의 읽을 수 있는 텍스트 추출",
           "링크가 포함된 결과 반환"
         ],
-        "needs": "app.tavily.com에서 발급받은 Tavily API 키(무료 계정이 있어요. 할당량은 문서에 없어요). npx용 Node.js.",
-        "labels": {
-          "TAVILY_API_KEY": "Tavily API 키"
-        }
+        "needs": "Tavily 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
       },
       "pt-BR": {
-        "description": "Busca na web e extração de páginas para agentes, pelo pacote MCP oficial da Tavily.",
-        "long": "O servidor MCP da Tavily permite que o agente pesquise fontes atuais na web e extraia o texto legível das páginas. Por exemplo: encontrar três artigos recentes sobre uma mudança de regra e tirar os parágrafos principais. O servidor roda no seu computador e usa sua chave da Tavily em cada chamada.",
+        "description": "Busca na web e extração de páginas para agentes, pelo servidor MCP próprio da Tavily.",
+        "long": "O servidor MCP da Tavily permite que o agente pesquise na web fontes atuais e extraia o texto legível de páginas. Por exemplo: encontrar três artigos recentes sobre uma mudança de regulamentação e extrair os parágrafos principais. O servidor roda na Tavily, e cada chamada passa pela sua conta Tavily.",
         "abilities": [
           "Pesquisar fontes atuais na web",
           "Extrair o texto legível das páginas",
           "Devolver resultados com links"
         ],
-        "needs": "Uma chave da API da Tavily em app.tavily.com (existe conta gratuita; a documentação não informa cotas). Node.js para o npx.",
-        "labels": {
-          "TAVILY_API_KEY": "Chave da API da Tavily"
-        }
+        "needs": "Uma conta no Tavily. Entre no navegador depois de clicar em Conectar."
       },
       "zh-Hans": {
-        "description": "为智能体提供网页搜索和网页内容提取，由 Tavily 官方 MCP 包提供。",
-        "long": "Tavily 的 MCP 服务器让智能体搜索网上的最新来源，并提取网页中可读的正文。例如：找到三篇关于某项政策变化的近期文章，并摘出要点段落。服务器在你的电脑上运行，每次调用都使用你的 Tavily 密钥。",
+        "description": "为智能体提供网页搜索和页面提取，由 Tavily 自有的 MCP 服务器提供。",
+        "long": "Tavily 的 MCP 服务器让智能体在网上搜索最新来源，并提取页面的可读正文。例如：找到三篇关于某项法规变化的近期文章，并摘出关键段落。服务器运行在 Tavily 一侧，每次调用都通过你的 Tavily 账号。",
         "abilities": [
           "搜索网上的最新来源",
           "提取网页的可读正文",
           "返回带链接的结果"
         ],
-        "needs": "在 app.tavily.com 获取的 Tavily API 密钥（有免费账户；文档未说明配额）。npx 需要 Node.js。",
-        "labels": {
-          "TAVILY_API_KEY": "Tavily API 密钥"
-        }
+        "needs": "一个 Tavily 账号。点击“连接”后在浏览器中登录。"
       }
     }
   },
@@ -5574,8 +5316,8 @@
       "Редактировать: достраивать края, заменять и перекрашивать объекты",
       "Увеличивать изображения и задавать композицию эскизом или структурой"
     ],
-    "needs_en": "A Stability AI API key from your Stability AI account. Every generation uses credits of that account. Node.js for npx.",
-    "needs_ru": "Ключ Stability AI API из вашего аккаунта Stability AI. Каждая генерация списывает кредиты этого аккаунта. Node.js для npx.",
+    "needs_en": "A Stability AI API key from your Stability AI account. Every generation uses credits of that account. Node.js for npx. The key is at https://platform.stability.ai/account/keys.",
+    "needs_ru": "Ключ Stability AI API из вашего аккаунта Stability AI. Каждая генерация списывает кредиты этого аккаунта. Node.js для npx. Ключ — на странице https://platform.stability.ai/account/keys.",
     "kind": "stdio",
     "command": "npx",
     "args": [
@@ -5604,7 +5346,7 @@
           "Bearbeiten: Ränder ergänzen, Objekte ersetzen oder umfärben",
           "Bilder hochskalieren und mit Skizze oder Struktur steuern"
         ],
-        "needs": "Ein API-Schlüssel von Stability AI aus Ihrem Konto bei Stability AI. Jede Erzeugung verbraucht Credits dieses Kontos. Node.js für npx.",
+        "needs": "Ein API-Schlüssel von Stability AI aus Ihrem Konto bei Stability AI. Jede Erzeugung verbraucht Credits dieses Kontos. Node.js für npx. Den Schlüssel finden Sie auf https://platform.stability.ai/account/keys.",
         "labels": {
           "STABILITY_AI_API_KEY": "Stability-AI-API-Schlüssel"
         }
@@ -5618,7 +5360,7 @@
           "Editar: completar bordes, reemplazar o recolorear objetos",
           "Ampliar imágenes y controlarlas con boceto o estructura"
         ],
-        "needs": "Una clave de la API de Stability AI de su cuenta. Cada generación gasta créditos de esa cuenta. Node.js para npx.",
+        "needs": "Una clave de la API de Stability AI de su cuenta. Cada generación gasta créditos de esa cuenta. Node.js para npx. La clave está en https://platform.stability.ai/account/keys.",
         "labels": {
           "STABILITY_AI_API_KEY": "Clave de la API de Stability AI"
         }
@@ -5632,7 +5374,7 @@
           "Modifier : étendre les bords, remplacer ou recolorer des objets",
           "Agrandir des images et les guider par un croquis ou une structure"
         ],
-        "needs": "Une clé d'API Stability AI de votre compte. Chaque génération consomme des crédits de ce compte. Node.js pour npx.",
+        "needs": "Une clé d'API Stability AI de votre compte. Chaque génération consomme des crédits de ce compte. Node.js pour npx. La clé se trouve sur https://platform.stability.ai/account/keys.",
         "labels": {
           "STABILITY_AI_API_KEY": "Clé d'API Stability AI"
         }
@@ -5646,7 +5388,7 @@
           "編集: 縁の拡張、オブジェクトの置換や色変更",
           "画像を拡大し、スケッチや構図で制御する"
         ],
-        "needs": "Stability AI のアカウントで取得した API キー。生成のたびにそのアカウントのクレジットを使います。npx 用の Node.js。",
+        "needs": "Stability AI のアカウントで取得した API キー。生成のたびにそのアカウントのクレジットを使います。npx 用の Node.js。 キーは https://platform.stability.ai/account/keys にあります。",
         "labels": {
           "STABILITY_AI_API_KEY": "Stability AI API キー"
         }
@@ -5660,7 +5402,7 @@
           "편집: 가장자리 확장, 객체 교체·재색칠",
           "이미지 확대와 스케치·구조로 제어"
         ],
-        "needs": "Stability AI 계정에서 발급받은 API 키. 생성할 때마다 해당 계정의 크레딧이 쓰여요. npx용 Node.js.",
+        "needs": "Stability AI 계정에서 발급받은 API 키. 생성할 때마다 해당 계정의 크레딧이 쓰여요. npx용 Node.js. 키는 https://platform.stability.ai/account/keys에서 받을 수 있어요.",
         "labels": {
           "STABILITY_AI_API_KEY": "Stability AI API 키"
         }
@@ -5674,7 +5416,7 @@
           "Editar: completar bordas, trocar ou recolorir objetos",
           "Ampliar imagens e controlá-las com esboço ou estrutura"
         ],
-        "needs": "Uma chave da API da Stability AI da sua conta. Cada geração usa créditos dessa conta. Node.js para o npx.",
+        "needs": "Uma chave da API da Stability AI da sua conta. Cada geração usa créditos dessa conta. Node.js para o npx. A chave fica em https://platform.stability.ai/account/keys.",
         "labels": {
           "STABILITY_AI_API_KEY": "Chave da API da Stability AI"
         }
@@ -5688,7 +5430,7 @@
           "编辑：扩展边缘、替换或重新上色对象",
           "放大图像，并用草图或结构控制"
         ],
-        "needs": "在你的 Stability AI 账户中获取的 API 密钥。每次生成都会消耗该账户的积分。npx 需要 Node.js。",
+        "needs": "在你的 Stability AI 账户中获取的 API 密钥。每次生成都会消耗该账户的积分。npx 需要 Node.js。 密钥在 https://platform.stability.ai/account/keys 获取。",
         "labels": {
           "STABILITY_AI_API_KEY": "Stability AI API 密钥"
         }
@@ -5829,8 +5571,8 @@
       "Смотреть страницу и извлекать данные",
       "Действовать на странице по инструкции обычными словами"
     ],
-    "needs_en": "A Browserbase account and its API key. Cloud sessions belong to that account; the docs do not describe prices or a free plan. Node.js for npx. The docs also name a Gemini key for the model used for page actions.",
-    "needs_ru": "Аккаунт Browserbase и его API-ключ. Облачные сессии относятся к этому аккаунту; цены и бесплатный тариф в доках не описаны. Node.js для npx. В доках также назван ключ Gemini для модели, которая выполняет действия на странице.",
+    "needs_en": "A Browserbase account and its API key. Cloud sessions belong to that account; the docs do not describe prices or a free plan. Node.js for npx. The docs also name a Gemini key for the model used for page actions. The key is at https://www.browserbase.com/settings.",
+    "needs_ru": "Аккаунт Browserbase и его API-ключ. Облачные сессии относятся к этому аккаунту; цены и бесплатный тариф в доках не описаны. Node.js для npx. В доках также назван ключ Gemini для модели, которая выполняет действия на странице. Ключ — на странице https://www.browserbase.com/settings.",
     "kind": "stdio",
     "command": "npx",
     "args": [
@@ -5866,7 +5608,7 @@
           "Seite beobachten und Daten auslesen",
           "Auf einer Seite nach einer Anweisung in Alltagssprache handeln"
         ],
-        "needs": "Ein Browserbase-Konto und sein API-Schlüssel. Die Sitzungen gehören zu diesem Konto; Preise und ein kostenloser Tarif sind in der Doku nicht beschrieben. Node.js für npx. Die Doku nennt außerdem einen Gemini-Schlüssel für das Modell.",
+        "needs": "Ein Browserbase-Konto und sein API-Schlüssel. Die Sitzungen gehören zu diesem Konto; Preise und ein kostenloser Tarif sind in der Doku nicht beschrieben. Node.js für npx. Die Doku nennt außerdem einen Gemini-Schlüssel für das Modell. Den Schlüssel finden Sie auf https://www.browserbase.com/settings.",
         "labels": {
           "BROWSERBASE_API_KEY": "Browserbase-API-Schlüssel",
           "GEMINI_API_KEY": "Gemini-API-Schlüssel (Modell für Aktionen)"
@@ -5881,7 +5623,7 @@
           "Observar la página y extraer datos",
           "Actuar en una página con instrucciones en lenguaje natural"
         ],
-        "needs": "Una cuenta de Browserbase y su clave de API. Las sesiones pertenecen a esa cuenta; la documentación no describe precios ni un plan gratuito. Node.js para npx. La documentación también menciona una clave de Gemini para el modelo.",
+        "needs": "Una cuenta de Browserbase y su clave de API. Las sesiones pertenecen a esa cuenta; la documentación no describe precios ni un plan gratuito. Node.js para npx. La documentación también menciona una clave de Gemini para el modelo. La clave está en https://www.browserbase.com/settings.",
         "labels": {
           "BROWSERBASE_API_KEY": "Clave de API de Browserbase",
           "GEMINI_API_KEY": "Clave de API de Gemini (modelo para acciones)"
@@ -5896,7 +5638,7 @@
           "Observer la page et extraire des données",
           "Agir sur une page à partir d'une consigne en langage courant"
         ],
-        "needs": "Un compte Browserbase et sa clé d'API. Les sessions appartiennent à ce compte ; la doc ne décrit ni prix ni forfait gratuit. Node.js pour npx. La doc mentionne aussi une clé Gemini pour le modèle.",
+        "needs": "Un compte Browserbase et sa clé d'API. Les sessions appartiennent à ce compte ; la doc ne décrit ni prix ni forfait gratuit. Node.js pour npx. La doc mentionne aussi une clé Gemini pour le modèle. La clé se trouve sur https://www.browserbase.com/settings.",
         "labels": {
           "BROWSERBASE_API_KEY": "Clé d'API Browserbase",
           "GEMINI_API_KEY": "Clé d'API Gemini (modèle pour les actions)"
@@ -5911,7 +5653,7 @@
           "ページを観察してデータを抽出する",
           "自然言語の指示でページを操作する"
         ],
-        "needs": "Browserbase のアカウントと API キー。セッションはそのアカウントに属します。料金や無料プランはドキュメントに記載がありません。npx 用の Node.js。ドキュメントでは、モデル用の Gemini キーも挙げられています。",
+        "needs": "Browserbase のアカウントと API キー。セッションはそのアカウントに属します。料金や無料プランはドキュメントに記載がありません。npx 用の Node.js。ドキュメントでは、モデル用の Gemini キーも挙げられています。 キーは https://www.browserbase.com/settings にあります。",
         "labels": {
           "BROWSERBASE_API_KEY": "Browserbase API キー",
           "GEMINI_API_KEY": "Gemini API キー（ページ操作用のモデル）"
@@ -5926,7 +5668,7 @@
           "페이지를 살펴보고 데이터 추출",
           "자연어 지시로 페이지 조작"
         ],
-        "needs": "Browserbase 계정과 API 키. 세션은 그 계정에 속해요. 가격과 무료 요금제는 문서에 없어요. npx용 Node.js. 문서에는 모델용 Gemini 키도 나와 있어요.",
+        "needs": "Browserbase 계정과 API 키. 세션은 그 계정에 속해요. 가격과 무료 요금제는 문서에 없어요. npx용 Node.js. 문서에는 모델용 Gemini 키도 나와 있어요. 키는 https://www.browserbase.com/settings에서 받을 수 있어요.",
         "labels": {
           "BROWSERBASE_API_KEY": "Browserbase API 키",
           "GEMINI_API_KEY": "Gemini API 키(페이지 작업용 모델)"
@@ -5941,7 +5683,7 @@
           "Observar a página e extrair dados",
           "Agir em uma página com instruções em linguagem natural"
         ],
-        "needs": "Uma conta na Browserbase e a chave de API. As sessões pertencem a essa conta; a documentação não descreve preços nem plano gratuito. Node.js para o npx. A documentação também cita uma chave do Gemini para o modelo.",
+        "needs": "Uma conta na Browserbase e a chave de API. As sessões pertencem a essa conta; a documentação não descreve preços nem plano gratuito. Node.js para o npx. A documentação também cita uma chave do Gemini para o modelo. A chave fica em https://www.browserbase.com/settings.",
         "labels": {
           "BROWSERBASE_API_KEY": "Chave de API da Browserbase",
           "GEMINI_API_KEY": "Chave de API do Gemini (modelo para ações)"
@@ -5956,7 +5698,7 @@
           "观察页面并提取数据",
           "根据自然语言指令操作页面"
         ],
-        "needs": "Browserbase 账户及其 API 密钥。会话属于该账户；文档未说明价格或免费套餐。npx 需要 Node.js。文档还提到用于模型的 Gemini 密钥。",
+        "needs": "Browserbase 账户及其 API 密钥。会话属于该账户；文档未说明价格或免费套餐。npx 需要 Node.js。文档还提到用于模型的 Gemini 密钥。 密钥在 https://www.browserbase.com/settings 获取。",
         "labels": {
           "BROWSERBASE_API_KEY": "Browserbase API 密钥",
           "GEMINI_API_KEY": "Gemini API 密钥（页面操作所用模型）"
@@ -5973,138 +5715,105 @@
     "homepage": "https://brightdata.com",
     "description_en": "Search, page scraping with unblocking and structured web data, through Bright Data's own MCP server.",
     "description_ru": "Поиск, сбор страниц с обходом блокировок и структурированные данные из веба через собственный MCP-сервер Bright Data.",
-    "long_en": "Bright Data's MCP server gives an agent search, page scraping past blocks, and ready structured data from sites such as shops and social networks. For example: collect a product's prices from three shops. The server offers many tools; TOOLS or GROUPS limit which ones are enabled. Requests are billed by Bright Data.",
-    "long_ru": "MCP-сервер Bright Data даёт агенту поиск, сбор страниц с обходом блокировок и готовые структурированные данные с сайтов магазинов и соцсетей. Например: собрать цены на товар в трёх магазинах. Инструментов много, их можно ограничить переменными TOOLS или GROUPS. Запросы тарифицирует Bright Data.",
+    "long_en": "Bright Data's MCP server gives an agent search, page scraping past blocks, and ready structured data from sites such as shops and social networks. For example: collect a product's prices from three shops. Requests are billed by Bright Data.",
+    "long_ru": "MCP-сервер Bright Data даёт агенту поиск, сбор страниц с обходом блокировок и готовые структурированные данные с сайтов магазинов и соцсетей. Например: собрать цены на товар в трёх магазинах. Запросы тарифицирует Bright Data.",
     "abilities_en": [
       "Search the web and scrape pages past blocks",
       "Read structured data from shops and social networks",
       "Drive a remote browser",
-      "Choose which tool groups are enabled"
+      "Sign in in the browser, with no API token to copy"
     ],
     "abilities_ru": [
       "Искать в вебе и собирать страницы в обход блокировок",
       "Читать структурированные данные магазинов и соцсетей",
       "Управлять удалённым браузером",
-      "Выбирать, какие группы инструментов включены"
+      "Вход в браузере, без API-токена"
     ],
-    "needs_en": "A Bright Data account and its API token. The free tier is 5,000 requests a month; then pay as you go (per the README, $1.50 per 1,000 results and $8 per GB of browser navigation). Node.js for npx.",
-    "needs_ru": "Аккаунт Bright Data и его API-токен. Бесплатно 5 000 запросов в месяц, дальше оплата по мере использования (по README: $1,50 за 1 000 результатов и $8 за ГБ навигации в браузере). Node.js для npx.",
-    "kind": "stdio",
-    "command": "npx",
-    "args": [
-      "-y",
-      "@brightdata/mcp@2.12.0"
-    ],
-    "env_keys": [
-      {
-        "key": "API_TOKEN",
-        "label_en": "Bright Data API token",
-        "label_ru": "API-токен Bright Data",
-        "secret": true,
-        "value_template": "{secret}"
-      }
-    ],
+    "needs_en": "A Bright Data account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Bright Data: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.brightdata.com/mcp",
+    "auth": "oauth",
     "docs_url": "https://github.com/brightdata/brightdata-mcp",
     "icon": "database",
     "accent": "#FF6B3D",
     "l10n": {
       "de": {
         "description": "Suche, Seitenabruf und strukturierte Webdaten mit Entsperrung, über den eigenen MCP-Server von Bright Data.",
-        "long": "Der MCP-Server von Bright Data gibt dem Agenten Suche, das Abrufen von Seiten mit Entsperrung und fertige strukturierte Daten von Websites wie Shops und sozialen Netzwerken. Zum Beispiel: Preise für ein Produkt in drei Shops sammeln. Der Server bietet viele Werkzeuge; mit TOOLS oder GROUPS können Sie sie einschränken. Anfragen werden von Bright Data berechnet.",
+        "long": "Der MCP-Server von Bright Data gibt dem Agenten Suche, Auslesen von Seiten trotz Sperren und fertige strukturierte Daten von Seiten wie Shops und sozialen Netzwerken. Zum Beispiel: die Preise eines Produkts in drei Shops sammeln. Anfragen werden von Bright Data abgerechnet.",
         "abilities": [
-          "Im Web suchen und Seiten trotz Sperren abrufen",
-          "Strukturierte Daten aus Shops und sozialen Netzwerken lesen",
+          "Im Web suchen und Seiten trotz Sperren auslesen",
+          "Strukturierte Daten von Shops und sozialen Netzwerken lesen",
           "Einen entfernten Browser steuern",
-          "Auswählen, welche Werkzeuggruppen aktiv sind"
+          "Anmeldung im Browser, ohne API-Token zum Kopieren"
         ],
-        "needs": "Ein Bright-Data-Konto und sein API-Token. Kostenlos sind 5 000 Anfragen im Monat; danach Bezahlung nach Verbrauch (laut README 1,50 $ je 1 000 Ergebnisse und 8 $ je GB Browser-Navigation). Node.js für npx.",
-        "labels": {
-          "API_TOKEN": "Bright-Data-API-Token"
-        }
+        "needs": "Ein Bright Data-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
       },
       "es": {
         "description": "Búsqueda, extracción de páginas y datos web estructurados con desbloqueo, mediante el servidor MCP oficial de Bright Data.",
-        "long": "El servidor MCP de Bright Data da al agente búsqueda, extracción de páginas con desbloqueo y datos estructurados listos de sitios como tiendas y redes sociales. Por ejemplo: reunir los precios de un producto en tres tiendas. El servidor ofrece muchas herramientas; con TOOLS o GROUPS puede limitarlas. Bright Data cobra las solicitudes.",
+        "long": "El servidor MCP de Bright Data da al agente búsqueda, extracción de páginas aunque haya bloqueos, y datos estructurados listos de tiendas y redes sociales. Por ejemplo: reunir los precios de un producto en tres tiendas. Las solicitudes las factura Bright Data.",
         "abilities": [
-          "Buscar en la web y extraer páginas pese a los bloqueos",
+          "Buscar en la web y extraer páginas aunque haya bloqueos",
           "Leer datos estructurados de tiendas y redes sociales",
-          "Manejar un navegador remoto",
-          "Elegir qué grupos de herramientas están activos"
+          "Controlar un navegador remoto",
+          "Inicio de sesión en el navegador, sin token de API que copiar"
         ],
-        "needs": "Una cuenta de Bright Data y su token de API. Incluye 5 000 solicitudes gratuitas al mes; después se paga según el uso (según el README, 1,50 $ por cada 1 000 resultados y 8 $ por GB de navegación). Node.js para npx.",
-        "labels": {
-          "API_TOKEN": "Token de API de Bright Data"
-        }
+        "needs": "Una cuenta de Bright Data. Inicia sesión en el navegador después de pulsar Conectar."
       },
       "fr": {
         "description": "Recherche, récupération de pages et données web structurées avec déblocage, via le serveur MCP officiel de Bright Data.",
-        "long": "Le serveur MCP de Bright Data donne à l'agent la recherche, la récupération de pages avec déblocage et des données structurées prêtes à l'emploi, issues de sites comme des boutiques ou des réseaux sociaux. Par exemple : relever les prix d'un produit dans trois boutiques. Le serveur propose beaucoup d'outils ; TOOLS ou GROUPS permettent d'en limiter la liste. Les requêtes sont facturées par Bright Data.",
+        "long": "Le serveur MCP de Bright Data donne à l'agent la recherche, l'extraction de pages malgré les blocages, et des données structurées prêtes à l'emploi issues de boutiques et de réseaux sociaux. Par exemple : relever le prix d'un produit dans trois boutiques. Les requêtes sont facturées par Bright Data.",
         "abilities": [
-          "Chercher sur le web et récupérer des pages malgré les blocages",
-          "Lire des données structurées de boutiques et de réseaux sociaux",
+          "Chercher sur le web et extraire des pages malgré les blocages",
+          "Lire les données structurées de boutiques et de réseaux sociaux",
           "Piloter un navigateur distant",
-          "Choisir les groupes d'outils activés"
+          "Connexion dans le navigateur, sans jeton d'API à copier"
         ],
-        "needs": "Un compte Bright Data et son jeton d'API. 5 000 requêtes gratuites par mois, puis paiement à l'usage (selon le README : 1,50 $ pour 1 000 résultats et 8 $ par Go de navigation). Node.js pour npx.",
-        "labels": {
-          "API_TOKEN": "Jeton d'API Bright Data"
-        }
+        "needs": "Un compte Bright Data. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
       },
       "ja": {
         "description": "ブロックを回避する Web 検索、ページ取得、構造化データを、Bright Data 公式の MCP サーバー経由で提供します。",
-        "long": "Bright Data の MCP サーバーを使うと、エージェントは検索、ブロックを回避したページ取得、ショップや SNS などのサイトから得られる構造化データを扱えます。例: 1つの商品の価格を3つのショップから集める。ツールは多いため、TOOLS や GROUPS で絞り込めます。リクエストは Bright Data が課金します。",
+        "long": "Bright Data の MCP サーバーを使うと、エージェントが検索、ブロックを回避したページの取得、ショップや SNS の構造化データを扱えます。例: 1 つの商品の価格を 3 つのショップから集める。リクエストは Bright Data が課金します。",
         "abilities": [
-          "Web を検索し、ブロックされたページも取得する",
+          "ウェブを検索し、ブロックを回避してページを取得する",
           "ショップや SNS の構造化データを読む",
-          "リモートブラウザを操作する",
-          "有効にするツールグループを選ぶ"
+          "リモートのブラウザを操作する",
+          "ブラウザでサインイン。コピーする API トークンは不要"
         ],
-        "needs": "Bright Data のアカウントと API トークン。月 5,000 リクエストまで無料で、その後は使った分だけ支払います（README より: 1,000 件の結果あたり 1.50 ドル、ブラウザ操作 1 GB あたり 8 ドル）。npx 用の Node.js。",
-        "labels": {
-          "API_TOKEN": "Bright Data API トークン"
-        }
+        "needs": "Bright Data のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
       },
       "ko": {
         "description": "차단 우회 웹 검색, 페이지 수집, 구조화된 웹 데이터를 Bright Data 공식 MCP 서버로 제공해요.",
-        "long": "Bright Data MCP 서버를 쓰면 에이전트가 검색하고, 차단을 우회해 페이지를 가져오고, 쇼핑몰이나 소셜 네트워크의 구조화된 데이터를 바로 받을 수 있어요. 예: 한 상품의 가격을 세 쇼핑몰에서 모으기. 도구가 많아서 TOOLS나 GROUPS로 범위를 줄일 수 있어요. 요청은 Bright Data가 과금해요.",
+        "long": "Bright Data MCP 서버를 쓰면 에이전트가 검색하고, 차단을 우회해 페이지를 가져오고, 쇼핑몰과 소셜 네트워크의 구조화된 데이터를 바로 쓸 수 있어요. 예를 들어 한 상품의 가격을 세 쇼핑몰에서 모을 수 있어요. 요청 비용은 Bright Data가 청구해요.",
         "abilities": [
-          "웹 검색과 차단된 페이지 수집",
-          "쇼핑몰·소셜 네트워크의 구조화된 데이터 읽기",
+          "웹 검색과 차단을 우회한 페이지 가져오기",
+          "쇼핑몰과 소셜 네트워크의 구조화된 데이터 읽기",
           "원격 브라우저 조작",
-          "사용할 도구 그룹 고르기"
+          "브라우저에서 로그인, 복사할 API 토큰 없음"
         ],
-        "needs": "Bright Data 계정과 API 토큰. 매달 5,000건의 요청이 무료이고, 그 뒤에는 사용량만큼 지불해요(README 기준 결과 1,000건당 1.50달러, 브라우저 탐색 1GB당 8달러). npx용 Node.js.",
-        "labels": {
-          "API_TOKEN": "Bright Data API 토큰"
-        }
+        "needs": "Bright Data 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
       },
       "pt-BR": {
         "description": "Busca, coleta de páginas e dados web estruturados com desbloqueio, pelo servidor MCP oficial da Bright Data.",
-        "long": "O servidor MCP da Bright Data dá ao agente busca, coleta de páginas com desbloqueio e dados estruturados prontos de sites como lojas e redes sociais. Por exemplo: reunir os preços de um produto em três lojas. O servidor tem muitas ferramentas; com TOOLS ou GROUPS você limita a lista. As requisições são cobradas pela Bright Data.",
+        "long": "O servidor MCP da Bright Data dá ao agente busca, extração de páginas mesmo com bloqueios e dados estruturados prontos de lojas e redes sociais. Por exemplo: juntar os preços de um produto em três lojas. As requisições são cobradas pela Bright Data.",
         "abilities": [
-          "Pesquisar na web e coletar páginas apesar de bloqueios",
+          "Pesquisar na web e extrair páginas mesmo com bloqueios",
           "Ler dados estruturados de lojas e redes sociais",
           "Controlar um navegador remoto",
-          "Escolher quais grupos de ferramentas ficam ativos"
+          "Entrada no navegador, sem token de API para copiar"
         ],
-        "needs": "Uma conta na Bright Data e o token de API. Há 5 000 requisições gratuitas por mês; depois, pagamento por uso (segundo o README, US$ 1,50 por 1 000 resultados e US$ 8 por GB de navegação). Node.js para o npx.",
-        "labels": {
-          "API_TOKEN": "Token de API da Bright Data"
-        }
+        "needs": "Uma conta no Bright Data. Entre no navegador depois de clicar em Conectar."
       },
       "zh-Hans": {
         "description": "带解锁功能的搜索、页面抓取和结构化网页数据，通过 Bright Data 官方 MCP 服务器提供。",
-        "long": "Bright Data 的 MCP 服务器让智能体进行搜索、带解锁功能的页面抓取，并直接获得店铺和社交网络等网站的结构化数据。例如：从三家店铺收集同一商品的价格。工具很多，可以用 TOOLS 或 GROUPS 进行限制。请求由 Bright Data 计费。",
+        "long": "Bright Data 的 MCP 服务器为智能体提供搜索、绕过封锁抓取页面，以及来自商店和社交网络的现成结构化数据。例如：从三家商店收集同一商品的价格。请求由 Bright Data 计费。",
         "abilities": [
-          "搜索网页并抓取被拦截的页面",
-          "读取店铺和社交网络的结构化数据",
-          "操作远程浏览器",
-          "选择启用哪些工具组"
+          "搜索网页，绕过封锁抓取页面",
+          "读取商店和社交网络的结构化数据",
+          "控制远程浏览器",
+          "在浏览器中登录，无需复制 API 令牌"
         ],
-        "needs": "Bright Data 账户及其 API 令牌。每月 5,000 次请求免费，之后按用量付费（据 README：每 1,000 条结果 1.50 美元，每 GB 浏览器导航 8 美元）。npx 需要 Node.js。",
-        "labels": {
-          "API_TOKEN": "Bright Data API 令牌"
-        }
+        "needs": "一个 Bright Data 账号。点击“连接”后在浏览器中登录。"
       }
     }
   },
@@ -6129,8 +5838,8 @@
       "Применять фильтры и линзы Kagi",
       "Получать полный текст страницы в markdown"
     ],
-    "needs_en": "A Kagi API key from the API portal. Pay per use: credit is prepaid; the docs list no free credits for search. Python with uv for uvx.",
-    "needs_ru": "Ключ Kagi API из API-портала. Оплата по факту: кредит вносится заранее; бесплатных кредитов на поиск в доках нет. Python с uv для uvx.",
+    "needs_en": "A Kagi API key from the API portal. Pay per use: credit is prepaid; the docs list no free credits for search. Python with uv for uvx. The key is at https://kagi.com/settings?p=api.",
+    "needs_ru": "Ключ Kagi API из API-портала. Оплата по факту: кредит вносится заранее; бесплатных кредитов на поиск в доках нет. Python с uv для uvx. Ключ — на странице https://kagi.com/settings?p=api.",
     "kind": "stdio",
     "command": "uvx",
     "args": [
@@ -6157,7 +5866,7 @@
           "Filter und Kagi-Linsen anwenden",
           "Den vollständigen Inhalt einer Seite als Markdown abrufen"
         ],
-        "needs": "Ein Kagi-API-Schlüssel aus dem API-Portal. Bezahlung nach Verbrauch: Guthaben wird vorab aufgeladen; die Doku nennt keine kostenlosen Credits für die Suche. Python mit uv für uvx.",
+        "needs": "Ein Kagi-API-Schlüssel aus dem API-Portal. Bezahlung nach Verbrauch: Guthaben wird vorab aufgeladen; die Doku nennt keine kostenlosen Credits für die Suche. Python mit uv für uvx. Den Schlüssel finden Sie auf https://kagi.com/settings?p=api.",
         "labels": {
           "KAGI_API_KEY": "Kagi-API-Schlüssel"
         }
@@ -6170,7 +5879,7 @@
           "Aplicar filtros y lentes de Kagi",
           "Obtener el contenido completo de una página en markdown"
         ],
-        "needs": "Una clave de la API de Kagi del portal de API. Pago por uso: el saldo se carga por adelantado; la documentación no menciona créditos gratuitos para la búsqueda. Python con uv para uvx.",
+        "needs": "Una clave de la API de Kagi del portal de API. Pago por uso: el saldo se carga por adelantado; la documentación no menciona créditos gratuitos para la búsqueda. Python con uv para uvx. La clave está en https://kagi.com/settings?p=api.",
         "labels": {
           "KAGI_API_KEY": "Clave de la API de Kagi"
         }
@@ -6183,7 +5892,7 @@
           "Appliquer des filtres et des lentilles Kagi",
           "Récupérer le contenu complet d'une page en markdown"
         ],
-        "needs": "Une clé d'API Kagi depuis le portail API. Paiement à l'usage : crédit rechargé à l'avance ; la doc ne mentionne pas de crédits gratuits pour la recherche. Python avec uv pour uvx.",
+        "needs": "Une clé d'API Kagi depuis le portail API. Paiement à l'usage : crédit rechargé à l'avance ; la doc ne mentionne pas de crédits gratuits pour la recherche. Python avec uv pour uvx. La clé se trouve sur https://kagi.com/settings?p=api.",
         "labels": {
           "KAGI_API_KEY": "Clé d'API Kagi"
         }
@@ -6196,7 +5905,7 @@
           "フィルターと Kagi レンズを適用する",
           "ページの全文を markdown で取得する"
         ],
-        "needs": "Kagi API ポータルで取得した API キー。使った分だけ支払い、クレジットを前払いします。ドキュメントには検索用の無料クレジットの記載はありません。uvx 用の uv を入れた Python。",
+        "needs": "Kagi API ポータルで取得した API キー。使った分だけ支払い、クレジットを前払いします。ドキュメントには検索用の無料クレジットの記載はありません。uvx 用の uv を入れた Python。 キーは https://kagi.com/settings?p=api にあります。",
         "labels": {
           "KAGI_API_KEY": "Kagi API キー"
         }
@@ -6209,7 +5918,7 @@
           "필터와 Kagi 렌즈 적용",
           "페이지 전체 내용을 markdown으로 가져오기"
         ],
-        "needs": "Kagi API 포털에서 발급받은 API 키. 사용량만큼 지불하며 크레딧을 미리 충전해요. 문서에는 검색용 무료 크레딧이 없어요. uvx용 uv가 있는 Python.",
+        "needs": "Kagi API 포털에서 발급받은 API 키. 사용량만큼 지불하며 크레딧을 미리 충전해요. 문서에는 검색용 무료 크레딧이 없어요. uvx용 uv가 있는 Python. 키는 https://kagi.com/settings?p=api에서 받을 수 있어요.",
         "labels": {
           "KAGI_API_KEY": "Kagi API 키"
         }
@@ -6222,7 +5931,7 @@
           "Aplicar filtros e lentes da Kagi",
           "Obter o conteúdo completo de uma página em markdown"
         ],
-        "needs": "Uma chave da API da Kagi, do portal de API. Pagamento por uso: o crédito é recarregado antecipadamente; a documentação não cita créditos gratuitos para a busca. Python com uv para o uvx.",
+        "needs": "Uma chave da API da Kagi, do portal de API. Pagamento por uso: o crédito é recarregado antecipadamente; a documentação não cita créditos gratuitos para a busca. Python com uv para o uvx. A chave fica em https://kagi.com/settings?p=api.",
         "labels": {
           "KAGI_API_KEY": "Chave da API da Kagi"
         }
@@ -6235,7 +5944,7 @@
           "应用过滤器和 Kagi 镜头",
           "以 markdown 获取页面全文"
         ],
-        "needs": "在 Kagi API 门户获取的 API 密钥。按用量付费，需预先充值；文档未提及搜索的免费积分。需要带 uv 的 Python 以运行 uvx。",
+        "needs": "在 Kagi API 门户获取的 API 密钥。按用量付费，需预先充值；文档未提及搜索的免费积分。需要带 uv 的 Python 以运行 uvx。 密钥在 https://kagi.com/settings?p=api 获取。",
         "labels": {
           "KAGI_API_KEY": "Kagi API 密钥"
         }
@@ -6263,8 +5972,8 @@
       "Возвращать результаты в виде структурированного JSON",
       "Читать список поисковиков и их параметры"
     ],
-    "needs_en": "A SerpApi API key. The free plan includes 250 searches a month; more searches need a paid plan.",
-    "needs_ru": "Ключ SerpApi API. Бесплатный тариф: 250 поисков в месяц; больше — платные тарифы.",
+    "needs_en": "A SerpApi API key. The free plan includes 250 searches a month; more searches need a paid plan. The key is at https://serpapi.com/manage-api-key.",
+    "needs_ru": "Ключ SerpApi API. Бесплатный тариф: 250 поисков в месяц; больше — платные тарифы. Ключ — на странице https://serpapi.com/manage-api-key.",
     "kind": "http",
     "url": "https://mcp.serpapi.com/mcp",
     "headers_keys": [
@@ -6288,7 +5997,7 @@
           "Ergebnisse als strukturiertes JSON zurückgeben",
           "Die Liste der Suchmaschinen und ihre Parameter lesen"
         ],
-        "needs": "Ein SerpApi-API-Schlüssel. Der kostenlose Tarif umfasst 250 Suchen im Monat; mehr gibt es in den kostenpflichtigen Tarifen.",
+        "needs": "Ein SerpApi-API-Schlüssel. Der kostenlose Tarif umfasst 250 Suchen im Monat; mehr gibt es in den kostenpflichtigen Tarifen. Den Schlüssel finden Sie auf https://serpapi.com/manage-api-key.",
         "labels": {
           "Authorization": "SerpApi-API-Schlüssel"
         }
@@ -6301,7 +6010,7 @@
           "Devolver los resultados como JSON estructurado",
           "Leer la lista de buscadores y sus parámetros"
         ],
-        "needs": "Una clave de la API de SerpApi. El plan gratuito incluye 250 búsquedas al mes; para más búsquedas hay planes de pago.",
+        "needs": "Una clave de la API de SerpApi. El plan gratuito incluye 250 búsquedas al mes; para más búsquedas hay planes de pago. La clave está en https://serpapi.com/manage-api-key.",
         "labels": {
           "Authorization": "Clave de la API de SerpApi"
         }
@@ -6314,7 +6023,7 @@
           "Renvoyer les résultats en JSON structuré",
           "Lire la liste des moteurs et leurs paramètres"
         ],
-        "needs": "Une clé d'API SerpApi. Le forfait gratuit comprend 250 recherches par mois ; au-delà, il y a des forfaits payants.",
+        "needs": "Une clé d'API SerpApi. Le forfait gratuit comprend 250 recherches par mois ; au-delà, il y a des forfaits payants. La clé se trouve sur https://serpapi.com/manage-api-key.",
         "labels": {
           "Authorization": "Clé d'API SerpApi"
         }
@@ -6327,7 +6036,7 @@
           "結果を構造化された JSON で返す",
           "検索エンジンの一覧とパラメーターを読む"
         ],
-        "needs": "SerpApi の API キー。無料プランは月 250 回の検索を含みます。それ以上は有料プランです。",
+        "needs": "SerpApi の API キー。無料プランは月 250 回の検索を含みます。それ以上は有料プランです。 キーは https://serpapi.com/manage-api-key にあります。",
         "labels": {
           "Authorization": "SerpApi API キー"
         }
@@ -6340,7 +6049,7 @@
           "결과를 구조화된 JSON으로 반환",
           "검색 엔진 목록과 매개변수 읽기"
         ],
-        "needs": "SerpApi API 키. 무료 요금제는 월 250회 검색을 포함하며, 그 이상은 유료 요금제예요.",
+        "needs": "SerpApi API 키. 무료 요금제는 월 250회 검색을 포함하며, 그 이상은 유료 요금제예요. 키는 https://serpapi.com/manage-api-key에서 받을 수 있어요.",
         "labels": {
           "Authorization": "SerpApi API 키"
         }
@@ -6353,7 +6062,7 @@
           "Devolver os resultados como JSON estruturado",
           "Ler a lista de buscadores e seus parâmetros"
         ],
-        "needs": "Uma chave da API da SerpApi. O plano gratuito inclui 250 buscas por mês; para mais, há planos pagos.",
+        "needs": "Uma chave da API da SerpApi. O plano gratuito inclui 250 buscas por mês; para mais, há planos pagos. A chave fica em https://serpapi.com/manage-api-key.",
         "labels": {
           "Authorization": "Chave da API da SerpApi"
         }
@@ -6366,7 +6075,7 @@
           "以结构化 JSON 返回结果",
           "读取搜索引擎列表及其参数"
         ],
-        "needs": "SerpApi API 密钥。免费套餐每月包含 250 次搜索；更多搜索需要付费套餐。",
+        "needs": "SerpApi API 密钥。免费套餐每月包含 250 次搜索；更多搜索需要付费套餐。 密钥在 https://serpapi.com/manage-api-key 获取。",
         "labels": {
           "Authorization": "SerpApi API 密钥"
         }
@@ -6505,8 +6214,8 @@
       "Получать текущую погоду, прогнозы и историю",
       "Регистрировать аккаунт из агента"
     ],
-    "needs_en": "Nothing to start: three tools work without a key. For data, a data key from an OpenWeather account (the sign_up tool creates one and accepts the Terms; the key is shown once). One Call: 1,000 free credits a day; the rest is paid. Create the account yourself rather than asking an agent: sign_up accepts OpenWeather's Terms on your behalf.",
-    "needs_ru": "Чтобы начать, ничего не нужно: три инструмента работают без ключа. Для данных нужен ключ данных аккаунта OpenWeather (инструмент sign_up создаёт аккаунт и принимает условия; ключ показывается один раз). One Call — 1 000 бесплатных кредитов в сутки, остальное платно. Аккаунт лучше заведите сами, а не поручайте агенту: sign_up принимает условия OpenWeather от вашего имени.",
+    "needs_en": "Nothing to start: three tools work without a key. For data, a data key from an OpenWeather account (the sign_up tool creates one and accepts the Terms; the key is shown once). One Call: 1,000 free credits a day; the rest is paid. Create the account yourself rather than asking an agent: sign_up accepts OpenWeather's Terms on your behalf. The key is at https://home.openweathermap.org/api_keys.",
+    "needs_ru": "Чтобы начать, ничего не нужно: три инструмента работают без ключа. Для данных нужен ключ данных аккаунта OpenWeather (инструмент sign_up создаёт аккаунт и принимает условия; ключ показывается один раз). One Call — 1 000 бесплатных кредитов в сутки, остальное платно. Аккаунт лучше заведите сами, а не поручайте агенту: sign_up принимает условия OpenWeather от вашего имени. Ключ — на странице https://home.openweathermap.org/api_keys.",
     "kind": "http",
     "url": "https://mcp.openweathermap.org/mcp",
     "headers_keys": [
@@ -6530,7 +6239,7 @@
           "Aktuelles Wetter, Vorhersagen und Verlauf abrufen",
           "Ein Konto aus dem Agenten heraus anlegen"
         ],
-        "needs": "Zum Start nichts: drei Werkzeuge funktionieren ohne Schlüssel. Für Daten ein Datenschlüssel aus einem OpenWeather-Konto (das Werkzeug sign_up legt ein Konto an und akzeptiert die Bedingungen; der Schlüssel wird nur einmal angezeigt). One Call: 1 000 kostenlose Credits pro Tag, der Rest ist kostenpflichtig. Legen Sie das Konto besser selbst an, statt es einen Agenten machen zu lassen: sign_up akzeptiert die Bedingungen von OpenWeather in Ihrem Namen.",
+        "needs": "Zum Start nichts: drei Werkzeuge funktionieren ohne Schlüssel. Für Daten ein Datenschlüssel aus einem OpenWeather-Konto (das Werkzeug sign_up legt ein Konto an und akzeptiert die Bedingungen; der Schlüssel wird nur einmal angezeigt). One Call: 1 000 kostenlose Credits pro Tag, der Rest ist kostenpflichtig. Legen Sie das Konto besser selbst an, statt es einen Agenten machen zu lassen: sign_up akzeptiert die Bedingungen von OpenWeather in Ihrem Namen. Den Schlüssel finden Sie auf https://home.openweathermap.org/api_keys.",
         "labels": {
           "Authorization": "Datenschlüssel (optional)"
         }
@@ -6543,7 +6252,7 @@
           "Obtener tiempo actual, previsiones e historial",
           "Crear una cuenta desde el agente"
         ],
-        "needs": "Para empezar no hace falta nada: tres herramientas funcionan sin clave. Para datos, una clave de datos de una cuenta de OpenWeather (la herramienta sign_up crea la cuenta y acepta las condiciones; la clave se muestra una sola vez). One Call: 1 000 créditos gratuitos al día; el resto es de pago. Mejor crea la cuenta tú mismo en lugar de pedírselo a un agente: sign_up acepta las condiciones de OpenWeather en tu nombre.",
+        "needs": "Para empezar no hace falta nada: tres herramientas funcionan sin clave. Para datos, una clave de datos de una cuenta de OpenWeather (la herramienta sign_up crea la cuenta y acepta las condiciones; la clave se muestra una sola vez). One Call: 1 000 créditos gratuitos al día; el resto es de pago. Mejor crea la cuenta tú mismo en lugar de pedírselo a un agente: sign_up acepta las condiciones de OpenWeather en tu nombre. La clave está en https://home.openweathermap.org/api_keys.",
         "labels": {
           "Authorization": "Clave de datos (opcional)"
         }
@@ -6556,7 +6265,7 @@
           "Obtenir la météo actuelle, les prévisions et l'historique",
           "Créer un compte depuis l'agent"
         ],
-        "needs": "Rien n'est requis pour commencer : trois outils fonctionnent sans clé. Pour les données, une clé de données d'un compte OpenWeather (l'outil sign_up crée le compte et accepte les conditions ; la clé n'est affichée qu'une fois). One Call : 1 000 crédits gratuits par jour, le reste est payant. Créez plutôt le compte vous-même au lieu de le confier à un agent : sign_up accepte les conditions d'OpenWeather en votre nom.",
+        "needs": "Rien n'est requis pour commencer : trois outils fonctionnent sans clé. Pour les données, une clé de données d'un compte OpenWeather (l'outil sign_up crée le compte et accepte les conditions ; la clé n'est affichée qu'une fois). One Call : 1 000 crédits gratuits par jour, le reste est payant. Créez plutôt le compte vous-même au lieu de le confier à un agent : sign_up accepte les conditions d'OpenWeather en votre nom. La clé se trouve sur https://home.openweathermap.org/api_keys.",
         "labels": {
           "Authorization": "Clé de données (facultative)"
         }
@@ -6569,7 +6278,7 @@
           "現在の天気、予報、履歴を取得する",
           "エージェントからアカウントを作成する"
         ],
-        "needs": "開始に必要なものはありません。キーなしで使えるツールが3つあります。データ取得には OpenWeather アカウントのデータキーが必要です（sign_up ツールがアカウントを作成し、利用規約に同意します。キーは一度だけ表示されます）。One Call は毎日 1,000 の無料クレジット、それ以外は有料です。 アカウントはエージェントに任せず自分で作成してください。sign_up はあなたの代わりに OpenWeather の利用規約に同意します。",
+        "needs": "開始に必要なものはありません。キーなしで使えるツールが3つあります。データ取得には OpenWeather アカウントのデータキーが必要です（sign_up ツールがアカウントを作成し、利用規約に同意します。キーは一度だけ表示されます）。One Call は毎日 1,000 の無料クレジット、それ以外は有料です。 アカウントはエージェントに任せず自分で作成してください。sign_up はあなたの代わりに OpenWeather の利用規約に同意します。 キーは https://home.openweathermap.org/api_keys にあります。",
         "labels": {
           "Authorization": "データキー（任意）"
         }
@@ -6582,7 +6291,7 @@
           "현재 날씨·예보·기록 가져오기",
           "에이전트에서 계정 만들기"
         ],
-        "needs": "시작에 필요한 것은 없어요. 키 없이 쓸 수 있는 도구가 세 개 있어요. 데이터에는 OpenWeather 계정의 데이터 키가 필요해요(sign_up 도구가 계정을 만들고 이용약관에 동의하며, 키는 한 번만 표시돼요). One Call은 매일 1,000 무료 크레딧, 나머지는 유료예요. 계정은 에이전트에게 맡기지 말고 직접 만드세요. sign_up은 사용자를 대신해 OpenWeather 약관에 동의해요.",
+        "needs": "시작에 필요한 것은 없어요. 키 없이 쓸 수 있는 도구가 세 개 있어요. 데이터에는 OpenWeather 계정의 데이터 키가 필요해요(sign_up 도구가 계정을 만들고 이용약관에 동의하며, 키는 한 번만 표시돼요). One Call은 매일 1,000 무료 크레딧, 나머지는 유료예요. 계정은 에이전트에게 맡기지 말고 직접 만드세요. sign_up은 사용자를 대신해 OpenWeather 약관에 동의해요. 키는 https://home.openweathermap.org/api_keys에서 받을 수 있어요.",
         "labels": {
           "Authorization": "데이터 키(선택)"
         }
@@ -6595,7 +6304,7 @@
           "Obter o tempo atual, previsões e histórico",
           "Criar uma conta a partir do agente"
         ],
-        "needs": "Para começar não é preciso nada: três ferramentas funcionam sem chave. Para dados, uma chave de dados de uma conta OpenWeather (a ferramenta sign_up cria a conta e aceita os termos; a chave aparece uma única vez). One Call: 1 000 créditos gratuitos por dia; o resto é pago. Prefira criar a conta você mesmo em vez de pedir a um agente: o sign_up aceita os termos da OpenWeather em seu nome.",
+        "needs": "Para começar não é preciso nada: três ferramentas funcionam sem chave. Para dados, uma chave de dados de uma conta OpenWeather (a ferramenta sign_up cria a conta e aceita os termos; a chave aparece uma única vez). One Call: 1 000 créditos gratuitos por dia; o resto é pago. Prefira criar a conta você mesmo em vez de pedir a um agente: o sign_up aceita os termos da OpenWeather em seu nome. A chave fica em https://home.openweathermap.org/api_keys.",
         "labels": {
           "Authorization": "Chave de dados (opcional)"
         }
@@ -6608,10 +6317,826 @@
           "获取当前天气、预报和历史数据",
           "由智能体注册账户"
         ],
-        "needs": "开始无需任何东西：三个工具无需密钥即可使用。获取数据需要 OpenWeather 账户的数据密钥（sign_up 工具会创建账户并接受条款，密钥只显示一次）。One Call 每天 1,000 免费积分，其余付费。 请自己创建账号，不要让智能体去做：sign_up 会以你的名义接受 OpenWeather 的条款。",
+        "needs": "开始无需任何东西：三个工具无需密钥即可使用。获取数据需要 OpenWeather 账户的数据密钥（sign_up 工具会创建账户并接受条款，密钥只显示一次）。One Call 每天 1,000 免费积分，其余付费。 请自己创建账号，不要让智能体去做：sign_up 会以你的名义接受 OpenWeather 的条款。 密钥在 https://home.openweathermap.org/api_keys 获取。",
         "labels": {
           "Authorization": "数据密钥（可选）"
         }
+      }
+    }
+  },
+  {
+    "id": "figma",
+    "name": "Figma",
+    "category": "design",
+    "publisher": "Figma",
+    "official": true,
+    "homepage": "https://www.figma.com",
+    "description_en": "Designs, components and variables in Figma, through Figma's MCP server.",
+    "description_ru": "Макеты, компоненты и переменные в Figma через MCP-сервер Figma.",
+    "long_en": "Figma's MCP server lets an agent read your design files: frames, components, variables and styles. For example: turn a selected frame into code that matches the design, or list the components a page uses.",
+    "long_ru": "MCP-сервер Figma позволяет агенту читать ваши файлы дизайна: фреймы, компоненты, переменные и стили. Например: превратить выбранный фрейм в код, который совпадает с макетом, или показать компоненты, которые использует страница.",
+    "abilities_en": [
+      "Read frames, components and variables",
+      "Get code and layout for a selected design",
+      "Access limited to the files your account can open"
+    ],
+    "abilities_ru": [
+      "Читать фреймы, компоненты и переменные",
+      "Получать код и разметку для выбранного макета",
+      "Доступ только к файлам, которые открываются вашему аккаунту"
+    ],
+    "needs_en": "A Figma account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Figma: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.figma.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developers.figma.com/docs/figma-mcp-server/",
+    "icon": "figma",
+    "accent": "#F24E1E",
+    "l10n": {
+      "de": {
+        "description": "Entwürfe, Komponenten und Variablen in Figma, über den MCP-Server von Figma.",
+        "long": "Der MCP-Server von Figma erlaubt dem Agenten, Ihre Design-Dateien zu lesen: Frames, Komponenten, Variablen und Stile. Zum Beispiel: einen ausgewählten Frame in Code umwandeln, der dem Entwurf entspricht, oder die Komponenten anzeigen, die eine Seite verwendet.",
+        "abilities": [
+          "Frames, Komponenten und Variablen lesen",
+          "Code und Layout für einen ausgewählten Entwurf abrufen",
+          "Zugriff nur auf Dateien, die Ihr Konto öffnen kann"
+        ],
+        "needs": "Ein Figma-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Diseños, componentes y variables en Figma, a través del servidor MCP de Figma.",
+        "long": "El servidor MCP de Figma permite al agente leer tus archivos de diseño: frames, componentes, variables y estilos. Por ejemplo: convertir un frame seleccionado en código que coincida con el diseño, o listar los componentes que usa una página.",
+        "abilities": [
+          "Leer frames, componentes y variables",
+          "Obtener código y maquetación de un diseño seleccionado",
+          "Acceso solo a los archivos que tu cuenta puede abrir"
+        ],
+        "needs": "Una cuenta de Figma. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Maquettes, composants et variables dans Figma, via le serveur MCP de Figma.",
+        "long": "Le serveur MCP de Figma permet à l'agent de lire vos fichiers de design : frames, composants, variables et styles. Par exemple : transformer un frame sélectionné en code fidèle au design, ou lister les composants utilisés par une page.",
+        "abilities": [
+          "Lire frames, composants et variables",
+          "Obtenir le code et la mise en page d'une maquette sélectionnée",
+          "Accès limité aux fichiers que votre compte peut ouvrir"
+        ],
+        "needs": "Un compte Figma. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Figma の MCP サーバーで、デザイン、コンポーネント、変数を扱います。",
+        "long": "Figma の MCP サーバーを使うと、エージェントがデザインファイルのフレーム、コンポーネント、変数、スタイルを読み取れます。例: 選んだフレームを、デザインに合うコードに変換する、ページで使われているコンポーネントを一覧にする。",
+        "abilities": [
+          "フレーム、コンポーネント、変数を読む",
+          "選んだデザインのコードとレイアウトを取得する",
+          "アカウントで開けるファイルだけにアクセスする"
+        ],
+        "needs": "Figma のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "Figma의 MCP 서버로 디자인, 컴포넌트, 변수를 다뤄요.",
+        "long": "Figma MCP 서버를 쓰면 에이전트가 디자인 파일의 프레임, 컴포넌트, 변수, 스타일을 읽을 수 있어요. 예를 들어 선택한 프레임을 디자인과 맞는 코드로 바꾸거나, 페이지가 쓰는 컴포넌트 목록을 보여줄 수 있어요.",
+        "abilities": [
+          "프레임, 컴포넌트, 변수 읽기",
+          "선택한 디자인의 코드와 레이아웃 가져오기",
+          "내 계정이 열 수 있는 파일에만 접근"
+        ],
+        "needs": "Figma 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Layouts, componentes e variáveis no Figma, pelo servidor MCP do Figma.",
+        "long": "O servidor MCP do Figma permite que o agente leia seus arquivos de design: frames, componentes, variáveis e estilos. Por exemplo: transformar um frame selecionado em código que bata com o design, ou listar os componentes que uma página usa.",
+        "abilities": [
+          "Ler frames, componentes e variáveis",
+          "Obter código e layout de um design selecionado",
+          "Acesso apenas aos arquivos que a sua conta consegue abrir"
+        ],
+        "needs": "Uma conta no Figma. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Figma 的 MCP 服务器处理 Figma 中的设计稿、组件和变量。",
+        "long": "Figma 的 MCP 服务器让智能体读取你的设计文件：框架、组件、变量和样式。例如：把选中的框架转成与设计一致的代码，或列出某个页面用到的组件。",
+        "abilities": [
+          "读取框架、组件和变量",
+          "获取所选设计的代码和布局",
+          "只能访问你的账号可以打开的文件"
+        ],
+        "needs": "一个 Figma 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "asana",
+    "name": "Asana",
+    "category": "productivity",
+    "publisher": "Asana",
+    "official": true,
+    "homepage": "https://asana.com",
+    "description_en": "Tasks, projects and goals in Asana, through Asana's MCP server.",
+    "description_ru": "Задачи, проекты и цели в Asana через MCP-сервер Asana.",
+    "long_en": "Asana's MCP server lets an agent find and update your tasks and projects. For example: list the tasks due this week in a project, or create tasks from the notes of a meeting.",
+    "long_ru": "MCP-сервер Asana позволяет агенту находить и обновлять ваши задачи и проекты. Например: показать задачи проекта со сроком на этой неделе или создать задачи из заметок встречи.",
+    "abilities_en": [
+      "Find and read tasks, projects and goals",
+      "Create and update tasks",
+      "Access limited to the workspaces your account can see"
+    ],
+    "abilities_ru": [
+      "Находить и читать задачи, проекты и цели",
+      "Создавать и обновлять задачи",
+      "Доступ только к рабочим пространствам, которые видит ваш аккаунт"
+    ],
+    "needs_en": "An Asana account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Asana: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.asana.com/v2/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developers.asana.com/docs/using-asanas-mcp-server",
+    "icon": "asana",
+    "accent": "#F06A6A",
+    "l10n": {
+      "de": {
+        "description": "Aufgaben, Projekte und Ziele in Asana, über den MCP-Server von Asana.",
+        "long": "Der MCP-Server von Asana erlaubt dem Agenten, Ihre Aufgaben und Projekte zu finden und zu ändern. Zum Beispiel: die Aufgaben eines Projekts mit Fälligkeit in dieser Woche anzeigen oder aus den Notizen einer Besprechung Aufgaben anlegen.",
+        "abilities": [
+          "Aufgaben, Projekte und Ziele finden und lesen",
+          "Aufgaben anlegen und ändern",
+          "Zugriff nur auf Arbeitsbereiche, die Ihr Konto sieht"
+        ],
+        "needs": "Ein Asana-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Tareas, proyectos y objetivos en Asana, a través del servidor MCP de Asana.",
+        "long": "El servidor MCP de Asana permite al agente encontrar y actualizar tus tareas y proyectos. Por ejemplo: listar las tareas de un proyecto que vencen esta semana, o crear tareas a partir de las notas de una reunión.",
+        "abilities": [
+          "Buscar y leer tareas, proyectos y objetivos",
+          "Crear y actualizar tareas",
+          "Acceso solo a los espacios de trabajo que ve tu cuenta"
+        ],
+        "needs": "Una cuenta de Asana. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Tâches, projets et objectifs dans Asana, via le serveur MCP d'Asana.",
+        "long": "Le serveur MCP d'Asana permet à l'agent de trouver et de mettre à jour vos tâches et projets. Par exemple : lister les tâches d'un projet échues cette semaine, ou créer des tâches à partir des notes d'une réunion.",
+        "abilities": [
+          "Trouver et lire tâches, projets et objectifs",
+          "Créer et mettre à jour des tâches",
+          "Accès limité aux espaces de travail visibles par votre compte"
+        ],
+        "needs": "Un compte Asana. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Asana の MCP サーバーで、タスク、プロジェクト、目標を扱います。",
+        "long": "Asana の MCP サーバーを使うと、エージェントがタスクとプロジェクトを探して更新できます。例: プロジェクトで今週期限のタスクを一覧にする、会議のメモからタスクを作成する。",
+        "abilities": [
+          "タスク、プロジェクト、目標を探して読む",
+          "タスクを作成し、更新する",
+          "アカウントから見えるワークスペースだけにアクセスする"
+        ],
+        "needs": "Asana のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "Asana의 MCP 서버로 Asana의 작업, 프로젝트, 목표를 다뤄요.",
+        "long": "Asana MCP 서버를 쓰면 에이전트가 작업과 프로젝트를 찾고 업데이트할 수 있어요. 예를 들어 프로젝트에서 이번 주 마감인 작업 목록을 보거나, 회의 메모로 작업을 만들 수 있어요.",
+        "abilities": [
+          "작업, 프로젝트, 목표 찾기와 읽기",
+          "작업 만들기와 업데이트",
+          "내 계정이 볼 수 있는 워크스페이스에만 접근"
+        ],
+        "needs": "Asana 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Tarefas, projetos e metas no Asana, pelo servidor MCP do Asana.",
+        "long": "O servidor MCP do Asana permite que o agente encontre e atualize suas tarefas e projetos. Por exemplo: listar as tarefas de um projeto que vencem nesta semana, ou criar tarefas a partir das notas de uma reunião.",
+        "abilities": [
+          "Encontrar e ler tarefas, projetos e metas",
+          "Criar e atualizar tarefas",
+          "Acesso apenas aos espaços de trabalho que a sua conta vê"
+        ],
+        "needs": "Uma conta no Asana. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Asana 的 MCP 服务器处理 Asana 中的任务、项目和目标。",
+        "long": "Asana 的 MCP 服务器让智能体查找并更新你的任务和项目。例如：列出某项目本周到期的任务，或根据会议笔记创建任务。",
+        "abilities": [
+          "查找并读取任务、项目和目标",
+          "创建并更新任务",
+          "只能访问你的账号可见的工作区"
+        ],
+        "needs": "一个 Asana 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "canva",
+    "name": "Canva",
+    "category": "design",
+    "publisher": "Canva",
+    "official": true,
+    "homepage": "https://www.canva.com",
+    "description_en": "Designs, presentations and brand assets in Canva, through Canva's MCP server.",
+    "description_ru": "Дизайны, презентации и брендовые материалы в Canva через MCP-сервер Canva.",
+    "long_en": "Canva's MCP server lets an agent find and work with your designs and brand assets in Canva. For example: find the latest presentation template, or create a social post from your brand kit.",
+    "long_ru": "MCP-сервер Canva позволяет агенту находить ваши дизайны и брендовые материалы в Canva и работать с ними. Например: найти последний шаблон презентации или создать пост для соцсетей по вашему брендбуку.",
+    "abilities_en": [
+      "Find designs and library assets",
+      "Create and edit designs",
+      "Work with your brand assets and export designs"
+    ],
+    "abilities_ru": [
+      "Находить дизайны и элементы библиотеки",
+      "Создавать и редактировать дизайны",
+      "Работать с брендовыми материалами и экспортировать дизайны"
+    ],
+    "needs_en": "A Canva account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Canva: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.canva.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://www.canva.com/help/mcp-agent-setup/",
+    "icon": "canva",
+    "accent": "#00C4CC",
+    "l10n": {
+      "de": {
+        "description": "Entwürfe, Präsentationen und Markenmaterial in Canva, über den MCP-Server von Canva.",
+        "long": "Der MCP-Server von Canva erlaubt dem Agenten, Ihre Entwürfe und Markenmaterialien in Canva zu finden und damit zu arbeiten. Zum Beispiel: die neueste Präsentationsvorlage finden oder einen Social-Media-Beitrag aus Ihrem Markenkit anlegen.",
+        "abilities": [
+          "Entwürfe und Bibliothekselemente finden",
+          "Entwürfe anlegen und bearbeiten",
+          "Mit Markenmaterial arbeiten und Entwürfe exportieren"
+        ],
+        "needs": "Ein Canva-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Diseños, presentaciones y recursos de marca en Canva, a través del servidor MCP de Canva.",
+        "long": "El servidor MCP de Canva permite al agente encontrar y usar tus diseños y recursos de marca en Canva. Por ejemplo: encontrar la última plantilla de presentación, o crear una publicación para redes a partir de tu kit de marca.",
+        "abilities": [
+          "Buscar diseños y recursos de la biblioteca",
+          "Crear y editar diseños",
+          "Trabajar con recursos de marca y exportar diseños"
+        ],
+        "needs": "Una cuenta de Canva. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Designs, présentations et éléments de marque dans Canva, via le serveur MCP de Canva.",
+        "long": "Le serveur MCP de Canva permet à l'agent de trouver vos designs et éléments de marque dans Canva et de travailler avec eux. Par exemple : trouver le dernier modèle de présentation, ou créer une publication pour les réseaux sociaux à partir de votre kit de marque.",
+        "abilities": [
+          "Trouver des designs et des éléments de bibliothèque",
+          "Créer et modifier des designs",
+          "Travailler avec les éléments de marque et exporter des designs"
+        ],
+        "needs": "Un compte Canva. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Canva の MCP サーバーで、デザイン、プレゼンテーション、ブランド素材を扱います。",
+        "long": "Canva の MCP サーバーを使うと、エージェントが Canva のデザインとブランド素材を探して操作できます。例: 最新のプレゼンテーションテンプレートを探す、ブランドキットから SNS 投稿を作る。",
+        "abilities": [
+          "デザインとライブラリの素材を探す",
+          "デザインを作成し、編集する",
+          "ブランド素材を使い、デザインを書き出す"
+        ],
+        "needs": "Canva のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "Canva의 MCP 서버로 디자인, 프레젠테이션, 브랜드 자산을 다뤄요.",
+        "long": "Canva MCP 서버를 쓰면 에이전트가 Canva의 디자인과 브랜드 자산을 찾고 작업할 수 있어요. 예를 들어 최신 프레젠테이션 템플릿을 찾거나, 브랜드 키트로 SNS 게시물을 만들 수 있어요.",
+        "abilities": [
+          "디자인과 라이브러리 자산 찾기",
+          "디자인 만들기와 편집",
+          "브랜드 자산을 활용하고 디자인 내보내기"
+        ],
+        "needs": "Canva 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Designs, apresentações e recursos de marca no Canva, pelo servidor MCP do Canva.",
+        "long": "O servidor MCP do Canva permite que o agente encontre e use seus designs e recursos de marca no Canva. Por exemplo: encontrar o modelo de apresentação mais recente, ou criar uma postagem para redes sociais a partir do seu kit de marca.",
+        "abilities": [
+          "Encontrar designs e recursos da biblioteca",
+          "Criar e editar designs",
+          "Trabalhar com recursos de marca e exportar designs"
+        ],
+        "needs": "Uma conta no Canva. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Canva 的 MCP 服务器处理 Canva 中的设计、演示文稿和品牌素材。",
+        "long": "Canva 的 MCP 服务器让智能体查找并使用你在 Canva 中的设计和品牌素材。例如：找到最新的演示模板，或根据品牌套件创建一条社交媒体帖子。",
+        "abilities": [
+          "查找设计和资源库素材",
+          "创建并编辑设计",
+          "使用品牌素材并导出设计"
+        ],
+        "needs": "一个 Canva 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "miro",
+    "name": "Miro",
+    "category": "design",
+    "publisher": "Miro",
+    "official": true,
+    "homepage": "https://miro.com",
+    "description_en": "Boards, sticky notes and diagrams in Miro, through Miro's MCP server.",
+    "description_ru": "Доски, стикеры и диаграммы в Miro через MCP-сервер Miro.",
+    "long_en": "Miro's MCP server lets an agent read your boards and add to them. For example: summarize the sticky notes of a workshop board, or add a diagram of a process to a board.",
+    "long_ru": "MCP-сервер Miro позволяет агенту читать ваши доски и добавлять на них элементы. Например: кратко пересказать стикеры с доски после воркшопа или добавить на доску схему процесса.",
+    "abilities_en": [
+      "Read boards and the items on them",
+      "Create sticky notes, shapes and diagrams",
+      "Access limited to the boards your account can open"
+    ],
+    "abilities_ru": [
+      "Читать доски и расположенные на них элементы",
+      "Создавать стикеры, фигуры и диаграммы",
+      "Доступ только к доскам, которые открываются вашему аккаунту"
+    ],
+    "needs_en": "A Miro account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Miro: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.miro.com/",
+    "auth": "oauth",
+    "docs_url": "https://developers.miro.com/docs/miro-mcp",
+    "icon": "miro",
+    "accent": "#050038",
+    "l10n": {
+      "de": {
+        "description": "Boards, Haftnotizen und Diagramme in Miro, über den MCP-Server von Miro.",
+        "long": "Der MCP-Server von Miro erlaubt dem Agenten, Ihre Boards zu lesen und Elemente hinzuzufügen. Zum Beispiel: die Haftnotizen eines Workshop-Boards zusammenfassen oder ein Prozessdiagramm auf ein Board setzen.",
+        "abilities": [
+          "Boards und die Elemente darauf lesen",
+          "Haftnotizen, Formen und Diagramme anlegen",
+          "Zugriff nur auf Boards, die Ihr Konto öffnen kann"
+        ],
+        "needs": "Ein Miro-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Tableros, notas adhesivas y diagramas en Miro, a través del servidor MCP de Miro.",
+        "long": "El servidor MCP de Miro permite al agente leer tus tableros y añadirles elementos. Por ejemplo: resumir las notas adhesivas de un tablero de un taller, o añadir a un tablero el diagrama de un proceso.",
+        "abilities": [
+          "Leer tableros y los elementos que contienen",
+          "Crear notas adhesivas, formas y diagramas",
+          "Acceso solo a los tableros que puede abrir tu cuenta"
+        ],
+        "needs": "Una cuenta de Miro. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Tableaux, notes adhésives et diagrammes dans Miro, via le serveur MCP de Miro.",
+        "long": "Le serveur MCP de Miro permet à l'agent de lire vos tableaux et d'y ajouter des éléments. Par exemple : résumer les notes d'un tableau d'atelier, ou ajouter à un tableau le schéma d'un processus.",
+        "abilities": [
+          "Lire les tableaux et leurs éléments",
+          "Créer des notes, formes et diagrammes",
+          "Accès limité aux tableaux que votre compte peut ouvrir"
+        ],
+        "needs": "Un compte Miro. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Miro の MCP サーバーで、ボード、付箋、図を扱います。",
+        "long": "Miro の MCP サーバーを使うと、エージェントがボードを読み取り、要素を追加できます。例: ワークショップのボードの付箋を要約する、プロセスの図をボードに追加する。",
+        "abilities": [
+          "ボードとその中の要素を読む",
+          "付箋、図形、ダイアグラムを作成する",
+          "アカウントで開けるボードだけにアクセスする"
+        ],
+        "needs": "Miro のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "Miro의 MCP 서버로 보드, 포스트잇, 다이어그램을 다뤄요.",
+        "long": "Miro MCP 서버를 쓰면 에이전트가 보드를 읽고 요소를 추가할 수 있어요. 예를 들어 워크숍 보드의 포스트잇을 요약하거나, 프로세스 다이어그램을 보드에 추가할 수 있어요.",
+        "abilities": [
+          "보드와 그 안의 요소 읽기",
+          "포스트잇, 도형, 다이어그램 만들기",
+          "내 계정이 열 수 있는 보드에만 접근"
+        ],
+        "needs": "Miro 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Quadros, notas adesivas e diagramas no Miro, pelo servidor MCP do Miro.",
+        "long": "O servidor MCP do Miro permite que o agente leia seus quadros e adicione itens a eles. Por exemplo: resumir as notas adesivas de um quadro de oficina, ou adicionar a um quadro o diagrama de um processo.",
+        "abilities": [
+          "Ler quadros e os itens neles",
+          "Criar notas adesivas, formas e diagramas",
+          "Acesso apenas aos quadros que a sua conta consegue abrir"
+        ],
+        "needs": "Uma conta no Miro. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Miro 的 MCP 服务器处理 Miro 中的白板、便签和图表。",
+        "long": "Miro 的 MCP 服务器让智能体读取你的白板并向其中添加内容。例如：汇总研讨会白板上的便签，或把某个流程图添加到白板上。",
+        "abilities": [
+          "读取白板及其中的内容",
+          "创建便签、形状和图表",
+          "只能访问你的账号可以打开的白板"
+        ],
+        "needs": "一个 Miro 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "webflow",
+    "name": "Webflow",
+    "category": "design",
+    "publisher": "Webflow",
+    "official": true,
+    "homepage": "https://webflow.com",
+    "description_en": "Sites, pages and CMS content in Webflow, through Webflow's MCP server.",
+    "description_ru": "Сайты, страницы и контент CMS в Webflow через MCP-сервер Webflow.",
+    "long_en": "Webflow's MCP server lets an agent work with your sites: read pages and CMS collections, and make changes to them. For example: list the blog posts that have no author set, or draft a new page for a campaign.",
+    "long_ru": "MCP-сервер Webflow позволяет агенту работать с вашими сайтами: читать страницы и коллекции CMS и вносить в них изменения. Например: показать посты блога без автора или набросать новую страницу для кампании.",
+    "abilities_en": [
+      "Read sites, pages and CMS collections",
+      "Make changes to CMS content and pages",
+      "Access limited to the sites your account can reach"
+    ],
+    "abilities_ru": [
+      "Читать сайты, страницы и коллекции CMS",
+      "Вносить изменения в контент CMS и страницы",
+      "Доступ только к сайтам, которые доступны вашему аккаунту"
+    ],
+    "needs_en": "A Webflow account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Webflow: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.webflow.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developers.webflow.com/mcp/reference/overview",
+    "icon": "webflow",
+    "accent": "#146EF5",
+    "l10n": {
+      "de": {
+        "description": "Websites, Seiten und CMS-Inhalte in Webflow, über den MCP-Server von Webflow.",
+        "long": "Der MCP-Server von Webflow erlaubt dem Agenten, mit Ihren Websites zu arbeiten: Seiten und CMS-Sammlungen lesen und Änderungen daran vornehmen. Zum Beispiel: Blogbeiträge ohne Autor auflisten oder eine neue Seite für eine Kampagne entwerfen.",
+        "abilities": [
+          "Websites, Seiten und CMS-Sammlungen lesen",
+          "CMS-Inhalte und Seiten ändern",
+          "Zugriff nur auf Websites, die Ihr Konto erreicht"
+        ],
+        "needs": "Ein Webflow-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Sitios, páginas y contenido del CMS en Webflow, a través del servidor MCP de Webflow.",
+        "long": "El servidor MCP de Webflow permite al agente trabajar con tus sitios: leer páginas y colecciones del CMS y hacer cambios en ellas. Por ejemplo: listar las entradas del blog sin autor, o preparar una página nueva para una campaña.",
+        "abilities": [
+          "Leer sitios, páginas y colecciones del CMS",
+          "Hacer cambios en el contenido del CMS y en las páginas",
+          "Acceso solo a los sitios a los que llega tu cuenta"
+        ],
+        "needs": "Una cuenta de Webflow. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Sites, pages et contenus CMS dans Webflow, via le serveur MCP de Webflow.",
+        "long": "Le serveur MCP de Webflow permet à l'agent de travailler avec vos sites : lire les pages et les collections CMS, et y apporter des modifications. Par exemple : lister les articles de blog sans auteur, ou préparer une nouvelle page pour une campagne.",
+        "abilities": [
+          "Lire sites, pages et collections CMS",
+          "Modifier les contenus CMS et les pages",
+          "Accès limité aux sites accessibles à votre compte"
+        ],
+        "needs": "Un compte Webflow. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Webflow の MCP サーバーで、サイト、ページ、CMS のコンテンツを扱います。",
+        "long": "Webflow の MCP サーバーを使うと、エージェントがサイトを扱えます。ページと CMS コレクションを読み、変更を加えられます。例: 作者が未設定のブログ記事を一覧にする、キャンペーン用の新しいページを下書きする。",
+        "abilities": [
+          "サイト、ページ、CMS コレクションを読む",
+          "CMS のコンテンツとページを変更する",
+          "アカウントが使えるサイトだけにアクセスする"
+        ],
+        "needs": "Webflow のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "Webflow의 MCP 서버로 사이트, 페이지, CMS 콘텐츠를 다뤄요.",
+        "long": "Webflow MCP 서버를 쓰면 에이전트가 사이트를 다룰 수 있어요. 페이지와 CMS 컬렉션을 읽고 변경할 수 있어요. 예를 들어 작성자가 없는 블로그 글 목록을 보거나, 캠페인용 새 페이지 초안을 만들 수 있어요.",
+        "abilities": [
+          "사이트, 페이지, CMS 컬렉션 읽기",
+          "CMS 콘텐츠와 페이지 변경",
+          "내 계정이 접근할 수 있는 사이트에만 접근"
+        ],
+        "needs": "Webflow 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Sites, páginas e conteúdo do CMS no Webflow, pelo servidor MCP do Webflow.",
+        "long": "O servidor MCP do Webflow permite que o agente trabalhe com seus sites: ler páginas e coleções do CMS e fazer alterações neles. Por exemplo: listar os posts do blog sem autor, ou rascunhar uma página nova para uma campanha.",
+        "abilities": [
+          "Ler sites, páginas e coleções do CMS",
+          "Fazer alterações no conteúdo do CMS e nas páginas",
+          "Acesso apenas aos sites que a sua conta alcança"
+        ],
+        "needs": "Uma conta no Webflow. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Webflow 的 MCP 服务器处理 Webflow 中的网站、页面和 CMS 内容。",
+        "long": "Webflow 的 MCP 服务器让智能体处理你的网站：读取页面和 CMS 集合，并对其进行修改。例如：列出没有作者的博客文章，或为某个活动起草一个新页面。",
+        "abilities": [
+          "读取网站、页面和 CMS 集合",
+          "修改 CMS 内容和页面",
+          "只能访问你的账号可以访问的网站"
+        ],
+        "needs": "一个 Webflow 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "square",
+    "name": "Square",
+    "category": "data",
+    "publisher": "Square",
+    "official": true,
+    "homepage": "https://squareup.com",
+    "description_en": "Sales, orders, customers and catalog in Square, through Square's MCP server.",
+    "description_ru": "Продажи, заказы, клиенты и каталог в Square через MCP-сервер Square.",
+    "long_en": "Square's MCP server lets an agent read your sales data from Square: orders, payments, customers and the item catalog. For example: list yesterday's orders by location, or find the items that sold best this month.",
+    "long_ru": "MCP-сервер Square позволяет агенту читать ваши данные о продажах в Square: заказы, платежи, клиентов и каталог товаров. Например: показать вчерашние заказы по точкам или найти товары, которые лучше всего продавались в этом месяце.",
+    "abilities_en": [
+      "Read orders, payments and customers",
+      "Read the item catalog",
+      "Access limited to the permissions of your Square account"
+    ],
+    "abilities_ru": [
+      "Читать заказы, платежи и клиентов",
+      "Читать каталог товаров",
+      "Доступ ограничен правами вашего аккаунта Square"
+    ],
+    "needs_en": "A Square account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Square: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.squareup.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developer.squareup.com/docs/mcp",
+    "icon": "square",
+    "accent": "#3E4348",
+    "l10n": {
+      "de": {
+        "description": "Verkäufe, Bestellungen, Kunden und Katalog in Square, über den MCP-Server von Square.",
+        "long": "Der MCP-Server von Square erlaubt dem Agenten, Ihre Verkaufsdaten aus Square zu lesen: Bestellungen, Zahlungen, Kunden und den Artikelkatalog. Zum Beispiel: die gestrigen Bestellungen nach Standort auflisten oder die Artikel finden, die diesen Monat am besten verkauft wurden.",
+        "abilities": [
+          "Bestellungen, Zahlungen und Kunden lesen",
+          "Den Artikelkatalog lesen",
+          "Zugriff im Rahmen der Berechtigungen Ihres Square-Kontos"
+        ],
+        "needs": "Ein Square-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Ventas, pedidos, clientes y catálogo en Square, a través del servidor MCP de Square.",
+        "long": "El servidor MCP de Square permite al agente leer tus datos de ventas en Square: pedidos, pagos, clientes y el catálogo de artículos. Por ejemplo: listar los pedidos de ayer por tienda, o encontrar los artículos que más se vendieron este mes.",
+        "abilities": [
+          "Leer pedidos, pagos y clientes",
+          "Leer el catálogo de artículos",
+          "Acceso limitado a los permisos de tu cuenta de Square"
+        ],
+        "needs": "Una cuenta de Square. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Ventes, commandes, clients et catalogue dans Square, via le serveur MCP de Square.",
+        "long": "Le serveur MCP de Square permet à l'agent de lire vos données de vente dans Square : commandes, paiements, clients et catalogue d'articles. Par exemple : lister les commandes d'hier par point de vente, ou trouver les articles les plus vendus ce mois-ci.",
+        "abilities": [
+          "Lire commandes, paiements et clients",
+          "Lire le catalogue d'articles",
+          "Accès limité aux droits de votre compte Square"
+        ],
+        "needs": "Un compte Square. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Square の MCP サーバーで、売上、注文、顧客、商品カタログを扱います。",
+        "long": "Square の MCP サーバーを使うと、エージェントが Square の売上データを読み取れます。注文、支払い、顧客、商品カタログが対象です。例: 昨日の注文を店舗別に一覧にする、今月よく売れた商品を探す。",
+        "abilities": [
+          "注文、支払い、顧客を読む",
+          "商品カタログを読む",
+          "Square アカウントの権限の範囲だけにアクセスする"
+        ],
+        "needs": "Square のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "Square의 MCP 서버로 판매, 주문, 고객, 카탈로그를 다뤄요.",
+        "long": "Square MCP 서버를 쓰면 에이전트가 Square의 판매 데이터를 읽을 수 있어요. 주문, 결제, 고객, 상품 카탈로그가 대상이에요. 예를 들어 어제 주문을 매장별로 보거나, 이번 달에 가장 많이 팔린 상품을 찾을 수 있어요.",
+        "abilities": [
+          "주문, 결제, 고객 읽기",
+          "상품 카탈로그 읽기",
+          "Square 계정 권한 범위 안에서만 접근"
+        ],
+        "needs": "Square 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Vendas, pedidos, clientes e catálogo no Square, pelo servidor MCP do Square.",
+        "long": "O servidor MCP do Square permite que o agente leia seus dados de vendas no Square: pedidos, pagamentos, clientes e o catálogo de itens. Por exemplo: listar os pedidos de ontem por loja, ou achar os itens que mais venderam neste mês.",
+        "abilities": [
+          "Ler pedidos, pagamentos e clientes",
+          "Ler o catálogo de itens",
+          "Acesso limitado às permissões da sua conta Square"
+        ],
+        "needs": "Uma conta no Square. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Square 的 MCP 服务器处理 Square 中的销售、订单、客户和商品目录。",
+        "long": "Square 的 MCP 服务器让智能体读取你在 Square 中的销售数据：订单、支付、客户和商品目录。例如：按门店列出昨天的订单，或找出本月销量最好的商品。",
+        "abilities": [
+          "读取订单、支付和客户",
+          "读取商品目录",
+          "访问范围限于你的 Square 账号权限"
+        ],
+        "needs": "一个 Square 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "paypal",
+    "name": "PayPal",
+    "category": "other",
+    "publisher": "PayPal",
+    "official": true,
+    "homepage": "https://www.paypal.com",
+    "description_en": "Payments, invoices and transactions in PayPal, through PayPal's MCP server.",
+    "description_ru": "Платежи, счета и операции в PayPal через MCP-сервер PayPal.",
+    "long_en": "PayPal's MCP server lets an agent look up payments, transactions and invoices in your PayPal account. For example: find a payment by its order number, or check whether a customer has paid an invoice.",
+    "long_ru": "MCP-сервер PayPal позволяет агенту смотреть платежи, операции и счета в вашем аккаунте PayPal. Например: найти платёж по номеру заказа или проверить, оплатил ли клиент счёт.",
+    "abilities_en": [
+      "Look up payments and transactions",
+      "Look up invoices",
+      "Access limited to the permissions of your PayPal account"
+    ],
+    "abilities_ru": [
+      "Смотреть платежи и операции",
+      "Смотреть счета",
+      "Доступ ограничен правами вашего аккаунта PayPal"
+    ],
+    "needs_en": "A PayPal account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт PayPal: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.paypal.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developer.paypal.com/ai-tools/mcp-server",
+    "icon": "paypal",
+    "accent": "#003087",
+    "l10n": {
+      "de": {
+        "description": "Zahlungen, Rechnungen und Vorgänge in PayPal, über den MCP-Server von PayPal.",
+        "long": "Der MCP-Server von PayPal erlaubt dem Agenten, Zahlungen, Vorgänge und Rechnungen in Ihrem PayPal-Konto nachzuschlagen. Zum Beispiel: eine Zahlung anhand der Bestellnummer finden oder prüfen, ob ein Kunde eine Rechnung bezahlt hat.",
+        "abilities": [
+          "Zahlungen und Vorgänge nachschlagen",
+          "Rechnungen nachschlagen",
+          "Zugriff im Rahmen der Berechtigungen Ihres PayPal-Kontos"
+        ],
+        "needs": "Ein PayPal-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Pagos, facturas y operaciones en PayPal, a través del servidor MCP de PayPal.",
+        "long": "El servidor MCP de PayPal permite al agente consultar pagos, operaciones y facturas de tu cuenta de PayPal. Por ejemplo: buscar un pago por su número de pedido, o comprobar si un cliente ha pagado una factura.",
+        "abilities": [
+          "Consultar pagos y operaciones",
+          "Consultar facturas",
+          "Acceso limitado a los permisos de tu cuenta de PayPal"
+        ],
+        "needs": "Una cuenta de PayPal. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Paiements, factures et transactions dans PayPal, via le serveur MCP de PayPal.",
+        "long": "Le serveur MCP de PayPal permet à l'agent de consulter les paiements, transactions et factures de votre compte PayPal. Par exemple : retrouver un paiement à partir de son numéro de commande, ou vérifier si un client a réglé une facture.",
+        "abilities": [
+          "Consulter paiements et transactions",
+          "Consulter les factures",
+          "Accès limité aux droits de votre compte PayPal"
+        ],
+        "needs": "Un compte PayPal. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "PayPal の MCP サーバーで、支払い、請求書、取引を扱います。",
+        "long": "PayPal の MCP サーバーを使うと、エージェントが PayPal アカウントの支払い、取引、請求書を調べられます。例: 注文番号から支払いを探す、顧客が請求書を支払ったかを確認する。",
+        "abilities": [
+          "支払いと取引を調べる",
+          "請求書を調べる",
+          "PayPal アカウントの権限の範囲だけにアクセスする"
+        ],
+        "needs": "PayPal のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "PayPal의 MCP 서버로 결제, 인보이스, 거래를 다뤄요.",
+        "long": "PayPal MCP 서버를 쓰면 에이전트가 내 PayPal 계정의 결제, 거래, 인보이스를 조회할 수 있어요. 예를 들어 주문 번호로 결제를 찾거나, 고객이 인보이스를 결제했는지 확인할 수 있어요.",
+        "abilities": [
+          "결제와 거래 조회",
+          "인보이스 조회",
+          "PayPal 계정 권한 범위 안에서만 접근"
+        ],
+        "needs": "PayPal 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Pagamentos, faturas e transações no PayPal, pelo servidor MCP do PayPal.",
+        "long": "O servidor MCP do PayPal permite que o agente consulte pagamentos, transações e faturas da sua conta PayPal. Por exemplo: encontrar um pagamento pelo número do pedido, ou verificar se um cliente pagou uma fatura.",
+        "abilities": [
+          "Consultar pagamentos e transações",
+          "Consultar faturas",
+          "Acesso limitado às permissões da sua conta PayPal"
+        ],
+        "needs": "Uma conta no PayPal. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 PayPal 的 MCP 服务器处理 PayPal 中的付款、账单和交易。",
+        "long": "PayPal 的 MCP 服务器让智能体查询你 PayPal 账号中的付款、交易和账单。例如：按订单号查找一笔付款，或确认客户是否已支付某张账单。",
+        "abilities": [
+          "查询付款和交易",
+          "查询账单",
+          "访问范围限于你的 PayPal 账号权限"
+        ],
+        "needs": "一个 PayPal 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "monday",
+    "name": "monday.com",
+    "category": "productivity",
+    "publisher": "monday.com",
+    "official": true,
+    "homepage": "https://monday.com",
+    "description_en": "Boards, items and updates in monday.com, through monday.com's MCP server.",
+    "description_ru": "Доски, элементы и обновления в monday.com через MCP-сервер monday.com.",
+    "long_en": "monday.com's MCP server lets an agent read your boards and items and update them. For example: list the late items on a board, or add an update to an item.",
+    "long_ru": "MCP-сервер monday.com позволяет агенту читать ваши доски и элементы и обновлять их. Например: показать просроченные элементы на доске или добавить обновление к элементу.",
+    "abilities_en": [
+      "Find and read boards and items",
+      "Create and update items",
+      "Access limited to the boards your account can see"
+    ],
+    "abilities_ru": [
+      "Находить и читать доски и элементы",
+      "Создавать и обновлять элементы",
+      "Доступ только к доскам, которые видит ваш аккаунт"
+    ],
+    "needs_en": "A monday.com account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт monday.com: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.monday.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developer.monday.com/api-reference/docs/mondaycom-mcp",
+    "icon": "monday",
+    "accent": "#6161FF",
+    "l10n": {
+      "de": {
+        "description": "Boards, Elemente und Updates in monday.com, über den MCP-Server von monday.com.",
+        "long": "Der MCP-Server von monday.com erlaubt dem Agenten, Ihre Boards und Elemente zu lesen und zu ändern. Zum Beispiel: die überfälligen Elemente eines Boards anzeigen oder einem Element ein Update hinzufügen.",
+        "abilities": [
+          "Boards und Elemente finden und lesen",
+          "Elemente anlegen und ändern",
+          "Zugriff nur auf Boards, die Ihr Konto sieht"
+        ],
+        "needs": "Ein monday.com-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Tableros, elementos y actualizaciones en monday.com, a través del servidor MCP de monday.com.",
+        "long": "El servidor MCP de monday.com permite al agente leer y actualizar tus tableros y elementos. Por ejemplo: listar los elementos atrasados de un tablero, o añadir una actualización a un elemento.",
+        "abilities": [
+          "Buscar y leer tableros y elementos",
+          "Crear y actualizar elementos",
+          "Acceso solo a los tableros que ve tu cuenta"
+        ],
+        "needs": "Una cuenta de monday.com. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Tableaux, éléments et mises à jour dans monday.com, via le serveur MCP de monday.com.",
+        "long": "Le serveur MCP de monday.com permet à l'agent de lire et de mettre à jour vos tableaux et éléments. Par exemple : lister les éléments en retard d'un tableau, ou ajouter une mise à jour à un élément.",
+        "abilities": [
+          "Trouver et lire tableaux et éléments",
+          "Créer et mettre à jour des éléments",
+          "Accès limité aux tableaux visibles par votre compte"
+        ],
+        "needs": "Un compte monday.com. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "monday.com の MCP サーバーで、ボード、アイテム、更新を扱います。",
+        "long": "monday.com の MCP サーバーを使うと、エージェントがボードとアイテムを読み取り、更新できます。例: ボード上の期限切れのアイテムを一覧にする、アイテムに更新を追加する。",
+        "abilities": [
+          "ボードとアイテムを探して読む",
+          "アイテムを作成し、更新する",
+          "アカウントから見えるボードだけにアクセスする"
+        ],
+        "needs": "monday.com のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "monday.com의 MCP 서버로 보드, 항목, 업데이트를 다뤄요.",
+        "long": "monday.com MCP 서버를 쓰면 에이전트가 보드와 항목을 읽고 업데이트할 수 있어요. 예를 들어 보드에서 기한이 지난 항목을 보거나, 항목에 업데이트를 남길 수 있어요.",
+        "abilities": [
+          "보드와 항목 찾기와 읽기",
+          "항목 만들기와 업데이트",
+          "내 계정이 볼 수 있는 보드에만 접근"
+        ],
+        "needs": "monday.com 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Quadros, itens e atualizações no monday.com, pelo servidor MCP do monday.com.",
+        "long": "O servidor MCP do monday.com permite que o agente leia e atualize seus quadros e itens. Por exemplo: listar os itens atrasados de um quadro, ou adicionar uma atualização a um item.",
+        "abilities": [
+          "Encontrar e ler quadros e itens",
+          "Criar e atualizar itens",
+          "Acesso apenas aos quadros que a sua conta vê"
+        ],
+        "needs": "Uma conta no monday.com. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 monday.com 的 MCP 服务器处理 monday.com 中的看板、项目和更新。",
+        "long": "monday.com 的 MCP 服务器让智能体读取并更新你的看板和项目。例如：列出某看板上逾期的项目，或为某个项目添加更新。",
+        "abilities": [
+          "查找并读取看板和项目",
+          "创建并更新项目",
+          "只能访问你的账号可见的看板"
+        ],
+        "needs": "一个 monday.com 账号。点击“连接”后在浏览器中登录。"
       }
     }
   }
