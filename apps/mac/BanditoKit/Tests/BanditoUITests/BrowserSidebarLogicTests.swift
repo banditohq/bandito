@@ -79,9 +79,14 @@ import Testing
         #expect(outcome == .show("b"))
     }
 
-    @Test func closingTheOnlyTabOpensABlankOne() {
+    @Test func closingTheOnlyTabLeavesNoneAndOpensNothing() {
         let outcome = BrowserTabPolicy.afterClosing(closedID: "a", shownID: "a", before: ["a"], remaining: [])
-        #expect(outcome == .openBlank)
+        #expect(outcome == .empty)
+    }
+
+    @Test func closingAnUnshownLastTabKeepsThePageArea() {
+        let outcome = BrowserTabPolicy.afterClosing(closedID: "a", shownID: nil, before: ["a"], remaining: [])
+        #expect(outcome == .keep)
     }
 
     @Test func closingAnotherTabKeepsTheShownOne() {

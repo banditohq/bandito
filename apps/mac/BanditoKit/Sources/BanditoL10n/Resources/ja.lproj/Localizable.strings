@@ -284,6 +284,8 @@
 "browser.emptyPage" = "開いているページはありません";
 "browser.error" = "ブラウザに接続できませんでした";
 "browser.forward" = "進む";
+"browser.frameTimeoutRetry" = "再試行";
+"browser.frameTimeoutTitle" = "ブラウザから画像が届きません";
 "browser.hint" = "ブラウザはサーバー上で動作します。サインインは保持され、エージェントはあなたと同じタブを見ます。分離されたエージェントは専用のブラウザを持ちます。";
 "browser.hintShort" = "ログイン情報はサーバーに保存され、エージェントも同じタブを使います。";
 "browser.install" = "インストール";
@@ -294,6 +296,8 @@
 "browser.needsChromeHint" = "Bandito はこのサーバーに Google Chrome をインストールできます。ブラウザはそこにサインインを保持します。";
 "browser.newTab" = "新しいタブ";
 "browser.newTabHelp" = "新しいタブ (⌘T)";
+"browser.noTabsHint" = "新しいタブを開いてください。エージェントも独自のタブを開けます。";
+"browser.noTabsTitle" = "タブがありません";
 "browser.onServer" = "サーバーで開いています";
 "browser.onServerHelp" = "このページは、この Mac ではなくサーバー上のブラウザで開いています";
 "browser.openFullscreen" = "全画面で開く";
@@ -304,6 +308,10 @@
 "browser.previewTitle" = "プレビュー";
 "browser.reload" = "再読み込み";
 "browser.start" = "ブラウザを起動";
+"browser.startAgentTabs" = "エージェントのタブ";
+"browser.startHint" = "上のバーにアドレスか検索語を入力してください。";
+"browser.startNoRecent" = "開いたアドレスがここに表示されます。";
+"browser.startRecent" = "最近";
 "browser.stopped" = "ブラウザは実行されていません";
 "browser.stoppedHint" = "ブラウザはサーバー上で動きます。エージェントも同じタブを見ます。";
 "browser.tabs" = "タブ";

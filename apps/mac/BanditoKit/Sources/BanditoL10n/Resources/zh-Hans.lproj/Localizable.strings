@@ -284,6 +284,8 @@
 "browser.emptyPage" = "没有打开的页面";
 "browser.error" = "无法连接浏览器";
 "browser.forward" = "前进";
+"browser.frameTimeoutRetry" = "重试";
+"browser.frameTimeoutTitle" = "浏览器没有发送画面";
 "browser.hint" = "浏览器运行在服务器上。登录状态会保留，代理看到的标签页与用户相同。隔离的代理拥有自己的浏览器。";
 "browser.hintShort" = "登录状态保存在服务器上，智能体使用同样的标签页。";
 "browser.install" = "安装";
@@ -294,6 +296,8 @@
 "browser.needsChromeHint" = "Bandito 可以在此服务器上安装 Google Chrome。浏览器会在其中保存登录状态。";
 "browser.newTab" = "新建标签页";
 "browser.newTabHelp" = "新标签页 (⌘T)";
+"browser.noTabsHint" = "打开一个新标签页。智能体也可以打开自己的标签页。";
+"browser.noTabsTitle" = "没有标签页";
 "browser.onServer" = "在服务器上打开";
 "browser.onServerHelp" = "页面在服务器上的浏览器中打开，而不是在这台 Mac 上";
 "browser.openFullscreen" = "全屏打开";
@@ -304,6 +308,10 @@
 "browser.previewTitle" = "预览";
 "browser.reload" = "重新载入";
 "browser.start" = "启动浏览器";
+"browser.startAgentTabs" = "智能体的标签页";
+"browser.startHint" = "在上方的栏中输入地址或搜索内容。";
+"browser.startNoRecent" = "你打开过的地址会显示在这里。";
+"browser.startRecent" = "最近";
 "browser.stopped" = "浏览器未运行";
 "browser.stoppedHint" = "浏览器在服务器上运行：智能体看到的是同样的标签页。";
 "browser.tabs" = "标签页";

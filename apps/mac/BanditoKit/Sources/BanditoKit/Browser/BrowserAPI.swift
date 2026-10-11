@@ -60,14 +60,10 @@ extension ServerModel {
     }
 
     /// A CDP session on one page (`WS /v1/browser/cdp/page/{id}`): `tabID`, or the first page when nil.
-    /// A running browser with no page gets a blank one first. Throws `CDPError.noSuchTab` (404) when the
-    /// tab has closed.
+    /// Throws `CDPError.noPage` when the browser has no tab: nothing opens one in its place (the person closed the
+    /// last one). Throws `CDPError.noSuchTab` (404) when the tab has closed.
     public func browserPageClient(tabID: String? = nil, workspace: String? = nil) async throws -> (CDPClient, BrowserTab) {
-        var tabs = try await browserTabs(workspace: workspace)
-        if tabs.isEmpty {
-            try await createBlankTab(workspace: workspace)
-            tabs = try await browserTabs(workspace: workspace)
-        }
+        let tabs = try await browserTabs(workspace: workspace)
         let tab = tabID.flatMap { id in tabs.first { $0.id == id } } ?? tabs.first
         guard let tab else { throw CDPError.noPage }
         guard BrowserRoute.isValidTargetID(tab.id) else { throw CDPError.badMessage }
@@ -82,17 +78,5 @@ extension ServerModel {
         let request = try await daemonRequest(
             path: "/v1/browser/cdp", query: BrowserRoute.query(workspace: workspace), socket: true)
         return CDPClient(socket: try await URLSessionCDPSocket.open(request: request))
-    }
-
-    /// Opens `about:blank` in a new tab, on the browser-level session (`Target.createTarget` is a browser command).
-    func createBlankTab(workspace: String? = nil) async throws {
-        let browser = try await browserTargetsClient(workspace: workspace)
-        do {
-            _ = try await browser.send(.createTarget(url: "about:blank"))
-        } catch {
-            await browser.close()
-            throw error
-        }
-        await browser.close()
     }
 }

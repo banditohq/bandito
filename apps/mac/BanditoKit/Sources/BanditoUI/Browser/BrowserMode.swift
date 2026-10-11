@@ -112,7 +112,20 @@ struct BrowserMainArea: View {
             PreviewPane(model: model, port: port)
         case .page?, nil:
             if model.status?.running == true {
-                PageSurface(model: model)
+                switch model.pageState {
+                case .noTabs:
+                    BrowserNoTabsView { Task { await model.newTab() } }
+                case .startPage:
+                    BrowserStartPageView(
+                        recent: model.recentAddresses,
+                        agentTabs: model.agentTabs,
+                        onOpenAddress: { model.openRecent($0) },
+                        onSelectTab: { id in Task { await model.selectPage(id) } }
+                    )
+                    .onAppear { model.requestAddressFocus() }
+                case .waitingForFrame, .frameTimedOut, .showsPage:
+                    PageSurface(model: model)
+                }
             } else {
                 BrowserStopped(model: model)
             }
@@ -223,6 +236,8 @@ private struct BrowserToolbar: View {
         }
         // The shortcuts come from the keymap, so Settings → Keys can change them: ⌘L address (⌘R is Refresh, in the menu).
         .keymapShortcut("browser.address", keymap: keymap) { addressFocused = true }
+        // A new tab's start page asks for the address field at once.
+        .onChange(of: model.addressFocusRequest) { _, _ in addressFocused = true }
     }
 
     private func addressBar(compact: Bool) -> some View {
@@ -500,7 +515,8 @@ private struct PageSurface: View {
                     BrowserFrameLayer(store: model.frames)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .accessibilityHidden(true)
-                } else {
+                } else if model.pageState == .waitingForFrame {
+                    // Still waiting: a spinner. After the timeout the retry view below takes its place.
                     VStack(spacing: 10) {
                         ProgressView().controlSize(.small)
                         Text(L10n.Browser.connecting)
@@ -540,6 +556,10 @@ private struct PageSurface: View {
                     canSwipe: { back in back ? model.canGoBack : model.canGoForward }
                 )
                 #endif
+                // Above the input, so its retry button can be pressed.
+                if model.pageState == .frameTimedOut {
+                    BrowserFrameTimedOutView { Task { await model.retryFrame() } }
+                }
             }
             // The page is sized to the area the picture is drawn in, so the picture fills it with no bars.
             .onAppear { reportArea(size) }

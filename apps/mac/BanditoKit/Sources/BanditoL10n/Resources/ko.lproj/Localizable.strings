@@ -284,6 +284,8 @@
 "browser.emptyPage" = "열린 페이지가 없어요";
 "browser.error" = "브라우저에 연결할 수 없어요";
 "browser.forward" = "앞으로";
+"browser.frameTimeoutRetry" = "다시 시도";
+"browser.frameTimeoutTitle" = "브라우저가 화면을 보내지 않았어요";
 "browser.hint" = "브라우저는 서버에서 실행돼요. 로그인 상태가 유지되고, 에이전트는 나와 같은 탭을 봐요. 격리된 에이전트는 자기만의 브라우저를 가져요.";
 "browser.hintShort" = "로그인 정보는 서버에 저장되며, 에이전트도 같은 탭을 써요.";
 "browser.install" = "설치";
@@ -294,6 +296,8 @@
 "browser.needsChromeHint" = "Bandito가 이 서버에 Google Chrome을 설치할 수 있어요. 브라우저는 거기에 로그인 상태를 보관해요.";
 "browser.newTab" = "새 탭";
 "browser.newTabHelp" = "새 탭 (⌘T)";
+"browser.noTabsHint" = "새 탭을 여세요. 에이전트도 자신의 탭을 열 수 있어요.";
+"browser.noTabsTitle" = "탭이 없습니다";
 "browser.onServer" = "서버에서 열림";
 "browser.onServerHelp" = "이 페이지는 이 Mac이 아닌 서버의 브라우저에서 열려 있어요";
 "browser.openFullscreen" = "전체 화면으로 열기";
@@ -304,6 +308,10 @@
 "browser.previewTitle" = "미리 보기";
 "browser.reload" = "새로고침";
 "browser.start" = "브라우저 시작";
+"browser.startAgentTabs" = "에이전트 탭";
+"browser.startHint" = "위쪽 입력창에 주소나 검색어를 입력하세요.";
+"browser.startNoRecent" = "여는 주소가 여기에 표시됩니다.";
+"browser.startRecent" = "최근";
 "browser.stopped" = "브라우저가 실행 중이 아니에요";
 "browser.stoppedHint" = "브라우저는 서버에서 실행돼요. 에이전트도 같은 탭을 봐요.";
 "browser.tabs" = "탭";
