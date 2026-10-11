@@ -124,28 +124,16 @@ public enum MessageBlocks {
 
 /// What the person may put on a message.
 public enum ReactionRules {
-    /// The six emoji offered first.
-    public static let common = ["👍", "❤️", "😂", "🔥", "👀", "✅"]
+    /// The emoji a person can react with: the reaction panel shows them in two rows of eight, and the menus list the
+    /// same ones. There is no other source (the system emoji palette is not offered).
+    public static let common = [
+        "👍", "❤️", "😂", "🎉", "🔥", "👀", "🙏", "✅",
+        "🤔", "👏", "🚀", "💯", "😅", "😮", "👎", "❌",
+    ]
 
     /// The daemon's check (`check_emoji`): one grapheme cluster of at most 16 bytes, no spaces.
     public static func isValid(_ emoji: String) -> Bool {
         emoji.count == 1 && emoji.utf8.count <= 16 && !emoji.contains(where: \.isWhitespace)
-    }
-
-    /// A character the system emoji picker could have produced: valid for the daemon and drawn as a picture
-    /// (a letter or a digit typed into the field is not).
-    public static func isPickable(_ character: Character) -> Bool {
-        let text = String(character)
-        guard isValid(text) else { return false }
-        return character.unicodeScalars.contains { scalar in
-            scalar.properties.isEmojiPresentation || scalar.value == 0xFE0F
-                || (scalar.properties.isEmoji && scalar.value >= 0x203C)
-        }
-    }
-
-    /// The first emoji in text the system picker put into a field, if any.
-    public static func firstEmoji(in text: String) -> String? {
-        text.first(where: isPickable).map(String.init)
     }
 }
 

@@ -47,6 +47,9 @@ public struct NewAgentDraft: Equatable, Sendable {
     public var runtime: RuntimeKind = .claude
     /// Empty means the runtime's default model.
     public var model = ""
+    /// True once the person picked the model in the sheet (even "Default"). Until then the sheet may set the model the
+    /// runtime starts on (see `NewAgentModelRules`); after that it never does. Not sent to the server.
+    public var modelChosen = false
     public var effort: Effort = .medium
     public var instructions = ""
     /// The project folder on the server. Empty until one is picked.

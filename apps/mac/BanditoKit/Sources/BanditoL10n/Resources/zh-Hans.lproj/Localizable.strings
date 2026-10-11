@@ -133,12 +133,6 @@
 "agentSheet.statusSignedInPlain" = "已登录";
 "agentSheet.statusUnknown" = "无法检查";
 "agentSheet.title" = "新建智能体";
-"agentSheet.toolBrowser" = "浏览器";
-"agentSheet.toolFiles" = "项目文件";
-"agentSheet.toolScreen" = "服务器屏幕";
-"agentSheet.toolTeam" = "给团队发消息";
-"agentSheet.toolTerminal" = "终端";
-"agentSheet.tools" = "可执行的操作";
 "agentSheet.windowResets" = "重置";
 "agentSheet.workplace" = "工作区";
 "agentSheet.workplaceContainer" = "容器";
@@ -1191,8 +1185,6 @@
 "message.copyAsText" = "复制为文本";
 "message.more" = "更多";
 "message.react" = "表情回应";
-"message.reactMore" = "更多…";
-"message.reactPickerHint" = "请在面板中选择表情";
 "message.reactionMine" = "取消回应";
 "message.reactionOf" = "%1$@ 的回应";
 "message.reactionSame" = "同样回应";

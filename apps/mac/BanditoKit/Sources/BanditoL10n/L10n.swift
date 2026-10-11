@@ -229,12 +229,6 @@ public enum L10n {
         public static var statusSignedInPlain: String { L10n.tr("agentSheet.statusSignedInPlain") }
         public static var statusUnknown: String { L10n.tr("agentSheet.statusUnknown") }
         public static var title: String { L10n.tr("agentSheet.title") }
-        public static var toolBrowser: String { L10n.tr("agentSheet.toolBrowser") }
-        public static var toolFiles: String { L10n.tr("agentSheet.toolFiles") }
-        public static var toolScreen: String { L10n.tr("agentSheet.toolScreen") }
-        public static var toolTeam: String { L10n.tr("agentSheet.toolTeam") }
-        public static var toolTerminal: String { L10n.tr("agentSheet.toolTerminal") }
-        public static var tools: String { L10n.tr("agentSheet.tools") }
         public static var windowResets: String { L10n.tr("agentSheet.windowResets") }
         public static var workplace: String { L10n.tr("agentSheet.workplace") }
         public static var workplaceContainer: String { L10n.tr("agentSheet.workplaceContainer") }
@@ -1700,8 +1694,6 @@ public enum L10n {
         public static var copyAsText: String { L10n.tr("message.copyAsText") }
         public static var more: String { L10n.tr("message.more") }
         public static var react: String { L10n.tr("message.react") }
-        public static var reactMore: String { L10n.tr("message.reactMore") }
-        public static var reactPickerHint: String { L10n.tr("message.reactPickerHint") }
         public static var reactionMine: String { L10n.tr("message.reactionMine") }
         public static func reactionOf(name: String) -> String { L10n.tr("message.reactionOf", name) }
         public static var reactionSame: String { L10n.tr("message.reactionSame") }

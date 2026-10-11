@@ -1,3 +1,4 @@
+import BanditoL10n
 import Testing
 
 @testable import BanditoUI
@@ -40,4 +41,21 @@ import Testing
             #expect(!capability.title.isEmpty)
         }
     }
+
+    // MARK: What the server cannot give
+
+    @Test func nothingIsMarkedBeforeTheServerInfoComes() {
+        #expect(AgentCapability.unavailable(infoKnown: false, supports: { _ in false }).isEmpty)
+    }
+
+    @Test func aServerWithTheScreenFeatureOffersEveryChip() {
+        #expect(AgentCapability.unavailable(infoKnown: true, supports: { $0 == "screen" }).isEmpty)
+    }
+
+    @Test func aServerWithoutTheScreenFeatureMarksOnlyTheScreen() {
+        let reasons = AgentCapability.unavailable(infoKnown: true, supports: { _ in false })
+        #expect(Set(reasons.keys) == [.screen])
+        #expect(reasons[.screen] == L10n.Screen.unsupported)
+    }
+
 }
