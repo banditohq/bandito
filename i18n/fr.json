@@ -2210,6 +2210,7 @@
   "agentConnect.hintBrowser": "Vous vous connectez dans le navigateur. Bandito donne l'accès à {agent} tout seul.",
   "agentConnect.hintKeys": "Vous remplissez les clés dans un formulaire. Bandito donne l'accès à {agent} tout seul.",
   "agentConnect.notNow": "Pas maintenant",
+  "agentConnect.reasonBy": "— écrit {agent}",
   "agentConnect.connected": "{service} connecté, {agent} continue",
   "agentConnect.declined": "Vous n'avez pas connecté {service}",
   "agentConnect.expired": "La demande pour {service} a expiré",

@@ -2210,6 +2210,7 @@
   "agentConnect.hintBrowser": "You sign in in the browser. Bandito hands the access to {agent} by itself.",
   "agentConnect.hintKeys": "You fill in the keys in a form. Bandito hands the access to {agent} by itself.",
   "agentConnect.notNow": "Not now",
+  "agentConnect.reasonBy": "— {agent} writes",
   "agentConnect.connected": "{service} connected, {agent} continues",
   "agentConnect.declined": "You did not connect {service}",
   "agentConnect.expired": "The request for {service} timed out",

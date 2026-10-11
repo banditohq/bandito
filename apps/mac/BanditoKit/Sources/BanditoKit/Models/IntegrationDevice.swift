@@ -101,11 +101,19 @@ public enum DeviceBeginTarget: Sendable, Equatable {
     case draft(NewIntegration)
 }
 
+extension DeviceServer {
+    public func deviceBegin(_ target: DeviceBeginTarget, connectRequestId: String?) async throws -> DeviceBegun {
+        try await deviceBegin(target)
+    }
+}
+
 /// The server calls a code sign-in needs. `ServerModel` is the real one; tests use a fake.
 @MainActor
 public protocol DeviceServer: AnyObject {
     var deviceServerID: UUID { get }
     func deviceBegin(_ target: DeviceBeginTarget) async throws -> DeviceBegun
+    /// Begins a sign-in that answers an agent's connect request (see `OAuthServer.oauthBegin`).
+    func deviceBegin(_ target: DeviceBeginTarget, connectRequestId: String?) async throws -> DeviceBegun
     func deviceStatus(flowId: String) async throws -> DeviceStatus
     /// Drops a flow the owner gave up. A failure is not worth telling: the daemon forgets the flow by itself.
     func deviceCancel(flowId: String) async

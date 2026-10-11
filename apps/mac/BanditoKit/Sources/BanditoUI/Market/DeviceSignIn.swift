@@ -29,7 +29,7 @@ public final class DeviceSignIn {
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let pollEvery: Duration
     /// What to start again for "Try again", and the server to tell when the owner gives up.
-    @ObservationIgnored private var attempt: (server: any DeviceServer, target: DeviceBeginTarget, name: String)?
+    @ObservationIgnored private var attempt: (server: any DeviceServer, target: DeviceBeginTarget, name: String, connectRequestId: String?)?
     @ObservationIgnored private var flowId: String?
     @ObservationIgnored private var poller: Task<Void, Never>?
     /// Changes with each start and each cancel, so an answer that arrives late knows it is out of date.
@@ -57,15 +57,19 @@ public final class DeviceSignIn {
 
     /// Starts a sign-in: asks the server for a code and waits for the owner to confirm it. One that was waiting is
     /// given up first.
-    public func begin(server: any DeviceServer, target: DeviceBeginTarget, name: String) async {
+    ///
+    /// With `connectRequestId` the sign-in answers an agent's request: when it ends well the daemon tells the agent.
+    public func begin(
+        server: any DeviceServer, target: DeviceBeginTarget, name: String, connectRequestId: String? = nil
+    ) async {
         await discard()
         let id = UUID()
         run = id
-        attempt = (server, target, name)
+        attempt = (server, target, name, connectRequestId)
         copied = false
         phase = .starting(name: name)
         do {
-            let begun = try await server.deviceBegin(target)
+            let begun = try await server.deviceBegin(target, connectRequestId: connectRequestId)
             guard run == id else {
                 // Cancelled while the server was answering.
                 await server.deviceCancel(flowId: begun.flowId)
@@ -91,7 +95,9 @@ public final class DeviceSignIn {
     /// "Try again" after a failure: a new code from the start.
     public func retry() async {
         guard case .failed = phase, let attempt else { return }
-        await begin(server: attempt.server, target: attempt.target, name: attempt.name)
+        await begin(
+            server: attempt.server, target: attempt.target, name: attempt.name,
+            connectRequestId: attempt.connectRequestId)
     }
 
     // MARK: - the code

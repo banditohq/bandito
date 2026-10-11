@@ -2269,6 +2269,7 @@
   "agentConnect.hintBrowser": "Вы входите в браузере. Доступ агенту {agent} Bandito выдаст сам.",
   "agentConnect.hintKeys": "Вы заполняете ключи в форме. Доступ агенту {agent} Bandito выдаст сам.",
   "agentConnect.notNow": "Не сейчас",
+  "agentConnect.reasonBy": "— пишет {agent}",
   "agentConnect.connected": "{service} подключён, {agent} продолжает",
   "agentConnect.declined": "Вы не стали подключать {service}",
   "agentConnect.expired": "Запрос на {service} истёк",

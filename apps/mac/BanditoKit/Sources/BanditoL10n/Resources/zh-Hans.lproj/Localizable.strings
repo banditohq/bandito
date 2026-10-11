@@ -56,6 +56,7 @@
 "agentConnect.hintBrowser" = "你在浏览器中登录，Bandito 会自动把访问权限交给 %1$@。";
 "agentConnect.hintKeys" = "你在表单中填写密钥，Bandito 会自动把访问权限交给 %1$@。";
 "agentConnect.notNow" = "暂不";
+"agentConnect.reasonBy" = "— %1$@ 写道";
 "agentConnect.title" = "%1$@ 需要 %2$@";
 "agentConnect.unknown" = "此服务器的目录中没有 %1$@";
 "agentSheet.advanced" = "高级";

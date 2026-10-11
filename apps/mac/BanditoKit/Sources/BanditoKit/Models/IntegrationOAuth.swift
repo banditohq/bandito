@@ -122,11 +122,20 @@ public struct OAuthCallback: Equatable, Sendable {
     }
 }
 
+extension OAuthServer {
+    public func oauthBegin(_ target: OAuthBeginTarget, connectRequestId: String?) async throws -> OAuthBegun {
+        try await oauthBegin(target)
+    }
+}
+
 /// The server calls a sign-in needs. `ServerModel` is the real one; tests use a fake.
 @MainActor
 public protocol OAuthServer: AnyObject {
     var oauthServerID: UUID { get }
     func oauthBegin(_ target: OAuthBeginTarget) async throws -> OAuthBegun
+    /// Begins a sign-in that answers an agent's connect request: when it ends well, the daemon tells the agent.
+    /// A server that knows nothing of requests begins an ordinary sign-in.
+    func oauthBegin(_ target: OAuthBeginTarget, connectRequestId: String?) async throws -> OAuthBegun
     func oauthComplete(state: String, code: String, iss: String?) async throws -> OAuthCompleted
     /// Drops a sign-in the owner gave up. A failure is not worth telling: the daemon forgets it in ten minutes.
     func oauthCancel(state: String) async

@@ -21,7 +21,7 @@ struct ThreadView: View {
     /// Failures of interrupt, approval and history loading.
     @State private var actionError: UserFacingMessage?
     /// The sheet of keys a connect card opened (see `connectService`).
-    @State private var connectSheet: IntegrationTarget?
+    @State private var connectSheet: AgentConnectRules.SheetItem?
     @State private var loadingOlder = false
     /// Files changed since the last checkpoint; `nil` until loaded or when the server lacks `changes`.
     @State private var changes: ChangesDiff?
@@ -477,11 +477,12 @@ struct ThreadView: View {
         .task(id: connectCardCount) {
             if connectCardCount > 0, server.supports("agent_connect") { await MentionServices.shared.ensure(server) }
         }
-        .banditoSheet(item: $connectSheet, dismissOnOutsideClick: false) { target in
+        .banditoSheet(item: $connectSheet, dismissOnOutsideClick: false) { item in
             IntegrationEditor(
-                server: server, target: target,
+                server: server, target: item.target,
                 existingNames: MentionServices.shared.snapshot(for: server)?.integrations.map(\.name) ?? [],
-                onChecked: { _, _ in }, onSaved: { await MentionServices.shared.ensure(server, force: true) })
+                onChecked: { _, _ in }, onSaved: { await MentionServices.shared.ensure(server, force: true) },
+                connectRequestId: item.requestId)
         }
         // Text put here by another screen ("Ask about this place") goes into the composer, once.
         .onChange(of: router.pendingComposerText, initial: true) { _, _ in
@@ -645,14 +646,20 @@ struct ThreadView: View {
             }
             let existing = AgentConnectRules.existing(for: entry, in: snapshot?.integrations ?? [])
             switch AgentConnectRules.start(
-                entry: entry, existing: existing, supportsOAuth: server.supports("integrations_oauth"))
+                entry: entry, existing: existing, supportsOAuth: server.supports("integrations_oauth"),
+                supportsDevice: server.supports("integrations_device"))
             {
             case .signIn(let target):
-                await app.oauth.begin(server: server, target: target, name: entry.name)
+                await app.oauth.begin(server: server, target: target, name: entry.name, connectRequestId: row.requestId)
+            case .deviceSignIn(let target):
+                await app.device.begin(server: server, target: target, name: entry.name, connectRequestId: row.requestId)
             case .sheet(let target):
-                connectSheet = target
-            case .needsUpdate:
-                actionError = UserFacingMessage(text: L10n.Integrations.Oauth.needsUpdate(name: entry.name))
+                connectSheet = AgentConnectRules.SheetItem(target: target, requestId: row.requestId)
+            case .needsUpdate(let device):
+                actionError = UserFacingMessage(
+                    text: device
+                        ? L10n.Integrations.Device.needsUpdate(name: entry.name)
+                        : L10n.Integrations.Oauth.needsUpdate(name: entry.name))
             }
         }
     }

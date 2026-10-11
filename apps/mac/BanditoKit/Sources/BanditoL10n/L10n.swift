@@ -149,6 +149,7 @@ public enum L10n {
         public static func hintBrowser(agent: String) -> String { L10n.tr("agentConnect.hintBrowser", agent) }
         public static func hintKeys(agent: String) -> String { L10n.tr("agentConnect.hintKeys", agent) }
         public static var notNow: String { L10n.tr("agentConnect.notNow") }
+        public static func reasonBy(agent: String) -> String { L10n.tr("agentConnect.reasonBy", agent) }
         public static func title(agent: String, service: String) -> String { L10n.tr("agentConnect.title", agent, service) }
         public static func unknown(service: String) -> String { L10n.tr("agentConnect.unknown", service) }
     }

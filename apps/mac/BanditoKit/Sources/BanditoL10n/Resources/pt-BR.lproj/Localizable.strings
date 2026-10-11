@@ -56,6 +56,7 @@
 "agentConnect.hintBrowser" = "Você entra no navegador. O Bandito passa o acesso para %1$@ sozinho.";
 "agentConnect.hintKeys" = "Você preenche as chaves em um formulário. O Bandito passa o acesso para %1$@ sozinho.";
 "agentConnect.notNow" = "Agora não";
+"agentConnect.reasonBy" = "— escreve %1$@";
 "agentConnect.title" = "%1$@ precisa de %2$@";
 "agentConnect.unknown" = "%1$@ não está no catálogo deste servidor";
 "agentSheet.advanced" = "Avançado";

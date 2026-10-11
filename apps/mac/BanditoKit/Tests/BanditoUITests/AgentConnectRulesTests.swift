@@ -30,6 +30,38 @@ import Testing
         #expect(id == "i1")
     }
 
+    private let github = IntegrationCatalogEntry(
+        id: "github", name: "GitHub", descriptionEn: "", descriptionRu: "", kind: .http,
+        url: "https://api.githubcopilot.com/mcp/", docsUrl: "", icon: "", auth: .device)
+
+    @Test func aServiceThatSignsInWithACodeOpensTheCodeSheetWithADraft() {
+        guard case .deviceSignIn(.draft(let draft)) = AgentConnectRules.start(
+            entry: github, existing: nil, supportsOAuth: true, supportsDevice: true)
+        else { Issue.record("expected a code sign-in with a draft"); return }
+        #expect(draft.name == "github")
+    }
+
+    @Test func aCodeServiceThatIsThereAlreadySignsInAgainAndAnOldServerAsksForAnUpdate() {
+        let row = Integration(id: "i9", name: "github", kind: .http, auth: .device)
+        guard case .deviceSignIn(.existing(let id)) = AgentConnectRules.start(
+            entry: github, existing: row, supportsOAuth: true, supportsDevice: true)
+        else { Issue.record("expected a code sign-in of the existing one"); return }
+        #expect(id == "i9")
+        guard case .needsUpdate(let device) = AgentConnectRules.start(
+            entry: github, existing: nil, supportsOAuth: true, supportsDevice: false)
+        else { Issue.record("expected needsUpdate"); return }
+        #expect(device)
+    }
+
+    @Test func theSheetOfKeysCarriesTheRequestItAnswers() {
+        let item = AgentConnectRules.SheetItem(target: .catalog(fetch), requestId: "r1")
+        #expect(item.requestId == "r1" && item.id == "r1-catalog-fetch")
+    }
+
+    @Test func theAgentsReasonIsQuotedSoItReadsAsItsWords() {
+        #expect(AgentConnectText.quoted("to read issues") == "\u{201C}to read issues\u{201D}")
+    }
+
     @Test func aServerWithoutBrowserSignInsAsksForAnUpdate() {
         guard case .needsUpdate = AgentConnectRules.start(entry: linear, existing: nil, supportsOAuth: false)
         else { Issue.record("expected needsUpdate"); return }

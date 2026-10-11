@@ -1,6 +1,7 @@
 //! `integrations.*` JSON-RPC methods: the owner's MCP servers for the agents, the template catalog, and a test
 //! that starts a server and lists its tools. Owner and apps only. See docs/ARCHITECTURE.md#integrations.
 
+use super::connect;
 use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, Peer, RpcError, RpcResult, SERVER_ERROR, ok, params};
 use crate::integrations::{self, Pair, Server, Transport};
 use crate::mcp_oauth::{self, Outcome, Target, Why, device};
@@ -42,6 +43,9 @@ struct Id {
 #[derive(Deserialize)]
 struct UpdateParams {
     id: String,
+    /// The request of an agent this update answers (see `connect.rs`): a row that works afterwards closes it.
+    #[serde(default)]
+    connect_request_id: Option<String>,
     #[serde(flatten)]
     patch: IntegrationPatch,
 }
@@ -55,6 +59,16 @@ struct BeginParams {
     /// A client registered with the service beforehand, for one without dynamic registration.
     #[serde(default)]
     client_id: Option<String>,
+    /// The request of an agent this connection answers (see `connect.rs`): when it succeeds, the agent is told.
+    #[serde(default)]
+    connect_request_id: Option<String>,
+}
+
+/// `integrations.add` may say it answers an agent's request too.
+#[derive(Deserialize)]
+struct ConnectWords {
+    #[serde(default)]
+    connect_request_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -176,6 +190,7 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 integration,
                 draft,
                 client_id,
+                connect_request_id,
             } = params(p)?;
             let target = match (integration, draft) {
                 (Some(id), None) => Target::Existing(store.integration_get(&id)?.ok_or_else(|| no_integration(&id))?),
@@ -191,10 +206,27 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 }
                 _ => return Err(RpcError::new(INVALID_PARAMS, "give either integration or draft")),
             };
+            // A connection for an agent's request is for that request's service.
+            let bound = match connect_request_id {
+                Some(rid) => {
+                    let (row, created) = match &target {
+                        Target::Existing(row) => (row.clone(), false),
+                        Target::Draft(draft) => (draft_row(draft), true),
+                    };
+                    connect::check_bind(app, &rid, &row)?.then_some(connect::Bound {
+                        request_id: rid,
+                        created,
+                    })
+                }
+                None => None,
+            };
             let now = now_ms();
             let begun = mcp_oauth::begin(store, &app.oauth, &device, target, client_id, now)
                 .await
                 .map_err(invalid)?;
+            if let Some(bound) = bound {
+                app.connects.bind_oauth(&begun.state, bound);
+            }
             ok(json!({
                 "authorize_url": begun.authorize_url,
                 "state": begun.state,
@@ -209,6 +241,17 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 .map_err(invalid)?;
             let id = done.integration.id.clone();
             reload_agents(app, users_of(store, &id)).await;
+            // The sign-in was started from an agent's card: the agent gets the service (and only this one does).
+            if let Some(bound) = app.connects.take_oauth(&state) {
+                connect::complete(
+                    &app.sup,
+                    &app.connects,
+                    &bound.request_id,
+                    &done.integration,
+                    bound.created,
+                )
+                .await;
+            }
             let status = mcp_oauth::status(store, &id, now)?;
             ok(json!({
                 "id": id,
@@ -221,7 +264,11 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
         }
         "integrations.oauth_cancel" => {
             let StateParams { state } = params(p)?;
-            ok(json!({ "cancelled": app.oauth.cancel(&state, &device) }))
+            let cancelled = app.oauth.cancel(&state, &device);
+            if cancelled {
+                app.connects.forget_oauth(&state);
+            }
+            ok(json!({ "cancelled": cancelled }))
         }
         "integrations.oauth_status" => {
             let StatusParams { id } = params(p)?;
@@ -285,7 +332,12 @@ async fn device_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcR
     let who = super::redeem_source(peer);
     match method {
         "integrations.device_begin" => {
-            let BeginParams { integration, draft, .. } = params(p)?;
+            let BeginParams {
+                integration,
+                draft,
+                connect_request_id,
+                ..
+            } = params(p)?;
             let target = match (integration, draft) {
                 (Some(id), None) => {
                     device::DeviceTarget::Existing(store.integration_get(&id)?.ok_or_else(|| no_integration(&id))?)
@@ -302,13 +354,34 @@ async fn device_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcR
                 }
                 _ => return Err(RpcError::new(INVALID_PARAMS, "give either integration or draft")),
             };
-            // When the token is stored, the sessions of the agents that have the service start again with it.
+            // A connection for an agent's request is for that request's service.
+            let created = matches!(target, device::DeviceTarget::Draft(_));
+            let bound = match connect_request_id {
+                Some(rid) => {
+                    let row = match &target {
+                        device::DeviceTarget::Existing(row) => row.clone(),
+                        device::DeviceTarget::Draft(draft) => draft_row(draft),
+                    };
+                    connect::check_bind(app, &rid, &row)?.then_some(rid)
+                }
+                None => None,
+            };
+            // When the token is stored, the sessions of the agents that have the service start again with it, and
+            // the agent whose card started the sign-in gets the service.
             let sup = app.sup.clone();
+            let connects = app.connects.clone();
             let after: device::After = Arc::new(move |id: String| {
                 let sup = sup.clone();
+                let connects = connects.clone();
+                let bound = bound.clone();
                 Box::pin(async move {
                     for agent in users_of(&sup.hub().store, &id) {
                         sup.reload(&agent, None).await;
+                    }
+                    if let Some(rid) = bound
+                        && let Ok(Some(row)) = sup.hub().store.integration_get(&id)
+                    {
+                        connect::complete(&sup, &connects, &rid, &row, created).await;
                     }
                 })
             });
@@ -397,7 +470,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 ));
             }
             // What the tools may do can be named when the row is added; without it the row starts as the catalog says.
-            let tools: ToolWords = params(p)?;
+            let tools: ToolWords = params(p.clone())?;
             check_tool_overrides(tools.tool_overrides.as_ref())?;
             check_new(&n)?;
             if store.integration_list()?.iter().any(|i| i.name == n.name) {
@@ -406,8 +479,13 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     format!("an integration named '{}' already exists", n.name),
                 ));
             }
+            let words: ConnectWords = params(p)?;
+            let bound = match words.connect_request_id {
+                Some(rid) => connect::check_bind(app, &rid, &draft_row(&n))?.then_some(rid),
+                None => None,
+            };
             let made = store.integration_create(n)?;
-            if tools.tool_mode.is_some() || tools.tool_overrides.is_some() {
+            let made = if tools.tool_mode.is_some() || tools.tool_overrides.is_some() {
                 let patch = IntegrationPatch {
                     tool_mode: tools.tool_mode,
                     tool_overrides: tools.tool_overrides,
@@ -417,12 +495,21 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 // A new service whose tools are limited from the start: the sessions that would get it are
                 // started again, so Claude is told to send its calls to the daemon.
                 reload_agents(app, users_of(store, &done.id)).await;
-                return ok(done);
+                done
+            } else {
+                made
+            };
+            if let Some(rid) = bound {
+                connect::complete(&app.sup, &app.connects, &rid, &made, true).await;
             }
             ok(made)
         }
         "integrations.update" => {
-            let UpdateParams { id, patch } = params(p)?;
+            let UpdateParams {
+                id,
+                connect_request_id,
+                patch,
+            } = params(p)?;
             check_tool_overrides(patch.tool_overrides.as_ref())?;
             let cur = store
                 .integration_get(&id)?
@@ -449,11 +536,21 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 return Err(RpcError::new(INVALID_PARAMS, "that name is taken"));
             }
             let changes_tool_rules = changes_tool_rules(&cur, &patch);
+            let bound = match connect_request_id {
+                Some(rid) => connect::check_bind(app, &rid, &cur)?.then_some(rid),
+                None => None,
+            };
             let updated = store.integration_update(&id, patch)?;
             if changes_tool_rules {
                 // The agents that have the service start their sessions again, with the new rules: Claude lists
                 // the service's calls as `permissions.ask` when the session starts.
                 reload_agents(app, users_of(store, &id)).await;
+            }
+            // Repaired from an agent's card (turned on, keys changed): when the row works, the agent gets it.
+            if let Some(rid) = bound
+                && connect::works(app, &updated)?
+            {
+                connect::complete(&app.sup, &app.connects, &rid, &updated, false).await;
             }
             ok(updated)
         }
@@ -846,7 +943,7 @@ fn check_new(n: &NewIntegration) -> Result<(), RpcError> {
 }
 
 /// The row a new integration would be stored as, before it has an id.
-fn draft_row(n: &NewIntegration) -> Integration {
+pub(super) fn draft_row(n: &NewIntegration) -> Integration {
     Integration {
         id: String::new(),
         name: n.name.clone(),

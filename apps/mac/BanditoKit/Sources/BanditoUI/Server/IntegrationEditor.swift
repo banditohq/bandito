@@ -11,6 +11,8 @@ struct IntegrationEditor: View {
     let existingNames: [String]
     var onChecked: (String, IntegrationTest) -> Void
     var onSaved: () async -> Void
+    /// The request of an agent this sheet answers: saving tells the agent (the connect card passes it).
+    var connectRequestId: String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var draft: IntegrationDraft
@@ -23,8 +25,10 @@ struct IntegrationEditor: View {
 
     init(
         server: ServerModel, target: IntegrationTarget, existingNames: [String],
-        onChecked: @escaping (String, IntegrationTest) -> Void, onSaved: @escaping () async -> Void
+        onChecked: @escaping (String, IntegrationTest) -> Void, onSaved: @escaping () async -> Void,
+        connectRequestId: String? = nil
     ) {
+        self.connectRequestId = connectRequestId
         self.server = server
         self.target = target
         self.existingNames = existingNames
@@ -224,7 +228,7 @@ struct IntegrationEditor: View {
                 if let id = draft.editingID {
                     guard await writeSecrets(save.secrets) else { return }
                     if let patch = save.patch {
-                        try await server.updateIntegration(id, patch: patch)
+                        try await server.updateIntegration(id, patch: patch, connectRequestId: connectRequestId)
                     }
                     await onSaved()
                     if target.isNew {
@@ -232,7 +236,8 @@ struct IntegrationEditor: View {
                     } else {
                         dismiss()
                     }
-                } else if let create = save.create {
+                } else if var create = save.create {
+                    create.connectRequestId = connectRequestId
                     let created = try await server.addIntegration(create)
                     draft.markSaved(id: created.id)
                     attempted = false

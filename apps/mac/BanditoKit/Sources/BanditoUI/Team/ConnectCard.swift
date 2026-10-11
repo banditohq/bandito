@@ -63,6 +63,9 @@ private struct ConnectResultLine: View {
 
 /// The words of the line that closes a request.
 enum AgentConnectText {
+    /// The agent's reason in quotation marks, so that it reads as its words. Marks the agent put in already are kept.
+    static func quoted(_ reason: String) -> String { "\u{201C}\(reason)\u{201D}" }
+
     static func line(outcome: ConnectOutcome, service: String, agent: String) -> String {
         switch outcome {
         case .connected: L10n.AgentConnect.connected(service: service, agent: agent)
@@ -102,12 +105,19 @@ private struct PendingConnectCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                     if let reason = row.shownReason {
-                        Text(reason)
-                            .font(BanditoFont.text(size: 13.5, weight: 400))
-                            .foregroundStyle(Color.Bandito.text2)
-                            .lineSpacing(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .textSelection(.enabled)
+                        // Words of the agent, shown as a quote with its name: the card is Bandito's, the reason is not.
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(AgentConnectText.quoted(reason))
+                                .font(BanditoFont.text(size: 13.5, weight: 400))
+                                .foregroundStyle(Color.Bandito.text2)
+                                .lineSpacing(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                            Text(L10n.AgentConnect.reasonBy(agent: agentName))
+                                .font(BanditoFont.text(size: 12, weight: 400))
+                                .foregroundStyle(Color.Bandito.text3)
+                                .lineLimit(1)
+                        }
                     }
                     Text(hint)
                         .font(BanditoFont.text(size: 12, weight: 400))

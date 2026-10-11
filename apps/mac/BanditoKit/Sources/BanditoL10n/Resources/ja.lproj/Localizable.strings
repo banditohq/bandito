@@ -56,6 +56,7 @@
 "agentConnect.hintBrowser" = "ブラウザでサインインします。%1$@ へのアクセスは Bandito が自動で渡します。";
 "agentConnect.hintKeys" = "フォームにキーを入力します。%1$@ へのアクセスは Bandito が自動で渡します。";
 "agentConnect.notNow" = "今はしない";
+"agentConnect.reasonBy" = "— %1$@ より";
 "agentConnect.title" = "%1$@ は %2$@ を必要としています";
 "agentConnect.unknown" = "%1$@ はこのサーバーのカタログにありません";
 "agentSheet.advanced" = "詳細設定";

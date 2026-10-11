@@ -15,18 +15,34 @@ enum AgentConnectRules {
     enum Start {
         /// The browser sign-in of a service that signs in there (`app.oauth.begin`).
         case signIn(OAuthBeginTarget)
+        /// The sign-in with a code, in the sheet that shows it (`app.device.begin`).
+        case deviceSignIn(DeviceBeginTarget)
         /// The sheet of keys (a new service from the catalog) or the sheet of a service that is there already.
         case sheet(IntegrationTarget)
-        /// The server cannot do browser sign-ins: it has to be updated first.
-        case needsUpdate
+        /// The server cannot do this kind of sign-in (`device`: the one with a code): it has to be updated first.
+        case needsUpdate(device: Bool)
+    }
+
+    /// The connection a card starts is told which request it answers, so that it closes that card and no other.
+    struct SheetItem: Identifiable {
+        var target: IntegrationTarget
+        var requestId: String
+        var id: String { "\(requestId)-\(target.id)" }
     }
 
     /// `existing` is the integration of that service already on the server (made from the template: it has the
     /// template's id as its name), for example one that is turned off or whose sign-in ran out. It is repaired, not
     /// added a second time.
-    static func start(entry: IntegrationCatalogEntry, existing: Integration?, supportsOAuth: Bool) -> Start {
+    static func start(
+        entry: IntegrationCatalogEntry, existing: Integration?, supportsOAuth: Bool, supportsDevice: Bool = true
+    ) -> Start {
+        if entry.usesDevice, let url = entry.url {
+            guard supportsDevice else { return .needsUpdate(device: true) }
+            if let existing { return .deviceSignIn(.existing(id: existing.id)) }
+            return .deviceSignIn(.draft(NewIntegration(name: entry.id, kind: .http, url: url)))
+        }
         if entry.usesOAuth, let url = entry.url {
-            guard supportsOAuth else { return .needsUpdate }
+            guard supportsOAuth else { return .needsUpdate(device: false) }
             if let existing { return .signIn(.existing(id: existing.id)) }
             return .signIn(.draft(NewIntegration(name: entry.id, kind: .http, url: url)))
         }

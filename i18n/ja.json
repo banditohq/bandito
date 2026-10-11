@@ -2182,6 +2182,7 @@
   "agentConnect.hintBrowser": "ブラウザでサインインします。{agent} へのアクセスは Bandito が自動で渡します。",
   "agentConnect.hintKeys": "フォームにキーを入力します。{agent} へのアクセスは Bandito が自動で渡します。",
   "agentConnect.notNow": "今はしない",
+  "agentConnect.reasonBy": "— {agent} より",
   "agentConnect.connected": "{service} を接続しました。{agent} は作業を続けます",
   "agentConnect.declined": "{service} は接続しませんでした",
   "agentConnect.expired": "{service} のリクエストは期限切れです",

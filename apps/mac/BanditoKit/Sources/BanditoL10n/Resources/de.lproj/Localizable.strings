@@ -56,6 +56,7 @@
 "agentConnect.hintBrowser" = "Du meldest dich im Browser an. Bandito gibt %1$@ den Zugriff selbst.";
 "agentConnect.hintKeys" = "Du füllst die Schlüssel in einem Formular aus. Bandito gibt %1$@ den Zugriff selbst.";
 "agentConnect.notNow" = "Nicht jetzt";
+"agentConnect.reasonBy" = "— schreibt %1$@";
 "agentConnect.title" = "%1$@ braucht %2$@";
 "agentConnect.unknown" = "%1$@ ist nicht im Katalog dieses Servers";
 "agentSheet.advanced" = "Erweitert";

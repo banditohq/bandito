@@ -124,6 +124,48 @@ import Testing
         await model.disconnect()
     }
 
+    func sentParams(_ method: String, _ fake: FakeTransport) async throws -> [String: Any] {
+        let sent = JSONRPC.requests(of: method, in: await fake.sentTexts())
+        let text = try #require(sent.first)
+        let request = try #require(JSONRPC.parse(text))
+        return try #require(JSONSerialization.jsonObject(with: Data(request.paramsJSON.utf8)) as? [String: Any])
+    }
+
+    @Test func everyConnectionACardStartsNamesTheRequestItAnswers() async throws {
+        let integration = #"{"id":"i1","name":"fetch","kind":"stdio","enabled":true,"created_at":1}"#
+        let (model, fake) = await connected(
+            features: ["agent_connect"],
+            extra: [
+                "integrations.oauth_begin": { _ in #"{"authorize_url":"https://x.test/a","state":"s1"}"# },
+                "integrations.device_begin": { _ in
+                    #"{"flow_id":"f1","user_code":"AB-12","verification_uri":"https://x.test/d","expires_at":1,"interval":5}"#
+                },
+                "integrations.add": { _ in integration },
+                "integrations.update": { _ in integration },
+            ])
+        let draft = NewIntegration(name: "linear", kind: .http, url: "https://mcp.linear.app/mcp")
+        _ = try await model.oauthBegin(.draft(draft), connectRequestId: "r1")
+        _ = try await model.deviceBegin(.existing(id: "i1"), connectRequestId: "r2")
+        _ = try await model.addIntegration(
+            NewIntegration(name: "fetch", kind: .stdio, command: "uvx", connectRequestId: "r3"))
+        _ = try await model.updateIntegration("i1", patch: IntegrationPatch(enabled: true), connectRequestId: "r4")
+        #expect(try await sentParams("integrations.oauth_begin", fake)["connect_request_id"] as? String == "r1")
+        #expect(try await sentParams("integrations.device_begin", fake)["connect_request_id"] as? String == "r2")
+        #expect(try await sentParams("integrations.add", fake)["connect_request_id"] as? String == "r3")
+        let update = try await sentParams("integrations.update", fake)
+        #expect(update["connect_request_id"] as? String == "r4" && update["id"] as? String == "i1")
+        await model.disconnect()
+    }
+
+    @Test func aConnectionNobodyAskedForSendsNoRequestId() async throws {
+        let (model, fake) = await connected(
+            features: [],
+            extra: ["integrations.oauth_begin": { _ in #"{"authorize_url":"https://x.test/a","state":"s1"}"# }])
+        _ = try await model.oauthBegin(.existing(id: "i1"))
+        #expect(try await sentParams("integrations.oauth_begin", fake)["connect_request_id"] == nil)
+        await model.disconnect()
+    }
+
     @Test func aRequestThatIsOverAlreadyIsNotAnError() async throws {
         let (model, _) = await connected(
             features: ["agent_connect"],
