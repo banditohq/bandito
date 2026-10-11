@@ -237,10 +237,7 @@ pub fn login_from_auth_status(probe: Option<&ProbeOutput>) -> LoginCheck {
     match serde_json::from_str::<AuthStatus>(&probe.stdout) {
         Ok(status) => LoginCheck {
             logged_in: Some(status.logged_in),
-            plan: status
-                .subscription_type
-                .as_deref()
-                .and_then(|subscription| plan_from_claude(subscription, None)),
+            plan: status.subscription_type.as_deref().and_then(plan_from_claude),
         },
         Err(_) => {
             tracing::debug!("claude: auth status printed no readable answer");
@@ -386,7 +383,6 @@ struct CredentialsFile {
 #[serde(rename_all = "camelCase")]
 struct OauthAccount {
     subscription_type: Option<String>,
-    rate_limit_tier: Option<String>,
 }
 
 /// The plan in a `.credentials.json` body. A broken file is logged without its content, since it holds tokens.
@@ -399,17 +395,16 @@ pub fn plan_from_credentials(bytes: &[u8]) -> Option<Plan> {
         }
     };
     let oauth = file.oauth?;
-    plan_from_claude(oauth.subscription_type.as_deref()?, oauth.rate_limit_tier.as_deref())
+    plan_from_claude(oauth.subscription_type.as_deref()?)
 }
 
-/// Plan from Claude's `subscriptionType` and `rateLimitTier`. The tier only tells the Max sizes apart.
-pub fn plan_from_claude(subscription: &str, tier: Option<&str>) -> Option<Plan> {
+/// Plan from Claude's `subscriptionType`.
+pub fn plan_from_claude(subscription: &str) -> Option<Plan> {
     let raw = subscription.trim();
-    let tier = tier.unwrap_or("").to_lowercase();
     let (id, label) = match raw.to_lowercase().as_str() {
         "" => return None,
-        "max" if tier.contains("20x") => ("max_20x", "Max ×20"),
-        "max" if tier.contains("5x") => ("max_5x", "Max ×5"),
+        // The CLI's `rateLimitTier` is not kept up to date (a Max ×20 account was seen with `..._max_5x`), so the
+        // size of a Max plan is not shown.
         "max" => ("max", "Max"),
         "pro" => ("pro", "Pro"),
         "team" => ("team", "Team"),
@@ -1459,58 +1454,32 @@ mod tests {
     }
 
     #[test]
-    fn plan_from_claude_maps_max_tiers_and_plain_plans() {
-        assert_eq!(
-            plan_from_claude("max", Some("default_claude_max_20x")),
-            Some(named("max_20x", "Max ×20"))
-        );
-        assert_eq!(
-            plan_from_claude("max", Some("default_claude_max_5x")),
-            Some(named("max_5x", "Max ×5"))
-        );
-        assert_eq!(plan_from_claude("max", None), Some(named("max", "Max")));
-        assert_eq!(
-            plan_from_claude("max", Some("default_claude_max")),
-            Some(named("max", "Max"))
-        );
-        assert_eq!(
-            plan_from_claude("pro", Some("default_claude_pro")),
-            Some(named("pro", "Pro"))
-        );
-        assert_eq!(plan_from_claude("team", None), Some(named("team", "Team")));
-        assert_eq!(
-            plan_from_claude("enterprise", None),
-            Some(named("enterprise", "Enterprise"))
-        );
+    fn plan_from_claude_names_max_without_its_size_and_plain_plans() {
+        assert_eq!(plan_from_claude("max"), Some(named("max", "Max")));
+        assert_eq!(plan_from_claude("pro"), Some(named("pro", "Pro")));
+        assert_eq!(plan_from_claude("team"), Some(named("team", "Team")));
+        assert_eq!(plan_from_claude("enterprise"), Some(named("enterprise", "Enterprise")));
     }
 
     #[test]
     fn plan_from_claude_ignores_case_and_spaces() {
-        assert_eq!(
-            plan_from_claude("MAX", Some("  Default_Claude_Max_20X ")),
-            Some(named("max_20x", "Max ×20"))
-        );
-        assert_eq!(plan_from_claude(" Max ", None), Some(named("max", "Max")));
-        // The tier only refines `max`: a Pro account with a max-looking tier is Pro.
-        assert_eq!(
-            plan_from_claude("pro", Some("default_claude_max_20x")),
-            Some(named("pro", "Pro"))
-        );
+        assert_eq!(plan_from_claude("MAX"), Some(named("max", "Max")));
+        assert_eq!(plan_from_claude(" Max "), Some(named("max", "Max")));
     }
 
     #[test]
     fn plan_from_claude_names_other_plans_as_they_come() {
-        assert_eq!(plan_from_claude("weird", None), Some(named("weird", "Weird")));
+        assert_eq!(plan_from_claude("weird"), Some(named("weird", "Weird")));
         assert_eq!(
-            plan_from_claude("Custom Plan", None),
+            plan_from_claude("Custom Plan"),
             Some(named("Custom Plan", "Custom Plan"))
         );
     }
 
     #[test]
     fn plan_from_claude_needs_a_subscription_type() {
-        assert_eq!(plan_from_claude("", Some("default_claude_max_20x")), None);
-        assert_eq!(plan_from_claude("   ", None), None);
+        assert_eq!(plan_from_claude(""), None);
+        assert_eq!(plan_from_claude("   "), None);
     }
 
     #[test]
@@ -1547,7 +1516,7 @@ mod tests {
             .await
             .unwrap()
             .expect("a plan");
-        assert_eq!(plan, named("max_20x", "Max ×20"));
+        assert_eq!(plan, named("max", "Max"));
         let debug = format!("{plan:?}");
         let json = serde_json::to_string(&plan).unwrap();
         for text in [debug, json] {
@@ -1562,7 +1531,7 @@ mod tests {
             ("CLAUDE_CONFIG_DIR".into(), dir.path().display().to_string()),
             ("HOME".into(), "/nonexistent-home".into()),
         ]);
-        assert_eq!(rt.account_plan().await.unwrap(), Some(named("max_20x", "Max ×20")));
+        assert_eq!(rt.account_plan().await.unwrap(), Some(named("max", "Max")));
     }
 
     #[tokio::test]
