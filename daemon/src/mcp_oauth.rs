@@ -25,6 +25,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// The only address a service may send the person back to.
 pub const REDIRECT_URI: &str = "bandito://oauth/callback";
+/// The address of a native app's loopback listener (RFC 8252 section 7.3). Many services refuse a custom scheme at
+/// registration and take this one. The port is fixed because the registration names it exactly.
+pub const LOOPBACK_REDIRECT_URI: &str = "http://127.0.0.1:45819/callback";
 /// How long a started sign-in waits for its answer.
 pub const FLOW_TTL_MS: i64 = 10 * 60 * 1000;
 /// Sign-ins waiting at once; the oldest is dropped past this.
@@ -813,10 +816,10 @@ async fn discover(server: &Url) -> Result<Discovery> {
 // ---- registration ----
 
 /// Registers Bandito as a public client (RFC 7591) and returns its `client_id`.
-async fn register(endpoint: &Url) -> Result<String> {
+async fn register(endpoint: &Url, redirect: &str) -> Result<String> {
     let body = json!({
         "client_name": "Bandito",
-        "redirect_uris": [REDIRECT_URI],
+        "redirect_uris": [redirect],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
         "token_endpoint_auth_method": "none",
@@ -833,7 +836,7 @@ async fn register(endpoint: &Url) -> Result<String> {
         .filter(|id| valid_client_id(id))
         .ok_or_else(|| anyhow!("the service's registration has no usable client_id"))?;
     if let Some(uris) = v.get("redirect_uris").and_then(Value::as_array)
-        && !uris.iter().any(|u| u.as_str() == Some(REDIRECT_URI))
+        && !uris.iter().any(|u| u.as_str() == Some(redirect))
     {
         bail!("the service registered another redirect address");
     }
@@ -846,8 +849,9 @@ async fn register(endpoint: &Url) -> Result<String> {
     Ok(client_id.to_string())
 }
 
+/// A client id is printable ASCII without spaces, 1 to 4096 long (some services issue a JWT).
 fn valid_client_id(id: &str) -> bool {
-    !id.is_empty() && id.len() <= 512 && !id.chars().any(|c| c.is_control() || c.is_whitespace())
+    !id.is_empty() && id.len() <= 4096 && id.bytes().all(|b| b.is_ascii_graphic())
 }
 
 // ---- pending sign-ins ----
@@ -862,6 +866,8 @@ struct Flow {
     url: String,
     verifier: String,
     client_id: String,
+    /// The address the service sends the person back to: the client's own, kept for the exchange of the code.
+    redirect_uri: String,
     issuer: String,
     token_endpoint: String,
     revocation_endpoint: Option<String>,
@@ -1233,6 +1239,9 @@ pub enum Target {
 pub struct Begun {
     pub authorize_url: String,
     pub state: String,
+    /// Where the service sends the person back: `"loopback"` (the app listens on 127.0.0.1) or `"scheme"`
+    /// (`bandito://oauth/callback`).
+    pub redirect: &'static str,
 }
 
 fn random_token() -> String {
@@ -1243,12 +1252,28 @@ fn random_token() -> String {
 /// Starts a sign-in for `device`: reads the service's metadata, registers Bandito if it must, and returns the address
 /// the person opens in the browser. `client_id` is a client registered with the service beforehand, for one that
 /// has no dynamic registration.
+#[cfg(test)]
 pub async fn begin(
     store: &Store,
     flows: &Flows,
     device: &str,
     target: Target,
     client_id: Option<String>,
+    now: i64,
+) -> Result<Begun> {
+    begin_with(store, flows, device, target, client_id, false, now).await
+}
+
+/// `begin`, where `loopback` says the app can receive the answer on a loopback listener. A new registration then
+/// names the loopback address; without it (an older app) the custom scheme is used as before. A client registered
+/// earlier keeps the address it was registered with, when the app can receive it.
+pub async fn begin_with(
+    store: &Store,
+    flows: &Flows,
+    device: &str,
+    target: Target,
+    client_id: Option<String>,
+    loopback: bool,
     now: i64,
 ) -> Result<Begun> {
     let (integration_id, draft, kind, url) = match target {
@@ -1267,22 +1292,28 @@ pub async fn begin(
     let server = Url::parse(&url)?;
     check_server_url(&server, allow_local())?;
     let found = discover(&server).await?;
-    // A client registered earlier for this issuer and this redirect address is used again, also after a disconnect.
+    // A client registered earlier for this issuer is used again, also after a disconnect, with the redirect address it
+    // was registered with (a record from before the loopback address has the custom scheme), if the app can receive it.
     let known = match &integration_id {
-        Some(id) => load_client(store, id)?
-            .filter(|c| c.issuer == found.issuer && c.redirect_uri == REDIRECT_URI && valid_client_id(&c.client_id)),
+        Some(id) => load_client(store, id)?.filter(|c| {
+            c.issuer == found.issuer
+                && valid_client_id(&c.client_id)
+                && (c.redirect_uri == REDIRECT_URI || (loopback && c.redirect_uri == LOOPBACK_REDIRECT_URI))
+        }),
         None => None,
     };
-    let client_id = match (client_id, known) {
+    let new_redirect = if loopback { LOOPBACK_REDIRECT_URI } else { REDIRECT_URI };
+    let (client_id, redirect_uri) = match (client_id, known) {
         (Some(id), _) => {
             if !valid_client_id(&id) {
                 bail!("the client id is not valid");
             }
-            id
+            // Issued by the service beforehand, for the custom scheme.
+            (id, REDIRECT_URI.to_string())
         }
-        (None, Some(known)) => known.client_id,
+        (None, Some(known)) => (known.client_id, known.redirect_uri),
         (None, None) => match &found.registration_endpoint {
-            Some(endpoint) => register(endpoint).await?,
+            Some(endpoint) => (register(endpoint, new_redirect).await?, new_redirect.to_string()),
             None => bail!(
                 "this service cannot be signed in to from Bandito (it does not take new clients): use a token instead"
             ),
@@ -1294,7 +1325,7 @@ pub async fn begin(
     let mut pairs = vec![
         ("response_type", "code"),
         ("client_id", client_id.as_str()),
-        ("redirect_uri", REDIRECT_URI),
+        ("redirect_uri", redirect_uri.as_str()),
         ("code_challenge", challenge.as_str()),
         ("code_challenge_method", "S256"),
         ("state", state.as_str()),
@@ -1322,6 +1353,7 @@ pub async fn begin(
             url,
             verifier,
             client_id,
+            redirect_uri: redirect_uri.clone(),
             issuer: found.issuer,
             token_endpoint: found.token_endpoint.text(),
             revocation_endpoint: found.revocation_endpoint.map(|u| u.text()),
@@ -1331,7 +1363,16 @@ pub async fn begin(
         },
         now,
     );
-    Ok(Begun { authorize_url, state })
+    let redirect = if redirect_uri == LOOPBACK_REDIRECT_URI {
+        "loopback"
+    } else {
+        "scheme"
+    };
+    Ok(Begun {
+        authorize_url,
+        state,
+        redirect,
+    })
 }
 
 pub struct Completed {
@@ -1367,7 +1408,7 @@ pub async fn complete(
         &[
             ("grant_type", "authorization_code"),
             ("code", code),
-            ("redirect_uri", REDIRECT_URI),
+            ("redirect_uri", &flow.redirect_uri),
             ("client_id", &flow.client_id),
             ("code_verifier", &flow.verifier),
             ("resource", &flow.resource),
@@ -1401,7 +1442,7 @@ pub async fn complete(
     };
     let client = Client {
         issuer: flow.issuer.clone(),
-        redirect_uri: REDIRECT_URI.to_string(),
+        redirect_uri: flow.redirect_uri.clone(),
         client_id: flow.client_id.clone(),
     };
     let (integration, created) = match (&flow.integration_id, flow.draft) {
