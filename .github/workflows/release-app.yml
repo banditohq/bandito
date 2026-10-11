@@ -80,7 +80,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: refs/tags/v${{ inputs.version }}
-          # The build number is the commit count of HEAD: the full history is needed.
+          # The build number is the commit count of HEAD (plus 1000): the full history is needed.
           fetch-depth: 0
           persist-credentials: false
 

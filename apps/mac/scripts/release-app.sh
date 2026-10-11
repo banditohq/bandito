@@ -104,7 +104,10 @@ fi
 [ -d "$platform/public" ] || { echo "error: no public/ in platform checkout: $platform (set BANDITO_PLATFORM_DIR)" >&2; exit 1; }
 
 mkdir -p "$release" "$work"
-build_number="$(git -C "$repo" rev-list --count HEAD)"
+# The build number (CFBundleVersion, which Sparkle compares) is the commit count of HEAD plus 1000. Releases are squashed
+# into main, so a build made from a release branch can count more commits than main does later (0.1.5 was 270, main had
+# 231 at 0.1.8); the offset keeps every build from main above any of those, so an update is always offered.
+build_number="$(( $(git -C "$repo" rev-list --count HEAD) + 1000 ))"
 echo "version $version, build $build_number, dry run: $dry_run"
 
 # --- (a) version in project.yml --------------------------------------------------------------------------------------
