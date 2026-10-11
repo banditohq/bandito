@@ -118,33 +118,7 @@ private struct TitleBarDragModifier: ViewModifier {
     }
 }
 
-/// An empty strip of the title area that zooms the window on a double-click, as Safari does, and moves the window on
-/// a drag, as the title bar does. Put it only where no control sits: it takes the mouse there.
-struct TitleBarZoomArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        TitleBarZoomView()
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {}
-}
-
-private final class TitleBarZoomView: NSView {
-    override var mouseDownCanMoveWindow: Bool { true }
-
-    override func mouseDown(with event: NSEvent) {
-        guard let window else { return }
-        guard event.clickCount == 2 else {
-            window.performDrag(with: event)
-            return
-        }
-        TitleBarZoom.perform(on: window)
-    }
-}
 #else
-struct TitleBarZoomArea: View {
-    var body: some View { Color.clear }
-}
-
 extension View {
     func titleBarZoomOnDoubleClick() -> some View { self }
 
