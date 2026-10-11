@@ -79,6 +79,7 @@ Build only from these. Need something that is not here: add it to the system fir
 | Mode switch | `ModeBar` | `Shell/ModeBar.swift` |
 | Chat bubbles | `BubbleLook`, `UserBubble`, `AgentBubble` | `Team/ThreadRowViews.swift` |
 | Chat input | `Composer` | `Team/Composer.swift` |
+| Back to the newest message | `ThreadJumpOverlay`, `ThreadJumpButton` (rules: `ThreadJumpRules`, `ThreadFollowRules`) | `Team/ThreadJumpButton.swift`, `Team/ThreadJumpRules.swift` |
 | Menu above the composer (`/`, `@`) | `.composerMenuSurface()`, `ComposerMenuGroupTitle`, `.composerMenuRow(selected:)`, `ComposerMenuFooter` | `Team/ComposerMenuChrome.swift` |
 | Mention of a service, teammate, file or tab | `MentionChip`, `MentionIcon` | `Team/MentionChips.swift`, `Team/MentionMenu.swift` |
 | Agent identity | `RaccoonAvatar`, `AgentAvatar`, `AvatarArtView` | `Components/RaccoonAvatar.swift`, `Avatar/` |
@@ -112,6 +113,7 @@ Build only from these. Need something that is not here: add it to the system fir
 - **UsageBar**: 6 pt capsule on `text` 8%; fill `text`, `signal` under 25%, `danger` at 0. **ContextRing**: 16 pt, stroke max(1.5, size x 0.11), `ok` then `signalGlow` above 80%. **KeyHint**: mono 10.5 `text3`, radius 5, 1 pt `text` 14% border.
 - **ModeBar**: `surface1`, radius 12, padding 3, gradient hairline; cells 32 high, radius 9, icon 16; active cell `surface3` with a `text` 10% border and a soft shadow, sliding on a spring (0.32, 0.86).
 - **Bubbles**: corners 16 with a 6 pt tail on the speaker's side; padding 14 x 10; text 14.5. Person: `surface2` + `text` 13% + `text` 8% border. Agent: `surface1` with a border fading 8% to 3%. No shadows. A person's message that still waits for its turn (the agent is busy or saving its memory) carries a quiet line under the bubble, right-aligned: `Queued`, 11.5 pt `text3`; it goes away when the turn takes the message. A message the daemon gave up on (crash, stop, restart) carries `Not delivered` in the same style, and its context menu offers Send again.
+- **Jump capsule** (back to the newest message): a capsule 34 high over the composer, centred, 10 above the thread's bottom edge. A down arrow (12/600 `text`); with messages that came in, a 6 pt `signal` dot and "3 new" (12.5/500 `text`, "99+ new" above 99). Fill: `ultraThinMaterial` under `surface2` at 82%, 1 pt `text` 12% border, `black` 35% shadow (0 6 10), only on this surface. A 64 pt fade from `bg` 0% to 90% sits under it so text never meets the capsule edge. It comes up 14 pt with a fade on a spring (0.34, 0.86) and goes with a fade; under Reduce Motion or Motion "Off" it only fades (0.12 s). After the person's own send the thread slides to the bottom (0.32 s, the base curve) and keeps following until the person scrolls up more than 64 pt; the capsule stays away and counts nothing meanwhile.
 - **Composer**: radius 24, `surface2`, border `line` (`text` 18% in focus), `black` 35% shadow (0 10 18), a `signal` 10% glow in focus; 14.5 text; 34 pt cream send disc with a `bg` arrow (stop while running).
 - **Menu above the composer** (`/` and `@`): max 640 wide, radius 18, `#201C18` at 98%, 1 pt `text` 12% border, `black` 50% shadow (0 14 30); group title 10.5/600 with 0.8 tracking in `text3`; row radius 10, padding 10 x 7, selected = `peach` 10% fill and 30% edge; footer 11.5 `text3` under a `text` 7% hairline.
 - **Mention chip**: a capsule 26 high, `surface3`, 0.5 pt `line` border (dashed `peach` 60% while the service is not connected), 18 pt picture on the left (a service's Marketplace tile, an agent's avatar, a file glyph, the browser mark), label 12.5/500 `text`, 260 max, middle-truncated. In the composer it sits in a strip above the field with a 18 pt cross; in the thread it sits right-aligned under the bubble, wrapping to the right edge. A file chip opens the file in the workbench.
@@ -124,6 +126,7 @@ shows a state, it is not a motion. The dot is hidden from VoiceOver; the button'
 ## Motion
 
 - Use `.banditoAnimation(_:value:)`, never `.animation(_:value:)`, and `.banditoRise` for list rows. They honour Reduce Motion and the app's Motion level (Full, Less at half duration, Off).
+- **Workbench panel**: it slides in from the right on a spring (0.36, 0.9) at a fixed width, only its position moves, no fade. The chat beside it changes its width once, at the first frame, never frame by frame: each bubble re-wraps its text on a width change, so an animated width re-laid out the whole thread on every frame.
 - Repeating motion (pulse, float, blink, sparkline) runs only at Full and only in the active window.
 - Durations are fast, base or slow. No new curves.
 - `RiseIn` goes on list rows only, never on the cards inside them.

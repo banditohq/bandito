@@ -2346,6 +2346,7 @@
 "thread.hintSearch" = "⌘K 検索";
 "thread.hintSend" = "↵ 送信";
 "thread.hintStop" = "⌘. 停止";
+"thread.jumpMany" = "新着 99+ 件";
 "thread.jumpToLatest" = "最新のメッセージへ";
 "thread.link.fileHelp" = "パネルで開きます · ⌥クリックで「ファイル」に表示";
 "thread.link.urlHelp" = "パネルのブラウザで開きます · ⌘クリックでMacのブラウザで開く";

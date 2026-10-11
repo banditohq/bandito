@@ -81,6 +81,15 @@ The composer sits at the bottom of the thread. It sends the message to the selec
 2. While the agent is working, the send button becomes Stop (Остановить). Press ⌘. to stop the turn (⌘. stop).
 3. A message you send while the agent is busy, or saving its memory before a new chapter, appears in the chat at once with the line Queued (В очереди) below it. The line goes away when the agent takes the message. If the agent stopped or the server restarted before it did, the line reads Not delivered (Не доставлено); right-click the message and choose Send again (Отправить снова). After a new chapter begins, the message sits below the chapter divider, where the agent reads it. The counter beside Thinking… counts from the start of the current turn.
 
+## Jump to the newest message
+
+<!-- id: team-jump-latest; covers: -->
+When you scroll up in a thread, a small capsule with a down arrow appears over the composer, in the middle. If messages came in meanwhile it also says how many ("3 new"). Click it to slide back to the newest message. When you send a message, the thread slides down to it by itself wherever you were, and keeps following the replies until you scroll up yourself. With Reduce Motion the capsule only fades and the thread jumps instead of sliding.
+Где: Team → agent thread → capsule over the composer
+1. Scroll up to read earlier messages. The capsule fades in over the composer.
+2. Click it, or send a message, to go to the bottom.
+3. Scroll up while the agent is answering: the thread stays where you are, and the capsule counts the new messages.
+
 ## Dictate a message
 
 <!-- id: team-dictation; covers: -->

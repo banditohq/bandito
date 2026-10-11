@@ -31,8 +31,12 @@ struct TeamMode: View {
                 let covers = WorkbenchLayout.coversChat(modeWidth: modeWidth, panelWidth: width)
                 // One tree: the chat is always the first child. The panel is placed beside it or over it.
                 ZStack(alignment: .trailing) {
+                    // The chat changes its width once, at the first frame of the move, never frame by frame: every
+                    // bubble re-wraps its text when the width changes, so an animated width re-laid out the whole
+                    // thread at 60 fps. The transaction below cuts the animation of the inset only; the panel slides.
                     chat(server: server, agent: agent)
-                        .padding(.trailing, open && !covers ? width : 0)
+                        .padding(.trailing, WorkbenchLayout.chatInset(open: open, covers: covers, panelWidth: width))
+                        .transaction { $0.animation = nil }
                     if open && covers {
                         // Over the chat the panel dims it; a click on the dimming closes the panel.
                         Color.black.opacity(0.28)
@@ -41,14 +45,16 @@ struct TeamMode: View {
                             .transition(.opacity)
                     }
                     if open {
+                        // A slide of the finished panel (fixed width): only its position changes, so nothing inside
+                        // is laid out again. No fade: it would draw the whole panel off screen on every frame.
                         panel(server: server, agent: agent, width: width, modeWidth: modeWidth, covers: covers)
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                            .transition(.move(edge: .trailing))
                     }
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)
                 .banditoAnimation(BanditoMotion.ease, value: covers)
             }
-            .banditoAnimation(BanditoMotion.ease, value: open)
+            .banditoAnimation(WorkbenchLayout.slide, value: open)
             .background(Color.Bandito.bg)
             // The agent on screen stays the chosen one, so an approval or status change elsewhere does not move it.
             // Not remembered as the last opened agent: only an explicit choice is (Router.selectAgent).

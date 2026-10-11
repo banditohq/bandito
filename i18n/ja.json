@@ -1969,6 +1969,10 @@
   "composer.newChapter.afterTurn": "現在の返信の後に開始されます",
   "composer.newChapter.continue": "続ける",
   "thread.jumpToLatest": "最新のメッセージへ",
+  "thread.jumpNew": {
+    "other": "新着 {count} 件"
+  },
+  "thread.jumpMany": "新着 99+ 件",
   "viewer.emptyFile": "ファイルは空です",
   "keys.teamHome": "チームのホーム",
   "team.home.title": "あなたのチーム",

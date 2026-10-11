@@ -2346,6 +2346,7 @@
 "thread.hintSearch" = "⌘K suchen";
 "thread.hintSend" = "↵ senden";
 "thread.hintStop" = "⌘. stoppen";
+"thread.jumpMany" = "99+ neu";
 "thread.jumpToLatest" = "Zur neuesten Nachricht";
 "thread.link.fileHelp" = "Öffnet im Bereich · ⌥-Klick zeigt in „Dateien“";
 "thread.link.urlHelp" = "Öffnet im Browser-Bereich · ⌘-Klick öffnet im Mac-Browser";

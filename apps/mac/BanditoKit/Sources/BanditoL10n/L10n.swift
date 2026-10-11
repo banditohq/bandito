@@ -3221,6 +3221,8 @@ public enum L10n {
         public static var hintSearch: String { L10n.tr("thread.hintSearch") }
         public static var hintSend: String { L10n.tr("thread.hintSend") }
         public static var hintStop: String { L10n.tr("thread.hintStop") }
+        public static var jumpMany: String { L10n.tr("thread.jumpMany") }
+        public static func jumpNew(count: Int) -> String { L10n.tr("thread.jumpNew", count) }
         public static var jumpToLatest: String { L10n.tr("thread.jumpToLatest") }
         public static func messageFor(name: String) -> String { L10n.tr("thread.messageFor", name) }
         public static func messageFrom(name: String) -> String { L10n.tr("thread.messageFrom", name) }

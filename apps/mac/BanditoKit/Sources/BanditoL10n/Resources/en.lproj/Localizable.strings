@@ -2346,6 +2346,7 @@
 "thread.hintSearch" = "⌘K search";
 "thread.hintSend" = "↵ send";
 "thread.hintStop" = "⌘. stop";
+"thread.jumpMany" = "99+ new";
 "thread.jumpToLatest" = "Jump to the newest message";
 "thread.link.fileHelp" = "Opens in the panel · ⌥-click shows it in Files";
 "thread.link.urlHelp" = "Opens in the browser panel · ⌘-click opens in your browser";

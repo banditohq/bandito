@@ -2050,6 +2050,13 @@
   "composer.newChapter.afterTurn": "Начнётся после текущего ответа",
   "composer.newChapter.continue": "Продолжить",
   "thread.jumpToLatest": "К последнему сообщению",
+  "thread.jumpNew": {
+    "one": "{count} новое",
+    "few": "{count} новых",
+    "many": "{count} новых",
+    "other": "{count} новых"
+  },
+  "thread.jumpMany": "99+ новых",
   "viewer.emptyFile": "Файл пуст",
   "keys.teamHome": "Главная команды",
   "team.home.title": "Ваша команда",
