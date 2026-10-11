@@ -41,6 +41,8 @@ enum QACommand: Equatable {
     case tab(ServerSection)
     /// The workbench of the agent on screen: `details`, `terminal`, `browser`, `changes`, `toggle`, `split`.
     case workbench(String)
+    /// The double-click of a title strip (`TitleBarZoom.doubleClick`), without a mouse: zooms or restores the window.
+    case zoom
 
     static func parse(_ text: String) -> QACommand? {
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -68,6 +70,8 @@ enum QACommand: Equatable {
             return ServerSection(rawValue: name).map { .tab($0) }
         case ("workbench", let action?) where ["details", "terminal", "browser", "changes", "toggle", "split"].contains(action):
             return .workbench(action)
+        case ("zoom", nil):
+            return .zoom
         default:
             return nil
         }
@@ -156,6 +160,8 @@ enum QAHooks {
             router.serverSection = section
         case .workbench(let action):
             runWorkbench(action, router: router)
+        case .zoom:
+            TitleBarZoom.doubleClick()
         }
     }
 

@@ -45,6 +45,12 @@ enum TitleBarZoom {
         }
     }
 
+    /// The double-click of a title strip: zooms the key window (or the main one). The QA hook `zoom` calls the same.
+    @MainActor
+    static func doubleClick() {
+        perform(on: NSApp.keyWindow ?? NSApp.mainWindow)
+    }
+
     /// Moves the window with the mouse held down. `event` is the mouse event that started the drag.
     @MainActor
     static func drag(on window: NSWindow?, event: NSEvent?) {
@@ -55,19 +61,30 @@ enum TitleBarZoom {
 }
 
 #if os(macOS)
-/// The height of the title strip: the same as the sidebar's top row.
+/// The title strip of a window with a hidden title bar. The content starts below the title bar's safe area
+/// (`inset`, where the traffic lights sit); the strip is the area above the content plus the first 52 pt of it
+/// (the sidebar's top row, the main area's header row).
 enum TitleBarBand {
     static let height: CGFloat = 52
+    static let inset: CGFloat = 28
 }
 
 extension View {
-    /// The top band of a main area (`TitleBarBand.height` high), drawn behind the content: a double-click on its
-    /// empty part zooms the window and a drag moves it. Buttons and fields in the band take their own clicks, because
-    /// the content is in front of this layer; only the empty space reacts.
+    /// The title strip of the view's top edge, drawn behind the content: a double-click on its empty part zooms the
+    /// window and a drag moves it. It runs up under the title bar's safe area, so the strip above the content (where
+    /// the traffic lights are) reacts too. Buttons and fields keep their own clicks, because the content is in front
+    /// of this layer; only the empty space reacts. Apply it before any opaque background of the view.
     func titleBarBand() -> some View {
         background(alignment: .top) {
             TitleBarBandSurface()
-                .frame(height: TitleBarBand.height)
+                .frame(height: TitleBarBand.height + TitleBarBand.inset)
+                .ignoresSafeArea(.container, edges: .top)
+        }
+        // The strip above the content takes its clicks directly (no control is there).
+        .overlay(alignment: .top) {
+            TitleBarZoomStrip()
+                .frame(height: TitleBarBand.inset)
+                .ignoresSafeArea(.container, edges: .top)
         }
     }
 
@@ -78,7 +95,7 @@ extension View {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) {
-                    TitleBarZoom.perform(on: NSApp.keyWindow ?? NSApp.mainWindow)
+                    TitleBarZoom.doubleClick()
                 }
         }
     }
@@ -91,7 +108,7 @@ private struct TitleBarBandSurface: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
             .onTapGesture(count: 2) {
-                TitleBarZoom.perform(on: NSApp.keyWindow ?? NSApp.mainWindow)
+                TitleBarZoom.doubleClick()
             }
             .modifier(TitleBarDragModifier())
     }
@@ -118,7 +135,32 @@ private struct TitleBarDragModifier: ViewModifier {
     }
 }
 
+/// The strip above the content of a window with a hidden title bar (where the traffic lights are). Nothing in it is a
+/// control, so this view takes the clicks there: a double-click zooms the window, a drag moves it.
+struct TitleBarZoomStrip: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        TitleBarStripView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class TitleBarStripView: NSView {
+    override var mouseDownCanMoveWindow: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        guard event.clickCount == 2 else {
+            window?.performDrag(with: event)
+            return
+        }
+        TitleBarZoom.perform(on: window)
+    }
+}
 #else
+struct TitleBarZoomStrip: View {
+    var body: some View { Color.clear }
+}
+
 extension View {
     func titleBarZoomOnDoubleClick() -> some View { self }
 

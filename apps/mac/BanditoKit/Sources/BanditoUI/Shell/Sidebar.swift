@@ -21,6 +21,9 @@ struct Sidebar: View {
         }
         .frame(width: Self.width)
         .frame(maxHeight: .infinity)
+        // The title strip runs over the whole top of the column, under the traffic lights too. It is drawn before the
+        // surface, so the surface does not cover it.
+        .titleBarBand()
         .background(Color.Bandito.surface1)
     }
 }
@@ -67,9 +70,6 @@ private struct SidebarTopRow: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
-        // The band sits behind the row: the buttons and the brand's text are in front of it, so only the empty space
-        // reacts (the same band as the main area's top).
-        .titleBarBand()
     }
 }
 

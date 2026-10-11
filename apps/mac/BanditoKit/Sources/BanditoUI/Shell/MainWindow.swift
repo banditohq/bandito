@@ -30,6 +30,9 @@ struct MainWindow: View {
                 PendingDevicesBanner()
                 ModeArea()
             }
+            // The title strip of the main column: at the column's root, like the sidebar's, so it runs up under the
+            // traffic lights. The mode's ground does not take clicks, so the strip gets the empty space.
+            .titleBarBand()
             .overlay { SwipeHint(progress: swipeProgress, symbol: swipeSymbol) }
         }
         .frame(minWidth: 900, minHeight: 600)
@@ -196,10 +199,9 @@ private struct ModeArea: View {
                 .id(router.mode)
                 .transition(.opacity)
         }
-        // The top band zooms on a double-click and drags the window; the mode's controls in it keep their clicks.
-        .titleBarBand()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background { ContentBackdrop().ignoresSafeArea() }
+        // The backdrop takes no clicks: the title strip behind the main column gets the empty space.
+        .background { ContentBackdrop().ignoresSafeArea().allowsHitTesting(false) }
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: router.mode)
     }
 

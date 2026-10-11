@@ -55,7 +55,8 @@ struct TeamMode: View {
                 .banditoAnimation(BanditoMotion.ease, value: covers)
             }
             .banditoAnimation(WorkbenchLayout.slide, value: open)
-            .background(Color.Bandito.bg)
+            // The ground takes no clicks, so the title band behind the mode gets the empty space (double-click zooms).
+            .background { Color.Bandito.bg.allowsHitTesting(false) }
             // The agent on screen stays the chosen one, so an approval or status change elsewhere does not move it.
             // Not remembered as the last opened agent: only an explicit choice is (Router.selectAgent).
             .task(id: "\(server.id.uuidString)|\(agent.id)") {
@@ -167,7 +168,7 @@ private struct EmptyTeam: View {
     var body: some View {
         if app.currentServer == nil {
             NoServerView(symbol: "bubble.left.and.text.bubble.right")
-                .background(Color.Bandito.bg)
+                .background { Color.Bandito.bg.allowsHitTesting(false) }
         } else {
             VStack(spacing: 14) {
                 Image(systemName: "bubble.left.and.text.bubble.right")
@@ -191,7 +192,7 @@ private struct EmptyTeam: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.Bandito.bg)
+            .background { Color.Bandito.bg.allowsHitTesting(false) }
         }
     }
 }
