@@ -25,8 +25,9 @@ struct Sidebar: View {
     }
 }
 
-/// 52 pt high, like the title bar. The traffic lights sit on the left, then the brand; the empty strip between the
-/// brand and the buttons zooms the window on a double-click. Search and new agent sit on the right.
+/// 52 pt high, like the title bar. The traffic lights sit on the left, then the brand; the empty space of the row
+/// (between the brand and the buttons, and around them) zooms the window on a double-click and moves it on a drag.
+/// Search and new agent sit on the right and keep their own clicks.
 private struct SidebarTopRow: View {
     @Environment(Router.self) private var router
 
@@ -45,7 +46,6 @@ private struct SidebarTopRow: View {
             .accessibilityElement(children: .combine)
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(TitleBarZoomArea())
             Button {
                 router.paletteOpen = true
             } label: {
@@ -67,6 +67,9 @@ private struct SidebarTopRow: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
+        // The band sits behind the row: the buttons and the brand's text are in front of it, so only the empty space
+        // reacts (the same band as the main area's top).
+        .titleBarBand()
     }
 }
 
