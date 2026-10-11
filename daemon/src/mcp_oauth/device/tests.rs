@@ -864,3 +864,143 @@ async fn the_built_in_github_provider_is_the_one_the_catalog_names() {
     let flows = DeviceFlows::default();
     assert_eq!(flows.providers().len(), 1);
 }
+
+#[tokio::test]
+async fn an_address_changed_while_the_sign_in_is_open_keeps_no_token_and_no_device_sign_in() {
+    let r = rig().await;
+    let access = r.mcp.inner.lock().unwrap().access.clone();
+    let row = r.store.integration_create(draft("gh", &r.mcp.url())).unwrap();
+    let begun = begin(
+        &r.store,
+        &r.flows,
+        "dev1",
+        DeviceTarget::Existing(row.clone()),
+        r.after.clone(),
+    )
+    .await
+    .unwrap();
+    // The person moves the integration to another host while the code is still waiting.
+    r.store
+        .integration_update(
+            &row.id,
+            crate::store::IntegrationPatch {
+                url: Some(Some("https://evil.example/mcp/".into())),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    r.gh.set(|g| g.script = VecDeque::from([granted(&access)]));
+    let ended = r.ended(&begun.flow_id).await;
+    assert_eq!(
+        (ended["state"].as_str(), ended["reason"].as_str()),
+        (Some("failed"), Some("changed")),
+        "{ended}"
+    );
+    assert_eq!(
+        r.store.integration_get(&row.id).unwrap().unwrap().auth,
+        IntegrationAuth::None
+    );
+    assert!(r.store.secrets_all().unwrap().is_empty());
+    assert_eq!(r.after_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_row_removed_as_the_token_is_stored_keeps_no_token_and_ends_gone() {
+    let r = rig().await;
+    let access = r.mcp.inner.lock().unwrap().access.clone();
+    let row = r.store.integration_create(draft("gh", &r.mcp.url())).unwrap();
+    let begun = begin(
+        &r.store,
+        &r.flows,
+        "dev1",
+        DeviceTarget::Existing(row.clone()),
+        r.after.clone(),
+    )
+    .await
+    .unwrap();
+    // The row is deleted just before its sign-in is set: the update finds no row and changes nothing.
+    r.store.break_for_test(
+        "CREATE TRIGGER drop_on_sign_in BEFORE UPDATE OF auth ON integrations
+         BEGIN DELETE FROM integrations WHERE id = NEW.id; SELECT RAISE(IGNORE); END;",
+    );
+    r.gh.set(|g| g.script = VecDeque::from([granted(&access)]));
+    let ended = r.ended(&begun.flow_id).await;
+    assert_eq!(
+        (ended["state"].as_str(), ended["reason"].as_str()),
+        (Some("failed"), Some("gone")),
+        "{ended}"
+    );
+    assert!(
+        r.store.secrets_all().unwrap().is_empty(),
+        "the stored token is deleted again"
+    );
+    assert!(r.store.integration_list().unwrap().is_empty());
+    assert_eq!(r.after_calls.load(Ordering::SeqCst), 0);
+}
+
+/// A flow as the map keeps it, with no task: the room rules need no provider.
+fn parked(key: &str, phase: Phase, created_at: i64) -> DeviceFlow {
+    let ended_at = matches!(phase, Phase::Done { .. } | Phase::Failed { .. } | Phase::Cancelled).then(now_ms);
+    DeviceFlow {
+        device: "dev1".into(),
+        key: key.into(),
+        user_code: "AAAA-BBBB".into(),
+        verification_uri: "https://github.com/login/device".into(),
+        expires_at: i64::MAX,
+        interval: 5,
+        phase,
+        ended_at,
+        created_at,
+        task: None,
+    }
+}
+
+#[tokio::test]
+async fn a_full_list_drops_the_oldest_flow_that_is_not_storing_a_token() {
+    let r = rig().await;
+    {
+        let mut map = r.flows.map();
+        // The oldest is storing its token: it stays. The next oldest has ended: it goes.
+        map.insert("storing".into(), parked("draft:storing", Phase::Finishing, 1));
+        map.insert("ended".into(), parked("draft:ended", Phase::Cancelled, 2));
+        for i in 0..MAX_DEVICE_FLOWS - 2 {
+            map.insert(
+                format!("f{i}"),
+                parked(&format!("draft:f{i}"), Phase::Finishing, 10 + i as i64),
+            );
+        }
+    }
+    let begun = r.begin("fresh").await;
+    let map = r.flows.map();
+    assert!(map.contains_key("storing"), "a token being stored is not cut off");
+    assert!(!map.contains_key("ended"));
+    assert!(map.contains_key(&begun.flow_id));
+    assert_eq!(map.len(), MAX_DEVICE_FLOWS);
+}
+
+#[tokio::test]
+async fn a_full_list_of_tokens_being_stored_refuses_a_new_sign_in_as_busy() {
+    let r = rig().await;
+    {
+        let mut map = r.flows.map();
+        for i in 0..MAX_DEVICE_FLOWS {
+            map.insert(
+                format!("f{i}"),
+                parked(&format!("draft:f{i}"), Phase::Finishing, i as i64),
+            );
+        }
+    }
+    let err = begin(
+        &r.store,
+        &r.flows,
+        "dev1",
+        DeviceTarget::Draft(draft("fresh", &r.mcp.url())),
+        r.after.clone(),
+    )
+    .await
+    .unwrap_err();
+    assert!(format!("{err:#}").contains("busy"), "{err:#}");
+    assert_eq!(r.flows.map().len(), MAX_DEVICE_FLOWS, "none is dropped");
+    assert!(r.flows.map().values().all(|f| f.phase == Phase::Finishing));
+    assert!(r.store.integration_list().unwrap().is_empty());
+}

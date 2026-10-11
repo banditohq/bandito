@@ -72,6 +72,24 @@ fn same_server(a: &str, b: &str) -> bool {
     }
 }
 
+/// The servers a test's fake provider serves: a token of a code sign-in may go to them as to the built-in ones.
+#[cfg(test)]
+static TEST_SERVERS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Whether a token of a code sign-in may be sent to this address: only a provider's own MCP server.
+pub fn server_allowed(url: &str) -> bool {
+    #[cfg(test)]
+    if TEST_SERVERS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .any(|s| same_server(s, url))
+    {
+        return true;
+    }
+    builtin().iter().any(|p| p.servers.iter().any(|s| same_server(s, url)))
+}
+
 /// What the daemon keeps besides the token (secret `…_STATE`, JSON).
 #[derive(Serialize, Deserialize, Clone)]
 struct DeviceState {
@@ -224,6 +242,10 @@ impl DeviceFlows {
     /// Tests: other providers (a fake server) and a short second.
     #[cfg(test)]
     pub(crate) fn for_test(&self, providers: Vec<Provider>, tick_ms: u64) {
+        TEST_SERVERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .extend(providers.iter().flat_map(|p| p.servers.clone()));
         *self.0.providers.lock().unwrap_or_else(|e| e.into_inner()) = Some(providers);
         self.0.tick_ms.store(tick_ms.max(1), Ordering::Relaxed);
     }
@@ -470,14 +492,17 @@ pub async fn begin(
         }
         map.retain(|_, f| f.ended_at.is_none_or(|t| now - t <= KEEP_FINISHED_MS));
         while map.len() >= MAX_DEVICE_FLOWS {
-            let oldest = map.iter().min_by_key(|(_, f)| f.created_at).map(|(id, _)| id.clone());
-            match oldest.and_then(|id| map.remove(&id)) {
-                Some(dropped) => {
-                    if let Some(task) = dropped.task {
-                        task.abort();
-                    }
-                }
-                None => break,
+            // A flow that is storing its token is never dropped: when all are, the new sign-in is refused.
+            let oldest = map
+                .iter()
+                .filter(|(_, f)| f.phase != Phase::Finishing)
+                .min_by_key(|(_, f)| f.created_at)
+                .map(|(id, _)| id.clone());
+            let Some(id) = oldest else {
+                bail!("busy: too many code sign-ins are being stored, try again in a moment");
+            };
+            if let Some(task) = map.remove(&id).and_then(|f| f.task) {
+                task.abort();
             }
         }
         let ctx = Ctx {
@@ -658,6 +683,7 @@ async fn finish(ctx: &Ctx, access: String, scope: Option<String>) {
             (ctx.after)(id).await;
         }
         Err(e) => {
+            let reason = lost_reason(&e);
             let text = Redactor::exact([("TOKEN".to_string(), access)])
                 .redact(&format!("{e:#}"))
                 .into_owned();
@@ -666,7 +692,7 @@ async fn finish(ctx: &Ctx, access: String, scope: Option<String>) {
                 &ctx.flow_id,
                 &Phase::Finishing,
                 Phase::Failed {
-                    reason: "store",
+                    reason,
                     message: clean(&text, &Redactor::default(), 300),
                 },
             );
@@ -674,18 +700,56 @@ async fn finish(ctx: &Ctx, access: String, scope: Option<String>) {
     }
 }
 
+/// Why a code sign-in cannot be stored: its integration went away or changed while the sign-in was open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Lost {
+    Changed,
+    Gone,
+}
+
+impl std::fmt::Display for Lost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Lost::Changed => "the integration changed while the sign-in was open",
+            Lost::Gone => "that integration was removed while the sign-in was open",
+        })
+    }
+}
+
+impl std::error::Error for Lost {}
+
+/// The reason a flow ends with, for an error of `commit`: `store` unless the integration was lost.
+fn lost_reason(e: &anyhow::Error) -> &'static str {
+    match e.downcast_ref::<Lost>() {
+        Some(Lost::Changed) => "changed",
+        Some(Lost::Gone) => "gone",
+        None => "store",
+    }
+}
+
+/// Marks the row as signed in with a code, if it still has the address the token was asked for.
+fn set_device_sign_in(store: &Store, id: &str, url: &str) -> Result<()> {
+    if store.integration_set_auth_if_url(id, url, IntegrationAuth::Device)? {
+        return Ok(());
+    }
+    match store.integration_get(id)? {
+        Some(_) => Err(Lost::Changed.into()),
+        None => Err(Lost::Gone.into()),
+    }
+}
+
 async fn commit(ctx: &Ctx, access: &str, scope: Option<String>) -> Result<(Integration, bool)> {
     let store = &ctx.store;
     let (row, created) = match &ctx.goal {
         Goal::Existing { id, url } => {
-            let row = store
-                .integration_get(id)?
-                .ok_or_else(|| anyhow!("that integration was removed while the sign-in was open"))?;
+            let Some(row) = store.integration_get(id)? else {
+                return Err(Lost::Gone.into());
+            };
             if row.auth == IntegrationAuth::Oauth {
                 bail!("that integration signs in in the browser now");
             }
             if row.url.as_deref() != Some(url.as_str()) {
-                bail!("the integration's address changed while the sign-in was open");
+                return Err(Lost::Changed.into());
             }
             (row, false)
         }
@@ -705,6 +769,7 @@ async fn commit(ctx: &Ctx, access: &str, scope: Option<String>) -> Result<(Integ
         issued_at: Some(now_ms()),
         needs_login: false,
     };
+    let url = row.url.clone().unwrap_or_default();
     let saved = serde_json::to_string(&state)
         .map_err(anyhow::Error::from)
         .and_then(|text| {
@@ -713,11 +778,12 @@ async fn commit(ctx: &Ctx, access: &str, scope: Option<String>) -> Result<(Integ
                 (&oauth_state_name(&row.id), &text),
             ])
         })
-        .and_then(|()| store.integration_set_auth(&row.id, IntegrationAuth::Device).map(|_| ()));
+        .and_then(|()| set_device_sign_in(store, &row.id, &url));
     if let Err(e) = saved {
+        // Nothing of this sign-in stays: the token is deleted again, and a row made for it goes too.
+        let _ = store.secrets_delete_many(&[&oauth_access_name(&row.id), &oauth_state_name(&row.id)]);
         if created {
             let _ = store.integration_delete(&row.id);
-            let _ = store.secrets_delete_many(&[&oauth_access_name(&row.id), &oauth_state_name(&row.id)]);
         }
         return Err(e.context("could not store the sign-in"));
     }
