@@ -2065,14 +2065,15 @@
 "share.install.reported" = "Жалоба отправлена";
 "share.install.riskyCapability" = "Опасно: по умолчанию выключено";
 "share.install.role" = "Роль";
-"share.install.schedulesCount" = "Расписания: %1$lld";
 "share.install.schedulesOff" = "Расписания (%1$lld) созданы выключенными — включите в настройках бота, когда проверите промпт.";
+"share.install.schedulesPending" = "Расписания: %1$lld — будут созданы выключенными";
 "share.install.scripts" = "Скрипты, которые смогут запускать агенты: %1$lld";
 "share.install.scriptsAck" = "Понимаю, что агенты смогут запускать эти скрипты";
-"share.install.servicesCount" = "Сервисы: %1$lld";
+"share.install.services" = "Сервисы: %1$@";
 "share.install.unknownServices" = "Нет в каталоге, поэтому бот их не получит: %1$@.";
 "share.install.version" = "Версия %1$@";
 "share.install.warning" = "Сделано сообществом. Проверьте промпт, прежде чем запускать.";
+"share.install.warningSkill" = "Сделано сообществом. Проверьте файлы скилла, прежде чем запускать.";
 "share.kind.bot" = "Бот";
 "share.kind.skill" = "Скилл";
 "share.menu" = "Поделиться…";

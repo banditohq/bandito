@@ -43,6 +43,9 @@ final class InstallSharedModel {
     var chosen: Set<AgentCapability> = []
     var acknowledged = false
     var promptExpanded = false
+    var skillExpanded = false
+    /// The catalog's names by service id (see `loadCatalog`).
+    private(set) var catalogNames: [String: String] = [:]
     private(set) var inFlight = false
     private(set) var outcome: Outcome?
     private(set) var problem: String?
@@ -91,7 +94,15 @@ final class InstallSharedModel {
     }
 
     func setCapability(_ capability: AgentCapability, _ on: Bool) {
+        // Once the bot is made, its capabilities are what the install gave it: the switches show them, read only.
+        guard outcome == nil else { return }
         if on { chosen.insert(capability) } else { chosen.remove(capability) }
+    }
+
+    /// The catalog's names by id, for the services a bot names. An id the catalog does not have shows as it is.
+    func loadCatalog(server: ServerModel) async {
+        guard let entries = try? await server.integrationCatalog() else { return }
+        catalogNames = Dictionary(entries.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
     }
 
     var canInstall: Bool {
@@ -198,6 +209,7 @@ struct InstallSharedSheet: View {
         .background(Color.Bandito.surface2)
         .task(id: shareID) {
             await model.fetch(shareID: shareID, client: { try await accountHub.prepare() })
+            if let server { await model.loadCatalog(server: server) }
         }
     }
 
@@ -228,7 +240,7 @@ struct InstallSharedSheet: View {
                 case .skill: skillDetails(info)
                 }
             }
-            Text(L10n.Share.Install.warning)
+            Text(item.kind == .skill ? L10n.Share.Install.warningSkill : L10n.Share.Install.warning)
                 .font(BanditoFont.text(size: 12, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -261,14 +273,19 @@ struct InstallSharedSheet: View {
                     capabilityRow(capability)
                 }
             }
-            HStack(spacing: 14) {
-                Text(L10n.Share.Install.servicesCount(count: info.serviceCount))
-                Text(L10n.Share.Install.schedulesCount(count: info.scheduleCount))
+            VStack(alignment: .leading, spacing: 4) {
+                if !info.services.isEmpty {
+                    let names = SharedPayloadInfo.serviceNames(info.services, catalog: model.catalogNames)
+                    Text(L10n.Share.Install.services(names: names.joined(separator: ", ")))
+                }
+                if info.scheduleCount > 0 {
+                    Text(L10n.Share.Install.schedulesPending(count: info.scheduleCount))
+                }
             }
             .font(BanditoFont.text(size: 12, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
             if let prompt = info.systemPrompt, !prompt.isEmpty {
-                promptBlock(prompt)
+                collapsibleText(L10n.Share.Install.prompt, prompt, expanded: $model.promptExpanded)
             }
         }
     }
@@ -287,22 +304,26 @@ struct InstallSharedSheet: View {
                 }
             }
             Spacer(minLength: 8)
+            // The title is the row's only label: the switch itself draws no text, so the name is not said twice.
             Toggle(
-                ShareLogic.capabilityTitle(capability),
                 isOn: Binding(
                     get: { model.chosen.contains(capability) },
                     set: { model.setCapability(capability, $0) })
-            )
-            .labelsHidden()
+            ) {
+                EmptyView()
+            }
             .toggleStyle(BanditoToggleStyle())
+            .accessibilityLabel(ShareLogic.capabilityTitle(capability))
+            .disabled(model.outcome != nil)
         }
     }
 
-    private func promptBlock(_ prompt: String) -> some View {
-        let preview = ShareLogic.preview(of: prompt)
-        let shown = model.promptExpanded ? prompt : preview.shown
+    /// A text in a monospaced block, cut to twelve lines with Show all (Показать всё) when it is longer.
+    private func collapsibleText(_ label: String, _ text: String, expanded: Binding<Bool>) -> some View {
+        let preview = ShareLogic.preview(of: text)
+        let shown = expanded.wrappedValue ? text : preview.shown
         return VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.Share.Install.prompt)
+            Text(label)
                 .font(BanditoFont.text(size: 11.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text3)
             Text(shown)
@@ -311,8 +332,8 @@ struct InstallSharedSheet: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
             if preview.isCollapsed {
-                Button(model.promptExpanded ? L10n.Share.Preview.collapse : L10n.Share.Preview.expand) {
-                    model.promptExpanded.toggle()
+                Button(expanded.wrappedValue ? L10n.Share.Preview.collapse : L10n.Share.Preview.expand) {
+                    expanded.wrappedValue.toggle()
                 }
                 .banditoButton(.link)
             }
@@ -328,6 +349,17 @@ struct InstallSharedSheet: View {
             Text(L10n.Share.Install.files(count: info.files.count))
                 .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
+            ScrollView {
+                Text(info.files.joined(separator: "\n"))
+                    .font(BanditoFont.mono(size: 11.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 96)
+            .scrollIndicators(.never)
+            if let markdown = info.skillMarkdown, !markdown.isEmpty {
+                collapsibleText("SKILL.md", markdown, expanded: $model.skillExpanded)
+            }
             if !info.scripts.isEmpty {
                 Text(L10n.Share.Install.scripts(count: info.scripts.count))
                     .font(BanditoFont.text(size: 12.5, weight: 600))
@@ -342,6 +374,7 @@ struct InstallSharedSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .toggleStyle(BanditoToggleStyle())
+                .disabled(model.outcome != nil)
             }
         }
     }
@@ -389,13 +422,17 @@ struct InstallSharedSheet: View {
 
     // MARK: buttons
 
+    /// The primary action takes the sheet's full width, on its own row, so a long translation is never cut at the edge.
+    /// Report and Close sit below it.
     private var buttons: some View {
-        HStack(spacing: 10) {
-            reportMenu
-            Spacer(minLength: 8)
-            Button(L10n.Common.close) { router.sheet = nil }
-                .banditoButton(.quiet())
+        VStack(alignment: .leading, spacing: 10) {
             primaryButton
+            HStack(spacing: 10) {
+                reportMenu
+                Spacer(minLength: 8)
+                Button(L10n.Common.close) { router.sheet = nil }
+                    .banditoButton(.quiet())
+            }
         }
     }
 
@@ -403,13 +440,13 @@ struct InstallSharedSheet: View {
     private var primaryButton: some View {
         if case .bot(let result)? = model.outcome {
             Button(L10n.Share.Install.openBot) { openBot(result) }
-                .banditoButton(.signal())
+                .banditoButton(.signal(fillsWidth: true))
         } else if model.outcome == nil {
             Button(model.inFlight ? L10n.Share.Install.installing : installTitle) {
                 guard let server else { return }
                 Task { await model.install(on: server, client: { try await accountHub.prepare() }) }
             }
-            .banditoButton(.signal())
+            .banditoButton(.signal(fillsWidth: true))
             .disabled(server == nil || !model.canInstall)
         }
     }

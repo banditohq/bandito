@@ -179,7 +179,7 @@ import Testing
         #expect(info.role == "Writes notes")
         #expect(info.systemPrompt == "Be brief.")
         #expect(info.capabilities == ["files", "terminal"])
-        #expect(info.serviceCount == 1)
+        #expect(info.services == ["github"])
         #expect(info.scheduleCount == 1)
         #expect(info.starter == "Hi")
     }
@@ -197,6 +197,23 @@ import Testing
         #expect(info.files == ["SKILL.md", "scripts/run.sh"])
         #expect(info.executables == ["scripts/run.sh"])
         #expect(info.license == "MIT")
+    }
+
+    @Test func aServiceIsNamedByTheCatalogAndAnUnknownIDStaysAsItIs() {
+        let names = SharedPayloadInfo.serviceNames(["github", "mystery-api"], catalog: ["github": "GitHub"])
+        #expect(names == ["GitHub", "mystery-api"])
+        #expect(SharedPayloadInfo.serviceNames(["github"], catalog: [:]) == ["github"])
+    }
+
+    @Test func aSkillShowsItsSkillMarkdown() throws {
+        let payload: JSONValue = .object([
+            "name": .string("pdf"),
+            "files": .object(["SKILL.md": .string("# PDF\n\nUse the scripts."), "notes.txt": .string("x")]),
+        ])
+        let info = try #require(SharedPayloadInfo(kind: .skill, payload: payload))
+        #expect(info.skillMarkdown == "# PDF\n\nUse the scripts.")
+        let bare = try #require(SharedPayloadInfo(kind: .skill, payload: .object(["name": .string("x")])))
+        #expect(bare.skillMarkdown == nil)
     }
 
     @Test func aPayloadWithoutANameIsNotShown() {

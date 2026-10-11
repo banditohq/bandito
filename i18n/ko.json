@@ -2599,8 +2599,6 @@
   "share.install.capabilities": "할 수 있는 일",
   "share.install.noCapabilities": "요청된 기능이 없습니다.",
   "share.install.riskyCapability": "위험: 기본적으로 꺼짐",
-  "share.install.servicesCount": "서비스: {count}",
-  "share.install.schedulesCount": "일정: {count}",
   "share.install.prompt": "프롬프트",
   "share.install.license": "라이선스",
   "share.install.files": "파일: {count}",
@@ -2637,5 +2635,8 @@
   "share.own.title": "내 스킬",
   "share.own.sharedBadge": "링크로",
   "share.skipped": "다음 파일은 전송되지 않습니다: {files}",
-  "share.mine.updated": "버전 {number}(으)로 업데이트했습니다."
+  "share.mine.updated": "버전 {number}(으)로 업데이트했습니다.",
+  "share.install.services": "서비스: {names}",
+  "share.install.schedulesPending": "일정: {count}개 — 꺼진 상태로 만들어집니다",
+  "share.install.warningSkill": "커뮤니티가 만들었습니다. 실행하기 전에 스킬의 파일을 확인하세요."
 }

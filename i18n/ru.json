@@ -2698,8 +2698,6 @@
   "share.install.capabilities": "Что сможет делать",
   "share.install.noCapabilities": "Возможности не запрашиваются.",
   "share.install.riskyCapability": "Опасно: по умолчанию выключено",
-  "share.install.servicesCount": "Сервисы: {count}",
-  "share.install.schedulesCount": "Расписания: {count}",
   "share.install.prompt": "Промпт",
   "share.install.license": "Лицензия",
   "share.install.files": "Файлы: {count}",
@@ -2736,5 +2734,8 @@
   "share.own.title": "Мои скиллы",
   "share.own.sharedBadge": "по ссылке",
   "share.skipped": "Эти файлы не войдут: {files}",
-  "share.mine.updated": "Обновлено до версии {number}."
+  "share.mine.updated": "Обновлено до версии {number}.",
+  "share.install.services": "Сервисы: {names}",
+  "share.install.schedulesPending": "Расписания: {count} — будут созданы выключенными",
+  "share.install.warningSkill": "Сделано сообществом. Проверьте файлы скилла, прежде чем запускать."
 }

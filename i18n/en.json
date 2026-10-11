@@ -2631,8 +2631,6 @@
   "share.install.capabilities": "What it may do",
   "share.install.noCapabilities": "No capabilities asked.",
   "share.install.riskyCapability": "Risky: off by default",
-  "share.install.servicesCount": "Services: {count}",
-  "share.install.schedulesCount": "Schedules: {count}",
   "share.install.prompt": "Prompt",
   "share.install.license": "License",
   "share.install.files": "Files: {count}",
@@ -2669,5 +2667,8 @@
   "share.own.title": "My skills",
   "share.own.sharedBadge": "by link",
   "share.skipped": "These files will not be sent: {files}",
-  "share.mine.updated": "Updated to version {number}."
+  "share.mine.updated": "Updated to version {number}.",
+  "share.install.services": "Services: {names}",
+  "share.install.schedulesPending": "Schedules: {count} — will be created turned off",
+  "share.install.warningSkill": "Made by the community. Check the skill's files before you run it."
 }

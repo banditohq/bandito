@@ -2065,14 +2065,15 @@
 "share.install.reported" = "신고됨";
 "share.install.riskyCapability" = "위험: 기본적으로 꺼짐";
 "share.install.role" = "역할";
-"share.install.schedulesCount" = "일정: %1$lld";
 "share.install.schedulesOff" = "일정 %1$lld개가 꺼진 상태로 만들어졌습니다. 프롬프트를 확인한 후 봇 설정에서 켜세요.";
+"share.install.schedulesPending" = "일정: %1$lld개 — 꺼진 상태로 만들어집니다";
 "share.install.scripts" = "에이전트가 실행할 수 있는 스크립트: %1$lld";
 "share.install.scriptsAck" = "에이전트가 이 스크립트를 실행할 수 있다는 것을 이해합니다";
-"share.install.servicesCount" = "서비스: %1$lld";
+"share.install.services" = "서비스: %1$@";
 "share.install.unknownServices" = "카탈로그에 없어서 봇에 연결되지 않습니다: %1$@";
 "share.install.version" = "버전 %1$@";
 "share.install.warning" = "커뮤니티가 만들었습니다. 실행하기 전에 프롬프트를 확인하세요.";
+"share.install.warningSkill" = "커뮤니티가 만들었습니다. 실행하기 전에 스킬의 파일을 확인하세요.";
 "share.kind.bot" = "봇";
 "share.kind.skill" = "스킬";
 "share.menu" = "공유…";

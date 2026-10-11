@@ -2599,8 +2599,6 @@
   "share.install.capabilities": "可以做什么",
   "share.install.noCapabilities": "未请求任何能力。",
   "share.install.riskyCapability": "有风险：默认关闭",
-  "share.install.servicesCount": "服务：{count}",
-  "share.install.schedulesCount": "定时任务：{count}",
   "share.install.prompt": "提示词",
   "share.install.license": "许可证",
   "share.install.files": "文件：{count}",
@@ -2637,5 +2635,8 @@
   "share.own.title": "我的技能",
   "share.own.sharedBadge": "通过链接",
   "share.skipped": "以下文件不会被发送：{files}",
-  "share.mine.updated": "已更新到版本 {number}。"
+  "share.mine.updated": "已更新到版本 {number}。",
+  "share.install.services": "服务：{names}",
+  "share.install.schedulesPending": "定时任务：{count} 个 — 将以关闭状态创建",
+  "share.install.warningSkill": "由社区制作。运行前请检查技能的文件。"
 }

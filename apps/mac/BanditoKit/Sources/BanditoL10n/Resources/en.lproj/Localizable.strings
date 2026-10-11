@@ -2065,14 +2065,15 @@
 "share.install.reported" = "Reported";
 "share.install.riskyCapability" = "Risky: off by default";
 "share.install.role" = "Role";
-"share.install.schedulesCount" = "Schedules: %1$lld";
 "share.install.schedulesOff" = "Schedules (%1$lld) were created turned off. Turn them on in the bot's settings once you have checked the prompt.";
+"share.install.schedulesPending" = "Schedules: %1$lld — will be created turned off";
 "share.install.scripts" = "Scripts agents can run: %1$lld";
 "share.install.scriptsAck" = "I understand that agents will be able to run these scripts";
-"share.install.servicesCount" = "Services: %1$lld";
+"share.install.services" = "Services: %1$@";
 "share.install.unknownServices" = "Not in the catalog, so the bot does not get them: %1$@.";
 "share.install.version" = "Version %1$@";
 "share.install.warning" = "Made by the community. Check the prompt before you run it.";
+"share.install.warningSkill" = "Made by the community. Check the skill's files before you run it.";
 "share.kind.bot" = "Bot";
 "share.kind.skill" = "Skill";
 "share.menu" = "Share…";

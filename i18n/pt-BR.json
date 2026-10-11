@@ -2631,8 +2631,6 @@
   "share.install.capabilities": "O que poderá fazer",
   "share.install.noCapabilities": "Nenhuma capacidade solicitada.",
   "share.install.riskyCapability": "Arriscado: desligado por padrão",
-  "share.install.servicesCount": "Serviços: {count}",
-  "share.install.schedulesCount": "Agendamentos: {count}",
   "share.install.prompt": "Prompt",
   "share.install.license": "Licença",
   "share.install.files": "Arquivos: {count}",
@@ -2669,5 +2667,8 @@
   "share.own.title": "Meus skills",
   "share.own.sharedBadge": "por link",
   "share.skipped": "Estes arquivos não serão enviados: {files}",
-  "share.mine.updated": "Atualizado para a versão {number}."
+  "share.mine.updated": "Atualizado para a versão {number}.",
+  "share.install.services": "Serviços: {names}",
+  "share.install.schedulesPending": "Agendamentos: {count} — serão criados desligados",
+  "share.install.warningSkill": "Feito pela comunidade. Confira os arquivos do skill antes de executar."
 }
