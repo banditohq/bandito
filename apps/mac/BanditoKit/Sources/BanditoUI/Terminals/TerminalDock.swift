@@ -115,28 +115,32 @@ struct DockCard: View {
     }
 }
 
-/// Orange dot that breathes, for "waiting for input". Still when Reduce Motion is on.
+/// Orange dot that breathes, for "waiting for input". Still when Reduce Motion is on. The breath is a Core Animation
+/// layer (see `LayerMotion`).
 struct PulsingDot: View {
     let size: CGFloat
-    @State private var expanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    @State private var layerShown = false
     /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
     private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     var body: some View {
-        Circle()
-            .fill(Color.Bandito.signal)
-            .frame(width: size, height: size)
-            .shadow(color: Color.Bandito.signal.opacity(0.7), radius: 4)
-            .scaleEffect(expanded ? 1.25 : 1)
-            .opacity(expanded ? 0.75 : 1)
-            .onAppear {
-                guard !still else { return }
-                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                    expanded = true
+        ZStack {
+            Circle()
+                .fill(Color.Bandito.signal)
+                .frame(width: size, height: size)
+                .shadow(color: Color.Bandito.signal.opacity(0.7), radius: 4)
+                .opacity(!still && layerShown ? 0 : 1)
+            #if os(macOS)
+            if !still {
+                BreathingDotMotion(size: size, color: Color.Bandito.signal) { shown in
+                    if layerShown != shown { layerShown = shown }
                 }
             }
+            #endif
+        }
+        .frame(width: size, height: size)
     }
 }
 

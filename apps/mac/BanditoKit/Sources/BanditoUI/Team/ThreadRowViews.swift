@@ -379,22 +379,23 @@ struct TypingIndicator: View {
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
     /// The row is on screen: the wave stops when it scrolls away (the timeline is not driven off screen).
     @State private var onScreen = false
+    @State private var layerShown = false
     /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
     private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     var body: some View {
         HStack(spacing: 9) {
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still || !onScreen)) { context in
-                let time = context.date.timeIntervalSinceReferenceDate
-                HStack(spacing: 4) {
-                    ForEach(0..<3, id: \.self) { index in
-                        Circle()
-                            .fill(Color.Bandito.text2)
-                            .frame(width: 6, height: 6)
-                            .opacity(Self.opacity(time: time, index: index, still: still))
-                            .offset(y: Self.lift(time: time, index: index, still: still))
+            ZStack {
+                Self.dots(time: 0, still: true)
+                    .opacity(!still && onScreen && layerShown ? 0 : 1)
+                #if os(macOS)
+                // The wave is a Core Animation layer (see `LayerMotion`): it must not redraw the thread.
+                if !still && onScreen {
+                    TypingDotsMotion(color: Color.Bandito.text2) { shown in
+                        if layerShown != shown { layerShown = shown }
                     }
                 }
+                #endif
             }
             Text(activity.title)
                 .font(BanditoFont.text(size: 12.5, weight: 400))
@@ -424,6 +425,19 @@ struct TypingIndicator: View {
     }
 
     /// Each dot brightens in turn, 0.2 s apart, over a 1.2 s cycle. Still dots stay at a middle level.
+    /// The three dots at `time`.
+    static func dots(time: Double, still: Bool) -> some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(Color.Bandito.text2)
+                    .frame(width: 6, height: 6)
+                    .opacity(opacity(time: time, index: index, still: still))
+                    .offset(y: lift(time: time, index: index, still: still))
+            }
+        }
+    }
+
     static func opacity(time: Double, index: Int, still: Bool) -> Double {
         if still { return 0.6 }
         return 0.25 + 0.75 * peak(time: time, index: index)

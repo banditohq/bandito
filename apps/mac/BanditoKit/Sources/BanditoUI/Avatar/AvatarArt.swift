@@ -15,7 +15,10 @@ struct AvatarArtView: View {
     var body: some View {
         Group {
             if let picture {
-                TileMood(name: name, size: size, mood: mood, tint: look.tintColor) {
+                TileMood(
+                    name: name, size: size, mood: mood, tint: look.tintColor,
+                    pictureKey: "picture|\(ObjectIdentifier(picture).hashValue)|\(size)"
+                ) {
                     Image(decorative: picture, scale: 1)
                         .resizable()
                         .scaledToFill()
@@ -23,7 +26,10 @@ struct AvatarArtView: View {
                         .clipShape(tileShape)
                 }
             } else if case let .emoji(emoji) = AvatarPresentation.choose(hasPicture: false, emoji: look.emoji) {
-                TileMood(name: name, size: size, mood: mood, tint: look.tintColor) { emojiTile(emoji) }
+                TileMood(
+                    name: name, size: size, mood: mood, tint: look.tintColor,
+                    pictureKey: "emoji|\(emoji)|\(look.customHex ?? look.palette.rawValue)|\(size)"
+                ) { emojiTile(emoji) }
             } else {
                 RaccoonAvatar(
                     name: name, color: look.palette, face: look.face, size: size, mood: mood,
@@ -67,7 +73,11 @@ struct TileMood<Content: View>: View {
     let size: CGFloat
     let mood: AvatarMood
     let tint: Color
+    /// Names what the tile shows (the picture, or the emoji and its colour): the moving copy is drawn once per key.
+    let pictureKey: String
     @ViewBuilder var content: Content
+    /// The Core Animation copy of the moving tile is in a window and shows.
+    @State private var layerShown = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -80,17 +90,59 @@ struct TileMood<Content: View>: View {
         let phase = AvatarPose.phase(for: name)
         let paused = AvatarSleepPolicy.paused(
             mood: mood, still: still, onScreen: onScreen, windowActive: scenePhase == .active)
-        TimelineView(AvatarSchedule(mood: mood, phase: phase, paused: paused)) { context in
-            let pose = AvatarPose.make(
-                mood: mood, time: context.date.timeIntervalSinceReferenceDate, phase: phase, reduceMotion: still)
-            content
-                .scaleEffect(TileMotion.scale(pose))
-                .offset(x: pose.shakeX * size / DesignGrid.edge, y: pose.bodyOffsetY * size / DesignGrid.edge)
-                .opacity(pose.opacity)
-                .overlay { AvatarMarks(pose: pose, tint: tint, size: size) }
+        ZStack {
+            posed(
+                AvatarPose.make(
+                    mood: mood, time: Date().timeIntervalSinceReferenceDate, phase: phase, reduceMotion: still))
+                .opacity(!paused && layerShown ? 0 : 1)
+            #if os(macOS)
+            // While the mood moves, Core Animation moves a picture of the tile (see `LayerMotion`).
+            if !paused {
+                AvatarMotion(
+                    spec: AvatarMotionSpec(
+                        body: .tile(key: pictureKey), tintKey: pictureKey, size: size, mood: mood, phase: phase),
+                    tint: tint, picture: TileMoodPictures.shared.picture(key: pictureKey, size: size) { content },
+                    onShown: { shown in if layerShown != shown { layerShown = shown } })
+            }
+            #endif
         }
         .frame(width: size, height: size)
         .avatarPresence($onScreen)
+    }
+}
+
+extension TileMood {
+    fileprivate func posed(_ pose: AvatarPose) -> some View {
+        content
+            .scaleEffect(TileMotion.scale(pose))
+            .offset(x: pose.shakeX * size / DesignGrid.edge, y: pose.bodyOffsetY * size / DesignGrid.edge)
+            .opacity(pose.opacity)
+            .overlay { AvatarMarks(pose: pose, tint: tint, size: size) }
+    }
+}
+
+/// The pictures of moving tiles, drawn once from their SwiftUI content at the screen's scale.
+@MainActor
+final class TileMoodPictures {
+    static let shared = TileMoodPictures()
+    private let cache: NSCache<NSString, CGImageBox> = {
+        let cache = NSCache<NSString, CGImageBox>()
+        cache.countLimit = 200
+        return cache
+    }()
+
+    final class CGImageBox {
+        let image: CGImage
+        init(_ image: CGImage) { self.image = image }
+    }
+
+    func picture<Content: View>(key: String, size: CGFloat, @ViewBuilder content: () -> Content) -> CGImage? {
+        if let hit = cache.object(forKey: key as NSString) { return hit.image }
+        let renderer = ImageRenderer(content: content().frame(width: size, height: size))
+        renderer.scale = 2
+        guard let image = renderer.cgImage else { return nil }
+        cache.setObject(CGImageBox(image), forKey: key as NSString)
+        return image
     }
 }
 

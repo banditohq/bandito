@@ -59,6 +59,8 @@ public struct RaccoonAvatar: View {
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
     /// The avatar is inside the part of a scroll view that shows (see `AvatarPresence`).
     @State private var onScreen = true
+    /// The Core Animation layers of the moving mood are in a window and show.
+    @State private var layerShown = false
     /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
     private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
     /// No frames are asked for while the avatar is scrolled out of view, or (a sleeping one) while the window is not
@@ -90,11 +92,24 @@ public struct RaccoonAvatar: View {
         let resolved = AvatarResolver.resolve(name: name, color: color, face: face)
         let tint = customHex.flatMap(AvatarHex.value).map { Color(hex: $0) } ?? resolved.color.color
         let phase = AvatarPose.phase(for: name)
-        TimelineView(AvatarSchedule(mood: mood, phase: phase, paused: paused)) { context in
-            let pose = AvatarPose.make(
-                mood: mood, time: context.date.timeIntervalSinceReferenceDate, phase: phase,
-                reduceMotion: still)
-            RaccoonFace(resolved: resolved, tint: tint, pose: pose, size: size)
+        ZStack {
+            // One frame drawn with the window. While the mood moves, Core Animation draws the avatar instead (see
+            // `LayerMotion`): the frame stays only where no layer can show (a picture made of the view).
+            RaccoonFace(
+                resolved: resolved, tint: tint,
+                pose: AvatarPose.make(
+                    mood: mood, time: Date().timeIntervalSinceReferenceDate, phase: phase, reduceMotion: still),
+                size: size)
+                .opacity(!paused && layerShown ? 0 : 1)
+            #if os(macOS)
+            if !paused {
+                AvatarMotion(
+                    spec: AvatarMotionSpec(
+                        body: .raccoon(resolved), tintKey: customHex ?? resolved.color.rawValue, size: size, mood: mood,
+                        phase: phase),
+                    tint: tint, picture: nil, onShown: { shown in if layerShown != shown { layerShown = shown } })
+            }
+            #endif
         }
         .frame(width: size, height: size)
         .avatarPresence($onScreen)
@@ -104,7 +119,7 @@ public struct RaccoonAvatar: View {
 }
 
 /// One frame of a raccoon avatar drawn from a pose. Pose offsets are in the 52-point design grid.
-private struct RaccoonFace: View {
+struct RaccoonFace: View {
     let resolved: ResolvedAvatar
     let tint: Color
     let pose: AvatarPose

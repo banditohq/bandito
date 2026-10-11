@@ -364,28 +364,30 @@ private struct ChromeInstallCard: View {
     }
 }
 
-/// A thin orange sweep under the address bar while a page loads.
+/// A thin orange sweep under the address bar while a page loads. The sweep is a Core Animation layer (see
+/// `LayerMotion`); still motion shows a steady segment in the middle instead.
 private struct LoadingBar: View {
-    @State private var phase: CGFloat = -0.3
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    @State private var layerShown = false
 
     var body: some View {
-        GeometryReader { geo in
-            Rectangle()
-                .fill(LinearGradient(colors: [.clear, Color.Bandito.signal, .clear], startPoint: .leading, endPoint: .trailing))
-                .frame(width: geo.size.width * 0.25, height: 2)
-                .offset(x: geo.size.width * phase)
-                .onAppear {
-                    // Still motion: a steady segment in the middle instead of a sweep.
-                    if reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion {
-                        phase = 0.375
-                        return
-                    }
-                    withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
-                        phase = 1
-                    }
+        let still = reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion
+        ZStack {
+            GeometryReader { geo in
+                Rectangle()
+                    .fill(LinearGradient(colors: [.clear, Color.Bandito.signal, .clear], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: geo.size.width * 0.25, height: 2)
+                    .offset(x: geo.size.width * 0.375)
+            }
+            .opacity(!still && layerShown ? 0 : 1)
+            #if os(macOS)
+            if !still {
+                SweepMotion(color: Color.Bandito.signal) { shown in
+                    if layerShown != shown { layerShown = shown }
                 }
+            }
+            #endif
         }
         .frame(height: 2)
         .clipped()
