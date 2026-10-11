@@ -780,6 +780,18 @@
 "integrations.custom.useSelected" = "Utiliser la sélection : %1$lld";
 "integrations.custom.variables" = "Variables d'environnement";
 "integrations.custom.willBe" = "sera : %1$@";
+"integrations.device.codeHint" = "Saisissez ce code sur %1$@ pour autoriser l'accès, puis revenez dans Bandito.";
+"integrations.device.copied" = "Copié";
+"integrations.device.copy" = "Copier";
+"integrations.device.expired" = "Le code a expiré. Réessayez pour en obtenir un nouveau.";
+"integrations.device.expiresIn" = "Le code est valable encore %1$@";
+"integrations.device.needsUpdate" = "Mettez le serveur à jour pour connecter %1$@ avec un code.";
+"integrations.device.network" = "Le serveur de Bandito n'a pas pu joindre le service. Vérifiez la connexion et réessayez.";
+"integrations.device.open" = "Ouvrir %1$@";
+"integrations.device.refused" = "Le service n'a pas accepté la connexion.";
+"integrations.device.revokeHint" = "L'accès reste valable chez le service tant que vous ne l'y retirez pas : github.com/settings/applications.";
+"integrations.device.starting" = "Demande d'un code…";
+"integrations.device.waiting" = "En attente de votre confirmation sur %1$@…";
 "integrations.edit" = "Modifier";
 "integrations.empty" = "Rien n'est connecté pour l'instant. Connectez-en une du catalogue ou ajoutez la vôtre.";
 "integrations.failure.missingProgram" = "Le programme n'est pas installé sur le serveur. Installez-le puis vérifiez à nouveau.";
@@ -1049,6 +1061,7 @@
 "market.step.fillPath" = "Remplacez dans la commande le dossier ou le chemin d'exemple par le vôtre.";
 "market.step.getKey" = "Obtenez la clé ou le jeton. La documentation indique où.";
 "market.step.signIn" = "Appuyez sur Connecter et autorisez l’accès sur la page du service, dans le navigateur.";
+"market.step.signInCode" = "Cliquez sur « Connecter », puis saisissez sur la page du service le code affiché par Bandito.";
 "market.subtitle" = "Connectez les services que les agents peuvent utiliser.";
 "market.tab.bots" = "Bots";
 "market.tab.services" = "Services";

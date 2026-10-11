@@ -2643,5 +2643,18 @@
   "share.mine.updated": "バージョン {number} に更新しました。",
   "share.install.services": "サービス: {names}",
   "share.install.schedulesPending": "スケジュール: {count}件 — オフの状態で作成されます",
-  "share.install.warningSkill": "コミュニティ製です。実行する前にスキルのファイルを確認してください。"
+  "share.install.warningSkill": "コミュニティ製です。実行する前にスキルのファイルを確認してください。",
+  "integrations.device.starting": "コードを取得しています…",
+  "integrations.device.codeHint": "アクセスを許可するため、{site} でこのコードを入力してから Bandito に戻ってください。",
+  "integrations.device.copy": "コピー",
+  "integrations.device.copied": "コピーしました",
+  "integrations.device.open": "{address} を開く",
+  "integrations.device.waiting": "{site} での確認を待っています…",
+  "integrations.device.expiresIn": "コードの有効期限まであと {time}",
+  "integrations.device.expired": "コードの有効期限が切れました。もう一度試して新しいコードを取得してください。",
+  "integrations.device.network": "Bandito のサーバーがサービスに接続できませんでした。接続を確認してもう一度お試しください。",
+  "integrations.device.refused": "サービスがサインインを受け付けませんでした。",
+  "integrations.device.needsUpdate": "コードで {name} を接続するには、サーバーを更新してください。",
+  "integrations.device.revokeHint": "アクセスはサービス側で削除するまで有効なままです: github.com/settings/applications",
+  "market.step.signInCode": "「接続」を押し、Bandito が表示するコードをサービスのページで入力します。"
 }

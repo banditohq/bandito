@@ -172,7 +172,7 @@ struct MarketDetailView: View {
                     .font(BanditoFont.text(size: 12.5, weight: 500))
                     .foregroundStyle(Color.Bandito.ok)
                 }
-                if integration.auth != .oauth {
+                if !integration.auth.isDaemonSignIn {
                     Button(L10n.Market.configure, action: onConfigure)
                         .banditoButton(.quiet())
                         .fixedSize()
@@ -256,6 +256,7 @@ struct MarketDetailView: View {
         case .fillPath: L10n.Market.Step.fillPath
         case .connect: L10n.Market.Step.connect
         case .signIn: L10n.Market.Step.signIn
+        case .signInCode: L10n.Market.Step.signInCode
         }
     }
 

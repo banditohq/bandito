@@ -127,6 +127,36 @@ extension ServerModel: OAuthServer {
     }
 }
 
+// MARK: - sign-in with a code (feature `integrations_device`)
+
+extension ServerModel: DeviceServer {
+    public var deviceServerID: UUID { id }
+
+    public func deviceBegin(_ target: DeviceBeginTarget) async throws -> DeviceBegun {
+        struct P: Encodable {
+            var integration: String?
+            var draft: NewIntegration?
+        }
+        let params: P
+        switch target {
+        case .existing(let id): params = P(integration: id)
+        case .draft(let draft): params = P(draft: draft)
+        }
+        return try await rpc().call("integrations.device_begin", params, as: DeviceBegun.self, timeout: .seconds(30))
+    }
+
+    public func deviceStatus(flowId: String) async throws -> DeviceStatus {
+        struct P: Encodable { var flowId: String }
+        return try await rpc().call("integrations.device_status", P(flowId: flowId), as: DeviceStatus.self)
+    }
+
+    public func deviceCancel(flowId: String) async {
+        struct P: Encodable { var flowId: String }
+        struct Reply: Decodable { var cancelled: Bool }
+        _ = try? await rpc().call("integrations.device_cancel", P(flowId: flowId), as: Reply.self)
+    }
+}
+
 /// `integrations.update` params: the id and the patch fields in one object.
 struct IntegrationUpdateParams: Encodable, Sendable {
     var id: String

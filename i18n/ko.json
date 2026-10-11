@@ -2643,5 +2643,18 @@
   "share.mine.updated": "버전 {number}(으)로 업데이트했습니다.",
   "share.install.services": "서비스: {names}",
   "share.install.schedulesPending": "일정: {count}개 — 꺼진 상태로 만들어집니다",
-  "share.install.warningSkill": "커뮤니티가 만들었습니다. 실행하기 전에 스킬의 파일을 확인하세요."
+  "share.install.warningSkill": "커뮤니티가 만들었습니다. 실행하기 전에 스킬의 파일을 확인하세요.",
+  "integrations.device.starting": "코드를 요청하는 중…",
+  "integrations.device.codeHint": "접근을 허용하려면 {site}에서 이 코드를 입력한 다음 Bandito로 돌아오세요.",
+  "integrations.device.copy": "복사",
+  "integrations.device.copied": "복사했어요",
+  "integrations.device.open": "{address} 열기",
+  "integrations.device.waiting": "{site}에서 확인하기를 기다리는 중…",
+  "integrations.device.expiresIn": "코드가 {time} 동안 유효해요",
+  "integrations.device.expired": "코드가 만료됐어요. 다시 시도해 새 코드를 받으세요.",
+  "integrations.device.network": "Bandito 서버가 서비스에 연결하지 못했어요. 연결을 확인하고 다시 시도하세요.",
+  "integrations.device.refused": "서비스가 로그인을 받아들이지 않았어요.",
+  "integrations.device.needsUpdate": "코드로 {name}을(를) 연결하려면 서버를 업데이트하세요.",
+  "integrations.device.revokeHint": "접근 권한은 서비스에서 직접 삭제할 때까지 유효해요: github.com/settings/applications",
+  "market.step.signInCode": "'연결'을 누르고 Bandito가 보여주는 코드를 서비스 페이지에 입력하세요."
 }

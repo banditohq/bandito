@@ -10,11 +10,15 @@ public enum IntegrationKind: String, Codable, Sendable, CaseIterable {
     case http
 }
 
-/// How an integration signs in (`auth` on the wire): `oauth` is a sign-in in the browser, whose tokens only the
-/// daemon holds (docs/ARCHITECTURE.md#integrations).
+/// How an integration signs in (`auth` on the wire): `oauth` is a sign-in in the browser and `device` a sign-in with
+/// a code typed on the provider's page; the tokens of both only the daemon holds (docs/ARCHITECTURE.md#integrations).
 public enum IntegrationAuth: String, Codable, Sendable {
     case none
     case oauth
+    case device
+
+    /// The daemon signs in and keeps the token: there are no keys for the owner to edit.
+    public var isDaemonSignIn: Bool { self != .none }
 }
 
 /// The catalog template of an integration is ahead of it (`template_update` of `integrations.list`, feature
@@ -246,13 +250,17 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
     public var abilitiesRu: [String]
     public var needsEn: String?
     public var needsRu: String?
-    /// `oauth` for a service that signs in in the browser; nil (or `none`) for one that takes a key.
+    /// `oauth` for a service that signs in in the browser, `device` for one that signs in with a code; nil (or `none`)
+    /// for one that takes a key.
     public var auth: IntegrationAuth
     /// The texts for the other app languages, by language code (`pt-BR`, `zh-Hans`, …). Empty for an older daemon.
     public var l10n: [String: IntegrationTranslation]
 
     /// Whether Connect starts a sign-in in the browser instead of opening the sheet of keys.
     public var usesOAuth: Bool { auth == .oauth }
+
+    /// Whether Connect starts a sign-in with a code (the code is shown in a sheet, and typed on the provider's page).
+    public var usesDevice: Bool { auth == .device }
 
     public init(
         id: String, name: String, descriptionEn: String, descriptionRu: String, kind: IntegrationKind,

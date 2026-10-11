@@ -51,7 +51,7 @@ public enum IntegrationStatus: Equatable, Sendable {
         _ integration: Integration, test: IntegrationTest?, connection: OAuthConnection? = nil
     ) -> IntegrationStatus {
         guard integration.enabled else { return .disabled }
-        if integration.auth == .oauth {
+        if integration.auth.isDaemonSignIn {
             if connection == .needsLogin || connection == .notConnected || test?.needsLogin == true {
                 return .needsLogin
             }

@@ -780,6 +780,18 @@
 "integrations.custom.useSelected" = "Usar seleccionados: %1$lld";
 "integrations.custom.variables" = "Variables de entorno";
 "integrations.custom.willBe" = "será: %1$@";
+"integrations.device.codeHint" = "Escribe este código en %1$@ para permitir el acceso y vuelve a Bandito.";
+"integrations.device.copied" = "Copiado";
+"integrations.device.copy" = "Copiar";
+"integrations.device.expired" = "El código ha caducado. Inténtalo de nuevo para obtener uno nuevo.";
+"integrations.device.expiresIn" = "El código sigue siendo válido %1$@";
+"integrations.device.needsUpdate" = "Actualiza el servidor para conectar %1$@ con un código.";
+"integrations.device.network" = "El servidor de Bandito no pudo conectar con el servicio. Revisa la conexión e inténtalo de nuevo.";
+"integrations.device.open" = "Abrir %1$@";
+"integrations.device.refused" = "El servicio no aceptó el inicio de sesión.";
+"integrations.device.revokeHint" = "El acceso sigue activo en el servicio hasta que lo quites allí: github.com/settings/applications.";
+"integrations.device.starting" = "Pidiendo un código…";
+"integrations.device.waiting" = "Esperando tu confirmación en %1$@…";
 "integrations.edit" = "Editar";
 "integrations.empty" = "Todavía no hay nada conectado. Conecta una del catálogo o añade la tuya.";
 "integrations.failure.missingProgram" = "El programa no está instalado en el servidor. Instálalo allí y vuelve a comprobar.";
@@ -1049,6 +1061,7 @@
 "market.step.fillPath" = "Sustituye en el comando la carpeta o ruta de ejemplo por la tuya.";
 "market.step.getKey" = "Consigue la clave o el token. La documentación indica dónde.";
 "market.step.signIn" = "Pulsa Conectar y permite el acceso en la página del servicio, en el navegador.";
+"market.step.signInCode" = "Pulsa «Conectar» e introduce en la página del servicio el código que muestra Bandito.";
 "market.subtitle" = "Conecta los servicios que pueden usar los agentes.";
 "market.tab.bots" = "Bots";
 "market.tab.services" = "Servicios";

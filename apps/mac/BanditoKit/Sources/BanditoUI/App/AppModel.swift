@@ -62,10 +62,13 @@ public final class AppModel {
 
     /// The sign-in to a service in the browser that is in progress (see `OAuthSignIn`).
     public let oauth: OAuthSignIn
+    /// The sign-in to a service with a code that is in progress (see `DeviceSignIn`).
+    public let device: DeviceSignIn
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         oauth = OAuthSignIn(defaults: defaults)
+        device = DeviceSignIn()
         load()
     }
 

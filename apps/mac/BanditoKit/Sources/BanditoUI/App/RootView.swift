@@ -45,5 +45,6 @@ public struct RootView: View {
             }
         }
         .modifier(OAuthSignInPresenter())
+        .modifier(DeviceSignInPresenter())
     }
 }

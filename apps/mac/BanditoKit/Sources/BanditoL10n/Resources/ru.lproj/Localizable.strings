@@ -780,6 +780,18 @@
 "integrations.custom.useSelected" = "Взять выбранные: %1$lld";
 "integrations.custom.variables" = "Переменные окружения";
 "integrations.custom.willBe" = "будет: %1$@";
+"integrations.device.codeHint" = "Введите этот код на %1$@, чтобы разрешить доступ, и вернитесь в Bandito.";
+"integrations.device.copied" = "Скопировано";
+"integrations.device.copy" = "Скопировать";
+"integrations.device.expired" = "Код истёк. Попробуйте снова, чтобы получить новый.";
+"integrations.device.expiresIn" = "Код действует ещё %1$@";
+"integrations.device.needsUpdate" = "Обновите сервер, чтобы подключить %1$@ по коду.";
+"integrations.device.network" = "Сервер Bandito не достучался до сервиса. Проверьте соединение и попробуйте снова.";
+"integrations.device.open" = "Открыть %1$@";
+"integrations.device.refused" = "Сервис не принял вход.";
+"integrations.device.revokeHint" = "Доступ остаётся действующим в сервисе, пока вы не отзовёте его там: github.com/settings/applications.";
+"integrations.device.starting" = "Запрашиваем код…";
+"integrations.device.waiting" = "Ждём подтверждения на %1$@…";
 "integrations.edit" = "Изменить";
 "integrations.empty" = "Пока ничего не подключено. Подключите из каталога или добавьте свою.";
 "integrations.failure.missingProgram" = "Программа не установлена на сервере. Установите её и проверьте снова.";
@@ -1049,6 +1061,7 @@
 "market.step.fillPath" = "Замените в команде пример папки или пути на свой.";
 "market.step.getKey" = "Получите ключ или токен. Где — сказано в документации.";
 "market.step.signIn" = "Нажмите «Подключить» и разрешите доступ на странице сервиса в браузере.";
+"market.step.signInCode" = "Нажмите «Подключить» и введите показанный Bandito код на странице сервиса.";
 "market.subtitle" = "Подключите сервисы, которыми смогут пользоваться агенты.";
 "market.tab.bots" = "Боты";
 "market.tab.services" = "Сервисы";
