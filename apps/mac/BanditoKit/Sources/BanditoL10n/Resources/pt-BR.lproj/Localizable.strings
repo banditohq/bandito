@@ -629,6 +629,8 @@
 "files.error.permissionDenied" = "Sem permissão";
 "files.error.tooLarge" = "O arquivo é grande demais";
 "files.favorites" = "FAVORITOS";
+"files.folderShared" = "Compartilhada";
+"files.folderSharedHelp" = "Também visível no próprio servidor ou em outro espaço de trabalho";
 "files.forward" = "Avançar";
 "files.forwardHelp" = "Avançar (⌘])";
 "files.hidden" = "Mostrar arquivos ocultos";
@@ -697,6 +699,8 @@
 "files.upload.failed" = "Não foi possível enviar %1$@: %2$@";
 "files.upload.hint" = "Solte os arquivos aqui";
 "files.upload.title" = "%1$@ envia do Mac para %2$@";
+"files.workplaceGroup" = "ESPAÇO DE TRABALHO: %1$@";
+"files.workplaceNoFolders" = "Ainda não há pastas";
 "folderPicker.choose" = "Escolher %1$@";
 "folderPicker.clone" = "Clonar a partir de um link";
 "folderPicker.cloneGo" = "Clonar";
@@ -1747,6 +1751,11 @@
 "screen.agentControls" = "O agente está no controle";
 "screen.askTakeControl" = "Assumir o controle para clicar aqui?";
 "screen.asleep" = "A tela está em repouso";
+"screen.card.asleep" = "Em repouso";
+"screen.card.checking" = "Verificando…";
+"screen.card.running" = "Tela ativa";
+"screen.card.unavailable" = "Ainda indisponível";
+"screen.card.unavailableHint" = "O Bandito do servidor é antigo demais para mostrar a tela deste espaço de trabalho. Atualize o servidor.";
 "screen.clipboard" = "Área de transferência";
 "screen.clipboardOff" = "Desligada";
 "screen.clipboardShared" = "Compartilhada";
@@ -1778,6 +1787,7 @@
 "screen.unsupported" = "A tela do servidor funciona em servidores Linux";
 "screen.unsupportedText" = "Em um servidor Linux, o Bandito mostra aqui a área de trabalho dele: os agentes usam apps nela, e você pode acompanhar ou assumir o controle. Um Mac não precisa disso — a tela dele está bem na sua frente.";
 "screen.who" = "Quem está aqui";
+"screen.workplaceUnavailable" = "O Bandito do servidor é antigo demais para mostrar a tela de um espaço de trabalho separado. Atualize o servidor para abri-la.";
 "screen.workplaces" = "Telas dos espaços de trabalho";
 "screen.youWatch" = "Você está assistindo";
 "search.noResults" = "Nada encontrado";
@@ -2582,6 +2592,7 @@
 "terminals.layouts.mainRight" = "Principal e dois à direita";
 "terminals.layouts.one" = "Uma janela";
 "terminals.newFailed" = "Não foi possível abrir um terminal: %1$@";
+"terminals.newIn" = "Novo terminal em %1$@";
 "terminals.noRoom" = "Sem espaço na tela. Recolha ou feche um painel primeiro.";
 "terminals.noServer" = "Nenhum servidor selecionado";
 "terminals.pane.close" = "Fechar e encerrar o processo";
@@ -2835,6 +2846,8 @@
 "workspace.move.title" = "Mover o agente para %1$@?";
 "workspace.network.internet" = "Internet";
 "workspace.network.offline" = "Nenhuma";
+"workspace.picker.onServer" = "No servidor";
+"workspace.picker.starting" = "Iniciando…";
 "workspace.row.cpu" = "CPU";
 "workspace.row.disk" = "Disco";
 "workspace.row.folders" = "Pastas";

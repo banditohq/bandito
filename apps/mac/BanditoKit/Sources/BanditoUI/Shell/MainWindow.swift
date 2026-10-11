@@ -126,7 +126,10 @@ struct MainWindow: View {
     }
 
     private var browserModel: BrowserModel? {
-        app.currentServer.map { BrowserStore.shared.model(for: $0) }
+        app.currentServer.map {
+            BrowserStore.shared.model(
+                for: $0, workspace: WorkspaceSelections.shared.selection(mode: "browser", server: $0).selectedID)
+        }
     }
 
     /// Whether the swipe has anywhere to go: a page with no earlier page, or Files at its first folder, shows no arrow.

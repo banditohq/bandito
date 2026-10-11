@@ -165,3 +165,14 @@ Some files are not text or are too large. The viewer says why.
 Two-finger swipe left and right moves back and forward through folders and files, like Safari and Finder. It can be switched off in Settings → Keys and gestures.
 Где: Files → two-finger swipe; Settings → Keys and gestures (Клавиши и жесты) → Trackpad gestures (Жесты тачпада)
 1. Swipe with two fingers. Use the slider Swipe sensitivity (Чувствительность свайпов) to change how far a swipe goes.
+
+## Folders of a container workplace (WORKPLACE: …)
+
+<!-- id: files-workplace-folders; covers: -->
+For each container workplace the sidebar has a group WORKPLACE: name (РАБОЧЕЕ МЕСТО: …) with the folders the container sees: the folders of the agents that run in it, and the folders you added to it in Server → Workplaces. Files browses the server's own disk, so these are the same folders you see everywhere else.
+Где: Files → sidebar → WORKPLACE: … (РАБОЧЕЕ МЕСТО: …)
+1. Click a folder to open it.
+2. A lock marks a folder the container sees read only.
+3. Shared (Общая) marks a folder that is also on the server itself or in another workplace: the folders you added, and any folder two containers see. Point at it for the explanation.
+4. An agent that runs in a container has the workplace's name next to it under WHERE AGENTS WORK (ГДЕ РАБОТАЮТ АГЕНТЫ).
+5. A container with no folders yet says No folders yet (Папок пока нет).

@@ -629,6 +629,8 @@
 "files.error.permissionDenied" = "権限がありません";
 "files.error.tooLarge" = "ファイルが大きすぎます";
 "files.favorites" = "お気に入り";
+"files.folderShared" = "共有";
+"files.folderSharedHelp" = "サーバー自体や別の作業場所からも見えます";
 "files.forward" = "進む";
 "files.forwardHelp" = "進む (⌘])";
 "files.hidden" = "隠しファイルを表示";
@@ -697,6 +699,8 @@
 "files.upload.failed" = "%1$@ をアップロードできませんでした: %2$@";
 "files.upload.hint" = "ここにファイルをドロップ";
 "files.upload.title" = "%1$@ を Mac から %2$@ にアップロード中";
+"files.workplaceGroup" = "作業場所: %1$@";
+"files.workplaceNoFolders" = "フォルダはまだありません";
 "folderPicker.choose" = "%1$@ を選ぶ";
 "folderPicker.clone" = "リンクからクローン";
 "folderPicker.cloneGo" = "クローン";
@@ -1747,6 +1751,11 @@
 "screen.agentControls" = "エージェントが操作中";
 "screen.askTakeControl" = "操作を引き継いでここをクリックしますか？";
 "screen.asleep" = "画面はスリープ中です";
+"screen.card.asleep" = "スリープ中";
+"screen.card.checking" = "確認中…";
+"screen.card.running" = "画面オン";
+"screen.card.unavailable" = "まだ利用できません";
+"screen.card.unavailableHint" = "サーバーのBanditoが古いため、この作業場所の画面を表示できません。サーバーをアップデートしてください。";
 "screen.clipboard" = "クリップボード";
 "screen.clipboardOff" = "オフ";
 "screen.clipboardShared" = "共有";
@@ -1778,6 +1787,7 @@
 "screen.unsupported" = "サーバー画面は Linux サーバーで利用できます";
 "screen.unsupportedText" = "Linux サーバーでは、Bandito がここにそのデスクトップを表示します。エージェントはそこでアプリを使い、あなたは見守ったり操作を引き継いだりできます。Mac には不要です。画面はすぐ目の前にあります。";
 "screen.who" = "ここにいるのは";
+"screen.workplaceUnavailable" = "サーバーのBanditoが古いため、別の作業場所の画面は表示できません。サーバーをアップデートすると開けます。";
 "screen.workplaces" = "作業場所の画面";
 "screen.youWatch" = "あなたが見ています";
 "search.noResults" = "見つかりません";
@@ -2582,6 +2592,7 @@
 "terminals.layouts.mainRight" = "メインと右側に 2 つ";
 "terminals.layouts.one" = "1 ウィンドウ";
 "terminals.newFailed" = "ターミナルを開けませんでした: %1$@";
+"terminals.newIn" = "%1$@ に新しいターミナル";
 "terminals.noRoom" = "画面に空きがありません。先にペインを折りたたむか閉じてください。";
 "terminals.noServer" = "サーバーが選択されていません";
 "terminals.pane.close" = "閉じてプロセスを終了";
@@ -2835,6 +2846,8 @@
 "workspace.move.title" = "エージェントを %1$@ に移動しますか？";
 "workspace.network.internet" = "インターネット";
 "workspace.network.offline" = "なし";
+"workspace.picker.onServer" = "サーバー上";
+"workspace.picker.starting" = "起動中…";
 "workspace.row.cpu" = "CPU";
 "workspace.row.disk" = "ディスク";
 "workspace.row.folders" = "フォルダー";

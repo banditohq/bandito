@@ -880,6 +880,8 @@ public enum L10n {
         public static var empty: String { L10n.tr("files.empty") }
         public static var emptyCreate: String { L10n.tr("files.emptyCreate") }
         public static var favorites: String { L10n.tr("files.favorites") }
+        public static var folderShared: String { L10n.tr("files.folderShared") }
+        public static var folderSharedHelp: String { L10n.tr("files.folderSharedHelp") }
         public static var forward: String { L10n.tr("files.forward") }
         public static var forwardHelp: String { L10n.tr("files.forwardHelp") }
         public static var hidden: String { L10n.tr("files.hidden") }
@@ -900,6 +902,8 @@ public enum L10n {
         public static var trash: String { L10n.tr("files.trash") }
         public static func truncated(count: Int) -> String { L10n.tr("files.truncated", count) }
         public static var unsupported: String { L10n.tr("files.unsupported") }
+        public static func workplaceGroup(name: String) -> String { L10n.tr("files.workplaceGroup", name) }
+        public static var workplaceNoFolders: String { L10n.tr("files.workplaceNoFolders") }
 
         public enum Access {
             public static var hintServer: String { L10n.tr("files.access.hintServer") }
@@ -2450,8 +2454,17 @@ public enum L10n {
         public static var unsupported: String { L10n.tr("screen.unsupported") }
         public static var unsupportedText: String { L10n.tr("screen.unsupportedText") }
         public static var who: String { L10n.tr("screen.who") }
+        public static var workplaceUnavailable: String { L10n.tr("screen.workplaceUnavailable") }
         public static var workplaces: String { L10n.tr("screen.workplaces") }
         public static var youWatch: String { L10n.tr("screen.youWatch") }
+
+        public enum Card {
+            public static var asleep: String { L10n.tr("screen.card.asleep") }
+            public static var checking: String { L10n.tr("screen.card.checking") }
+            public static var running: String { L10n.tr("screen.card.running") }
+            public static var unavailable: String { L10n.tr("screen.card.unavailable") }
+            public static var unavailableHint: String { L10n.tr("screen.card.unavailableHint") }
+        }
     }
 
     public enum Search {
@@ -3611,6 +3624,7 @@ public enum L10n {
         public static var inputToAllOff: String { L10n.tr("terminals.inputToAllOff") }
         public static var layoutTitle: String { L10n.tr("terminals.layoutTitle") }
         public static func newFailed(message: String) -> String { L10n.tr("terminals.newFailed", message) }
+        public static func newIn(name: String) -> String { L10n.tr("terminals.newIn", name) }
         public static var noRoom: String { L10n.tr("terminals.noRoom") }
         public static var noServer: String { L10n.tr("terminals.noServer") }
         public static var rename: String { L10n.tr("terminals.rename") }
@@ -4030,6 +4044,11 @@ public enum L10n {
         public enum Network {
             public static var internet: String { L10n.tr("workspace.network.internet") }
             public static var offline: String { L10n.tr("workspace.network.offline") }
+        }
+
+        public enum Picker {
+            public static var onServer: String { L10n.tr("workspace.picker.onServer") }
+            public static var starting: String { L10n.tr("workspace.picker.starting") }
         }
 
         public enum Row {

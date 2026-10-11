@@ -98,6 +98,16 @@ struct TeamSidebar: View {
             .padding(.bottom, 12)
         }
         .background(Color.Bandito.surface1)
+        // The names of the containers label the agents that run in them. Read only while some agent does.
+        .task(id: "\(agents.contains { $0.workspaceId != Workspace.sharedID }) \(server.supports("workspaces"))") {
+            guard agents.contains(where: { $0.workspaceId != Workspace.sharedID }), server.supports("workspaces")
+            else { return }
+            let directory = WorkspaceDirectories.shared.directory(for: server)
+            while !Task.isCancelled {
+                if directory.shouldPoll { await directory.refresh() }
+                try? await Task.sleep(for: .seconds(15))
+            }
+        }
         .confirmationDialog(
             pendingDelete.map { L10n.Agent.Delete.confirm(name: $0.name) } ?? "",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
@@ -204,7 +214,10 @@ struct TeamSidebar: View {
         } label: {
             AgentRow(
                 agent: agent, server: server, thread: thread, status: server.status(of: agent.id), isSelected: selected,
-                lastActivity: lastActivityLabel(agent, thread: thread), isLead: isLead)
+                lastActivity: lastActivityLabel(agent, thread: thread), isLead: isLead,
+                place: WorkspacePickerLogic.label(
+                    workspaceID: agent.workspaceId,
+                    workspaces: WorkspaceDirectories.shared.directory(for: server).workspaces))
                 .contentShape(Rectangle())
         }
         .banditoButton(.row(cornerRadius: 10))
@@ -310,6 +323,8 @@ struct AgentRow: View {
     var lastActivity = ""
     /// The server's main agent: a crown on the avatar.
     var isLead = false
+    /// The name of the container the agent runs in; nil for the shared server.
+    var place: String?
 
     var body: some View {
         let _ = PerfCounters.hit("AgentRow")
@@ -341,6 +356,7 @@ struct AgentRow: View {
                             .help(L10n.Inspector.statePaused)
                     }
                     if !agent.role.isEmpty { Chip(text: agent.role) }
+                    if let place { WorkspaceChip(text: place) }
                     Spacer(minLength: 4)
                     if !lastActivity.isEmpty {
                         Text(lastActivity)

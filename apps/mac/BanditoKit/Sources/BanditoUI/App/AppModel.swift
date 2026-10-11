@@ -512,7 +512,8 @@ public final class AppModel {
             await terminalController(for: server).refresh()
         }
         if reloads.contains(.browserPage) {
-            await BrowserStore.shared.model(for: server).reload()
+            let chosen = WorkspaceSelections.shared.selection(mode: "browser", server: server).selectedID
+            await BrowserStore.shared.model(for: server, workspace: chosen).reload()
         }
         router.refreshRequests += 1
     }

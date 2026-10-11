@@ -48,7 +48,8 @@ pub const SCREENSHOT_MAX_WIDTH: u32 = 1280;
 pub const IDLE_CHECK_INTERVAL: Duration = Duration::from_secs(60);
 /// RFB (VNC) uses only the first 8 characters of a password, so the whole password is 8.
 pub const PASSWORD_LEN: usize = 8;
-pub const MAX_WORKSPACE_LEN: usize = 32;
+/// Long enough for a workspace id (a UUID is 36 characters); the browser accepts the same.
+pub const MAX_WORKSPACE_LEN: usize = 64;
 /// Scroll notches when `amount` is not given, and the largest accepted amount.
 pub const DEFAULT_SCROLL: u32 = 3;
 pub const MAX_SCROLL: u32 = 20;
@@ -1603,6 +1604,9 @@ mod tests {
     fn workspace_names_are_short_and_safe_for_a_folder_name() {
         let long = "x".repeat(MAX_WORKSPACE_LEN);
         let too_long = "x".repeat(MAX_WORKSPACE_LEN + 1);
+        // A workspace id is a UUID (36 characters): a container workspace's screen is named by it.
+        let uuid = crate::store::new_id();
+        assert_eq!(validate_workspace(&uuid), Ok(()), "{uuid}");
         for ok in ["shared", "team-1", "a_b", long.as_str()] {
             assert_eq!(validate_workspace(ok), Ok(()), "{ok}");
         }

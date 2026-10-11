@@ -293,6 +293,19 @@ pub fn exec_args(
     out
 }
 
+/// Arguments of `docker exec -it` for a terminal in a container: a TTY, the folder inside the container, and the
+/// names of the variables to pass (values come from the docker client's environment, like `exec_args`).
+pub fn exec_tty_args(container: &str, cwd: &str, env_names: &[String], program: &str, args: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = vec!["exec".into(), "-it".into(), "-w".into(), cwd.to_string()];
+    for name in env_names {
+        out.extend(["-e".to_string(), name.clone()]);
+    }
+    out.push(container.to_string());
+    out.push(program.to_string());
+    out.extend(args.iter().cloned());
+    out
+}
+
 /// The command that runs `program` in a workspace: directly for `Shared` (or no workspace), and
 /// through `docker exec` for a container. Stdio is left to the caller.
 pub fn exec_command(
@@ -623,6 +636,21 @@ mod tests {
             target: path.into(),
             read_only,
         }
+    }
+
+    #[test]
+    fn terminal_exec_has_a_tty_a_folder_and_only_variable_names() {
+        let args = exec_tty_args(
+            "c1",
+            "/work",
+            &["TERM".to_string()],
+            "sh",
+            &["-c".to_string(), "x".to_string()],
+        );
+        assert_eq!(
+            args,
+            ["exec", "-it", "-w", "/work", "-e", "TERM", "c1", "sh", "-c", "x"]
+        );
     }
 
     #[test]

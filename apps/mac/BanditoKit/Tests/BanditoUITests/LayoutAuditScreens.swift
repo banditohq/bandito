@@ -50,7 +50,74 @@ extension LayoutAuditSnapshots {
 
     private static let hostFeatures = ["host", "update", "workspaces", "secrets", "backups", "schedules", "crew"]
 
-    static let serverScreens: [AuditCase] = [
+    /// Two containers next to the shared server, with long names on purpose: one stopped, one with Docker not answering.
+    private static let auditWorkspaces: [Workspace] = [
+        Workspace(id: Workspace.sharedID, name: "Shared", kind: .shared),
+        Workspace(
+            id: "box-1", name: "Testumgebung für die Abnahme der neuen Version", kind: .container,
+            status: WorkspaceStatus(running: true, containerId: "c1")),
+        Workspace(
+            id: "box-2", name: "Рабочее место для долгой проверки", kind: .container,
+            status: WorkspaceStatus(running: false)),
+        Workspace(
+            id: "box-3", name: "Build", kind: .container, status: WorkspaceStatus(running: false, error: "docker_unavailable")),
+    ]
+
+    private static func auditSelection(_ env: AuditEnvironment, selected: String = "box-1") -> WorkspaceSelection {
+        let suite = "dev.bandito.layout-audit-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.set(selected, forKey: WorkspacePickerLogic.storageKey(mode: "audit", serverID: env.server.id))
+        let directory = WorkspaceDirectory(server: env.server, workspaces: auditWorkspaces, loaded: true)
+        let selection = WorkspaceSelection(mode: "audit", directory: directory, defaults: defaults)
+        // The choice is read at init; the audit never writes it, so nothing is left on disk.
+        defaults.removePersistentDomain(forName: suite)
+        return selection
+    }
+
+    /// The sidebars of the Screen, Browser, Terminals and Files modes with two containers next to the shared server.
+    /// The sidebar is 296 pt wide.
+    static let workspaceSidebars: [AuditCase] = [
+        AuditCase(name: "workspace-picker", width: 296) { env in
+            AnyView(WorkspacePicker(selection: auditSelection(env)).padding(.horizontal, 8))
+        },
+        AuditCase(name: "screen-sidebar-cards", width: 296) { env in
+            let cards = ScreenCardData.make(
+                workspaces: auditWorkspaces,
+                states: ["shared": .running, "box-1": .asleep, "box-2": .unavailable, "box-3": .unknown],
+                selectedID: "box-1")
+            return AnyView(
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(cards) { card in
+                        ScreenCard(
+                            data: card, preview: ScreenPreviews.shared.box(server: env.server.id, workspace: card.id),
+                            onSelect: {})
+                    }
+                }
+                .padding(.horizontal, 8))
+        },
+        AuditCase(name: "files-workplace-group", width: 296) { _ in
+            let box = auditWorkspaces[1]
+            let agent = Agent(
+                id: "a1", name: "Forge with a long name for the layout check", runtime: .claude,
+                cwd: "/work/a-project-folder-with-a-rather-long-name", workspaceId: "box-1")
+            let folders = WorkspaceFolders.folders(
+                of: Workspace(
+                    id: box.id, name: box.name, kind: .container,
+                    mounts: [WorkspaceMount(host: "/data/shared-datasets-for-all-containers", target: "/data", readOnly: true)]),
+                in: auditWorkspaces, agents: [agent])
+            return AnyView(
+                VStack(alignment: .leading, spacing: 6) {
+                    SectionLabel(L10n.Files.workplaceGroup(name: box.name))
+                        .padding(.horizontal, 18)
+                    ForEach(folders) { folder in
+                        WorkspaceFolderRow(folder: folder, isCurrent: false, action: {})
+                    }
+                    .padding(.horizontal, 8)
+                })
+        },
+    ]
+
+    static let serverScreens: [AuditCase] = workspaceSidebars + [
         AuditCase(name: "screen-missing-components", width: modeArea) { _ in
             AnyView(ScreenMissingComponents(components: ["x11vnc", "xdotool"], setup: SetupModel(), onInstall: {}))
         },

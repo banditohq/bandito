@@ -629,6 +629,8 @@
 "files.error.permissionDenied" = "Accès refusé";
 "files.error.tooLarge" = "Le fichier est trop volumineux";
 "files.favorites" = "FAVORIS";
+"files.folderShared" = "Partagé";
+"files.folderSharedHelp" = "Visible aussi sur le serveur lui-même ou dans un autre espace de travail";
 "files.forward" = "Avancer";
 "files.forwardHelp" = "Avancer (⌘])";
 "files.hidden" = "Afficher les fichiers cachés";
@@ -697,6 +699,8 @@
 "files.upload.failed" = "Impossible d’envoyer %1$@ : %2$@";
 "files.upload.hint" = "Déposez les fichiers ici";
 "files.upload.title" = "%1$@ envoie depuis ce Mac vers %2$@";
+"files.workplaceGroup" = "ESPACE DE TRAVAIL : %1$@";
+"files.workplaceNoFolders" = "Aucun dossier pour l’instant";
 "folderPicker.choose" = "Choisir %1$@";
 "folderPicker.clone" = "Cloner depuis un lien";
 "folderPicker.cloneGo" = "Cloner";
@@ -1747,6 +1751,11 @@
 "screen.agentControls" = "L’agent contrôle";
 "screen.askTakeControl" = "Prendre le contrôle pour cliquer ici ?";
 "screen.asleep" = "L’écran est en veille";
+"screen.card.asleep" = "En veille";
+"screen.card.checking" = "Vérification…";
+"screen.card.running" = "Écran actif";
+"screen.card.unavailable" = "Pas encore disponible";
+"screen.card.unavailableHint" = "Le Bandito du serveur est trop ancien pour afficher l’écran de cet espace de travail. Mettez le serveur à jour.";
 "screen.clipboard" = "Presse-papiers";
 "screen.clipboardOff" = "Désactivé";
 "screen.clipboardShared" = "Partagé";
@@ -1778,6 +1787,7 @@
 "screen.unsupported" = "L’écran du serveur fonctionne sur les serveurs Linux";
 "screen.unsupportedText" = "Sur un serveur Linux, Bandito affiche ici son bureau : les agents y utilisent des applications, et vous pouvez observer ou reprendre la main. Un Mac n’en a pas besoin : son écran est juste devant vous.";
 "screen.who" = "Qui est là";
+"screen.workplaceUnavailable" = "Le Bandito du serveur est trop ancien pour afficher l’écran d’un espace de travail séparé. Mettez le serveur à jour pour l’ouvrir.";
 "screen.workplaces" = "Écrans des espaces de travail";
 "screen.youWatch" = "Vous regardez";
 "search.noResults" = "Aucun résultat";
@@ -2582,6 +2592,7 @@
 "terminals.layouts.mainRight" = "Principal et deux à droite";
 "terminals.layouts.one" = "Une fenêtre";
 "terminals.newFailed" = "Impossible d’ouvrir un terminal : %1$@";
+"terminals.newIn" = "Nouveau terminal dans %1$@";
 "terminals.noRoom" = "Plus de place à l’écran. Réduisez ou fermez d’abord un volet.";
 "terminals.noServer" = "Aucun serveur sélectionné";
 "terminals.pane.close" = "Fermer et terminer le processus";
@@ -2835,6 +2846,8 @@
 "workspace.move.title" = "Transférer l’agent vers %1$@ ?";
 "workspace.network.internet" = "Internet";
 "workspace.network.offline" = "Aucun";
+"workspace.picker.onServer" = "Sur le serveur";
+"workspace.picker.starting" = "Démarrage…";
 "workspace.row.cpu" = "Processeur";
 "workspace.row.disk" = "Disque";
 "workspace.row.folders" = "Dossiers";

@@ -21,6 +21,7 @@ struct FilesSidebar: View {
 private struct FilesSidebarContent: View {
     let server: ServerModel
     @Environment(Router.self) private var router
+    @State private var directory: WorkspaceDirectory?
     @State private var projectsRoot: String?
     @State private var home: String?
     @State private var disk: HostDisk?
@@ -43,6 +44,8 @@ private struct FilesSidebarContent: View {
         let userPlaces = favorites.paths(for: server.id).filter { !builtInKeys.contains($0) }.map { path in
             Place(title: FilePath.lastComponent(path), path: path, icon: "folder", tint: Color(hex: 0xBDB2A0), isBuiltIn: false)
         }
+        let workspaces = directory?.workspaces ?? []
+        let containers = workspaces.filter { $0.kind == .container }
         let hidden = favorites.hidden(for: server.id)
         let builtIn = allBuiltIn.filter { !hidden.contains($0.path) }
 
@@ -93,12 +96,43 @@ private struct FilesSidebarContent: View {
                             .padding(.bottom, 6)
                         VStack(spacing: 1) {
                             ForEach(agentsInFolders) { agent in
-                                AgentPlaceRow(server: server, agent: agent, isCurrent: router.filesPath == agent.cwd) {
+                                AgentPlaceRow(
+                                    server: server, agent: agent, isCurrent: router.filesPath == agent.cwd,
+                                    place: WorkspacePickerLogic.label(
+                                        workspaceID: agent.workspaceId, workspaces: workspaces)
+                                ) {
                                     router.filesPath = agent.cwd
                                 }
                             }
                         }
                         .padding(.horizontal, 8)
+                    }
+
+                    // One group for each container workplace: the folders it sees (its agents' folders and the ones
+                    // added to it). They are paths on the server, so a click browses them here.
+                    ForEach(containers) { container in
+                        let folders = WorkspaceFolders.folders(of: container, in: workspaces, agents: server.sortedAgents)
+                        SectionLabel(L10n.Files.workplaceGroup(name: container.name))
+                            .help(container.name)
+                            .padding(.horizontal, 18)
+                            .padding(.top, 16)
+                            .padding(.bottom, 6)
+                        if folders.isEmpty {
+                            Text(L10n.Files.workplaceNoFolders)
+                                .font(BanditoFont.text(size: 12, weight: 400))
+                                .foregroundStyle(Color.Bandito.text3)
+                                .padding(.horizontal, 18)
+                        } else {
+                            VStack(spacing: 1) {
+                                ForEach(folders) { folder in
+                                    WorkspaceFolderRow(folder: folder, isCurrent: router.filesPath == folder.path) {
+                                        router.filesPath = folder.path
+                                    }
+                                    .equatable()
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                        }
                     }
                 }
                 .padding(.bottom, 12)
@@ -123,6 +157,17 @@ private struct FilesSidebarContent: View {
         }
         .frame(maxHeight: .infinity)
         .task(id: server.id) { await loadExtras() }
+        // The workplaces are read now and every few seconds, so the groups follow containers added or removed.
+        // The server's features arrive after the connection: the task runs again when "workspaces" appears.
+        .task(id: "\(server.id.uuidString) \(server.supports("workspaces"))") {
+            guard server.supports("workspaces") else { return }
+            let directory = WorkspaceDirectories.shared.directory(for: server)
+            self.directory = directory
+            while !Task.isCancelled {
+                if directory.shouldPoll { await directory.refresh() }
+                try? await Task.sleep(for: .seconds(8))
+            }
+        }
     }
 
     /// `~/.Trash` on macOS, the freedesktop trash elsewhere.
@@ -267,6 +312,8 @@ private struct AgentPlaceRow: View {
     let server: ServerModel
     let agent: Agent
     let isCurrent: Bool
+    /// The name of the container the agent runs in; nil for the shared server.
+    var place: String?
     let action: () -> Void
 
     var body: some View {
@@ -278,6 +325,9 @@ private struct AgentPlaceRow: View {
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                 Spacer(minLength: 6)
+                if let place {
+                    WorkspaceChip(text: place)
+                }
             }
             .padding(.horizontal, 10)
             .frame(height: 34)
@@ -286,6 +336,59 @@ private struct AgentPlaceRow: View {
         }
         .banditoButton(.row(cornerRadius: 10))
         .help(agent.cwd)
+    }
+}
+
+/// A folder a container sees: its name, a lock for a read-only one, and "Общая" when the folder is also visible on the
+/// server itself or in another workplace.
+struct WorkspaceFolderRow: View, Equatable {
+    let folder: WorkspaceFolder
+    let isCurrent: Bool
+    let action: () -> Void
+
+    nonisolated static func == (lhs: WorkspaceFolderRow, rhs: WorkspaceFolderRow) -> Bool {
+        lhs.folder == rhs.folder && lhs.isCurrent == rhs.isCurrent
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: folder.readOnly ? "lock" : "folder")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color(hex: 0xBDB2A0))
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(FilePath.lastComponent(folder.path))
+                        .font(BanditoFont.text(size: 13, weight: 400))
+                        .foregroundStyle(isCurrent ? Color.Bandito.text : Color.Bandito.text2)
+                        .lineLimit(1)
+                    if case .agent(let name) = folder.origin {
+                        Text(name)
+                            .font(BanditoFont.text(size: 11, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 6)
+                if folder.shared {
+                    Text(L10n.Files.folderShared)
+                        .font(BanditoFont.text(size: 10.5, weight: 600))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1.5)
+                        .background(Color.Bandito.text.opacity(0.07), in: Capsule())
+                        .help(L10n.Files.folderSharedHelp)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(minHeight: 30)
+            .background(isCurrent ? Color.Bandito.text.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .banditoButton(.row(cornerRadius: 10))
+        .help(folder.path)
     }
 }
 

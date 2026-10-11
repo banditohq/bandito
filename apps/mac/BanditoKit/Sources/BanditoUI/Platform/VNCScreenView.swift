@@ -80,6 +80,7 @@ struct VNCScreenView: NSViewRepresentable {
             frame: container.bounds, framebuffer: framebuffer, connection: connection, connectionDelegate: delegate)
         view.autoresizingMask = [.width, .height]
         container.addSubview(view)
+        model.snapshotProvider = { [weak view] in view.flatMap { ScreenSnapshot.thumbnail(of: $0) } }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -87,6 +88,23 @@ struct VNCScreenView: NSViewRepresentable {
     final class Coordinator {
         /// The framebuffer the current view shows.
         var shown: ObjectIdentifier?
+    }
+}
+
+/// A small picture of what the VNC view shows now, for the card of the screen in the sidebar.
+@MainActor
+enum ScreenSnapshot {
+    static func thumbnail(of view: NSView, width: CGFloat = 208) -> NSImage? {
+        guard let layer = view.layer, view.bounds.width > 1, view.bounds.height > 1 else { return nil }
+        let scale = width / view.bounds.width
+        let size = CGSize(width: width, height: (view.bounds.height * scale).rounded())
+        guard let context = CGContext(
+            data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        context.scaleBy(x: scale, y: scale)
+        layer.render(in: context)
+        return context.makeImage().map { NSImage(cgImage: $0, size: size) }
     }
 }
 

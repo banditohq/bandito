@@ -13,12 +13,15 @@ enum BrowserSelection: Hashable {
     case preview(Int)
 }
 
-/// The state of one server's browser: its status, its tabs, the picture of the current page, and the input
-/// that goes to the page. Lives as long as the app keeps the server (see `BrowserStore`).
+/// The state of one workplace's browser on one server: its status, its tabs, the picture of the current page, and the
+/// input that goes to the page. Lives as long as the app keeps the server (see `BrowserStore`).
 @MainActor
 @Observable
 final class BrowserModel {
     let server: ServerModel
+    /// The workplace whose browser this is: `shared`, or the id of a container workplace. Every call, every tab route
+    /// and the list of recent addresses are of this workplace.
+    let workspace: String
     private static let log = Logger(subsystem: "dev.bandito.app", category: "browser")
 
     private(set) var status: BrowserStatus?
@@ -103,9 +106,19 @@ final class BrowserModel {
     /// Counts up each time the address field is asked for the focus (a new tab's start page wants it at once).
     private(set) var addressFocusRequest = 0
 
-    init(server: ServerModel) {
+    init(server: ServerModel, workspace: String = Workspace.sharedID) {
         self.server = server
+        self.workspace = workspace
         wheel = WheelSender { [weak self] batch in await self?.sendWheel(batch) }
+    }
+
+    /// The `workspace` parameter of the calls: nothing for the shared workplace, so an older daemon is asked as before.
+    private var wsParam: String? { WorkspacePickerLogic.rpcParameter(workspace) }
+
+    /// The key of this workplace's lists in the stored settings: the server's id, and the workplace when it is not the
+    /// shared one (so the shared list keeps the key it always had).
+    private var storageKey: String {
+        workspace == Workspace.sharedID ? server.id.uuidString : "\(server.id.uuidString).\(workspace)"
     }
 
     /// Whether the server has the browser feature (`server.info.features`).
@@ -145,7 +158,7 @@ final class BrowserModel {
         gaveUp = false
         reconnect = BrowserReconnectPolicy()
         do {
-            status = try await server.browserStart()
+            status = try await server.browserStart(workspace: wsParam)
             errorText = nil
             needsChrome = false
             await refresh()
@@ -164,7 +177,7 @@ final class BrowserModel {
             return
         }
         guard let id = await createBlankTab() else { return }
-        tabs = (try? await server.browserTabs()) ?? tabs
+        tabs = (try? await server.browserTabs(workspace: wsParam)) ?? tabs
         await selectPage(id)
     }
 
@@ -172,7 +185,7 @@ final class BrowserModel {
     private func createBlankTab() async -> String? {
         let browser: CDPClient
         do {
-            browser = try await server.browserTargetsClient()
+            browser = try await server.browserTargetsClient(workspace: wsParam)
         } catch {
             errorText = Self.describe(error)
             return nil
@@ -210,10 +223,10 @@ final class BrowserModel {
         }
         if await !askToClose(id, within: Self.closeTimeout) {
             // Old daemons have no forced close: the tab is then dropped from the list and the next poll tells the truth.
-            try? await server.browserCloseTab(id)
+            try? await server.browserCloseTab(id, workspace: wsParam)
         }
         let before = tabs.map(\.id)
-        let fresh = (try? await server.browserTabs()) ?? tabs
+        let fresh = (try? await server.browserTabs(workspace: wsParam)) ?? tabs
         tabs = fresh.filter { $0.id != id }
         let shown: String? = { if case .page(let shown) = selection { return shown } else { return nil } }()
         switch BrowserTabPolicy.afterClosing(closedID: id, shownID: shown, before: before, remaining: tabs.map(\.id)) {
@@ -232,7 +245,7 @@ final class BrowserModel {
     private func askToClose(_ id: String, within seconds: Double) async -> Bool {
         let browser: CDPClient
         do {
-            browser = try await server.browserTargetsClient()
+            browser = try await server.browserTargetsClient(workspace: wsParam)
         } catch {
             return false
         }
@@ -273,7 +286,7 @@ final class BrowserModel {
     func refresh() async {
         guard isSupported else { return }
         do {
-            let fresh = try await server.browserStatus()
+            let fresh = try await server.browserStatus(workspace: wsParam)
             errorText = nil
             guard fresh.isRelay else {
                 status = fresh
@@ -288,7 +301,7 @@ final class BrowserModel {
             status = fresh
             pollTick += 1
             if pollTick % 5 == 1 {
-                tabs = try await server.browserTabs()
+                tabs = try await server.browserTabs(workspace: wsParam)
                 fillAddressFromTabs()
                 // The page's own history is the truth for the address: it repairs one the events missed.
                 if let client, !isEditingAddress { await readCurrentAddress(client: client) }
@@ -299,7 +312,7 @@ final class BrowserModel {
             }
             if Date().timeIntervalSince(lastTouch) > 60, NSApplication.shared.isActive {
                 lastTouch = Date()
-                try? await server.browserTouch()
+                try? await server.browserTouch(workspace: wsParam)
             }
         } catch {
             errorText = Self.describe(error)
@@ -401,7 +414,7 @@ final class BrowserModel {
 
     private func setControl(_ holder: ControlHolder) async {
         do {
-            status = try await server.browserControl(holder)
+            status = try await server.browserControl(holder, workspace: wsParam)
             asksToTakeControl = false
         } catch {
             errorText = Self.describe(error)
@@ -612,7 +625,7 @@ final class BrowserModel {
         await closeClient()
         isLoading = true
         do {
-            let (client, tab) = try await server.browserPageClient(tabID: tabID)
+            let (client, tab) = try await server.browserPageClient(tabID: tabID, workspace: wsParam)
             self.client = client
             clientTabID = tab.id
             if selection == nil { selection = .page(tab.id) }
@@ -747,7 +760,7 @@ final class BrowserModel {
 
     /// The addresses opened on this server, newest first: the start page's "recent" list.
     var recentAddresses: [String] {
-        BrowserRecentAddresses.list(serverKey: server.id.uuidString)
+        BrowserRecentAddresses.list(serverKey: storageKey)
     }
 
     /// The tabs agents opened, except the one shown: the start page's "agent tabs" list.
@@ -768,7 +781,7 @@ final class BrowserModel {
 
     /// Keeps a web address in the recent list of this server (see `BrowserRecentAddresses`).
     private func rememberAddress(_ url: String) {
-        BrowserRecentAddresses.remember(url, serverKey: server.id.uuidString)
+        BrowserRecentAddresses.remember(url, serverKey: storageKey)
     }
 
     /// The page shows another size than the viewport it was given (the override was lost): sends it again, at most
@@ -958,16 +971,19 @@ private final class TitleDeadline {
     }
 }
 
-/// One `BrowserModel` per server, so the sidebar and the main area show the same browser.
+/// One `BrowserModel` per server and workplace, so the sidebar and the main area show the same browser. The panels in
+/// the chat and the workbench ask for the shared workplace's browser (`model(for:)`): agents in a container have no
+/// browser tools, so only the shared browser holds what an agent opened.
 @MainActor
 final class BrowserStore {
     static let shared = BrowserStore()
-    private var models: [UUID: BrowserModel] = [:]
+    private var models: [String: BrowserModel] = [:]
 
-    func model(for server: ServerModel) -> BrowserModel {
-        if let model = models[server.id] { return model }
-        let model = BrowserModel(server: server)
-        models[server.id] = model
+    func model(for server: ServerModel, workspace: String = Workspace.sharedID) -> BrowserModel {
+        let key = "\(server.id.uuidString)|\(workspace)"
+        if let model = models[key] { return model }
+        let model = BrowserModel(server: server, workspace: workspace)
+        models[key] = model
         return model
     }
 }
