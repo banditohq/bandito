@@ -66,7 +66,8 @@ struct MarketView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Bandito.bg)
+        // The ground takes no clicks, so the title band behind the mode gets the empty space (double-click zooms).
+        .background { Color.Bandito.bg.allowsHitTesting(false) }
         .overlay { panelOverlay }
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: panel)
         .task(id: loadKey) {

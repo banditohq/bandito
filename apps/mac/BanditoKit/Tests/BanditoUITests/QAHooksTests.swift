@@ -43,6 +43,11 @@ import Testing
         #expect(QACommand.parse("onboarding again") == nil)
     }
 
+    @Test func zoomTakesNoArgumentAndIsTheTitleStripDoubleClick() {
+        #expect(QACommand.parse("zoom") == .zoom)
+        #expect(QACommand.parse("zoom 2") == nil)
+    }
+
     @Test func blankLinesAndUnknownWordsAreNotCommands() {
         #expect(QACommand.parse("") == nil)
         #expect(QACommand.parse("   ") == nil)
