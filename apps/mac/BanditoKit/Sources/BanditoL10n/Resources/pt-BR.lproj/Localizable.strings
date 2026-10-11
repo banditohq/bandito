@@ -1674,8 +1674,9 @@
 "screen.error" = "Não foi possível conectar à tela";
 "screen.fullscreen" = "Tela cheia";
 "screen.hint" = "Clique na tela ou toque em “Assumir controle”. O agente espera até você soltar.";
+"screen.installing" = "Instalando os programas que a tela precisa…";
 "screen.latency" = "%1$@ ms";
-"screen.missingComponent" = "O servidor não tem %1$@, então a tela não pode iniciar. Instale e tente de novo.";
+"screen.missingComponents" = "A tela precisa de programas que o servidor não tem: %1$@.";
 "screen.needsUpdate" = "Este servidor roda uma versão antiga do Bandito. Atualize o servidor para iniciar a tela.";
 "screen.noAddress" = "O servidor não informou como se conectar à tela. Tente de novo.";
 "screen.noFrame" = "A tela não respondeu";
@@ -1689,6 +1690,7 @@
 "screen.sharedSub" = "Tela do espaço de trabalho";
 "screen.sleepHint" = "A tela acorda sob demanda. Depois de 30 minutos sem uso, nem você nem os agentes, ela entra em repouso para liberar a memória do servidor.";
 "screen.start" = "Iniciar tela";
+"screen.startFailed" = "Não foi possível iniciar a tela";
 "screen.starting" = "Iniciando a tela…";
 "screen.title" = "Tela do servidor";
 "screen.transfer" = "Transferência";

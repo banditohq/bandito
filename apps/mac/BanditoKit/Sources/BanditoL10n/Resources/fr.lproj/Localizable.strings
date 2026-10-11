@@ -1674,8 +1674,9 @@
 "screen.error" = "Impossible de se connecter à l’écran";
 "screen.fullscreen" = "Plein écran";
 "screen.hint" = "Cliquez sur l’écran ou appuyez sur « Prendre le contrôle ». L’agent attend que vous ayez fini.";
+"screen.installing" = "Installation des programmes nécessaires à l’écran…";
 "screen.latency" = "%1$@ ms";
-"screen.missingComponent" = "Le serveur n’a pas %1$@, l’écran ne peut donc pas démarrer. Installez-le et réessayez.";
+"screen.missingComponents" = "Il manque sur le serveur des programmes nécessaires à l’écran : %1$@.";
 "screen.needsUpdate" = "Ce serveur tourne avec une ancienne version de Bandito. Mettez le serveur à jour pour démarrer l’écran.";
 "screen.noAddress" = "Le serveur n’a pas indiqué comment joindre l’écran. Réessayez.";
 "screen.noFrame" = "L’écran ne répond pas";
@@ -1689,6 +1690,7 @@
 "screen.sharedSub" = "Écran de l’espace de travail";
 "screen.sleepHint" = "L’écran se réveille à la demande. Après 30 minutes sans utilisation, ni de votre part ni de celle des agents, il se met en veille pour libérer la mémoire du serveur.";
 "screen.start" = "Démarrer l’écran";
+"screen.startFailed" = "Impossible de démarrer l’écran";
 "screen.starting" = "Démarrage de l’écran…";
 "screen.title" = "Écran du serveur";
 "screen.transfer" = "Transfert";

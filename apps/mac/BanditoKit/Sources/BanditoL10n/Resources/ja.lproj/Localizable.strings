@@ -1674,8 +1674,9 @@
 "screen.error" = "画面に接続できませんでした";
 "screen.fullscreen" = "全画面";
 "screen.hint" = "画面をクリックするか、「操作を引き継ぐ」を押してください。手を離すまで、エージェントは待機します。";
+"screen.installing" = "画面に必要なプログラムをインストールしています…";
 "screen.latency" = "%1$@ ms";
-"screen.missingComponent" = "サーバーに %1$@ がないため、画面を起動できません。インストールしてもう一度お試しください。";
+"screen.missingComponents" = "画面に必要なプログラムがサーバーにありません: %1$@";
 "screen.needsUpdate" = "このサーバーは古いバージョンのBanditoで動作しています。画面を起動するにはサーバーを更新してください。";
 "screen.noAddress" = "サーバーが画面への接続方法を返しませんでした。もう一度お試しください。";
 "screen.noFrame" = "画面が応答しません";
@@ -1689,6 +1690,7 @@
 "screen.sharedSub" = "作業場所の画面";
 "screen.sleepHint" = "画面は必要なときに起動します。30 分間、あなたもエージェントも使わなかった場合はスリープし、サーバーのメモリを解放します。";
 "screen.start" = "画面を起動";
+"screen.startFailed" = "画面を起動できませんでした";
 "screen.starting" = "画面を起動しています…";
 "screen.title" = "サーバー画面";
 "screen.transfer" = "転送";

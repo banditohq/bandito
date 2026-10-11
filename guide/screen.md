@@ -86,14 +86,22 @@ While the server starts the screen, the button turns into a spinner with the wor
 1. Wait. Do not click again: the spinner means the start is in progress.
 2. When the picture arrives, the screen shows. Nothing else to do.
 
+## Programs the server lacks (Install)
+
+<!-- id: screen-missing-components; covers: -->
+If the server has no programs the screen needs, the page names them in red, such as The screen needs programs that the server does not have: x11vnc, xdotool. Install (Установить) is under it. Click it and Bandito installs the programs on the server, then starts the screen.
+Где: Server screen → page, where the Start screen button was; the button Install (Установить)
+1. Click Install (Установить). The page shows the install's progress with its log: Installing the programs the screen needs… (Устанавливаем программы для экрана…).
+2. If the server needs an administrator password, the page shows a command. Click Open terminal (Открыть терминал), type the password there, and click Install (Установить) again.
+3. When the install is done, the screen starts by itself. If it fails, the page names the program that could not be installed.
+
 ## Start failed (Retry)
 
 <!-- id: screen-start-failed; covers: -->
-If the screen does not start, the page says why under the icon: a sentence in red, such as The server has no Xvfb, or The screen did not start. Try again. (Повторить) is under it.
+If the screen does not start, the page says why under the icon: a sentence in red, Could not start the screen (Не удалось запустить экран). Retry (Повторить) is under it.
 Где: Server screen → page → sentence and Retry (Повторить)
-1. Read the sentence. If the server lacks a program, install it on the server and try again.
-2. Click Retry (Повторить). The app starts the screen again.
-3. The Details (Подробнее) line under the sentence has the technical text, for a report.
+1. Click Retry (Повторить). The app starts the screen again.
+2. Details (Подробнее) is a full-width line under the sentence. Click it to open the technical text; it can be copied, for a report.
 
 ## Screen did not answer (The screen did not answer)
 

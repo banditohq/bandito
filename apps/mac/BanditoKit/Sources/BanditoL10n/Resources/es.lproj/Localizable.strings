@@ -1674,8 +1674,9 @@
 "screen.error" = "No se pudo conectar con la pantalla";
 "screen.fullscreen" = "Pantalla completa";
 "screen.hint" = "Haz clic en la pantalla o pulsa «Tomar el control». El agente espera a que sueltes.";
+"screen.installing" = "Instalando los programas que necesita la pantalla…";
 "screen.latency" = "%1$@ ms";
-"screen.missingComponent" = "En el servidor falta %1$@, así que la pantalla no puede iniciarse. Instálelo e inténtelo de nuevo.";
+"screen.missingComponents" = "A la pantalla le faltan programas en el servidor: %1$@.";
 "screen.needsUpdate" = "En este servidor hay una versión antigua de Bandito. Actualice el servidor para iniciar la pantalla.";
 "screen.noAddress" = "El servidor no indicó cómo conectarse a la pantalla. Inténtelo de nuevo.";
 "screen.noFrame" = "La pantalla no responde";
@@ -1689,6 +1690,7 @@
 "screen.sharedSub" = "Pantalla del lugar de trabajo";
 "screen.sleepHint" = "La pantalla se despierta bajo demanda. Tras 30 minutos sin que nadie la use, ni tú ni los agentes, se duerme para liberar memoria del servidor.";
 "screen.start" = "Iniciar pantalla";
+"screen.startFailed" = "No se pudo iniciar la pantalla";
 "screen.starting" = "Iniciando la pantalla…";
 "screen.title" = "Pantalla del servidor";
 "screen.transfer" = "Transferencia";

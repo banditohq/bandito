@@ -1674,8 +1674,9 @@
 "screen.error" = "Verbindung zum Bildschirm nicht möglich";
 "screen.fullscreen" = "Vollbild";
 "screen.hint" = "Klicken Sie auf den Bildschirm oder drücken Sie „Steuerung übernehmen“. Der Agent wartet, bis Sie loslassen.";
+"screen.installing" = "Die Programme für den Bildschirm werden installiert…";
 "screen.latency" = "%1$@ ms";
-"screen.missingComponent" = "Auf dem Server fehlt %1$@, daher kann der Bildschirm nicht starten. Installieren Sie es und versuchen Sie es erneut.";
+"screen.missingComponents" = "Dem Bildschirm fehlen auf dem Server Programme: %1$@.";
 "screen.needsUpdate" = "Auf diesem Server läuft eine alte Version von Bandito. Aktualisieren Sie den Server, um den Bildschirm zu starten.";
 "screen.noAddress" = "Der Server hat nicht mitgeteilt, wie der Bildschirm erreichbar ist. Versuchen Sie es erneut.";
 "screen.noFrame" = "Der Bildschirm antwortet nicht";
@@ -1689,6 +1690,7 @@
 "screen.sharedSub" = "Bildschirm des Arbeitsplatzes";
 "screen.sleepHint" = "Der Bildschirm wacht auf Anfrage auf. Wird er 30 Minuten lang von niemandem genutzt — weder von Ihnen noch von Agenten —, schläft er ein und gibt den Arbeitsspeicher des Servers frei.";
 "screen.start" = "Bildschirm starten";
+"screen.startFailed" = "Der Bildschirm konnte nicht gestartet werden";
 "screen.starting" = "Bildschirm wird gestartet…";
 "screen.title" = "Serverbildschirm";
 "screen.transfer" = "Übertragung";
