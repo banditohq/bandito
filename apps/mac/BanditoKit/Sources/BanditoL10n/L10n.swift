@@ -2742,7 +2742,10 @@ public enum L10n {
             }
 
             public enum Sets {
+                public static var arcade: String { L10n.tr("settings.sounds.sets.arcade") }
+                public static var crystal: String { L10n.tr("settings.sounds.sets.crystal") }
                 public static var glass: String { L10n.tr("settings.sounds.sets.glass") }
+                public static var marimba: String { L10n.tr("settings.sounds.sets.marimba") }
                 public static var mechanics: String { L10n.tr("settings.sounds.sets.mechanics") }
                 public static var retro: String { L10n.tr("settings.sounds.sets.retro") }
                 public static var soft: String { L10n.tr("settings.sounds.sets.soft") }

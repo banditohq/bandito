@@ -2009,7 +2009,10 @@
 "settings.sounds.intro" = "クリック、入力、エージェントの出来事に短い音を鳴らします。初期設定はオフです。";
 "settings.sounds.listen" = "試聴";
 "settings.sounds.set" = "サウンドセット";
+"settings.sounds.sets.arcade" = "アーケード";
+"settings.sounds.sets.crystal" = "クリスタル";
 "settings.sounds.sets.glass" = "ガラス";
+"settings.sounds.sets.marimba" = "マリンバ";
 "settings.sounds.sets.mechanics" = "メカニカル";
 "settings.sounds.sets.retro" = "レトロ";
 "settings.sounds.sets.soft" = "ソフト";

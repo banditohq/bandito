@@ -2009,7 +2009,10 @@
 "settings.sounds.intro" = "为点击、输入和代理事件播放短促的声音。默认关闭。";
 "settings.sounds.listen" = "试听";
 "settings.sounds.set" = "音效组";
+"settings.sounds.sets.arcade" = "街机";
+"settings.sounds.sets.crystal" = "水晶";
 "settings.sounds.sets.glass" = "玻璃";
+"settings.sounds.sets.marimba" = "马林巴";
 "settings.sounds.sets.mechanics" = "机械";
 "settings.sounds.sets.retro" = "复古";
 "settings.sounds.sets.soft" = "柔和";
