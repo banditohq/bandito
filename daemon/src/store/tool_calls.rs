@@ -6,14 +6,19 @@ use super::Store;
 use anyhow::Result;
 use rusqlite::{Connection, Row, params};
 use serde::Serialize;
+use std::sync::atomic::Ordering;
 
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
 /// Rows older than this are removed when a call is recorded.
 pub const RETENTION_MS: i64 = 30 * DAY_MS;
 
-/// Most rows kept; when more, the oldest (by `at_ms`) are removed when a call is recorded.
+/// Most rows kept; when more, the oldest (by `at_ms`) are removed at the next cap check (see `CAP_CHECK_EVERY`).
 pub const MAX_ROWS: i64 = 20_000;
+
+/// The cap is counted once per this many recorded calls, and once at start. Counting 20 000 rows on every call would
+/// cost a full covering-index scan per call; between two checks the journal may hold up to this many rows over the cap.
+pub const CAP_CHECK_EVERY: u64 = 200;
 
 /// Characters of an error text that are kept: the first line of the result, at most this many.
 pub const ERROR_MAX_CHARS: usize = 120;
@@ -63,9 +68,13 @@ fn clip(text: &str, max_chars: usize) -> String {
     text.chars().take(max_chars).collect()
 }
 
-/// Removes rows older than the retention, then the oldest rows beyond the cap.
-fn prune(conn: &Connection, now: i64) -> Result<()> {
+/// Removes rows older than the retention (an indexed range, on every call), then, when `check_cap`, the oldest rows
+/// beyond the cap.
+pub(super) fn prune(conn: &Connection, now: i64, check_cap: bool) -> Result<()> {
     conn.execute("DELETE FROM tool_calls WHERE at_ms < ?1", params![now - RETENTION_MS])?;
+    if !check_cap {
+        return Ok(());
+    }
     let rows: i64 = conn.query_row("SELECT COUNT(*) FROM tool_calls", [], |r| r.get(0))?;
     if rows > MAX_ROWS {
         conn.execute(
@@ -107,7 +116,8 @@ impl Store {
             params![at_ms, agent_id, integration, tool, decision],
         )?;
         let id = conn.last_insert_rowid();
-        prune(&conn, at_ms)?;
+        let recorded = self.tool_inserts.fetch_add(1, Ordering::Relaxed) + 1;
+        prune(&conn, at_ms, recorded.is_multiple_of(CAP_CHECK_EVERY))?;
         Ok(id)
     }
 
@@ -143,14 +153,15 @@ impl Store {
         let mut stmt = conn.prepare(
             "SELECT id, at_ms, agent_id, integration, tool, duration_ms, ok, error, decision FROM tool_calls
              WHERE at_ms >= ?5 AND (?1 IS NULL OR integration = ?1) AND (?2 IS NULL OR agent_id = ?2)
-               AND (?3 IS NULL OR id < ?3)
+               AND id < ?3
              ORDER BY id DESC LIMIT ?4",
         )?;
+        // `id < ?3` is a rowid range: newest first, the walk starts at the page's cursor (no cursor = i64::MAX).
         let rows = stmt.query_map(
             params![
                 filter.integration,
                 filter.agent_id,
-                filter.before,
+                filter.before.unwrap_or(i64::MAX),
                 filter.limit,
                 now - RETENTION_MS
             ],
@@ -337,6 +348,11 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count(&store), MAX_ROWS + 5);
+        // The cap is counted on every CAP_CHECK_EVERY-th call: the first 199 calls leave the journal over the cap.
+        for _ in 0..CAP_CHECK_EVERY - 1 {
+            start(&store, "a1", "new", NOW);
+        }
+        assert_eq!(count(&store), MAX_ROWS + 5 + 199);
         start(&store, "a1", "new", NOW);
         assert_eq!(count(&store), MAX_ROWS);
         let all = store
@@ -348,9 +364,31 @@ mod tests {
                 NOW,
             )
             .unwrap();
-        // Six rows were over the cap: the six oldest seeded rows (at +1 .. +6) are gone, the oldest left is at +7.
-        assert_eq!(all.last().unwrap().at_ms, NOW - 3_600_000 + 7);
+        // 205 rows were over the cap: the 205 oldest seeded rows (at +1 .. +205) are gone, the oldest left is at +206.
+        assert_eq!(all.last().unwrap().at_ms, NOW - 3_600_000 + 206);
         assert_eq!(all.first().unwrap().integration, "new");
+    }
+
+    #[test]
+    fn a_journal_over_the_cap_is_trimmed_when_the_store_starts() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bandito.db");
+        let now = crate::store::now_ms();
+        {
+            let store = Store::open(&path).unwrap();
+            store
+                .conn()
+                .execute(
+                    "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?1)
+                     INSERT INTO tool_calls (at_ms, agent_id, integration, tool)
+                     SELECT ?2 + i, 'a1', 'bulk', 't' FROM n",
+                    params![MAX_ROWS + 5, now - 3_600_000],
+                )
+                .unwrap();
+            assert_eq!(count(&store), MAX_ROWS + 5);
+        }
+        let store = Store::open(&path).unwrap();
+        assert_eq!(count(&store), MAX_ROWS);
     }
 
     #[test]

@@ -124,14 +124,23 @@ impl Store {
             .optional()?)
     }
 
-    /// All schedules, or one agent's; ordered by `created_at`.
+    /// All schedules, or one agent's; ordered by `created_at`. One agent's list is served by `schedules_agent`.
     pub fn schedule_list(&self, agent_id: Option<&str>) -> Result<Vec<Schedule>> {
         let conn = self.conn();
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {COLS} FROM schedules WHERE (?1 IS NULL OR agent_id = ?1) ORDER BY created_at, id"
-        ))?;
-        let rows = stmt.query_map([agent_id], from_row)?;
-        Ok(rows.collect::<rusqlite::Result<_>>()?)
+        let rows = match agent_id {
+            Some(agent) => {
+                let mut stmt = conn.prepare(&format!(
+                    "SELECT {COLS} FROM schedules WHERE agent_id = ?1 ORDER BY created_at, id"
+                ))?;
+                stmt.query_map([agent], from_row)?
+                    .collect::<rusqlite::Result<Vec<_>>>()?
+            }
+            None => {
+                let mut stmt = conn.prepare(&format!("SELECT {COLS} FROM schedules ORDER BY created_at, id"))?;
+                stmt.query_map([], from_row)?.collect::<rusqlite::Result<Vec<_>>>()?
+            }
+        };
+        Ok(rows)
     }
 
     /// Apply the patch in one transaction. `next` either sets `next_run_at` or

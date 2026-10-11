@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
 
 mod agents;
 mod approvals;
@@ -70,10 +71,13 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0023_telegram.sql"),
     include_str!("../../migrations/0024_integration_auth_device.sql"),
     include_str!("../../migrations/0025_agent_migrated.sql"),
+    include_str!("../../migrations/0026_query_indexes.sql"),
 ];
 
 pub struct Store {
     conn: Mutex<Connection>,
+    /// Calls recorded since this store opened: the call journal's cap is counted every `CAP_CHECK_EVERY` of them.
+    tool_inserts: AtomicU64,
 }
 
 pub fn now_ms() -> i64 {
@@ -96,7 +100,15 @@ impl Store {
     }
 
     fn init(conn: Connection) -> Result<Self> {
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;")?;
+        // WAL with synchronous=NORMAL: a crash of the process loses nothing, a power loss may drop the last commits but
+        // never corrupts the file. FULL (the default) also fsyncs every commit, i.e. every event. busy_timeout makes a
+        // second process on the same file (the CLI's backup or restore) wait up to 5 s instead of failing with SQLITE_BUSY.
+        // cache_size: 16 MB of pages instead of 2 MB, for the hot reads of a history of hundreds of thousands of events.
+        // temp_store=MEMORY: the sorts of the list queries stay in RAM. mmap_size stays off (not measured to help).
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
+             PRAGMA cache_size=-16000; PRAGMA temp_store=MEMORY;",
+        )?;
         let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         if version as usize > MIGRATIONS.len() {
             bail!("database is newer ({version}) than this bandito ({})", MIGRATIONS.len());
@@ -107,7 +119,12 @@ impl Store {
             tx.pragma_update(None, "user_version", (i + 1) as i64)?;
             tx.commit()?;
         }
-        Ok(Self { conn: Mutex::new(conn) })
+        // The call journal's cap is checked every CAP_CHECK_EVERY calls; a start is the other moment it is checked.
+        tool_calls::prune(&conn, now_ms(), true)?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+            tool_inserts: AtomicU64::new(0),
+        })
     }
 
     /// Runs a statement that breaks the database, for a test of what the daemon does when it cannot read it.
@@ -182,68 +199,57 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
-    /// Events with `seq > after`, oldest first.
+    /// Events with `seq > after`, oldest first. With an agent, only that agent's events, read through
+    /// `events_agent_seq`: the cost follows the rows returned, not the history after `after`.
     pub fn events_since(&self, after: i64, limit: u32, agent_id: Option<&str>) -> Result<Vec<Event>> {
         let conn = self.conn();
-        let mut stmt = conn.prepare(
-            "SELECT seq, agent_id, ts, kind, payload FROM events
-             WHERE seq > ?1 AND (?2 IS NULL OR agent_id = ?2)
-             ORDER BY seq LIMIT ?3",
-        )?;
-        let rows = stmt.query_map(params![after, agent_id, limit.min(5000)], |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, i64>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?,
-            ))
-        })?;
-        let mut out = Vec::new();
-        for row in rows {
-            let (seq, agent_id, ts, kind, payload) = row?;
-            let body = EventBody::from_parts(&kind, serde_json::from_str(&payload)?)
-                .with_context(|| format!("decode event {seq} ({kind})"))?;
-            out.push(Event {
-                seq,
-                agent_id,
-                ts,
-                body,
-            });
-        }
-        Ok(out)
+        let limit = limit.min(5000);
+        let rows = match agent_id {
+            Some(agent) => {
+                let mut stmt = conn.prepare(
+                    "SELECT seq, agent_id, ts, kind, payload FROM events
+                     WHERE agent_id = ?1 AND seq > ?2 ORDER BY seq LIMIT ?3",
+                )?;
+                stmt.query_map(params![agent, after, limit], history::map_row)?
+                    .collect::<rusqlite::Result<Vec<_>>>()?
+            }
+            None => {
+                let mut stmt = conn.prepare(
+                    "SELECT seq, agent_id, ts, kind, payload FROM events
+                     WHERE seq > ?1 ORDER BY seq LIMIT ?2",
+                )?;
+                stmt.query_map(params![after, limit], history::map_row)?
+                    .collect::<rusqlite::Result<Vec<_>>>()?
+            }
+        };
+        rows.into_iter().map(history::decode).collect()
     }
 
     /// One agent's newest events before `before` (exclusive; `None` = latest),
-    /// returned oldest first. For scrolling a thread back page by page.
+    /// returned oldest first. For scrolling a thread back page by page. Served by `events_agent_seq`, the `seq`
+    /// bound included, so a deep page does not walk the newer events first.
     pub fn events_page(&self, agent_id: &str, before: Option<i64>, limit: u32) -> Result<Vec<Event>> {
         let conn = self.conn();
-        let mut stmt = conn.prepare(
-            "SELECT seq, agent_id, ts, kind, payload FROM events
-             WHERE agent_id = ?1 AND (?2 IS NULL OR seq < ?2)
-             ORDER BY seq DESC LIMIT ?3",
-        )?;
-        let rows = stmt.query_map(params![agent_id, before, limit.clamp(1, 1000)], |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, i64>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?,
-            ))
-        })?;
-        let mut out = Vec::new();
-        for row in rows {
-            let (seq, agent_id, ts, kind, payload) = row?;
-            let body = EventBody::from_parts(&kind, serde_json::from_str(&payload)?)
-                .with_context(|| format!("decode event {seq} ({kind})"))?;
-            out.push(Event {
-                seq,
-                agent_id,
-                ts,
-                body,
-            });
-        }
+        let limit = limit.clamp(1, 1000);
+        let rows = match before {
+            Some(before) => {
+                let mut stmt = conn.prepare(
+                    "SELECT seq, agent_id, ts, kind, payload FROM events
+                     WHERE agent_id = ?1 AND seq < ?2 ORDER BY seq DESC LIMIT ?3",
+                )?;
+                stmt.query_map(params![agent_id, before, limit], history::map_row)?
+                    .collect::<rusqlite::Result<Vec<_>>>()?
+            }
+            None => {
+                let mut stmt = conn.prepare(
+                    "SELECT seq, agent_id, ts, kind, payload FROM events
+                     WHERE agent_id = ?1 ORDER BY seq DESC LIMIT ?2",
+                )?;
+                stmt.query_map(params![agent_id, limit], history::map_row)?
+                    .collect::<rusqlite::Result<Vec<_>>>()?
+            }
+        };
+        let mut out: Vec<Event> = rows.into_iter().map(history::decode).collect::<Result<_>>()?;
         out.reverse();
         Ok(out)
     }
@@ -457,6 +463,25 @@ impl ApprovalMode {
 mod tests {
     use super::*;
     use crate::event::{AgentStatus, EventBody};
+
+    #[test]
+    fn the_file_database_runs_in_wal_with_the_connection_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = Store::open(&dir.path().join("bandito.db")).unwrap();
+        let conn = s.conn();
+        let mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+        assert_eq!(mode, "wal");
+        let sync: i64 = conn.query_row("PRAGMA synchronous", [], |r| r.get(0)).unwrap();
+        assert_eq!(sync, 1, "synchronous=NORMAL");
+        let timeout: i64 = conn.query_row("PRAGMA busy_timeout", [], |r| r.get(0)).unwrap();
+        assert_eq!(timeout, 5000);
+        let fk: i64 = conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0)).unwrap();
+        assert_eq!(fk, 1);
+        let cache: i64 = conn.query_row("PRAGMA cache_size", [], |r| r.get(0)).unwrap();
+        assert_eq!(cache, -16000, "16 MB of pages");
+        let temp: i64 = conn.query_row("PRAGMA temp_store", [], |r| r.get(0)).unwrap();
+        assert_eq!(temp, 2, "temp_store=MEMORY");
+    }
 
     #[test]
     fn a_fresh_database_reaches_the_last_migration_with_all_the_tables_and_columns() {

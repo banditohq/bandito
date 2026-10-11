@@ -58,13 +58,13 @@ impl Store {
 }
 
 /// Raw columns of one event row: seq, agent_id, ts, kind, payload.
-type Row = (i64, String, i64, String, String);
+pub(super) type Row = (i64, String, i64, String, String);
 
-fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Row> {
+pub(super) fn map_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Row> {
     Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
 }
 
-fn decode(row: Row) -> Result<Event> {
+pub(super) fn decode(row: Row) -> Result<Event> {
     let (seq, agent_id, ts, kind, payload) = row;
     let body = EventBody::from_parts(&kind, serde_json::from_str(&payload)?)
         .with_context(|| format!("decode event {seq} ({kind})"))?;
