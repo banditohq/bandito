@@ -21,7 +21,7 @@ use crate::store::{
     Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind,
     capabilities_csv, new_id, now_ms,
 };
-use crate::turn_gate::TurnSlot;
+use crate::turn_gate::{SlotWait, TurnSlot};
 use crate::workspace::{self, WorkspaceManager, WorkspaceSpec};
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Local, NaiveTime, TimeZone};
@@ -539,6 +539,7 @@ impl Supervisor {
             slot: None,
             slot_rx: self.hub.turns().subscribe(),
             slot_waiting: false,
+            wait: None,
         };
         tokio::spawn(actor.run(rx));
         actors.insert(agent_id.to_string(), tx.clone());
@@ -996,6 +997,8 @@ struct Actor {
     slot_rx: watch::Receiver<u64>,
     /// A turn was ready but no slot was free: the agent waits, its message shown as queued.
     slot_waiting: bool,
+    /// This agent's place in the line for a slot, while it waits (see `turn_gate`).
+    wait: Option<SlotWait>,
 }
 
 async fn recv_opt(rx: &mut Option<mpsc::Receiver<RuntimeOutput>>) -> Option<RuntimeOutput> {
@@ -1027,9 +1030,13 @@ impl Actor {
                     Err(_) => self.slot_waiting = false,
                 },
             }
-            // Whatever the step did, a slot is held only while a turn or a wrap-up runs.
+            // Whatever the step did, a slot is held only while a turn or a wrap-up runs, and a place in the line only
+            // while the agent waits for one.
             if self.turn.is_none() && self.wrap_up.is_none() {
                 self.slot = None;
+            }
+            if !self.slot_waiting {
+                self.wait = None;
             }
         }
         self.close().await;
@@ -1040,21 +1047,21 @@ impl Actor {
         self.hub.store.server_settings_or_default().turn_limit()
     }
 
-    /// True when a turn could start now: this agent holds a slot, or one is free.
-    fn slot_available(&self) -> bool {
-        self.slot.is_some() || self.hub.turns().has_room(self.slot_limit())
-    }
-
-    /// Takes a turn slot for this agent (keeps it when it holds one). When none is free the agent waits: the
-    /// watch is marked as seen first, so a slot given back after this check wakes the agent (see `run`).
+    /// Takes a turn slot for this agent (keeps it when it holds one). The agent asks in line (see `turn_gate`): the
+    /// slot goes to the first in line only. When it does not get one, the agent waits, and the watch is marked as seen
+    /// first, so a change after this check wakes the agent (see `run`).
     fn claim_slot(&mut self) -> bool {
         if self.slot.is_some() {
             return true;
         }
         let _ = self.slot_rx.borrow_and_update();
-        match self.hub.turns().try_take(self.slot_limit()) {
+        let gate = self.hub.turns().clone();
+        let limit = self.slot_limit();
+        let wait = self.wait.get_or_insert_with(|| gate.join());
+        match gate.take(wait, limit) {
             Some(slot) => {
                 self.slot = Some(slot);
+                self.wait = None;
                 self.slot_waiting = false;
                 true
             }
@@ -1089,14 +1096,14 @@ impl Actor {
         match cmd {
             Cmd::Send(msg, reply) => {
                 let held = self.is_paused();
-                // A message that cannot start now is shown now, marked as waiting. One that starts at once is
-                // shown by its turn, as before.
-                let waits = held
-                    || self.turn.is_some()
-                    || self.wrap_up.is_some()
-                    || !self.queue.is_empty()
-                    || self.chapter_pending()
-                    || !self.slot_available();
+                // An idle agent asks for its slot now. The answer is the decision whether the message waits: a message
+                // that waits is shown now, marked as queued; one that starts at once is shown by its turn, as before.
+                let idle = !held
+                    && self.turn.is_none()
+                    && self.wrap_up.is_none()
+                    && self.queue.is_empty()
+                    && !self.chapter_pending();
+                let waits = !(idle && self.claim_slot());
                 let echoed = waits.then(|| self.echo(&msg, true)).filter(|seq| *seq > 0);
                 self.queue.push_back(Queued { msg, echoed });
                 let res = self.pump().await.map(|()| held);
@@ -2205,6 +2212,9 @@ impl Actor {
         if self.manual_chapter && self.apply_manual_chapter().await.is_ok() && self.wrap_up.is_some() {
             return;
         }
+        // The turn is over: the slot goes back to the line. An agent with more messages asks again below, so it goes
+        // to the end, behind the agents already waiting (a long queue must not hold a slot).
+        self.slot = None;
         // A paused agent holds its queue: it is idle until the pause ends.
         if self.queue.is_empty() || self.is_paused() {
             self.set_status(AgentStatus::Idle, None);
@@ -3205,6 +3215,38 @@ mod tests {
         w.wait_log("send first").await;
         w.wait_log("send second").await;
         assert_eq!(w.sup.hub().turns().running(), 2);
+    }
+
+    /// With one slot: an agent that starts at once is not marked queued; the agent with more messages goes behind the
+    /// agent that waited for the slot before it asked again.
+    #[tokio::test]
+    async fn the_line_is_first_come_first_served_and_a_queue_does_not_overtake() {
+        let w = world(ApprovalMode::Risky);
+        set_setting(&w.store, json!({"max_running_agents": 1}));
+        let b = second_agent(&w, "Scout");
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        // A is the only one running: its own message was not waiting.
+        let a_first_queued = w
+            .store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .any(|e| matches!(e.body, EventBody::MessageUser { queued: true, text, .. } if text == "first"));
+        assert!(!a_first_queued, "an agent that starts at once is not marked queued");
+        // B asks while A runs, then A gets a second message: it waits behind B in its own queue.
+        w.sup.send(&b, Inbound::user("b-msg")).await.unwrap();
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+        // A's turn ends: B was first in line, so B gets the slot, and A's second message waits.
+        w.push(done()).await;
+        w.wait_log("send b-msg").await;
+        assert!(
+            !w.log.lock().unwrap().iter().any(|l| l == "send second"),
+            "A's queued message does not overtake B"
+        );
+        // B's turn ends: now A's second message runs.
+        w.push_as(&b, done()).await;
+        w.wait_log("send second").await;
     }
 
     fn user_texts(w: &World) -> Vec<String> {

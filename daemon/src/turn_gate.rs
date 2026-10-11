@@ -1,11 +1,16 @@
 //! How many agents run a turn at once (`max_running_agents`, docs/ARCHITECTURE.md#server-settings). Every agent's
 //! supervisor takes a slot before its turn starts and gives it back when the agent is idle again. An agent that finds
-//! no slot keeps its message in its queue (shown as queued) and waits: the gate tells it when a slot is free.
-//! The gate is shared by all agents of one daemon (it lives in the [`crate::hub::Hub`]).
+//! no slot keeps its message in its queue (shown as queued) and waits in line.
 //!
-//! A hold ([`IdleHold`]) closes the gate for new turns, so that a check of "no turn runs" stays true while the
-//! holder acts (the night install, see `update::spawn_auto_install`). New turns wait like turns past the limit.
+//! The line is first come, first served: an agent that asks gets a ticket at the end of it ([`SlotWait`]), and a
+//! slot goes only to the ticket at the front. An agent that gives its slot back and asks again (a long queue of
+//! messages) therefore goes to the end, behind everyone already waiting.
+//!
+//! A hold ([`IdleHold`]) closes the gate for new turns, so that a check of "no turn runs" stays true while the holder
+//! acts (the night install, see `update::spawn_auto_install`). New turns wait in line like turns past the limit.
+//! The gate is shared by all agents of one daemon (it lives in the [`crate::hub::Hub`]).
 
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::sync::watch;
 
@@ -15,12 +20,16 @@ struct State {
     running: usize,
     /// Holds in force. While any is, no slot is given.
     holds: usize,
+    /// The tickets of the agents waiting for a slot, first in line at the front.
+    waiting: VecDeque<u64>,
+    /// The next ticket number.
+    next_ticket: u64,
 }
 
 pub struct TurnGate {
     state: Mutex<State>,
-    /// Counts every change of the gate: a slot given back, a hold ended, or a wake after a settings change. A waiting
-    /// agent watches it, so a change between its check and its wait is not missed.
+    /// Counts every change of the gate: a slot given back or taken, a hold or a ticket ended, or a wake after a
+    /// settings change. A waiting agent watches it, so a change between its check and its wait is not missed.
     changes: watch::Sender<u64>,
 }
 
@@ -37,20 +46,45 @@ impl TurnGate {
         self.state.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// A slot, when no hold is in force and fewer than `limit` slots are taken. `usize::MAX` means no limit.
-    pub fn try_take(self: &Arc<Self>, limit: usize) -> Option<TurnSlot> {
+    /// Asks for a slot: takes a ticket at the end of the line. Ask again with [`Self::take`]. Dropping the ticket
+    /// (see [`SlotWait`]) leaves the line.
+    pub fn join(self: &Arc<Self>) -> SlotWait {
         let mut state = self.state();
-        if state.holds > 0 || state.running >= limit {
+        let ticket = state.next_ticket;
+        state.next_ticket += 1;
+        state.waiting.push_back(ticket);
+        SlotWait {
+            gate: Arc::clone(self),
+            ticket,
+        }
+    }
+
+    /// The slot of `wait`, when it is first in line, no hold is in force and fewer than `limit` slots are taken.
+    /// `usize::MAX` means no limit. The ticket is used up by a slot.
+    pub fn take(self: &Arc<Self>, wait: &SlotWait, limit: usize) -> Option<TurnSlot> {
+        let mut state = self.state();
+        if state.holds > 0 || state.running >= limit || state.waiting.front() != Some(&wait.ticket) {
             return None;
         }
+        state.waiting.pop_front();
         state.running += 1;
+        drop(state);
+        // The next one in line may go now.
+        self.wake();
         Some(TurnSlot { gate: Arc::clone(self) })
     }
 
-    /// True when [`Self::try_take`] would give a slot now.
+    /// A slot now, when nobody is in line before and one is free. A test helper and a shortcut: an agent that keeps
+    /// its ticket uses [`Self::join`] and [`Self::take`].
+    pub fn try_take(self: &Arc<Self>, limit: usize) -> Option<TurnSlot> {
+        let wait = self.join();
+        self.take(&wait, limit)
+    }
+
+    /// True when a new asker would get a slot now: no hold, nobody in line, and a slot free.
     pub fn has_room(&self, limit: usize) -> bool {
         let state = self.state();
-        state.holds == 0 && state.running < limit
+        state.holds == 0 && state.waiting.is_empty() && state.running < limit
     }
 
     /// How many slots are taken: the turns running now.
@@ -78,6 +112,37 @@ impl TurnGate {
     /// Tells every waiting agent to check again (after the limit changed).
     pub fn wake(&self) {
         self.changes.send_modify(|n| *n = n.wrapping_add(1));
+    }
+}
+
+/// A place in the line for a slot. Dropping it leaves the line (and wakes the agents behind it).
+pub struct SlotWait {
+    gate: Arc<TurnGate>,
+    ticket: u64,
+}
+
+impl SlotWait {
+    /// The ticket's number: a smaller one was asked for earlier.
+    pub fn ticket(&self) -> u64 {
+        self.ticket
+    }
+}
+
+impl Drop for SlotWait {
+    fn drop(&mut self) {
+        let removed = {
+            let mut state = self.gate.state();
+            match state.waiting.iter().position(|t| *t == self.ticket) {
+                Some(at) => {
+                    state.waiting.remove(at);
+                    true
+                }
+                None => false,
+            }
+        };
+        if removed {
+            self.gate.wake();
+        }
     }
 }
 
@@ -142,12 +207,70 @@ mod tests {
         let mut rx = gate.subscribe();
         rx.borrow_and_update();
         let slot = gate.try_take(1).unwrap();
-        assert!(!rx.has_changed().unwrap(), "taking a slot is not a change to wait for");
+        assert!(
+            rx.has_changed().unwrap(),
+            "a taken slot is a change the others may need to see"
+        );
+        rx.borrow_and_update();
         drop(slot);
         assert!(rx.has_changed().unwrap());
         rx.borrow_and_update();
         gate.wake();
         assert!(rx.has_changed().unwrap());
+    }
+
+    /// Agents A, B and C ask for the one slot in that order. The slot goes to them in that order, whatever the
+    /// timing of their checks, and an agent that gives its slot back goes to the end of the line.
+    #[test]
+    fn slots_are_given_in_the_order_of_asking() {
+        let gate = TurnGate::new();
+        let a = gate.join();
+        let b = gate.join();
+        let c = gate.join();
+        assert!(a.ticket() < b.ticket() && b.ticket() < c.ticket());
+
+        let first = gate.take(&a, 1).expect("A asked first");
+        assert!(gate.take(&b, 1).is_none(), "B waits behind A");
+        assert!(gate.take(&c, 1).is_none(), "C waits behind A and B");
+        drop(first);
+        // C checks before B does: it still waits its turn in line.
+        assert!(gate.take(&c, 1).is_none(), "C does not overtake B");
+        let second = gate.take(&b, 1).expect("B is next");
+        assert!(gate.take(&c, 1).is_none());
+        drop(second);
+        assert!(gate.take(&c, 1).is_some(), "C is last and gets the slot");
+    }
+
+    #[test]
+    fn an_agent_that_asks_again_goes_to_the_end_of_the_line() {
+        let gate = TurnGate::new();
+        let a = gate.join();
+        let first = gate.take(&a, 1).expect("A runs");
+        // B waits while A runs; then A gives its slot back and asks again (a long message queue).
+        let b = gate.join();
+        drop(first);
+        let a_again = gate.join();
+        assert!(gate.take(&a_again, 1).is_none(), "A is behind B");
+        assert!(gate.take(&b, 1).is_some(), "B takes the slot A gave back");
+        drop(a);
+        drop(a_again);
+    }
+
+    #[test]
+    fn leaving_the_line_lets_the_next_one_in() {
+        let gate = TurnGate::new();
+        let holder = gate.try_take(1).expect("a slot is held");
+        let gone = gate.join();
+        let next = gate.join();
+        let mut rx = gate.subscribe();
+        rx.borrow_and_update();
+        drop(gone);
+        assert!(rx.has_changed().unwrap(), "the line moved: the agents behind are woken");
+        drop(holder);
+        assert!(
+            gate.take(&next, 1).is_some(),
+            "the one behind the gone ticket is first now"
+        );
     }
 
     #[test]
