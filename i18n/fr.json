@@ -3058,5 +3058,6 @@
   "perfCheck.page.market": "Marketplace",
   "perfCheck.page.settings": "Réglages",
   "perfCheck.page.modes": "Modes et serveurs",
-  "perfCheck.page.overlays": "Menus, fenêtres et bandeaux"
+  "perfCheck.page.overlays": "Menus, fenêtres et bandeaux",
+  "perfCheck.quit": "Quitter"
 }

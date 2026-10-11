@@ -1696,6 +1696,7 @@
 "perfCheck.page.typing" = "Chat: digitação";
 "perfCheck.percent" = "%1$@%%";
 "perfCheck.progress" = "%1$@ de %2$@";
+"perfCheck.quit" = "Sair";
 "perfCheck.running" = "Verificando: %1$@";
 "perfCheck.screen" = "Tela: até %1$@ quadros por segundo";
 "perfCheck.summary.all" = "Todas as páginas atingem a meta.";

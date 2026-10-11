@@ -1696,6 +1696,7 @@
 "perfCheck.page.typing" = "聊天：输入";
 "perfCheck.percent" = "%1$@%%";
 "perfCheck.progress" = "%1$@ / %2$@";
+"perfCheck.quit" = "退出";
 "perfCheck.running" = "正在检查：%1$@";
 "perfCheck.screen" = "屏幕：每秒最多 %1$@ 帧";
 "perfCheck.summary.all" = "所有页面都达到了目标。";

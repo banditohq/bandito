@@ -1696,6 +1696,7 @@
 "perfCheck.page.typing" = "Чат: ввод текста";
 "perfCheck.percent" = "%1$@%%";
 "perfCheck.progress" = "%1$@ из %2$@";
+"perfCheck.quit" = "Выйти";
 "perfCheck.running" = "Проверяю: %1$@";
 "perfCheck.screen" = "Экран: до %1$@ кадров в секунду";
 "perfCheck.summary.all" = "Все страницы соответствуют цели.";

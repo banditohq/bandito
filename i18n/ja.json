@@ -3020,5 +3020,6 @@
   "perfCheck.page.market": "マーケットプレイス",
   "perfCheck.page.settings": "設定",
   "perfCheck.page.modes": "モードとサーバー",
-  "perfCheck.page.overlays": "メニュー、シート、通知"
+  "perfCheck.page.overlays": "メニュー、シート、通知",
+  "perfCheck.quit": "終了"
 }

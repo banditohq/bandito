@@ -53,6 +53,7 @@ public struct LocalDaemonPairing: Sendable {
 
     /// As `serverConfig`, and with the device's id: a caller that cannot keep the token revokes the device with it.
     public func pair(name: String, id: UUID = UUID(), deviceName: String) async throws -> PairedServer {
+        LaunchProbe.record?("pairing")
         let info = try await run(["info", "--json"], step: "Reading the daemon's address")
         guard let port = SSHInstaller.listenPort(in: info.stdout) else {
             throw InstallError.badResponse("info")

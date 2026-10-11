@@ -305,6 +305,8 @@ final class PerfCheckWindowController: NSWindowController, NSWindowDelegate {
     let world = PerfDemoWorld()
     let state = PerfCheckRun()
     var onClose: (() -> Void)?
+    /// The check is the whole program (`PerfStandalone`): sounds and statistics stay off after the run too.
+    var keepsSilent = false
     private var task: Task<Void, Never>?
     private var started = false
 
@@ -320,6 +322,9 @@ final class PerfCheckWindowController: NSWindowController, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.isRestorable = false
         window.backgroundColor = NSColor(srgbRed: 0.071, green: 0.063, blue: 0.055, alpha: 1)
+        // Dark whatever the system is: outside the app's own scene (`PerfStandalone`) nothing else makes it so, and the
+        // table's text took the light colours.
+        window.appearance = NSAppearance(named: .darkAqua)
         window.contentMinSize = NSSize(width: 900, height: 600)
         super.init(window: window)
         window.delegate = self
@@ -344,8 +349,10 @@ final class PerfCheckWindowController: NSWindowController, NSWindowDelegate {
             SoundPlayer.isMuted = true
             Telemetry.isPaused = true
             defer {
-                SoundPlayer.isMuted = false
-                Telemetry.isPaused = false
+                if !keepsSilent {
+                    SoundPlayer.isMuted = false
+                    Telemetry.isPaused = false
+                }
                 guardian.restore()
                 task = nil
             }

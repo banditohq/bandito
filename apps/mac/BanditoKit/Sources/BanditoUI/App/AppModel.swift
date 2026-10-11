@@ -66,6 +66,7 @@ public final class AppModel {
     public let device: DeviceSignIn
 
     public init(defaults: UserDefaults = .standard) {
+        LaunchProbe.record?("savedServers")
         self.defaults = defaults
         oauth = OAuthSignIn(defaults: defaults)
         device = DeviceSignIn()

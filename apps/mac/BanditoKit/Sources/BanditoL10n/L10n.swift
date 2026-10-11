@@ -2310,6 +2310,7 @@ public enum L10n {
         public static func ms(value: String) -> String { L10n.tr("perfCheck.ms", value) }
         public static func percent(value: String) -> String { L10n.tr("perfCheck.percent", value) }
         public static func progress(index: String, total: String) -> String { L10n.tr("perfCheck.progress", index, total) }
+        public static var quit: String { L10n.tr("perfCheck.quit") }
         public static func running(page: String) -> String { L10n.tr("perfCheck.running", page) }
         public static func screen(fps: String) -> String { L10n.tr("perfCheck.screen", fps) }
         public static var target: String { L10n.tr("perfCheck.target") }

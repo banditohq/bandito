@@ -3137,5 +3137,6 @@
   "perfCheck.page.market": "Маркетплейс",
   "perfCheck.page.settings": "Настройки",
   "perfCheck.page.modes": "Режимы и серверы",
-  "perfCheck.page.overlays": "Меню, листы и плашки"
+  "perfCheck.page.overlays": "Меню, листы и плашки",
+  "perfCheck.quit": "Выйти"
 }

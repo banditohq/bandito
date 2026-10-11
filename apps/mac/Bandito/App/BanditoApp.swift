@@ -3,7 +3,7 @@ import BanditoDesign
 import BanditoUI
 import SwiftUI
 
-@main
+/// The app. `Main` starts it, or the smoothness check alone (`--perf-check`, see `PerfStandalone`).
 struct BanditoApp: App {
     @State private var model: AppModel
     @State private var router = Router()

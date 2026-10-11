@@ -1696,6 +1696,7 @@
 "perfCheck.page.typing" = "채팅: 입력";
 "perfCheck.percent" = "%1$@%%";
 "perfCheck.progress" = "%1$@ / %2$@";
+"perfCheck.quit" = "종료";
 "perfCheck.running" = "검사 중: %1$@";
 "perfCheck.screen" = "화면: 초당 최대 %1$@프레임";
 "perfCheck.summary.all" = "모든 페이지가 목표를 충족합니다.";

@@ -37,6 +37,8 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -eu
+          # The perf build (scripts/perf-build.sh) runs only the smoothness check: it has no daemon to bundle.
+          if [ "${BANDITO_SKIP_DAEMON:-}" = "1" ]; then exit 0; fi
           # Xcode's script PATH has no cargo from rustup or Homebrew.
           export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
           if ! command -v cargo >/dev/null 2>&1; then
