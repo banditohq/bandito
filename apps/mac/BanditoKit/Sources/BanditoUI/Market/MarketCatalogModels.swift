@@ -63,6 +63,9 @@ final class BotsMarketModel {
 @Observable
 final class SkillsMarketModel {
     private(set) var skills: [SkillEntry] = []
+    /// The owner's own skills and the copies of shared links (`skills.own`), above the catalog. Empty when the server
+    /// does not have the sharing feature or the list could not be read: the catalog is not affected by that.
+    private(set) var own: [OwnSkill] = []
     private(set) var loaded = false
     private(set) var failure: UserFacingMessage?
     /// Installs and removes in flight, by `busyKey`: a second press on the same one is ignored.
@@ -79,6 +82,7 @@ final class SkillsMarketModel {
     func reset() {
         generation += 1
         skills = []
+        own = []
         loaded = false
         failure = nil
         busy = []
@@ -97,6 +101,10 @@ final class SkillsMarketModel {
             guard !Task.isCancelled, started == generation else { return }
             failure = UserFacingError.message(for: error)
         }
+        // The owner's skills are read after the catalog, and a failure there leaves the section out.
+        let mine = server.supports("sharing") ? ((try? await server.ownSkills()) ?? []) : []
+        guard !Task.isCancelled, started == generation else { return }
+        own = mine
     }
 
     /// Installs or removes a skill, then reads the catalog again. Returns nil when it went through, else why not.

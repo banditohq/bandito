@@ -2087,6 +2087,8 @@
 "share.mine.signIn" = "공유한 봇과 스킬을 보려면 로그인하세요.";
 "share.mine.title" = "내 게시물";
 "share.mine.update" = "현재 버전으로 업데이트";
+"share.own.sharedBadge" = "링크로";
+"share.own.title" = "내 스킬";
 "share.preview.collapse" = "접기";
 "share.preview.expand" = "모두 보기";
 "share.preview.title" = "공유될 내용";
@@ -2113,6 +2115,7 @@
 "share.signIn.button" = "계정 열기";
 "share.signIn.hint" = "공유하려면 로그인하세요";
 "share.signIn.text" = "공유한 봇과 스킬에는 링크가 생깁니다. 작성자로 계정 이름이 표시됩니다.";
+"share.skipped" = "다음 파일은 전송되지 않습니다: %1$@";
 "share.visibility.everyone" = "공개";
 "share.visibility.everyoneHint" = "모든 사람과 검색 엔진에 보입니다";
 "share.visibility.link" = "링크가 있는 사람만";

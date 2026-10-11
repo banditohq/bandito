@@ -2664,5 +2664,8 @@
   "share.mine.delete": "Löschen",
   "share.mine.deleteTitle": "„{title}“ löschen?",
   "share.mine.deleteText": "Der Link funktioniert nicht mehr. Bereits installierte Kopien bleiben bei den Nutzern erhalten.",
-  "share.mine.noSource": "Aktualisieren geht nur aus dem Bot oder Skill, von dem geteilt wurde, auf diesem Mac."
+  "share.mine.noSource": "Aktualisieren geht nur aus dem Bot oder Skill, von dem geteilt wurde, auf diesem Mac.",
+  "share.own.title": "Meine Skills",
+  "share.own.sharedBadge": "über Link",
+  "share.skipped": "Diese Dateien werden nicht gesendet: {files}"
 }

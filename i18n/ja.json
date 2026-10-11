@@ -2633,5 +2633,8 @@
   "share.mine.delete": "削除",
   "share.mine.deleteTitle": "「{title}」を削除しますか？",
   "share.mine.deleteText": "リンクは使えなくなります。すでにインストールされたコピーはそのまま残ります。",
-  "share.mine.noSource": "更新は、このMacで共有元になったボットまたはスキルから行えます。"
+  "share.mine.noSource": "更新は、このMacで共有元になったボットまたはスキルから行えます。",
+  "share.own.title": "自分のスキル",
+  "share.own.sharedBadge": "リンク経由",
+  "share.skipped": "次のファイルは送信されません: {files}"
 }

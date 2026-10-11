@@ -3,6 +3,11 @@ import Testing
 
 @testable import BanditoKit
 
+/// The shape of the `skills.own` answer, as the daemon sends it.
+private struct OwnSkillsWire: Decodable {
+    var skills: [OwnSkill]
+}
+
 /// The wire of the sharing features: ids, the platform's error codes, the daemon's refusals, and the answers of the
 /// daemon's bot creation, which are read with `RPCClient.decoder` like every other daemon answer.
 @Suite struct ShareWireTests {
@@ -90,6 +95,37 @@ import Testing
         #expect(object["kind"] as? String == "bot")
         let payload = try #require(object["payload"] as? [String: Any])
         #expect(payload["system_prompt"] as? String == "p")
+    }
+
+    @Test func theOwnSkillsListReadsItsSnakeCaseFlags() throws {
+        let json = """
+            {"skills":[{"name":"pdf","description":"PDFs","source":"shared:k3HqT9vZ2Lm8pXcR4wBn7e","version":2,\
+            "has_scripts":true,"files":3},{"name":"notes","description":"","source":"own","version":null,\
+            "has_scripts":false,"files":1}]}
+            """
+        let reply = try RPCClient.decoder.decode(OwnSkillsWire.self, from: Data(json.utf8))
+        let skills = reply.skills
+        #expect(skills.map(\.name) == ["pdf", "notes"])
+        #expect(skills[0].hasScripts)
+        #expect(skills[0].version == 2)
+        #expect(skills[0].files == 3)
+        #expect(skills[1].version == nil)
+        #expect(skills[1].source == "own")
+    }
+
+    @Test func anExportKeepsItsSkippedNamesAndItsPayloadKeys() throws {
+        let json = """
+            {"payload":{"schema":1,"name":"pdf","files":{"my_tool.py":"x"}},"skipped":[".DS_Store"]}
+            """
+        let export = try JSONDecoder().decode(SkillExport.self, from: Data(json.utf8))
+        #expect(export.skipped == [".DS_Store"])
+        #expect(export.payload["files"]?["my_tool.py"] == .string("x"))
+    }
+
+    @Test func anExportWithoutSkippedHasNone() throws {
+        let json = #"{"payload":{"schema":1,"name":"pdf"}}"#
+        let export = try JSONDecoder().decode(SkillExport.self, from: Data(json.utf8))
+        #expect(export.skipped.isEmpty)
     }
 
     @Test func reportReasonsAreTheFiveOfThePlatform() {

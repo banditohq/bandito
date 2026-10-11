@@ -2732,5 +2732,8 @@
   "share.mine.delete": "Удалить",
   "share.mine.deleteTitle": "Удалить «{title}»?",
   "share.mine.deleteText": "Ссылка перестанет работать. Уже установленные копии у людей останутся.",
-  "share.mine.noSource": "Обновить можно из того бота или скилла, с которого публиковали, на этом Mac."
+  "share.mine.noSource": "Обновить можно из того бота или скилла, с которого публиковали, на этом Mac.",
+  "share.own.title": "Мои скиллы",
+  "share.own.sharedBadge": "по ссылке",
+  "share.skipped": "Эти файлы не войдут: {files}"
 }

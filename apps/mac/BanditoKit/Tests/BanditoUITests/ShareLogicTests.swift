@@ -216,6 +216,53 @@ import Testing
         #expect(ShareSourceStore.load(defaults: defaults).isEmpty)
     }
 
+    // MARK: own skills
+
+    private static let copyOfLink = OwnSkill(
+        name: "pdf", description: "Read PDFs", source: "shared:\(id)", version: 2, hasScripts: false, files: 2)
+    private static let mine = OwnSkill(
+        name: "notes", description: "Write notes", source: "own", version: nil, hasScripts: true, files: 4)
+
+    @Test func aCopyOfALinkIsMarkedAndCannotBeSharedAgain() {
+        #expect(OwnSkillsLogic.isShared(Self.copyOfLink))
+        #expect(!OwnSkillsLogic.canShare(Self.copyOfLink))
+        #expect(OwnSkillsLogic.sharedID(Self.copyOfLink) == Self.id)
+    }
+
+    @Test func theOwnSkillCanBeSharedAndHasNoLinkID() {
+        #expect(!OwnSkillsLogic.isShared(Self.mine))
+        #expect(OwnSkillsLogic.canShare(Self.mine))
+        #expect(OwnSkillsLogic.sharedID(Self.mine) == nil)
+    }
+
+    @Test func aSharedSourceWithAnInvalidIDGivesNoID() {
+        let broken = OwnSkill(
+            name: "x", description: "", source: "shared:../../etc", version: nil, hasScripts: false, files: 1)
+        #expect(OwnSkillsLogic.isShared(broken))
+        #expect(OwnSkillsLogic.sharedID(broken) == nil)
+    }
+
+    @Test func theSectionShowsOnlyOnTheAllFilterAndWhenNotEmpty() {
+        #expect(!OwnSkillsLogic.showsSection([], query: "", filter: .all))
+        #expect(OwnSkillsLogic.showsSection([Self.mine], query: "", filter: .all))
+        #expect(!OwnSkillsLogic.showsSection([Self.mine], query: "", filter: .installed))
+        #expect(!OwnSkillsLogic.showsSection([Self.mine], query: "zzz", filter: .all))
+    }
+
+    @Test func theSearchMatchesNameAndDescriptionInTheDaemonsOrder() {
+        let all = [Self.copyOfLink, Self.mine]
+        #expect(OwnSkillsLogic.visible(all, query: "") == all)
+        #expect(OwnSkillsLogic.visible(all, query: "  PDF ") == [Self.copyOfLink])
+        #expect(OwnSkillsLogic.visible(all, query: "notes") == [Self.mine])
+        #expect(OwnSkillsLogic.visible(all, query: "write").map(\.name) == ["notes"])
+    }
+
+    @Test func theSkippedNamesAreNamedOnlyWhenThereAreSome() {
+        #expect(OwnSkillsLogic.skippedText([]) == nil)
+        let text = OwnSkillsLogic.skippedText([".DS_Store", ".env"])
+        #expect(text?.contains(".DS_Store, .env") == true)
+    }
+
     @Test func onlyAShareWithAKnownSourceCanBeUpdated() {
         let item = ShareSummary(
             id: Self.id, kind: .skill, visibility: .link, title: "pdf", summary: "", lang: nil, version: 1,

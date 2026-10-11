@@ -2087,6 +2087,8 @@
 "share.mine.signIn" = "登录后即可查看已分享的内容。";
 "share.mine.title" = "我的分享";
 "share.mine.update" = "更新到当前版本";
+"share.own.sharedBadge" = "通过链接";
+"share.own.title" = "我的技能";
 "share.preview.collapse" = "收起";
 "share.preview.expand" = "显示全部";
 "share.preview.title" = "将要分享的内容";
@@ -2113,6 +2115,7 @@
 "share.signIn.button" = "打开账户";
 "share.signIn.hint" = "登录后即可分享";
 "share.signIn.text" = "分享的机器人和技能会生成一个链接，并显示账户名称作为作者。";
+"share.skipped" = "以下文件不会被发送：%1$@";
 "share.visibility.everyone" = "公开";
 "share.visibility.everyoneHint" = "所有人和搜索引擎都可以看到";
 "share.visibility.link" = "仅通过链接";

@@ -499,7 +499,8 @@ struct MarketView: View {
             onInstall: { panel = .skillInstall($0.id) },
             onRemoveEverywhere: { removingSkill = SkillRemoval(skill: $0, target: .everyone, place: "") },
             onUpdate: { skill in Task { await updateSkill(skill, targets: SkillLogic.updateTargets(skill)) } },
-            onRetry: { if let server { Task { await skills.load(from: server) } } })
+            onRetry: { if let server { Task { await skills.load(from: server) } } },
+            onShare: { skill in router.sheet = .share(.skill(name: skill.name)) })
         if let error {
             UserFacingErrorView(message: error)
         }

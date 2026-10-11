@@ -2087,6 +2087,8 @@
 "share.mine.signIn" = "共有したボットとスキルを見るにはサインインしてください。";
 "share.mine.title" = "自分の公開";
 "share.mine.update" = "現在のバージョンに更新";
+"share.own.sharedBadge" = "リンク経由";
+"share.own.title" = "自分のスキル";
 "share.preview.collapse" = "折りたたむ";
 "share.preview.expand" = "すべて表示";
 "share.preview.title" = "共有される内容";
@@ -2113,6 +2115,7 @@
 "share.signIn.button" = "アカウントを開く";
 "share.signIn.hint" = "共有するにはサインインしてください";
 "share.signIn.text" = "共有したボットとスキルにはリンクが付きます。作者としてアカウント名が表示されます。";
+"share.skipped" = "次のファイルは送信されません: %1$@";
 "share.visibility.everyone" = "公開";
 "share.visibility.everyoneHint" = "誰でも、検索エンジンからも見られます";
 "share.visibility.link" = "リンクを知っている人だけ";

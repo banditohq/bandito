@@ -337,3 +337,46 @@ public enum ShareLogic {
         L10n.Share.Install.version(number: String(version))
     }
 }
+
+/// The owner's own skills on the Skills page: which ones can be shared, which are copies of a link, and the search.
+public enum OwnSkillsLogic {
+    static let sharedPrefix = "shared:"
+
+    /// A copy installed from a link: the badge says so, and it cannot be shared again from here.
+    public static func isShared(_ skill: OwnSkill) -> Bool {
+        skill.source.hasPrefix(sharedPrefix)
+    }
+
+    /// Only the owner's own skill can be published; a copy of a link is someone else's work.
+    public static func canShare(_ skill: OwnSkill) -> Bool {
+        skill.source == "own"
+    }
+
+    /// The id of the share a copy came from, when the source names a valid one.
+    public static func sharedID(_ skill: OwnSkill) -> String? {
+        guard isShared(skill) else { return nil }
+        let id = String(skill.source.dropFirst(sharedPrefix.count))
+        return ShareID.isValid(id) ? id : nil
+    }
+
+    /// The skills the section shows: by name or description, in the order the daemon sends them. The section is
+    /// shown only on the "All" filter of the Skills page.
+    public static func visible(_ skills: [OwnSkill], query: String) -> [OwnSkill] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return skills }
+        return skills.filter { skill in
+            skill.name.lowercased().contains(needle) || skill.description.lowercased().contains(needle)
+        }
+    }
+
+    /// The section is there only when it has something to show.
+    public static func showsSection(_ skills: [OwnSkill], query: String, filter: MarketFilter) -> Bool {
+        filter == .all && !visible(skills, query: query).isEmpty
+    }
+
+    /// The line that names the files a share will not send. Nil when none were left out.
+    public static func skippedText(_ skipped: [String]) -> String? {
+        guard !skipped.isEmpty else { return nil }
+        return L10n.Share.skipped(files: skipped.joined(separator: ", "))
+    }
+}

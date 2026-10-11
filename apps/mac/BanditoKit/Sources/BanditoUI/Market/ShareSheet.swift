@@ -25,6 +25,8 @@ final class ShareModel {
     private(set) var phase: Phase = .loading
     private(set) var info: SharedPayloadInfo?
     private(set) var payload: JSONValue?
+    /// Dot files of a skill's folder that are not sent, by name (`skills.export`'s `skipped`).
+    private(set) var skipped: [String] = []
     var title = ""
     var summary = ""
     var visibility: ShareVisibility = .link
@@ -60,8 +62,11 @@ final class ShareModel {
             switch subject {
             case .bot(let agentID):
                 exported = try await server.exportBot(agentID: agentID)
+                skipped = []
             case .skill(let name):
-                exported = try await server.exportSkill(name: name, license: license)
+                let skillExport = try await server.exportSkill(name: name, license: license)
+                exported = skillExport.payload
+                skipped = skillExport.skipped
             }
             guard let parsed = SharedPayloadInfo(kind: kind, payload: exported) else {
                 phase = .unavailable(L10n.Share.Problem.payload)
@@ -202,6 +207,12 @@ struct ShareSheet: View {
     private var form: some View {
         VStack(alignment: .leading, spacing: 16) {
             preview
+            if let skippedLine = OwnSkillsLogic.skippedText(model.skipped) {
+                Text(skippedLine)
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             VStack(alignment: .leading, spacing: 8) {
                 fieldLabel(L10n.Share.Visibility.title)
                 HStack(alignment: .top, spacing: 10) {

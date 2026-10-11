@@ -2633,5 +2633,8 @@
   "share.mine.delete": "삭제",
   "share.mine.deleteTitle": "“{title}”을(를) 삭제할까요?",
   "share.mine.deleteText": "링크가 더 이상 작동하지 않습니다. 이미 설치된 사본은 그대로 남습니다.",
-  "share.mine.noSource": "업데이트는 이 Mac에서 공유한 봇이나 스킬에서만 할 수 있습니다."
+  "share.mine.noSource": "업데이트는 이 Mac에서 공유한 봇이나 스킬에서만 할 수 있습니다.",
+  "share.own.title": "내 스킬",
+  "share.own.sharedBadge": "링크로",
+  "share.skipped": "다음 파일은 전송되지 않습니다: {files}"
 }

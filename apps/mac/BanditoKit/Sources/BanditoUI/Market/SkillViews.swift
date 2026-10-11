@@ -62,6 +62,8 @@ struct SkillsPage: View {
     var onRemoveEverywhere: (SkillEntry) -> Void
     var onUpdate: (SkillEntry) -> Void
     var onRetry: () -> Void
+    /// "Share…" on one of the owner's own skills.
+    var onShare: (OwnSkill) -> Void = { _ in }
 
     @Environment(Router.self) private var router
 
@@ -71,6 +73,14 @@ struct SkillsPage: View {
         let shown = SkillLogic.visible(
             model.skills, filter: router.marketSkillFilter, query: query, languageCode: languageCode)
         VStack(alignment: .leading, spacing: 14) {
+            if OwnSkillsLogic.showsSection(model.own, query: query, filter: router.marketSkillFilter) {
+                SectionLabel(L10n.Share.Own.title)
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                    ForEach(OwnSkillsLogic.visible(model.own, query: query)) { skill in
+                        OwnSkillCard(skill: skill, onShare: { onShare(skill) })
+                    }
+                }
+            }
             SectionLabel(L10n.Market.Skills.catalog)
             if !shown.isEmpty {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
@@ -97,6 +107,68 @@ struct SkillsPage: View {
     private var emptyText: String {
         if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return L10n.Market.noResults }
         return router.marketSkillFilter == .installed ? L10n.Market.Skills.noneInstalled : L10n.Market.Skills.empty
+    }
+}
+
+/// One of the owner's skills. A copy of a shared link carries the badge and no share action; the owner's own skill
+/// has Share..., which opens the publish sheet for it.
+struct OwnSkillCard: View {
+    let skill: OwnSkill
+    var onShare: () -> Void
+
+    var body: some View {
+        MarketCardFrame {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    MarketTileSurface(color: MarketTileStyle.color(hex: nil, name: skill.name), size: 36) {
+                        Image(systemName: "wand.and.stars")
+                            .font(.system(size: 36 * 0.44, weight: .semibold))
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(skill.name)
+                            .font(BanditoFont.text(size: 14, weight: 600))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                        Text(detail)
+                            .font(BanditoFont.text(size: 11, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                Text(skill.description)
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .lineLimit(2, reservesSpace: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if OwnSkillsLogic.isShared(skill) {
+                    Text(L10n.Share.Own.sharedBadge)
+                        .font(BanditoFont.text(size: 11, weight: 600))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .padding(.horizontal, 8)
+                        .frame(height: 20)
+                        .background(Color.Bandito.text.opacity(0.06), in: Capsule())
+                }
+                Spacer(minLength: 0)
+                if OwnSkillsLogic.canShare(skill) {
+                    HStack {
+                        Spacer(minLength: 0)
+                        Button(L10n.Share.menu, action: onShare)
+                            .banditoButton(.lightPill())
+                            .fixedSize()
+                    }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 176, alignment: .topLeading)
+        }
+    }
+
+    private var detail: String {
+        var parts: [String] = []
+        if let version = skill.version { parts.append(ShareLogic.versionLabel(version)) }
+        parts.append(L10n.Share.Install.files(count: skill.files))
+        return parts.joined(separator: " · ")
     }
 }
 
