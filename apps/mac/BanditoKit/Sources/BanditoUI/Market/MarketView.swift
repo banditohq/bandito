@@ -20,8 +20,8 @@ struct MarketView: View {
     @State private var connections: [String: OAuthConnection] = [:]
     /// The server the lists above belong to. A switch to another server clears them before the new lists load.
     @State private var shownServer: UUID?
-    @State private var query = ""
-    @FocusState private var searchFocused: Bool
+    /// The search text: the field writes it, the page reads it, the header does not (see `MarketHeader`).
+    @State private var search = MarketSearch()
     @State private var error: UserFacingMessage?
     @State private var editing: IntegrationTarget?
     @State private var removing: Integration?
@@ -87,13 +87,13 @@ struct MarketView: View {
             await loadOpenJournal()
         }
         .onChange(of: tab) { _, _ in
-            query = ""
+            search.text = ""
             panel = nil
         }
         // A pasted `https://bandito.dev/s/<id>` opens the install sheet of that bot or skill, not a search.
-        .onChange(of: query) { _, text in
+        .onChange(of: search.text) { _, text in
             guard let shareID = ShareLogic.shareID(fromLink: text) else { return }
-            query = ""
+            search.text = ""
             router.sheet = .installShared(shareID: shareID)
         }
         .confirmationDialog(
@@ -355,7 +355,7 @@ struct MarketView: View {
         let content: MarketContent? =
             tab == .services && supported
             ? memo.content(
-                entries, filter: router.marketFilter, query: query, recommended: recommendation?.items.count ?? 0)
+                entries, filter: router.marketFilter, query: search.text, recommended: recommendation?.items.count ?? 0)
             : nil
         return ScrollView {
             if let content {
@@ -574,95 +574,27 @@ struct MarketView: View {
         }
     }
 
+    /// The title, the pages and the actions. An `Equatable` view of its own: a filter, a category or a search letter
+    /// rebuilds the page under it, not the header (measuring its actions was 200 ms at each change).
     private func header(supported: Bool) -> some View {
-        let tabs = availableTabs
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.Mode.market)
-                        .font(BanditoFont.display(size: 24, weight: 600))
-                        .foregroundStyle(Color.Bandito.text)
-                        // Unbounded is wide: in a narrow window the title shrinks instead of breaking inside the word.
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .layoutPriority(1)
-                    Text(subtitle)
-                        .font(BanditoFont.text(size: 13, weight: 400))
-                        .foregroundStyle(Color.Bandito.text2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 12)
-                if tabs.count == 1, supported {
-                    // A server with only services keeps the one-row header.
-                    headerActions(showsSearch: true, addsIntegration: true)
-                }
-            }
-            if tabs.count > 1 {
-                HStack(alignment: .center, spacing: 12) {
-                    SegmentedPicker(
-                        selection: Binding(
-                            get: { tab },
-                            set: { chosen in
-                                guard chosen != router.marketTab else { return }
-                                router.marketTab = chosen
-                                router.marketDetail = nil
-                                MarketTabStore.save(chosen)
-                            }),
-                        options: tabs.map { ($0, $0.title) }
-                    )
-                    .fixedSize()
-                    Spacer(minLength: 12)
-                    headerActions(
-                        showsSearch: tab != .services || supported,
-                        addsIntegration: tab == .services && supported)
-                }
-            }
-        }
-    }
-
-    /// The search field and the actions of the header: text buttons, icon buttons or one menu, whichever fits.
-    private func headerActions(showsSearch: Bool, addsIntegration: Bool) -> some View {
-        MarketHeaderActions(
-            showsSearch: showsSearch,
-            search: searchField,
-            addsIntegration: addsIntegration,
-            showsMine: sharingSupported,
+        MarketHeader(
+            tab: tab, tabs: availableTabs, supported: supported, sharingSupported: sharingSupported, search: search,
+            onTab: { chosen in
+                guard chosen != router.marketTab else { return }
+                router.marketTab = chosen
+                router.marketDetail = nil
+                MarketTabStore.save(chosen)
+            },
             onImport: { router.sheet = .importer },
             onOwn: { editing = .custom },
-            onMine: { router.sheet = .myShares })
-    }
-
-    private var subtitle: String {
-        switch tab {
-        case .services: L10n.Market.subtitle
-        case .bots: L10n.Market.Bots.subtitle
-        case .skills: L10n.Market.Skills.subtitle
-        }
+            onMine: { router.sheet = .myShares }
+        )
+        .equatable()
     }
 
     /// The server has the `sharing` feature: bots and skills can be published, and the list of one's shares exists.
     private var sharingSupported: Bool {
         server?.supports("sharing") ?? false
-    }
-
-    /// One capsule holds the lens and the field: the capsule draws the fill and the border, the field inside is plain.
-    /// Focus shows as a cream ring on the capsule.
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.Bandito.text3)
-            TextField(L10n.Market.search, text: $query)
-                .textFieldStyle(.plain)
-                .font(BanditoFont.text(size: 13, weight: 400))
-                .foregroundStyle(Color.Bandito.text)
-                .focused($searchFocused)
-        }
-        .padding(.horizontal, 12)
-        .frame(width: 240, height: 32)
-        .background(Capsule().fill(Color.Bandito.text.opacity(0.05)))
-        .overlay(Capsule().strokeBorder(searchFocused ? Color.Bandito.text.opacity(0.3) : Color.Bandito.line, lineWidth: 1))
-        .banditoAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: BanditoMotion.fast), value: searchFocused)
     }
 
     private func emptyText(_ state: MarketEmptyState) -> some View {
@@ -679,7 +611,7 @@ struct MarketView: View {
     @ViewBuilder
     private var botsContent: some View {
         BotsPage(
-            model: bots, catalog: catalog, integrations: integrations, query: query, languageCode: languageCode,
+            model: bots, catalog: catalog, integrations: integrations, query: search.text, languageCode: languageCode,
             agents: server?.agents ?? [], canShare: sharingSupported,
             onView: { panel = .botDetail($0.id) },
             onCreate: { panel = .botCreate($0.id) },
@@ -699,7 +631,7 @@ struct MarketView: View {
     @ViewBuilder
     private var skillsContent: some View {
         SkillsPage(
-            model: skills, query: query, languageCode: languageCode, agents: server?.agents ?? [],
+            model: skills, query: search.text, languageCode: languageCode, agents: server?.agents ?? [],
             onView: { panel = .skillDetail($0.id) },
             onInstall: { panel = .skillInstall($0.id) },
             onRemoveEverywhere: { removingSkill = SkillRemoval(skill: $0, target: .everyone, place: "") },
@@ -1030,7 +962,7 @@ struct MarketView: View {
     }
 
     var recommendationContext: RecommendationContext? {
-        guard router.marketFilter == .all, query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        guard router.marketFilter == .all, search.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             let server, let agent = recommendationAgent, !isRecommendationHidden(agent)
         else { return nil }
         let items = RecommendationLogic.items(recommendations, catalog: catalog, integrations: integrations)
