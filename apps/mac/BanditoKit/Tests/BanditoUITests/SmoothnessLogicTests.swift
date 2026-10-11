@@ -91,6 +91,18 @@ import Testing
         #expect(lines.box.change == .all && lines.box.lines.last?.id == ThreadListLine.typingID)
     }
 
+    @Test func firstFitTakesTheFirstCandidateThatFits() {
+        let widths: [Int: CGFloat] = [0: 500, 1: 300, 2: 40]
+        #expect(FirstFitRule.index(available: nil, widths: widths, count: 3) == 2)
+        #expect(FirstFitRule.index(available: 500, widths: widths, count: 3) == 0)
+        #expect(FirstFitRule.index(available: 499, widths: widths, count: 3) == 1)
+        #expect(FirstFitRule.index(available: 100, widths: widths, count: 3) == 2)
+        // The last is shown when nothing fits, and until all are measured.
+        #expect(FirstFitRule.index(available: 10, widths: widths, count: 3) == 2)
+        #expect(FirstFitRule.index(available: 900, widths: [0: 500], count: 3) == 2)
+        #expect(FirstFitRule.index(available: 10, widths: [:], count: 1) == 0)
+    }
+
     @Test func theSparklineSpansItsRectAndNeverOvershoots() {
         let rect = CGRect(x: 0, y: 0, width: 100, height: 50)
         let points = SparklineGeometry.points(values: [0, 10, 10, 5], top: 10, in: rect)

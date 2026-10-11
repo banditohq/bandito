@@ -36,13 +36,19 @@ SwiftUI, macOS, dark theme. The app is a thin shell (`apps/mac/Bandito`); all co
 
 - Never write `@State`/model state from `onScrollGeometryChange`, `onGeometryChange`, hover or a timer unless the
   value changed (compare first). One write per frame re-renders the whole subtree.
-- No `LazyVStack` in the chat thread: its estimates and hover updates looped at 100% CPU. The thread renders a
-  `VStack` window of the newest items (`ThreadScroll`), rows are `Equatable` (`ThreadRowKey`), message bodies are
-  parsed once (`MessageRenderCache`).
+- The chat thread is an AppKit table (`ThreadList`, `NSTableView` with reused cells), not a SwiftUI stack: a stack laid
+  out its whole window of rows at each scroll step, and `LazyVStack` looped on its estimates and hover (100% CPU). Each
+  cell hosts the same SwiftUI row (`EquatableThreadRow`, keyed by `ThreadRowKey`), so bubbles, selection, menus,
+  reactions and VoiceOver are the SwiftUI ones. A row is measured once per width (`ThreadListCell.height`), guessed
+  (`ThreadHeightGuess`, once per line) until then; rows above the screen that change height move the offset with them.
+  The lines are kept between updates (`ThreadListMemo`, handed over in a versioned box): a token makes and reconfigures
+  the streamed line only. A thread just opened makes only the rows that show (`ThreadTableView.prepareOnlyVisible`).
+  Message bodies are parsed once (`MessageRenderCache`).
 - Live pictures (browser screencast) go to a `CALayer` (`BrowserFrameLayer`), never through `@Observable` per frame.
   Decode images off the main thread.
 - No shadows, blurs or materials on every row of a long list; use them on hover or on single surfaces.
-- A scroll step costs about 0.08 ms for every row that exists in a non-lazy stack, built or not on screen. The thread builds only the rows near the screen and stands in empty spaces for the rest (`ThreadVirtualWindow`); a new long list does the same or is lazy.
+- A scroll step of a SwiftUI stack costs about 0.08 ms for every row that exists in it, built or not on screen: a long
+  list is lazy or an AppKit table.
 - Never pass a `Binding(get:set:)` that reads an `@Observable` into a child (`Composer` used to take one from `ThreadView`): the parent reads it while it builds the child, so each typed letter rebuilt the whole thread. The child reads and writes the model itself.
 - Per-row work that repeats on every redraw (regex, `DateFormatter`, `ByteCountFormatter`, `NSRegularExpression(pattern:)`) is made once and kept (`PlainLineCache`, `DateFormatterCache`, static regexes in `ChatLinks`).
 - A view that reads `server.thread(for:)` is rebuilt at every streamed token: read it in the row (`ThreadReader`), not in the list that holds the rows.
@@ -59,7 +65,14 @@ SwiftUI, macOS, dark theme. The app is a thin shell (`apps/mac/Bandito`); all co
 - A preference read over the whole window (tour anchors) is read only while it is needed (`TourOverlay`).
 - Lists of rows of one height are lazy (team sidebar, files sidebar, ⌘K palette); staggered entrances stop after the first rows (`SidebarRise`). `ViewThatFits` builds every candidate: try only the parts that differ (words), never a whole toolbar or anything with an avatar in it.
 - A horizontal `ScrollView` per element is expensive (code blocks): only where the content needs it (`CodeBlockLayout`).
-- A thread opens with the rows that fill its screen (`ThreadVirtualWindow.firstScreen`); the rest come two a frame.
+- `ViewThatFits` measures all its candidates again at every layout of the window: a header or a toolbar with a field
+  and menus in its candidates cost 100–200 ms at each change of the page under it. Use `FirstFit` (candidates measured
+  once out of sight, the choice from their widths) or a rule over measured widths (`MarketHeaderFit`).
+- A page's header that does not change with the page is an `Equatable` view of its own (`MarketHeader`), and a search
+  text lives in a reference that only the field and the results read (`MarketSearch`): a category or a letter rebuilt
+  and measured the header with the page.
+- An agent switch needs the chosen agent only: `TeamSelection.shownAgentID` does not sort the team when the chosen one
+  is there (the sort read every agent's state).
 - Measure with the smoothness check: Help → ⌥ Smoothness check… (release builds too) runs every page on demo daemons (`DemoDaemonTransport`, `PerfDemoWorld`) in a window of its own and shows the table. In a QA copy, `perf <scenario>` runs one page in that window and `perf check` all of them (`PerfScenarios.swift`; JSON in `~/.cache/bandito-qa/`: frames, the main thread's work and processor time per frame, stretches over 100 ms, `bodies` in debug builds, a verdict per page and part). A build for speed: `BANDITO_XCODE_EXTRA="SWIFT_OPTIMIZATION_LEVEL=-O" scripts/build.sh`. Hangs of the main thread of 250 ms or more are logged by `HangMonitor` (`dev.bandito` / `perf`) and counted as `perf.hang.<screen>`. An AppKit sheet slides in a run loop of its own: the monitor counts the slide as busy.
 
 ## Decoding replies

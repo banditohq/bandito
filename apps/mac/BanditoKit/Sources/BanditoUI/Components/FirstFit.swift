@@ -44,13 +44,13 @@ struct FirstFit<Candidate: View>: View {
 
 /// Which candidate of a `FirstFit` shows.
 enum FirstFitRule {
-    /// The first candidate whose width fits `available`; the last when none does. While the offered width is not known,
-    /// the first; a candidate not measured yet is taken as fitting (it is measured in the same pass).
+    /// The first candidate whose width fits `available`; the last when none does. Until the offered width and the
+    /// candidates are measured (the first layout), the last: the most compact never runs over the edge.
     static func index(available: CGFloat?, widths: [Int: CGFloat], count: Int) -> Int {
-        guard count > 1, let available else { return 0 }
-        for index in 0..<(count - 1) {
-            guard let width = widths[index] else { return index }
-            if width <= available + 0.5 { return index }
+        guard count > 1 else { return 0 }
+        guard let available, widths.count >= count else { return count - 1 }
+        for index in 0..<(count - 1) where (widths[index] ?? .infinity) <= available + 0.5 {
+            return index
         }
         return count - 1
     }

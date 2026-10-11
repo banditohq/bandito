@@ -150,7 +150,8 @@ Text is 4.5:1 or better (`text3` is the floor, 4.6:1 on `bg`); focus rings and m
 ## Performance
 
 - No shadows, blurs or materials on every row of a long list; use them on hover or on single surfaces.
-- No `LazyVStack` in the chat thread (it looped at 100% CPU); the thread is a `VStack` window of the newest items.
+- No `LazyVStack` in the chat thread (it looped at 100% CPU); the thread is an AppKit table of hosted SwiftUI rows
+  (`ThreadList`), so the rows look exactly as before.
 - Never write `@State` or model state from scroll, geometry, hover or timer callbacks unless the value changed.
 - Live pictures go to a `CALayer`, not through `@Observable` per frame.
 

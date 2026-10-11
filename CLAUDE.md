@@ -47,7 +47,8 @@ Public repo (FSL-1.1-ALv2). Everything here is visible to the world: no secrets,
   database. Unit tests now resolve the data folder under `target/` (`home.rs`), but keep test homes explicit.
 - The app decodes replies with `convertFromSnakeCase`: a Swift `CodingKeys` raw value like `"image_rev"` never
   matches. Use plain camelCase cases; test decoding with `RPCClient.decoder`, not `JSONDecoder()`.
-- `LazyVStack` in the chat thread caused a measure ↔ hover update loop (100% CPU). The thread is a `VStack` window.
+- `LazyVStack` in the chat thread caused a measure ↔ hover update loop (100% CPU), and a `VStack` of rows re-laid every
+  row at each scroll step. The thread is an AppKit table (`ThreadList`) of hosted SwiftUI rows.
 - Writing `@State` from geometry, scroll or hover callbacks on every call re-renders whole trees. Write on change.
 - App releases need the server release of the same version (`release.yml` builds and signs the daemon binaries);
   without it "Add a server" fails.
