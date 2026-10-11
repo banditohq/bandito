@@ -1,0 +1,11 @@
+// An MCP call to an integration's server (`linear`) completes. The journal records it under its server name.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start"}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-13"}}}}
+{"expect": {"method": "turn/start"}}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-14", "items": [], "status": "inProgress", "error": null}}}}
+{"send": {"method": "item/started", "params": {"threadId": "thr-13", "turnId": "turn-14", "item": {"type": "mcpToolCall", "id": "mcp-3", "server": "linear", "tool": "create_issue", "arguments": {"title": "ARGUMENT-SECRET"}, "status": "inProgress"}}}}
+{"send": {"method": "item/completed", "params": {"threadId": "thr-13", "turnId": "turn-14", "completedAtMs": 1, "item": {"type": "mcpToolCall", "id": "mcp-3", "server": "linear", "tool": "create_issue", "arguments": {}, "status": "completed", "result": {"content": [{"type": "text", "text": "created LIN-1"}], "isError": false}}}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-13", "turn": {"id": "turn-14", "items": [], "status": "completed", "error": null}}}}

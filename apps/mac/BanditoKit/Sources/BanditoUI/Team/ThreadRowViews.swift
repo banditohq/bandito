@@ -51,6 +51,8 @@ struct ThreadRowKey: Equatable {
     /// The parts of the chat state that belong to this row only.
     var reactions: MessageReactions?
     var quoted: ReplyTarget?
+    /// The mentions of the message, drawn as chips under it.
+    var mentions: [Mention]
     var flashing: Bool
     var isLastAgent: Bool
     /// 0 for a message that is not waiting, 1 while it is queued, 2 when it was not delivered.
@@ -72,6 +74,7 @@ struct ThreadRowKey: Equatable {
             let seq = item.messageSeq
             reactions = seq.flatMap { chat.reactions[$0] }
             quoted = (chat.repliesOn ? seq.flatMap { chat.replies[$0] } : nil).flatMap { chat.original($0) }
+            mentions = seq.flatMap { chat.mentions[$0] } ?? []
             flashing = chat.highlightedID == item.id
             isLastAgent = chat.lastAgentID == item.id
             waiting = seq.map { chat.waiting.contains($0) ? 1 : chat.undelivered.contains($0) ? 2 : 0 } ?? 0
@@ -79,6 +82,7 @@ struct ThreadRowKey: Equatable {
             waiting = 0
             reactions = nil
             quoted = nil
+            mentions = []
             flashing = false
             isLastAgent = false
         }
@@ -162,6 +166,9 @@ private struct ItemView: View {
                     ) {
                         VStack(alignment: .trailing, spacing: 4) {
                             UserBubble(text: text) { quote(forSeq: seq) }
+                            if let seq, let mentions = chat.mentions[seq], !mentions.isEmpty {
+                                MessageMentions(mentions: mentions, agentID: agentID, server: server)
+                            }
                             if let seq, chat.waiting.contains(seq) || chat.undelivered.contains(seq) {
                                 Text(chat.undelivered.contains(seq) ? L10n.Thread.notDelivered : L10n.Thread.queued)
                                     .font(BanditoFont.text(size: 11.5, weight: 400))

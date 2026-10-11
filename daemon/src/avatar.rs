@@ -18,6 +18,12 @@ pub fn sniff(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
     }
 }
 
+/// An agent id is a UUID made by the daemon: letters, digits and '-'. Anything else never names a picture, so a crafted
+/// id (`../x`) cannot reach a file outside the avatars folder.
+fn safe_id(agent_id: &str) -> bool {
+    !agent_id.is_empty() && agent_id.len() <= 64 && agent_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
+
 /// The folder of the pictures.
 pub fn dir(data_home: &Path) -> PathBuf {
     data_home.join("avatars")
@@ -25,6 +31,9 @@ pub fn dir(data_home: &Path) -> PathBuf {
 
 /// The picture of an agent on disk, with its MIME type: `None` if there is none.
 pub fn find(data_home: &Path, agent_id: &str) -> Option<(PathBuf, &'static str)> {
+    if !safe_id(agent_id) {
+        return None;
+    }
     [("png", "image/png"), ("jpg", "image/jpeg")]
         .into_iter()
         .map(|(ext, mime)| (dir(data_home).join(format!("{agent_id}.{ext}")), mime))
@@ -33,6 +42,7 @@ pub fn find(data_home: &Path, agent_id: &str) -> Option<(PathBuf, &'static str)>
 
 /// Store the picture, replacing any earlier one of the agent. Written to a temporary file first, then renamed.
 pub fn write(data_home: &Path, agent_id: &str, bytes: &[u8]) -> Result<()> {
+    anyhow::ensure!(safe_id(agent_id), "not an agent id");
     let (_, ext) = sniff(bytes).context("not a PNG or JPEG picture")?;
     let folder = dir(data_home);
     std::fs::create_dir_all(&folder).context("create the avatars folder")?;
@@ -45,6 +55,9 @@ pub fn write(data_home: &Path, agent_id: &str, bytes: &[u8]) -> Result<()> {
 
 /// Delete the agent's picture, whatever its extension. A missing file is not an error.
 pub fn remove(data_home: &Path, agent_id: &str) {
+    if !safe_id(agent_id) {
+        return;
+    }
     for ext in ["png", "jpg"] {
         let _ = std::fs::remove_file(dir(data_home).join(format!("{agent_id}.{ext}")));
     }
@@ -88,6 +101,18 @@ mod tests {
         assert!(find(&h, "agent-1").is_none());
         remove(&h, "agent-1");
         std::fs::remove_dir_all(&h).ok();
+    }
+
+    #[test]
+    fn a_crafted_id_never_reaches_a_file_outside_the_folder() {
+        let home = home("crafted-id");
+        let outside = home.join("x.png");
+        std::fs::write(&outside, PNG).unwrap();
+        remove(&home, "../x");
+        assert!(outside.exists(), "a file outside avatars/ is left alone");
+        assert!(find(&home, "../x").is_none());
+        assert!(write(&home, "../y", PNG).is_err());
+        assert!(!home.join("y.png").exists());
     }
 
     #[test]

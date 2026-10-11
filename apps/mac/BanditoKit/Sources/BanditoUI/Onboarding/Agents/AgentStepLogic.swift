@@ -187,7 +187,7 @@ enum AgentNameRule {
     static let maxLength = 40
 
     /// The problem with `name`, or nil when it can be used. Names compare without case against `existing`.
-    static func problem(for name: String, existing: [String]) -> Problem? {
+    static func problem(for name: String, existing: [String], maxLength: Int = AgentNameRule.maxLength) -> Problem? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return .empty }
         guard trimmed.count <= maxLength else { return .tooLong }

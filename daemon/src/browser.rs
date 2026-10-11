@@ -951,7 +951,7 @@ mod tests {
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
                 model: None,
-                cwd: "/home/u/app".into(),
+                cwd: "/bandito-probe/u/app".into(),
                 approval_mode: ApprovalMode::Risky,
                 system_prompt: None,
                 effort: None,

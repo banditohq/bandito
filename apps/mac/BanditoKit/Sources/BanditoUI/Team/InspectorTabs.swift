@@ -23,6 +23,8 @@ struct DetailsTab: View {
     @State private var modelDraft = ""
     /// The folded "Advanced" row of the model section (the fallback runtime).
     @State private var advancedOpen = false
+    /// "Read replies aloud" of this agent (kept on this Mac, see `ReadAloud`).
+    @State private var readAloud = false
     @FocusState private var folderFocused: Bool
     /// The chips on screen, and the sends that have not been answered yet.
     @State private var chips = AgentCapability.allOn
@@ -140,6 +142,22 @@ struct DetailsTab: View {
                         .disabled(!PauseActions.available(on: server))
                         .help(PauseActions.available(on: server) ? "" : L10n.Team.pauseUnavailable)
                     }
+                }
+                InspectorRow(label: L10n.Inspector.readAloud, compact: true) {
+                    Toggle("", isOn: Binding(
+                        get: { readAloud },
+                        set: { on in
+                            readAloud = on
+                            ReadAloud.set(on, agentID: agent.id)
+                        })
+                    )
+                    .labelsHidden()
+                    .toggleStyle(BanditoToggleStyle())
+                    .help(L10n.Inspector.readAloudHint)
+                    .accessibilityLabel(L10n.Inspector.readAloud)
+                }
+                .task(id: agent.id) {
+                    readAloud = ReadAloud.isOn(agentID: agent.id)
                 }
                 InspectorRow(label: L10n.Inspector.project, compact: true) {
                     // A long path is cut at its start ("…/projects/app") and the full path is in the tooltip. Clicking

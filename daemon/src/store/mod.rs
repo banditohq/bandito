@@ -20,19 +20,26 @@ mod reactions;
 mod rules;
 mod schedules;
 mod secrets;
+mod telegram;
+mod tool_calls;
 mod usage;
 mod workspaces;
 
-pub use agents::{ALL_CAPABILITIES, Agent, AgentPatch, Avatar, Capability, NewAgent, capabilities_csv};
+pub use agents::{ALL_CAPABILITIES, Agent, AgentPatch, Avatar, Capability, NewAgent, capabilities_csv, validate_name};
 pub use approvals::{Approval, ApprovalStatus};
 pub use auth::Device;
 pub use checkpoints::{Checkpoint, CheckpointKind};
 pub use forms::{Form, FormStatus};
-pub use integrations::{Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, NewIntegration};
+pub use integrations::{
+    Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, IntegrationTool, NewIntegration, ToolMode,
+    ToolOverride,
+};
 pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
 pub use secrets::{SecretInfo, check_agents, check_name, check_value};
+pub use telegram::{ANSWER_MODES, TgChat, TgLink, TgMessage};
+pub use tool_calls::{CallFilter, CallStats, ERROR_MAX_CHARS, ToolCall};
 pub use usage::UsageEntry;
 pub use workspaces::{Mount, Network, NewWorkspace, SHARED_WORKSPACE, Workspace, WorkspaceKind, WorkspacePatch};
 
@@ -54,6 +61,11 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0016_integrations.sql"),
     include_str!("../../migrations/0017_agent_lead.sql"),
     include_str!("../../migrations/0018_integration_auth.sql"),
+    include_str!("../../migrations/0019_integration_tools.sql"),
+    include_str!("../../migrations/0020_integration_tool_mode.sql"),
+    include_str!("../../migrations/0021_tool_calls.sql"),
+    include_str!("../../migrations/0022_agent_template_id.sql"),
+    include_str!("../../migrations/0023_telegram.sql"),
 ];
 
 pub struct Store {
@@ -92,6 +104,12 @@ impl Store {
             tx.commit()?;
         }
         Ok(Self { conn: Mutex::new(conn) })
+    }
+
+    /// Runs a statement that breaks the database, for a test of what the daemon does when it cannot read it.
+    #[cfg(test)]
+    pub fn break_for_test(&self, sql: &str) {
+        self.conn().execute_batch(sql).unwrap();
     }
 
     fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
@@ -418,6 +436,44 @@ impl ApprovalMode {
 mod tests {
     use super::*;
     use crate::event::{AgentStatus, EventBody};
+
+    #[test]
+    fn a_fresh_database_reaches_the_last_migration_with_all_the_tables_and_columns() {
+        let s = Store::open_in_memory().unwrap();
+        let version: i64 = s.conn().query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version as usize, MIGRATIONS.len());
+        for table in ["integration_tools", "tool_calls"] {
+            let found: i64 = s
+                .conn()
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                    [table],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(found, 1, "table {table}");
+        }
+        let columns: Vec<String> = s
+            .conn()
+            .prepare("SELECT name FROM pragma_table_info('integrations')")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        for column in ["tool_mode", "tool_overrides"] {
+            assert!(columns.iter().any(|c| c == column), "column integrations.{column}");
+        }
+        let indexed: i64 = s
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'tool_calls_at'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(indexed, 1, "index on tool_calls(at_ms)");
+    }
 
     #[test]
     fn migrates_and_reopens() {

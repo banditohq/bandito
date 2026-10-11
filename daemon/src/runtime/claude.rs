@@ -94,10 +94,13 @@ fn capability_deny_rules(caps: Option<&[Capability]>) -> Vec<String> {
 /// The file tools may not touch Bandito's own folder (see docs/ARCHITECTURE.md#approvals-policy). The tools the
 /// policy decides are asked, so an `allow` in the user's or the project's settings cannot run them without
 /// `can_use_tool`.
-fn permission_settings(home: &std::path::Path, caps: Option<&[Capability]>) -> Value {
+fn permission_settings(home: &std::path::Path, caps: Option<&[Capability]>, gated: &[String]) -> Value {
     let mut deny = bandito_home_rules(home);
     deny.extend(capability_deny_rules(caps));
-    json!({"permissions": {"deny": deny, "ask": POLICY_TOOLS}})
+    // The services whose tools the owner limited: every tool of theirs is asked about, so the daemon sees the call.
+    let mut ask: Vec<String> = POLICY_TOOLS.iter().map(|tool| (*tool).to_string()).collect();
+    ask.extend(gated.iter().map(|name| format!("mcp__{name}__*")));
+    json!({"permissions": {"deny": deny, "ask": ask}})
 }
 
 const INIT_REQUEST_ID: &str = "init";
@@ -307,7 +310,11 @@ impl Runtime for ClaudeRuntime {
             }
         }
         // One argument of inline JSON, so no rule can be split at a space.
-        let settings = permission_settings(&crate::workspace::data_dir(), cfg.capabilities.as_deref());
+        let settings = permission_settings(
+            &crate::workspace::data_dir(),
+            cfg.capabilities.as_deref(),
+            &cfg.gated_tools,
+        );
         cmd.arg("--settings").arg(settings.to_string());
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
@@ -598,6 +605,20 @@ impl Session for ClaudeSession {
         self.proc.send(&json!({
             "type": "control_response",
             "response": {"subtype": "success", "request_id": key, "response": response}
+        }))
+    }
+
+    async fn deny_with_message(&mut self, key: &str, message: &str) -> anyhow::Result<()> {
+        let Some(_input) = self.take_pending(key) else {
+            bail!("unknown approval {key}");
+        };
+        self.proc.send(&json!({
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": key,
+                "response": {"behavior": "deny", "message": message}
+            }
         }))
     }
 
@@ -1724,9 +1745,25 @@ mod login_tests {
     }
 
     #[test]
+    fn limited_services_are_asked_about_so_the_daemon_sees_their_calls() {
+        let home = std::path::Path::new("/home/u/.bandito");
+        let none = permission_settings(home, None, &[]);
+        assert_eq!(none["permissions"]["ask"], json!(POLICY_TOOLS));
+        let gated = permission_settings(home, None, &["linear".to_string(), "gh".to_string()]);
+        let ask: Vec<&str> = gated["permissions"]["ask"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(ask[..POLICY_TOOLS.len()], POLICY_TOOLS);
+        assert_eq!(ask[POLICY_TOOLS.len()..], ["mcp__linear__*", "mcp__gh__*"]);
+    }
+
+    #[test]
     fn session_settings_put_the_capability_denials_after_the_folder_rules() {
         let home = std::path::Path::new("/home/u/.bandito");
-        let settings = permission_settings(home, Some(&[Capability::Files, Capability::Browser]));
+        let settings = permission_settings(home, Some(&[Capability::Files, Capability::Browser]), &[]);
         let deny: Vec<&str> = settings["permissions"]["deny"]
             .as_array()
             .unwrap()
@@ -1737,7 +1774,7 @@ mod login_tests {
         assert_eq!(&deny[3..], ["Bash"]);
         assert_eq!(settings["permissions"]["ask"], json!(POLICY_TOOLS));
         // Every capability: the folder rules alone.
-        let all = permission_settings(home, None);
+        let all = permission_settings(home, None, &[]);
         assert_eq!(all["permissions"]["deny"], json!(bandito_home_rules(home)));
     }
 

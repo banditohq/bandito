@@ -1,0 +1,3 @@
+/* Permission prompts. Generated with the app's languages; the English text is in Config/Info.plist. */
+"NSMicrophoneUsageDescription" = "O Bandito usa o microfone somente enquanto você dita uma mensagem. A fala é reconhecida neste Mac e nunca é enviada pela rede.";
+"NSSpeechRecognitionUsageDescription" = "O Bandito transforma o que você dita em texto neste Mac. O reconhecimento acontece no dispositivo; o áudio não é enviado a lugar nenhum.";

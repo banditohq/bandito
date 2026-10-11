@@ -1,0 +1,399 @@
+import BanditoKit
+import BanditoL10n
+import Foundation
+
+/// What a share sheet is about: a bot of a server, or a skill in the daemon user's folder.
+public enum ShareSubject: Hashable, Sendable {
+    case bot(agentID: String)
+    case skill(name: String)
+
+    public var kind: ShareKind {
+        switch self {
+        case .bot: .bot
+        case .skill: .skill
+        }
+    }
+}
+
+/// Where a shared item came from, kept per share on this Mac. "Update to the current version" exports again from it.
+public struct ShareSource: Codable, Equatable, Sendable {
+    public var kind: ShareKind
+    /// The `Server.id` (UUID string) the item was exported from.
+    public var serverID: String
+    /// The agent of a bot share.
+    public var agentID: String?
+    /// The folder name of a skill share.
+    public var skillName: String?
+
+    public init(kind: ShareKind, serverID: String, agentID: String? = nil, skillName: String? = nil) {
+        self.kind = kind
+        self.serverID = serverID
+        self.agentID = agentID
+        self.skillName = skillName
+    }
+}
+
+/// The sources of the shares of this Mac, per share id, in the app's own defaults.
+public enum ShareSourceStore {
+    static let key = "share.sources.v1"
+
+    public static func load(defaults: UserDefaults = .standard) -> [String: ShareSource] {
+        guard let data = defaults.data(forKey: key),
+            let sources = try? JSONDecoder().decode([String: ShareSource].self, from: data)
+        else { return [:] }
+        return sources
+    }
+
+    public static func remember(_ source: ShareSource, for shareID: String, defaults: UserDefaults = .standard) {
+        var sources = load(defaults: defaults)
+        sources[shareID] = source
+        if let data = try? JSONEncoder().encode(sources) {
+            defaults.set(data, forKey: key)
+        }
+    }
+
+    public static func forget(_ shareID: String, defaults: UserDefaults = .standard) {
+        var sources = load(defaults: defaults)
+        sources.removeValue(forKey: shareID)
+        if let data = try? JSONEncoder().encode(sources) {
+            defaults.set(data, forKey: key)
+        }
+    }
+}
+
+/// What a bot or skill payload shows on screen: its name, what it does, and what it would change on this Mac.
+/// Read from the payload as JSON, so the screen shows exactly what the daemon will install.
+public struct SharedPayloadInfo: Equatable, Sendable {
+    public var kind: ShareKind
+    public var name: String
+    /// Bot: the role line.
+    public var role: String?
+    /// Bot: the system prompt, the text the agent runs on.
+    public var systemPrompt: String?
+    /// Bot: the capability names it asks for.
+    public var capabilities: [String]
+    /// Bot: the catalog ids of the services it may use, in the payload's order.
+    public var services: [String]
+    /// Bot: how many schedules it carries.
+    public var scheduleCount: Int
+    /// Bot: the first message, put in the input field.
+    public var starter: String?
+    /// Skill: the description line.
+    public var description: String?
+    /// Skill: the license the owner chose.
+    public var license: String?
+    /// Skill: the file paths, in order.
+    public var files: [String]
+    /// Skill: the paths the payload marks executable.
+    public var executables: [String]
+    /// Skill: the text of `SKILL.md`, the skill's own description of what to do, when the payload has it.
+    public var skillMarkdown: String?
+
+    /// Skill: every file agents may run: each file under `scripts/` and each path marked executable, once, sorted.
+    /// The install sheet names all of them and needs the owner's tick whenever there is one.
+    public var scripts: [String] {
+        Array(Set(executables + files.filter { $0.hasPrefix("scripts/") })).sorted()
+    }
+
+    public init?(kind: ShareKind, payload: JSONValue) {
+        guard let name = payload["name"]?.string, !name.isEmpty else { return nil }
+        self.kind = kind
+        self.name = name
+        role = payload["role"]?.string
+        systemPrompt = payload["system_prompt"]?.string
+        capabilities = Self.strings(payload["capabilities"])
+        services = Self.strings(payload["services"])
+        scheduleCount = Self.count(payload["schedules"])
+        starter = payload["starter"]?.string
+        description = payload["description"]?.string
+        license = payload["license"]?.string
+        files = Self.files(payload["files"])
+        executables = Self.strings(payload["executable"])
+        skillMarkdown = payload["files"]?["SKILL.md"]?.string
+    }
+
+    /// The names of the services a bot names, for the screen: the catalog's name where the catalog has the id, the id
+    /// as it is where it does not (a service this server does not know).
+    public static func serviceNames(_ ids: [String], catalog: [String: String]) -> [String] {
+        ids.map { catalog[$0] ?? $0 }
+    }
+
+    private static func strings(_ value: JSONValue?) -> [String] {
+        guard case .array(let items)? = value else { return [] }
+        return items.compactMap(\.string)
+    }
+
+    private static func count(_ value: JSONValue?) -> Int {
+        guard case .array(let items)? = value else { return 0 }
+        return items.count
+    }
+
+    private static func files(_ value: JSONValue?) -> [String] {
+        guard case .object(let map)? = value else { return [] }
+        return map.keys.sorted()
+    }
+}
+
+/// Logic of the share screens: ids and links, the limits of a draft, the texts of the failures and the states of the
+/// buttons. Pure, so the rules are tested without a server.
+public enum ShareLogic {
+    public static let titleLimit = 80
+    public static let summaryLimit = 280
+    /// The number of lines of a payload shown before "Show all".
+    public static let previewLineLimit = 12
+    /// The licenses a skill can be shared under (the platform's list).
+    public static let licenses = [
+        "MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MPL-2.0", "CC-BY-4.0", "CC0-1.0", "Unlicense",
+    ]
+    public static let defaultLicense = "MIT"
+    public static let host = "bandito.dev"
+
+    // MARK: capabilities of a shared bot
+
+    /// The capabilities that stay off unless the owner turns them on: running commands, seeing the screen, managing
+    /// other agents.
+    public static let riskyCapabilities: Set<String> = [
+        AgentCapability.terminal.rawValue, AgentCapability.screen.rawValue, AgentCapability.team.rawValue,
+    ]
+
+    /// The capabilities of a payload the app offers, in the order of the chips: only the known names, each once.
+    public static func offeredCapabilities(_ names: [String]) -> [AgentCapability] {
+        AgentCapability.allCases.filter { names.contains($0.rawValue) }
+    }
+
+    /// The name of a capability in the install sheet. The risky ones say what they let the bot do.
+    public static func capabilityTitle(_ capability: AgentCapability) -> String {
+        switch capability {
+        case .files: L10n.Share.Capability.files
+        case .browser: L10n.Share.Capability.browser
+        case .terminal: L10n.Share.Capability.terminal
+        case .team: L10n.Share.Capability.team
+        case .screen: L10n.Share.Capability.screen
+        }
+    }
+
+    /// What is on before the owner touches the list: every offered capability except the risky ones.
+    public static func defaultCapabilities(_ offered: [AgentCapability]) -> Set<AgentCapability> {
+        Set(offered.filter { !riskyCapabilities.contains($0.rawValue) })
+    }
+
+    /// The list sent with `agents.create_from_shared`: the chosen ones, in the order of the chips. Always a subset of
+    /// the payload's capabilities.
+    public static func chosenCapabilities(_ chosen: Set<AgentCapability>, offered: [AgentCapability]) -> [String] {
+        offered.filter(chosen.contains).map(\.rawValue)
+    }
+
+    // MARK: links
+
+    /// The id in `https://bandito.dev/s/<id>`, or nil for any other text. The text is trimmed first; the scheme must be
+    /// `https`, the host `bandito.dev`, with no port, user or query.
+    public static func shareID(fromLink text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The whole text must be the page's address: https, exactly this host (no user part, port, query or
+        // fragment), `/s/`, the id, and at most one trailing slash. It is matched as text, because URL parsing
+        // normalises paths and hosts and would widen what is accepted.
+        guard let match = trimmed.wholeMatch(of: /(?i:https:\/\/bandito\.dev)\/s\/([A-Za-z0-9]{22})\/?/) else {
+            return nil
+        }
+        let id = String(match.output.1)
+        return ShareID.isValid(id) ? id : nil
+    }
+
+    /// The id in `bandito://install?share=<id>`, or nil for any other URL.
+    public static func installID(fromURL url: URL) -> String? {
+        guard url.scheme?.lowercased() == "bandito", url.host?.lowercased() == "install" else { return nil }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let values = items.filter { $0.name == "share" }.compactMap(\.value)
+        guard values.count == 1, let id = values.first, ShareID.isValid(id) else { return nil }
+        return id
+    }
+
+    public static func pageURL(id: String) -> String {
+        "https://\(host)/s/\(id)"
+    }
+
+    // MARK: draft
+
+    /// A title of 1 to 80 characters once trimmed.
+    public static func isTitleValid(_ title: String) -> Bool {
+        let count = title.trimmingCharacters(in: .whitespacesAndNewlines).count
+        return (1...titleLimit).contains(count)
+    }
+
+    public static func isSummaryValid(_ summary: String) -> Bool {
+        summary.count <= summaryLimit
+    }
+
+    /// The publish button: a signed-in owner, a valid draft, a payload read from the daemon, and no request running.
+    public static func canPublish(
+        title: String, summary: String, hasPayload: Bool, signedIn: Bool, inFlight: Bool
+    ) -> Bool {
+        signedIn && hasPayload && !inFlight && isTitleValid(title) && isSummaryValid(summary)
+    }
+
+    /// The install button: a server, a loaded item, no install running, and for a skill with scripts the owner's tick.
+    /// `scripts` is `SharedPayloadInfo.scripts`: the files under `scripts/` together with the executable paths.
+    public static func canInstall(
+        hasServer: Bool, hasItem: Bool, scripts: [String], acknowledged: Bool, inFlight: Bool
+    ) -> Bool {
+        guard hasServer, hasItem, !inFlight else { return false }
+        return scripts.isEmpty || acknowledged
+    }
+
+    /// The payload as text for the preview and the install sheet: pretty, sorted keys, the exact JSON that is sent.
+    public static func payloadText(_ payload: JSONValue) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(payload) else { return "" }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    public struct Preview: Equatable, Sendable {
+        /// The first lines (up to `previewLineLimit`) or the whole text when it is short.
+        public var shown: String
+        /// True when lines were left out and "Show all" is offered.
+        public var isCollapsed: Bool
+    }
+
+    /// The text cut to `previewLineLimit` lines, for the collapsed view.
+    public static func preview(of text: String, lineLimit: Int = previewLineLimit) -> Preview {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        guard lines.count > lineLimit else { return Preview(shown: text, isCollapsed: false) }
+        return Preview(shown: lines.prefix(lineLimit).joined(separator: "\n"), isCollapsed: true)
+    }
+
+    // MARK: failures
+
+    /// The text of a failed publish. `secret` names the field; the owner removes it and publishes again.
+    public static func publishMessage(for failure: ShareFailure) -> String {
+        switch failure {
+        case .looksLikeSecret(let field): L10n.Share.Problem.secret(field: field)
+        case .rate: L10n.Share.Problem.rate
+        case .tooMany: L10n.Share.Problem.tooMany
+        case .hidden: L10n.Share.Problem.hidden
+        case .notFound: L10n.Share.Problem.notFound
+        case .unauthorized: L10n.Share.Problem.unauthorized
+        case .invalid: L10n.Share.Problem.invalid
+        case .network: L10n.Share.Problem.network
+        case .api, .badResponse: L10n.Share.Problem.generic
+        }
+    }
+
+    /// The text of a failed read of a shared item (the install sheet, "My shares").
+    public static func fetchMessage(for failure: ShareFailure) -> String {
+        switch failure {
+        case .notFound: L10n.Share.Problem.notFound
+        case .hidden: L10n.Share.Problem.hidden
+        case .network: L10n.Share.Problem.network
+        case .unauthorized: L10n.Share.Problem.unauthorized
+        default: L10n.Share.Problem.generic
+        }
+    }
+
+    /// The text of a daemon refusal on install or export. Nothing is overwritten when the reason is `exists_not_ours`.
+    public static func installMessage(for failure: SharedInstallFailure) -> String {
+        switch failure {
+        case .reason(let reason):
+            switch reason {
+            case "catalog_skill": L10n.Share.Daemon.catalogSkill
+            case "not_yours": L10n.Share.Daemon.notYours
+            case "license_required": L10n.Share.Daemon.licenseRequired
+            case "no_skill": L10n.Share.Daemon.noSkill
+            case "unsafe_path": L10n.Share.Daemon.unsafePath
+            case "bad_path": L10n.Share.Daemon.badPath
+            case "not_utf8": L10n.Share.Daemon.notUtf8
+            case "too_large": L10n.Share.Daemon.tooLarge
+            case "exists_not_ours": L10n.Share.Daemon.existsNotOurs
+            default: L10n.Share.Daemon.io
+            }
+        case .invalid(let field): L10n.Share.Daemon.invalid(field: field)
+        case .other: L10n.Share.Problem.payload
+        }
+    }
+
+    // MARK: labels
+
+    public static func kindLabel(_ kind: ShareKind) -> String {
+        switch kind {
+        case .bot: L10n.Share.Kind.bot
+        case .skill: L10n.Share.Kind.skill
+        }
+    }
+
+    public static func reportLabel(_ reason: ShareReportReason) -> String {
+        switch reason {
+        case .spam: L10n.Share.Report.spam
+        case .malicious: L10n.Share.Report.malicious
+        case .secrets: L10n.Share.Report.secrets
+        case .offensive: L10n.Share.Report.offensive
+        case .other: L10n.Share.Report.other
+        }
+    }
+
+    public static func visibilityLabel(_ visibility: ShareVisibility) -> String {
+        switch visibility {
+        case .everyone: L10n.Share.Visibility.everyone
+        case .link: L10n.Share.Visibility.link
+        }
+    }
+
+    public static func visibilityHint(_ visibility: ShareVisibility) -> String {
+        switch visibility {
+        case .everyone: L10n.Share.Visibility.everyoneHint
+        case .link: L10n.Share.Visibility.linkHint
+        }
+    }
+
+    /// "Update to the current version" needs the bot or skill this share was made from, on this Mac.
+    public static func canUpdate(_ item: ShareSummary, sources: [String: ShareSource]) -> Bool {
+        sources[item.id] != nil
+    }
+
+    /// The version a share is at, for the lists: "Version 3".
+    public static func versionLabel(_ version: Int) -> String {
+        L10n.Share.Install.version(number: String(version))
+    }
+}
+
+/// The owner's own skills on the Skills page: which ones can be shared, which are copies of a link, and the search.
+public enum OwnSkillsLogic {
+    static let sharedPrefix = "shared:"
+
+    /// A copy installed from a link: the badge says so, and it cannot be shared again from here.
+    public static func isShared(_ skill: OwnSkill) -> Bool {
+        skill.source.hasPrefix(sharedPrefix)
+    }
+
+    /// Only the owner's own skill can be published; a copy of a link is someone else's work.
+    public static func canShare(_ skill: OwnSkill) -> Bool {
+        skill.source == "own"
+    }
+
+    /// The id of the share a copy came from, when the source names a valid one.
+    public static func sharedID(_ skill: OwnSkill) -> String? {
+        guard isShared(skill) else { return nil }
+        let id = String(skill.source.dropFirst(sharedPrefix.count))
+        return ShareID.isValid(id) ? id : nil
+    }
+
+    /// The skills the section shows: by name or description, in the order the daemon sends them. The section is
+    /// shown only on the "All" filter of the Skills page.
+    public static func visible(_ skills: [OwnSkill], query: String) -> [OwnSkill] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return skills }
+        return skills.filter { skill in
+            skill.name.lowercased().contains(needle) || skill.description.lowercased().contains(needle)
+        }
+    }
+
+    /// The section is there only when it has something to show.
+    public static func showsSection(_ skills: [OwnSkill], query: String, filter: MarketFilter) -> Bool {
+        filter == .all && !visible(skills, query: query).isEmpty
+    }
+
+    /// The line that names the files a share will not send. Nil when none were left out.
+    public static func skippedText(_ skipped: [String]) -> String? {
+        guard !skipped.isEmpty else { return nil }
+        return L10n.Share.skipped(files: skipped.joined(separator: ", "))
+    }
+}

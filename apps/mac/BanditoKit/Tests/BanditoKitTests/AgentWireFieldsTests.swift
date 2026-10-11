@@ -17,6 +17,16 @@ import Testing
         #expect(agent.capabilities == ["terminal", "team"])
     }
 
+    @Test func agentReadsTheTemplateItWasMadeFrom() throws {
+        let made = #"{"id":"a","name":"n","runtime":"claude","cwd":"/x","template_id":"code-reviewer"}"#
+        let agent = try RPCClient.decoder.decode(Agent.self, from: Data(made.utf8))
+        #expect(agent.templateId == "code-reviewer")
+
+        let byHand = #"{"id":"b","name":"m","runtime":"claude","cwd":"/x","template_id":null}"#
+        let plain = try RPCClient.decoder.decode(Agent.self, from: Data(byHand.utf8))
+        #expect(plain.templateId == nil)
+    }
+
     @Test func agentFromOldDaemonHasNoAvatarOrCapabilities() throws {
         let raw = #"{"id":"a","name":"n","runtime":"claude","cwd":"/x"}"#
         let agent = try RPCClient.decoder.decode(Agent.self, from: Data(raw.utf8))

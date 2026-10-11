@@ -35,19 +35,23 @@ extension BanditoButtonSize {
 public struct SignalButtonStyle: ButtonStyle {
     /// Height and label size of the button.
     public var size: BanditoButtonSize
+    /// The capsule takes the whole width the button is offered, the label stays centred (a narrow panel's main action).
+    public var fillsWidth: Bool
 
-    public init(size: BanditoButtonSize = .regular) {
+    public init(size: BanditoButtonSize = .regular, fillsWidth: Bool = false) {
         self.size = size
+        self.fillsWidth = fillsWidth
     }
 
     public func makeBody(configuration: Configuration) -> some View {
-        SignalButtonBody(configuration: configuration, size: size)
+        SignalButtonBody(configuration: configuration, size: size, fillsWidth: fillsWidth)
     }
 }
 
 private struct SignalButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let size: BanditoButtonSize
+    let fillsWidth: Bool
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
@@ -67,8 +71,9 @@ private struct SignalButtonBody: View {
             .font(BanditoFont.display(size: size.fontSize * 0.92, weight: 600))
             .foregroundStyle(isEnabled ? Color.Bandito.bg : Color.Bandito.text3)
             .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
+            .fixedSize(horizontal: !fillsWidth, vertical: false)
             .padding(.horizontal, size.horizontalPadding)
+            .frame(maxWidth: fillsWidth ? .infinity : nil)
             .frame(height: size.height)
             .background(isEnabled ? Color.Bandito.text : Color.Bandito.surface3, in: Capsule())
             .brightness(isEnabled && hovered ? 0.06 : 0)
@@ -77,27 +82,36 @@ private struct SignalButtonBody: View {
     }
 }
 
+/// The colour of a quiet button: `neutral` is the cream label; `danger` is for a destructive action (a rollback), with
+/// the label and the border in `danger` and the same fill and border steps.
+public enum BanditoButtonTone: Sendable {
+    case neutral, danger
+}
+
 /// Secondary action: translucent fill with a hairline border and cream label.
-/// On hover the fill and the border get brighter.
+/// On hover the fill and the border get brighter. `tone: .danger` makes the label and the border `danger`.
 public struct QuietButtonStyle: ButtonStyle {
     /// Height and label size of the button.
     public var size: BanditoButtonSize
+    public var tone: BanditoButtonTone
 
-    public init(size: BanditoButtonSize = .regular) {
+    public init(size: BanditoButtonSize = .regular, tone: BanditoButtonTone = .neutral) {
         self.size = size
+        self.tone = tone
     }
 
     public func makeBody(configuration: Configuration) -> some View {
-        InteractiveBody(isPressed: configuration.isPressed) { hovered in
+        let ink = tone == .danger ? Color.Bandito.danger : Color.Bandito.text
+        return InteractiveBody(isPressed: configuration.isPressed) { hovered in
             configuration.label
                 .font(BanditoFont.text(size: size.fontSize, weight: 500))
-                .foregroundStyle(Color.Bandito.text)
+                .foregroundStyle(ink)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, size.horizontalPadding)
                 .frame(height: size.height)
-                .background(Color.Bandito.text.opacity(hovered ? 0.10 : 0.06), in: Capsule())
-                .overlay(Capsule().stroke(Color.Bandito.text.opacity(hovered ? 0.22 : 0.12), lineWidth: 1))
+                .background(ink.opacity(hovered ? 0.10 : 0.06), in: Capsule())
+                .overlay(Capsule().stroke(ink.opacity(hovered ? 0.22 : 0.12), lineWidth: 1))
         }
     }
 }
@@ -173,8 +187,8 @@ public struct BrightenButtonStyle: ButtonStyle {
 /// Which Bandito button style a button uses. `banditoButton(_:)` applies the style and the matching focus ring,
 /// so the two never disagree about the shape.
 public enum BanditoButtonKind {
-    case signal(size: BanditoButtonSize = .regular)
-    case quiet(size: BanditoButtonSize = .regular)
+    case signal(size: BanditoButtonSize = .regular, fillsWidth: Bool = false)
+    case quiet(size: BanditoButtonSize = .regular, tone: BanditoButtonTone = .neutral)
     case lightPill(size: BanditoButtonSize = .regular)
     case icon(size: CGFloat = 30, label: String)
     case row(cornerRadius: CGFloat = 8, hoverOpacity: Double = 0.05)
@@ -188,10 +202,10 @@ private struct BanditoButtonModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         switch kind {
-        case .signal(let size):
-            content.buttonStyle(SignalButtonStyle(size: size)).brandFocusRing(shape: Capsule())
-        case .quiet(let size):
-            content.buttonStyle(QuietButtonStyle(size: size)).brandFocusRing(shape: Capsule())
+        case .signal(let size, let fillsWidth):
+            content.buttonStyle(SignalButtonStyle(size: size, fillsWidth: fillsWidth)).brandFocusRing(shape: Capsule())
+        case .quiet(let size, let tone):
+            content.buttonStyle(QuietButtonStyle(size: size, tone: tone)).brandFocusRing(shape: Capsule())
         case .lightPill(let size):
             content.buttonStyle(LightPillButtonStyle(size: size)).brandFocusRing(shape: Capsule())
         case .icon(let size, let label):

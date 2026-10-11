@@ -68,6 +68,15 @@ struct MainWindow: View {
             }
         }
         .banditoAnimation(BanditoMotion.ease, value: router.rollbackNotice?.id)
+        .overlay(alignment: .bottom) {
+            if let notice = router.botNotice {
+                BotNoticeToast(notice: notice) { router.botNotice = nil }
+                    .padding(.bottom, 18)
+                    .padding(.horizontal, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .banditoAnimation(BanditoMotion.ease, value: router.botNotice?.id)
         .overlayPreferenceValue(TourAnchorKey.self) { anchors in
             if onboarding.tourRequested {
                 TourLayer(anchors: anchors)
@@ -142,10 +151,19 @@ struct MainWindow: View {
         case .newAgent: NewAgentSheet()
         case .account: AccountSheet()
         case .addServer: AddServerSheet()
+        case .importer: ImportSheet()
         case .schedule(let agentID, let existing):
             if let server = app.currentServer {
                 ScheduleEditor(server: server, agentID: agentID, existing: existing)
             }
+        case .share(let subject):
+            if let server = app.currentServer {
+                ShareSheet(subject: subject, server: server)
+            }
+        case .installShared(let shareID):
+            InstallSharedSheet(shareID: shareID, server: app.currentServer)
+        case .myShares:
+            MySharesView(servers: app.servers)
         }
     }
 }

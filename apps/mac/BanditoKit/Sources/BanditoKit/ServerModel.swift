@@ -465,9 +465,20 @@ public final class ServerModel: Identifiable {
     /// for notifications, so events that were already seen never notify twice.
     public var onLiveEvent: ((Event) -> Void)?
 
+    /// Counts the `telegram.changed` events this model applied. The Telegram section reads the status again on each
+    /// change of this number.
+    public internal(set) var telegramRevision = 0
+    /// Whether the daemon knows the Telegram RPCs. `unknown` until `checkTelegramSupport()` has answered; the Settings
+    /// window shows the Telegram section only for `supported`.
+    public internal(set) var telegramSupport = TelegramSupport.unknown
+
     /// Fold one event into the model (also used by tests).
     public func apply(_ e: Event) {
         if e.seq > lastSeq { lastSeq = e.seq }
+        if case .telegramChanged = e.body {
+            telegramRevision &+= 1
+            return
+        }
         if case .usageLimits(let runtime, let windows) = e.body {
             recordUsage(runtime: runtime, windows: windows)
         }
@@ -556,6 +567,14 @@ public final class ServerModel: Identifiable {
         agentsReadAt = Date()
     }
 
+    /// Reads `agents.list` now and waits for the answer, for a caller that must see the list as it is (after a create
+    /// that failed, the agents it made may be in it). Throws when the read fails; the list stays as it was.
+    public func readAgentsNow() async throws {
+        guard !inSafeMode, let c = client else { return }
+        let list = try await c.call("agents.list", NoParams(), as: [Agent].self)
+        setAgents(list)
+    }
+
     /// The daemon runs in safe mode: it answers only `daemon.info` and `backups.*`, so nothing else is asked.
     private var inSafeMode: Bool { info?.isSafeMode == true }
 
@@ -621,7 +640,7 @@ public final class ServerModel: Identifiable {
         if stale { requestAgentsRefresh() }
     }
 
-    private func replaceAgent(_ a: Agent) {
+    func replaceAgent(_ a: Agent) {
         if let i = agents.firstIndex(where: { $0.id == a.id }) { agents[i] = a } else { agents.append(a) }
     }
 
@@ -700,32 +719,71 @@ public final class ServerModel: Identifiable {
 
     /// Sends a message to an agent. `attachments` are files from `uploadAttachment`; they go by path. `replyTo` is the
     /// `seq` of the message it answers (the daemon takes it with the `attachments` feature; without that feature the
-    /// field is left out and the text goes alone).
+    /// field is left out and the text goes alone). `mentions` go with the `mentions` feature; without it the text
+    /// keeps the `@Name` words and nothing more.
     public func send(
-        _ text: String, to agentId: String, replyTo: Int64? = nil, attachments: [AgentAttachment] = []
+        _ text: String, to agentId: String, replyTo: Int64? = nil, attachments: [AgentAttachment] = [],
+        mentions: [Mention] = []
     ) async throws {
         let request = AgentSendRequest(
             agentId: agentId, text: text, attachments: attachments.isEmpty ? nil : attachments.map(\.path),
-            replyTo: supports("attachments") ? replyTo : nil)
+            replyTo: supports("attachments") ? replyTo : nil,
+            mentions: mentions.isEmpty || !supports("mentions") ? nil : mentions)
         try await rpc().call("agents.send", request)
     }
 
-    /// Sends an undelivered message again, with its files and the message it answered. The line "Not delivered" goes
-    /// away at once, so a second click does nothing; a failed send brings it back.
-    public func resendUndelivered(_ seq: Int64, of agentId: String) async throws {
+    /// Sends an undelivered message again, with its files, the message it answered and its mentions. A mention that
+    /// is not available any more (a service taken off the agent, a closed tab, a deleted file or teammate) is left
+    /// out and returned, so the send does not fail on it. The line "Not delivered" goes away at once, so a second
+    /// click does nothing; a failed send brings it back.
+    @discardableResult
+    public func resendUndelivered(_ seq: Int64, of agentId: String) async throws -> [Mention] {
         guard var thread = threads[agentId], thread.undeliveredSeqs.contains(seq),
             case .user(_, let text, _, _, _, _)? = thread.items.first(where: { $0.id == ThreadItem.messageID(seq: seq) })
-        else { return }
+        else { return [] }
         let files = thread.attachments[seq] ?? []
         let replyTo = thread.replies[seq]
         thread.markResent(seq)
         threads[agentId] = thread
+        var dropped: [Mention] = []
         do {
-            try await send(text, to: agentId, replyTo: replyTo, attachments: files)
+            var mentions = thread.mentions[seq] ?? []
+            if !mentions.isEmpty, supports("mentions") {
+                let split = await availableMentions(mentions, agentId: agentId)
+                mentions = split.kept
+                dropped = split.dropped
+            }
+            try await send(text, to: agentId, replyTo: replyTo, attachments: files, mentions: mentions)
         } catch {
             threads[agentId]?.unmarkResent(seq)
             throw error
         }
+        return dropped
+    }
+
+    /// The mentions that are still good, asked of the daemon. A failed question counts as "not available".
+    private func availableMentions(_ mentions: [Mention], agentId: String) async -> MentionResend {
+        var integrations: Set<String> = []
+        if mentions.contains(where: { $0.kind == .integration }), supports("integrations"),
+            let list = try? await self.integrations()
+        {
+            let own = agents.first { $0.id == agentId }?.integrations.map(Set.init)
+            integrations = Set(list.filter { $0.enabled && (own?.contains($0.id) ?? true) }.map(\.id))
+        }
+        var tabs: Set<String>?
+        if mentions.contains(where: { $0.kind == .browserTab }), supports("browser"),
+            let status = try? await browserStatus(), status.isRelay, let pages = try? await browserTabs()
+        {
+            tabs = Set(pages.map(\.id))
+        }
+        var files: Set<String> = []
+        if supports("files") {
+            for mention in mentions where mention.kind == .file {
+                if (try? await stat(mention.id)) != nil { files.insert(mention.id) }
+            }
+        }
+        return MentionResend.split(
+            mentions, integrations: integrations, agents: Set(agents.map(\.id)), tabs: tabs, files: files)
     }
 
     /// Saves one file in the agent's attachment folder (`attachments.upload`). The daemon refuses more than 20 MB.

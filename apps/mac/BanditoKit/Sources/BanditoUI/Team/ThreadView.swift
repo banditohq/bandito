@@ -2,11 +2,16 @@ import BanditoDesign
 import BanditoKit
 import BanditoL10n
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// The thread of one agent: header, the rows, banners and the composer.
 struct ThreadView: View {
     var server: ServerModel
     var agent: Agent
+    /// Which replies are read aloud (a reference type: changes do not redraw the thread).
+    @State private var readAloud = ReadAloudTracker()
     /// Which tab the inspector opens on; the header's schedules button sets it.
     @Binding var inspectorTab: InspectorTab
 
@@ -478,7 +483,21 @@ struct ThreadView: View {
             if wasRunning && !isRunning {
                 Task { await loadChanges() }
             }
+            readNewReply()
         }
+        // A final message arrives as the last item; it is read when its turn has ended (see `ReadAloudTracker`).
+        .onChange(of: thread.items.last?.id) { _, _ in readNewReply() }
+        .onChange(of: agent.id) { _, _ in readAloud.reset() }
+    }
+
+    /// Reads a new final reply aloud when the agent has "Read replies aloud" on and Bandito is the active app. A reply
+    /// that comes while the app is in the background is passed over, not read later.
+    private func readNewReply() {
+        guard let reply = readAloud.observe(items: thread.items, turnRunning: thread.turnRunning) else { return }
+        guard ReadAloud.isOn(agentID: agent.id), NSApplication.shared.isActive else { return }
+        let spoken = SpeechText.plain(reply.text, codeSkipped: L10n.Speech.codeSkipped)
+        let voice = SpeechLanguage.voiceTag(for: spoken, appLanguage: SpeechLanguage.appLanguage)
+        SpeechOutput.shared.speak(spoken, key: reply.id, voiceTag: voice)
     }
 
     private var isStreaming: Bool {
@@ -538,6 +557,8 @@ struct ThreadView: View {
     private func send() {
         let id = agent.id
         let text = router.takeDraft(for: id)
+        let draftMentions = router.takeMentions(for: id)
+        let mentions = MentionDraft.wire(draftMentions, in: text)
         // The files that finished uploading go with the text; a failed send leaves them in the tray for a retry.
         let files = AttachmentTray.readyFiles(AttachmentTrays.shared.files(for: id))
         guard !text.isEmpty || !files.isEmpty else { return }
@@ -548,11 +569,12 @@ struct ThreadView: View {
         bottomRequest += 1
         Task {
             do {
-                try await server.send(text, to: id, replyTo: reply?.seq, attachments: files)
+                try await server.send(text, to: id, replyTo: reply?.seq, attachments: files, mentions: mentions)
                 AttachmentTrays.shared.removeSent(files, agentID: id)
             } catch {
                 sendError = UserFacingError.message(for: error)
                 router.restoreDraft(text, for: id)
+                router.restoreMentions(draftMentions, for: id)
                 replyDrafts.restore(reply, for: id)
             }
         }
@@ -580,6 +602,7 @@ struct ThreadView: View {
             reactions: current.reactions,
             replies: current.replies,
             attachments: current.attachments,
+            mentions: current.mentions,
             waiting: current.waitingSeqs,
             undelivered: current.undeliveredSeqs,
             onResend: { seq in resend(seq) },
@@ -613,7 +636,13 @@ struct ThreadView: View {
     private func resend(_ seq: Int64) {
         let agentID = agent.id
         Task {
-            do { try await server.resendUndelivered(seq, of: agentID) } catch {
+            do {
+                let dropped = try await server.resendUndelivered(seq, of: agentID)
+                if !dropped.isEmpty {
+                    let names = dropped.map(\.label).joined(separator: ", ")
+                    actionError = UserFacingMessage(text: L10n.Mention.resendDropped(names: names))
+                }
+            } catch {
                 actionError = UserFacingError.message(for: error)
             }
         }

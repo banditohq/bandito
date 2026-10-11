@@ -1,0 +1,155 @@
+import Foundation
+import Testing
+
+@testable import BanditoKit
+
+/// The shape of the `skills.own` answer, as the daemon sends it.
+private struct OwnSkillsWire: Decodable {
+    var skills: [OwnSkill]
+}
+
+/// The wire of the sharing features: ids, the platform's error codes, the daemon's refusals, and the answers of the
+/// daemon's bot creation, which are read with `RPCClient.decoder` like every other daemon answer.
+@Suite struct ShareWireTests {
+    @Test func aShareIDIsExactlyTwentyTwoBase62Characters() {
+        #expect(ShareID.isValid("k3HqT9vZ2Lm8pXcR4wBn7e"))
+        #expect(!ShareID.isValid("k3HqT9vZ2Lm8pXcR4wBn7"))
+        #expect(!ShareID.isValid("k3HqT9vZ2Lm8pXcR4wBn7e!"))
+        #expect(!ShareID.isValid("k3HqT9vZ2Lm8pXcR4wBn-e"))
+        #expect(!ShareID.isValid("../../../../etc/passw"))
+        #expect(!ShareID.isValid(""))
+    }
+
+    @Test func platformErrorCodesMapToTheirCases() {
+        #expect(ShareFailure.from(code: "looks_like_secret", status: 422, field: "summary") == .looksLikeSecret(field: "summary"))
+        #expect(ShareFailure.from(code: "looks_like_secret", status: 422, field: nil) == .looksLikeSecret(field: ""))
+        #expect(ShareFailure.from(code: "rate", status: 429, field: nil) == .rate)
+        #expect(ShareFailure.from(code: "too_many", status: 409, field: nil) == .tooMany)
+        #expect(ShareFailure.from(code: "hidden", status: 410, field: nil) == .hidden)
+        #expect(ShareFailure.from(code: "not_found", status: 404, field: nil) == .notFound)
+        #expect(ShareFailure.from(code: "unauthorized", status: 401, field: nil) == .unauthorized)
+        #expect(ShareFailure.from(code: "invalid", status: 400, field: nil) == .invalid)
+        #expect(ShareFailure.from(code: "later", status: 500, field: nil) == .api(code: "later", status: 500))
+    }
+
+    @Test func aBareStatusDecidesWhenThereIsNoCode() {
+        #expect(ShareFailure.from(status: 401) == .unauthorized)
+        #expect(ShareFailure.from(status: 404) == .notFound)
+        #expect(ShareFailure.from(status: 410) == .hidden)
+        #expect(ShareFailure.from(status: 429) == .rate)
+        #expect(ShareFailure.from(status: 503) == .api(code: "http_503", status: 503))
+    }
+
+    @Test func aDaemonFolderRefusalNamesItsReason() {
+        let refusal = RPCError(
+            code: RPCError.commandsError, message: "exists", data: .object(["reason": .string("exists_not_ours")]))
+        #expect(SharedInstallFailure(refusal) == .reason("exists_not_ours"))
+
+        let noReason = RPCError(code: RPCError.commandsError, message: "io")
+        #expect(SharedInstallFailure(noReason) == .reason("io"))
+    }
+
+    @Test func aPayloadRefusalNamesTheField() {
+        let invalid = RPCError(code: RPCError.invalidParams, message: "invalid: system_prompt")
+        #expect(SharedInstallFailure(invalid) == .invalid(field: "system_prompt"))
+
+        let other = RPCError(code: RPCError.invalidParams, message: "no agent x")
+        #expect(SharedInstallFailure(other) == .other("no agent x"))
+    }
+
+    @Test func aShareSummaryReadsItsSnakeCaseDates() throws {
+        let json = """
+            {"id":"k3HqT9vZ2Lm8pXcR4wBn7e","kind":"skill","visibility":"public","title":"pdf","summary":"",\
+            "version":1,"installs":0,"created_at":"2026-10-11T08:12:34.567Z","updated_at":"2026-10-11T08:12:34Z",\
+            "url":"https://bandito.dev/s/k3HqT9vZ2Lm8pXcR4wBn7e"}
+            """
+        let summary = try JSONDecoder().decode(ShareSummary.self, from: Data(json.utf8))
+        #expect(summary.kind == .skill)
+        #expect(summary.visibility == .everyone)
+        #expect(abs((summary.createdAt?.timeIntervalSince1970 ?? 0) - 1_791_706_354.567) < 0.001)
+        #expect(summary.updatedAt?.timeIntervalSince1970 == 1_791_706_354)
+        #expect(summary.url == "https://bandito.dev/s/k3HqT9vZ2Lm8pXcR4wBn7e")
+        #expect(summary.hidden == false)
+        #expect(summary.lang == nil)
+    }
+
+    @Test func theDatesOfThePlatformParseWithAndWithoutFractionalSeconds() {
+        let fractional = ShareDate.parse("2026-10-11T08:12:34.567Z")
+        let plain = ShareDate.parse("2026-10-11T08:12:34Z")
+        #expect(abs((fractional?.timeIntervalSince1970 ?? 0) - 1_791_706_354.567) < 0.001)
+        #expect(plain?.timeIntervalSince1970 == 1_791_706_354)
+        #expect(ShareDate.parse("11.10.2026") == nil)
+        #expect(ShareDate.parse("") == nil)
+    }
+
+    @Test func aBadDateDoesNotFailTheWholeSummary() throws {
+        let json = """
+            {"id":"k3HqT9vZ2Lm8pXcR4wBn7e","kind":"bot","visibility":"link","title":"t","version":1,\
+            "created_at":"yesterday","updated_at":null}
+            """
+        let summary = try JSONDecoder().decode(ShareSummary.self, from: Data(json.utf8))
+        #expect(summary.createdAt == nil)
+        #expect(summary.updatedAt == nil)
+    }
+
+    @Test func aBotCreationFromTheDaemonReadsItsSnakeCaseLists() throws {
+        let json = """
+            {"agent":null,"schedule_ids":["s1","s2"],"unknown_services":["nope"],"missing_services":["github"],\
+            "errors":[{"step":"schedule","message":"bad cron"}],"starter":"Hi!"}
+            """
+        let created = try RPCClient.decoder.decode(SharedBotCreation.self, from: Data(json.utf8))
+        #expect(created.agent == nil)
+        #expect(created.scheduleIds == ["s1", "s2"])
+        #expect(created.unknownServices == ["nope"])
+        #expect(created.missingServices == ["github"])
+        #expect(created.errors == [SharedStepError(step: "schedule", message: "bad cron")])
+        #expect(created.starter == "Hi!")
+    }
+
+    @Test func aDraftKeepsThePayloadKeysAndNamesTheEnumValues() throws {
+        let draft = ShareDraft(
+            kind: .bot, visibility: .everyone, lang: "ru", title: "t", summary: "s",
+            payload: .object(["system_prompt": .string("p")]))
+        let data = try JSONEncoder().encode(draft)
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["visibility"] as? String == "public")
+        #expect(object["kind"] as? String == "bot")
+        let payload = try #require(object["payload"] as? [String: Any])
+        #expect(payload["system_prompt"] as? String == "p")
+    }
+
+    @Test func theOwnSkillsListReadsItsSnakeCaseFlags() throws {
+        let json = """
+            {"skills":[{"name":"pdf","description":"PDFs","source":"shared:k3HqT9vZ2Lm8pXcR4wBn7e","version":2,\
+            "has_scripts":true,"files":3},{"name":"notes","description":"","source":"own","version":null,\
+            "has_scripts":false,"files":1}]}
+            """
+        let reply = try RPCClient.decoder.decode(OwnSkillsWire.self, from: Data(json.utf8))
+        let skills = reply.skills
+        #expect(skills.map(\.name) == ["pdf", "notes"])
+        #expect(skills[0].hasScripts)
+        #expect(skills[0].version == 2)
+        #expect(skills[0].files == 3)
+        #expect(skills[1].version == nil)
+        #expect(skills[1].source == "own")
+    }
+
+    @Test func anExportKeepsItsSkippedNamesAndItsPayloadKeys() throws {
+        let json = """
+            {"payload":{"schema":1,"name":"pdf","files":{"my_tool.py":"x"}},"skipped":[".DS_Store"]}
+            """
+        let export = try JSONDecoder().decode(SkillExport.self, from: Data(json.utf8))
+        #expect(export.skipped == [".DS_Store"])
+        #expect(export.payload["files"]?["my_tool.py"] == .string("x"))
+    }
+
+    @Test func anExportWithoutSkippedHasNone() throws {
+        let json = #"{"payload":{"schema":1,"name":"pdf"}}"#
+        let export = try JSONDecoder().decode(SkillExport.self, from: Data(json.utf8))
+        #expect(export.skipped.isEmpty)
+    }
+
+    @Test func reportReasonsAreTheFiveOfThePlatform() {
+        #expect(ShareReportReason.allCases.map(\.rawValue) == ["spam", "malicious", "secrets", "offensive", "other"])
+    }
+}

@@ -1,5 +1,6 @@
 import BanditoKit
 import BanditoL10n
+import Foundation
 import Observation
 
 /// The seven sections of the main window. The mode bar and ⌘1…⌘7 switch between them.
@@ -35,9 +36,14 @@ public enum AppMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The filter of the Marketplace sidebar: every service, only the connected ones, or one category of the catalog.
+/// The filter of the Marketplace sidebar: everything, only the connected services or the installed skills, or one
+/// category of the catalog.
 public enum MarketFilter: Hashable, Identifiable, Sendable {
     case all, connected
+    /// Skills that are installed somewhere on the server.
+    case installed
+    /// Bots made from a template (the Bots page only). Not a catalog filter: it keeps no template, service or skill.
+    case myBots
     /// A catalog category: `dev`, `productivity`, `data`, `web`, `design`, `other`.
     case category(String)
 
@@ -45,6 +51,8 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
         switch self {
         case .all: "all"
         case .connected: "connected"
+        case .installed: "installed"
+        case .myBots: "myBots"
         case .category(let name): "category:\(name)"
         }
     }
@@ -53,13 +61,15 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
         switch self {
         case .all: L10n.Market.Filter.all
         case .connected: L10n.Market.Filter.connected
+        case .installed: L10n.Market.Filter.installed
+        case .myBots: L10n.Market.Filter.myBots
         case .category(let name): MarketCategory.title(name)
         }
     }
 
-    /// The sidebar rows: All, Connected, then the categories the catalog has.
+    /// The sidebar rows of the Services page: All, Connected, then the categories the catalog has.
     public static func rows(categories: [String]) -> [MarketFilter] {
-        [.all, .connected] + categories.map { .category($0) }
+        MarketTab.services.filterRows(categories: categories)
     }
 }
 
@@ -82,6 +92,11 @@ public enum MarketCategory {
         case "web": L10n.Market.Category.web
         case "design": L10n.Market.Category.design
         case "other": L10n.Market.Category.other
+        case "ops": L10n.Market.Category.ops
+        case "research": L10n.Market.Category.research
+        case "writing": L10n.Market.Category.writing
+        case "business": L10n.Market.Category.business
+        case "personal": L10n.Market.Category.personal
         default: name.prefix(1).uppercased() + name.dropFirst()
         }
     }
@@ -96,13 +111,26 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     /// A new schedule of the agent (`existing` nil), or the change of an existing one. Shown on the main window,
     /// not on the inspector, which is too narrow for it.
     case schedule(agentID: String, existing: Schedule?)
+    /// Import agents, skills and commands from Claude Code and Codex on this Mac.
+    case importer
+    /// Publish a bot or a skill of this server as a link (see `ShareSheet`).
+    case share(ShareSubject)
+    /// Install a bot or skill someone shared, by its id (a `bandito://install` link or a pasted link).
+    case installShared(shareID: String)
+    /// The bots and skills this account shared: visibility, update, delete (see `MySharesView`).
+    case myShares
 
     public var id: String {
         switch self {
+        case .importer: "importer"
         case .newAgent: "newAgent"
         case .addServer: "addServer"
         case .account: "account"
         case .schedule(let agentID, let existing): "schedule-\(agentID)-\(existing?.id ?? "new")"
+        case .share(.bot(let agentID)): "share-bot-\(agentID)"
+        case .share(.skill(let name)): "share-skill-\(name)"
+        case .installShared(let shareID): "install-\(shareID)"
+        case .myShares: "myShares"
         }
     }
 }
@@ -159,6 +187,10 @@ public final class Router {
     public var pendingTemplate: AgentTemplate?
     /// Team: text for the composer of the selected agent ("Ask about this place"). Taken once by the thread.
     public var pendingComposerText: String?
+    /// Team: ⌥⌘D was pressed. Each press counts up; the composer of the selected agent starts or stops a dictation.
+    public var dictationRequest = 0
+    /// Team: the dictation of the composer is recording. Esc then belongs to it, not to the approval deny command.
+    public var dictationRecording = false
     /// Team: the composer of this agent should take keyboard focus (⌘↵ in the palette, after opening the agent).
     /// Taken once, by the composer of that agent only.
     public private(set) var composerFocusAgentID: String?
@@ -178,6 +210,18 @@ public final class Router {
     public var marketDetail: String?
     /// Marketplace: the categories of the loaded catalog, for the sidebar. Set by the Marketplace page.
     public var marketCategories: [String] = []
+    /// Marketplace: the page in front (services, bots or skills). Restored from the app's defaults at start. The
+    /// page shown is `MarketTab.effective(_:available:)`: a server without the feature falls back to services.
+    public var marketTab: MarketTab = .services
+    /// Marketplace, Bots page: the sidebar filter (all, my bots, or a category).
+    public var marketBotFilter: MarketFilter = .all
+    /// Marketplace, Skills page: the sidebar filter (all, installed, or a category).
+    public var marketSkillFilter: MarketFilter = .all
+    /// The categories of the bot templates and of the skills, for the sidebar. Set by the pages.
+    public var marketBotCategories: [String] = []
+    public var marketSkillCategories: [String] = []
+    /// What the last bot creation left to say: shown over the window as a toast until closed.
+    var botNotice: BotNotice?
     /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
     public var pendingTerminalCommand: String?
 
@@ -268,8 +312,9 @@ public final class Router {
     private var backStack: [AppMode] = []
     private var forwardStack: [AppMode] = []
 
-    public init(mode: AppMode = .team) {
+    public init(mode: AppMode = .team, defaults: UserDefaults = .standard) {
         self.mode = mode
+        marketTab = MarketTabStore.load(defaults: defaults)
     }
 
     /// In Files, back and forward walk the folders visited on the server (`FolderHistory`), not the modes.
@@ -391,9 +436,29 @@ public final class Router {
         return pendingTemplate
     }
 
+    /// Opens the Marketplace on its Bots page (the Team home's "All bots"). With `template`, the create panel of that
+    /// bot opens too, once the page has the template (a tile of the Team home).
+    public func showBots(template: String? = nil) {
+        marketTab = .bots
+        marketDetail = nil
+        MarketTabStore.save(.bots)
+        pendingBotTemplate = template
+        select(mode: .market)
+    }
+
+    /// The bot whose create panel the Bots page opens. Taken once, by the page.
+    public private(set) var pendingBotTemplate: String?
+
+    public func takePendingBotTemplate() -> String? {
+        defer { pendingBotTemplate = nil }
+        return pendingBotTemplate
+    }
+
     /// The composer's text of each agent, by agent id. Kept here rather than in the thread view, so a draft stays with
     /// its agent when the view is recreated or the person goes to another agent.
     public var drafts: [String: String] = [:]
+    /// The `@` mentions in each agent's draft (see `MentionDraft`). They live as long as their `@Label` is in the text.
+    var draftMentions: [String: [DraftMention]] = [:]
     /// Counts each ⌘R. The thread and the folder on show reload their data when it changes (see `RefreshRules`).
     var refreshRequests = 0
     /// Where each agent's thread was left (see `ThreadPlace`). Not observed: only the thread reads and writes it, and
@@ -405,6 +470,20 @@ public final class Router {
         let text = (drafts[agentID] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         drafts[agentID] = nil
         return text
+    }
+
+    /// The mentions of an agent's draft, for sending; they are cleared with the draft.
+    func takeMentions(for agentID: String) -> [DraftMention] {
+        defer { draftMentions[agentID] = nil }
+        return draftMentions[agentID] ?? []
+    }
+
+    /// Puts the mentions of a message that could not be sent back, beside any made since.
+    func restoreMentions(_ list: [DraftMention], for agentID: String) {
+        guard !list.isEmpty else { return }
+        var merged = list
+        for item in draftMentions[agentID] ?? [] where !merged.contains(item) { merged.append(item) }
+        draftMentions[agentID] = merged
     }
 
     /// Puts text that could not be sent back into the draft of its own agent, in front of anything typed since.

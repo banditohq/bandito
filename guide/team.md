@@ -57,10 +57,10 @@ Pause all agents (Пауза для всех агентов) pauses every agent 
 ## Team home (⌘0)
 
 <!-- id: team-home; covers: -->
-The screen shown in the Team mode when no chat is open: a greeting with the raccoon, the New agent (Новый агент) button, the six agents used last (each with its status: working, waiting or asleep, and the time of its last event), the templates and a few ideas for what to hand off.
+The screen shown in the Team mode when no chat is open: a greeting with the raccoon, the New agent (Новый агент) button, the six agents used last (each with its status: working, waiting or asleep, and the time of its last event), the templates and a few ideas for what to hand off. The last message of an agent shows as one plain line. The templates start with the built-in ones; on a server with Bots in the Marketplace they are the first five bots of the Marketplace, then From scratch (С нуля), and All bots in the marketplace (Все боты в маркетплейсе →) opens the Bots page.
 Где: Sidebar → TEAM (КОМАНДА) label; ⌘0; swipe right with two fingers in a chat
 1. Click the TEAM label above the agents, press ⌘0, or swipe right with two fingers in a chat.
-2. Click New agent, or a template, to open the New agent sheet; click an agent to open its chat.
+2. Click New agent, or a template, to open the New agent sheet; a bot tile opens the create sheet of that bot in the Marketplace; click an agent to open its chat.
 3. Swipe left with two fingers to return to the chat you left.
 
 ## Search and quick open (⌘K)
@@ -81,6 +81,24 @@ The composer sits at the bottom of the thread. It sends the message to the selec
 2. While the agent is working, the send button becomes Stop (Остановить). Press ⌘. to stop the turn (⌘. stop).
 3. A message you send while the agent is busy, or saving its memory before a new chapter, appears in the chat at once with the line Queued (В очереди) below it. The line goes away when the agent takes the message. If the agent stopped or the server restarted before it did, the line reads Not delivered (Не доставлено); right-click the message and choose Send again (Отправить снова). After a new chapter begins, the message sits below the chapter divider, where the agent reads it. The counter beside Thinking… counts from the start of the current turn.
 
+## Dictate a message
+
+<!-- id: team-dictation; covers: -->
+Speak instead of typing. Speech is turned into text on this Mac; no audio is sent over the network. The words go into the field at the caret.
+Где: Team → agent thread → composer, the microphone button (Надиктовать) next to +, or ⌥⌘D (menu Team → Dictate into the message)
+1. Press the microphone or ⌥⌘D. The first time, macOS asks for the microphone and for speech recognition: allow both. If you refused, a line above the field says so and links to System Settings.
+2. Speak. The words appear in the field at the caret. While it listens the microphone is filled and has a cream dot.
+3. Stop it with the microphone again, ⌥⌘D or Esc, or let it stop by itself: two seconds after the last words it recognised, or eight seconds if you said nothing. Check the text, then press ↵ to send.
+4. A language without an offline speech model cannot be dictated. The line above the field says how to add it: System Settings → Keyboard → Dictation.
+
+## Read replies aloud
+
+<!-- id: team-read-aloud; covers: -->
+Hear an agent's answer. The voice follows the language of the text. Markdown is read as plain sentences; a code block is not read, it becomes "code skipped" (код пропущен).
+Где: the ⋯ menu of an agent's message (or right-click) → Read aloud (Прочитать вслух); Inspector → Details → Read replies aloud (Читать ответы вслух)
+1. Point at an agent's message, press ⋯ and choose Read aloud. Choose Stop reading (Остановить) to stop.
+2. To hear every new finished reply of one agent, turn on Read replies aloud in its Details. It is off by default and kept on this Mac, per agent. A reply is read once, when its turn has ended. It is read only while Bandito is the active app; opening a thread reads nothing from its history.
+
 ## Attach a file to a message
 
 <!-- id: team-attach; covers: -->
@@ -98,6 +116,17 @@ Typing / in the composer opens a list of commands. Four sources are merged and c
 1. Type / and read the list. Use ↑↓ to choose (↑↓ select), ↵ to run (↵ run), or ⇥ to complete the name (⇥ complete).
 2. Use the filters All (Все), Server (Сервер), From Mac (С Mac), Bandito (Bandito), Mine (Мои) to narrow the list.
 3. A command from This Mac that is not on the server yet asks Install /name on the server? (Install /name on the server?). Click Install and send (Установить и отправить): the command is copied once, then the message is sent.
+4. The Bandito commands also answer to words in the language of the app: in Russian, /модель finds /model and /усилие finds /effort. The English name always works, case and accents do not matter.
+
+## Mentions (@)
+
+<!-- id: team-mentions; covers: -->
+Type @ after a space to point the agent at something: a service (SERVICES), a teammate (AGENTS), a file or folder of the agent's project (FILES), or an open tab of the server's browser (BROWSER). The pick leaves @Name in the message and a chip above the field; the agent reads a short note of what each one is. The message in the thread shows the chips under it. A service that is not connected is marked Connect (Подключить). Search finds the name, the English name and the words of the group (@сервисы, @files).
+Где: Team → agent thread → composer → type @
+1. Type @ and a few letters. Use ↑↓ to choose (↑↓ select), ↵ to insert (↵ insert), ⇥ to complete (⇥ complete), Esc to close.
+2. The chip appears above the field. Click ✕ on it, or press Backspace right after @Name, to take it away with its words.
+3. A service that is not connected asks Connect Linear? (Connect {name}?) above the field. Click Connect: the sign-in opens in the browser, or the sheet of keys, as in the Marketplace. The message goes by itself when the service is connected.
+4. A server older than this build sends the words only, without the chips.
 
 ## /new
 
@@ -231,9 +260,9 @@ A tab of the workbench panel that lists the files the agent changed, task by tas
 1. Open the changes tab. The tasks are listed with their restore points: Before the task (До задачи), End of turn (Конец хода), and Before restore (Перед откатом).
 2. Click a file to see its diff. Switch between Inline (Построчно) and Side by side (Рядом). Binary files show Binary file changed.
 3. To keep a file as it was before the task, untick it (Keep {name}). The count shows Keep N files. The other files stay as they are.
-4. To roll back the whole task, click Roll back the whole task (Откатить всю задачу), read the question, and click Roll back (Откатить). Files go back to how they were before the task.
+4. To roll back the whole task, click Roll back all (Откатить всё), read the question (Откатить всю задачу?), and click Roll back (Откатить). Files go back to how they were before the task.
 5. After a rollback, a notice appears with Undo (Отменить). Click it to bring the changes back.
-6. Ask about a place: click Ask {name} about this place (Ask {name} about this place) on a diff line. The composer gets the request for that file and line.
+6. Ask about a place: click Ask agent (Спросить агента) on a diff line; its tooltip names the agent. The composer gets the request for that file and line.
 
 ## Changes needs a current server (Update the server)
 

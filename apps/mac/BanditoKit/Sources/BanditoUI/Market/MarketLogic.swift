@@ -116,7 +116,8 @@ enum MarketLogic {
         return entries.filter { entry in
             switch filter {
             case .all: true
-            case .connected: entry.isConnected
+            case .connected, .installed: entry.isConnected
+            case .myBots: false
             case .category(let name): entry.category == name
             }
         }.filter { entry in
@@ -135,8 +136,11 @@ enum MarketLogic {
             return MarketPage(
                 connected: connected,
                 grid: visible(entries, filter: .all, query: query).filter { !$0.isConnected })
-        case .connected:
+        case .connected, .installed:
             return MarketPage(connected: [], grid: connected)
+        case .myBots:
+            // Services have no bots: nothing to show under this filter.
+            return MarketPage(connected: [], grid: [])
         case .category:
             // A category lists its services whether or not they are connected.
             return MarketPage(connected: [], grid: visible(entries, filter: filter, query: query))

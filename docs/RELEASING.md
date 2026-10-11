@@ -49,6 +49,8 @@ Actions → `release-app` → Run workflow. Inputs:
 
 Dispatch it from the default branch: the workflow file is read from the branch you run it on.
 
+Entitlements: `apps/mac/Config/Bandito.entitlements` (`audio-input`, for dictation) comes from `project.yml`; `release-app.sh` re-signs with the entitlements of the built app, so it is kept.
+
 The single job (macOS 15 runner) does this:
 
 1. Checks the inputs, that the tag exists, that the release is published and has the server assets, and that the

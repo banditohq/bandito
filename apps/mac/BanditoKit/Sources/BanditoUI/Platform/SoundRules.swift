@@ -133,5 +133,8 @@ public struct TypeThrottle: Sendable {
 
 /// Pitch variants for `type`: seven steps from -3% to +3%, so repeated keys do not sound identical.
 public enum SoundPitch {
-    public static let factors: [Double] = (0..<7).map { 1 + 0.03 * Double($0 - 3) / 3 }
+    public static let factors: [Double] = (0..<7).map { (step: Int) -> Double in
+        let offset = Double(step - 3)
+        return 1 + 0.01 * offset
+    }
 }

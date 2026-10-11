@@ -34,14 +34,18 @@ public struct SlashEntry: Identifiable, Hashable, Sendable {
     public let description: String?
     public let argsHint: String?
     public let origin: SlashOrigin
+    /// Other words that find the command, in the app's language (`slash.alias.<command>`). The name is the English
+    /// one and always finds it.
+    public let aliases: [String]
 
     public var id: String { "\(origin.rawValue):\(name)" }
 
-    public init(name: String, description: String?, argsHint: String?, origin: SlashOrigin) {
+    public init(name: String, description: String?, argsHint: String?, origin: SlashOrigin, aliases: [String] = []) {
         self.name = name
         self.description = description
         self.argsHint = argsHint
         self.origin = origin
+        self.aliases = aliases
     }
 }
 
@@ -82,12 +86,11 @@ public enum SlashInvocationParser {
 }
 
 public enum SlashMatcher {
-    /// Entries whose name starts with `query` (ignoring case) and that the source filter includes.
-    /// The input order is kept.
+    /// Entries that the source filter includes and whose name, or an alias, starts with `query` (a word of an alias
+    /// counts too). Case and accents do not matter. The input order is kept.
     public static func filter(_ entries: [SlashEntry], query: String, source: SlashSourceFilter) -> [SlashEntry] {
-        let prefix = query.lowercased()
-        return entries.filter { entry in
-            source.includes(entry.origin) && entry.name.lowercased().hasPrefix(prefix)
+        entries.filter { entry in
+            source.includes(entry.origin) && SearchFolding.matches(query: query, candidates: [entry.name] + entry.aliases)
         }
     }
 }
@@ -133,6 +136,25 @@ public enum BuiltinSlash: CaseIterable, Sendable {
         }
     }
 
+    /// The words that find the command in the app's language (`slash.alias.<command>`), besides its English name.
+    public var aliases: [String] {
+        SearchFolding.words(aliasText)
+    }
+
+    private var aliasText: String {
+        switch self {
+        case .new: L10n.Slash.Alias.new
+        case .model: L10n.Slash.Alias.model
+        case .effort: L10n.Slash.Alias.effort
+        case .memory: L10n.Slash.Alias.memory
+        case .changes: L10n.Slash.Alias.changes
+        case .terminal: L10n.Slash.Alias.terminal
+        case .files: L10n.Slash.Alias.files
+        case .usage: L10n.Slash.Alias.usage
+        case .pause: L10n.Slash.Alias.pause
+        }
+    }
+
     public var argsHint: String? {
         switch self {
         case .model: "<model>"
@@ -153,7 +175,7 @@ public enum SlashCatalog {
             SlashEntry(name: $0.name, description: $0.description, argsHint: $0.argsHint, origin: .mac)
         }
         entries += BuiltinSlash.allCases.map {
-            SlashEntry(name: $0.name, description: $0.summary, argsHint: $0.argsHint, origin: .bandito)
+            SlashEntry(name: $0.name, description: $0.summary, argsHint: $0.argsHint, origin: .bandito, aliases: $0.aliases)
         }
         entries += snippets.map {
             SlashEntry(

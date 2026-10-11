@@ -146,6 +146,14 @@ Opens the palette to search across everything, including history.
 1. Press ⇧⌘F to open the palette with the focus on the search of everything.
 Хоткей: ⇧⌘F
 
+## Dictate into the message (Диктовка в сообщение)
+
+<!-- id: key-team-dictate; covers: command:team.dictate -->
+Starts or stops dictation into the composer of the agent on screen. See Dictate a message.
+Где: Team → Dictate into the message (Диктовка в сообщение)
+1. Press ⌥⌘D to start dictating at the caret. Press it again to stop.
+Хоткей: ⌥⌘D
+
 ## Previous agent (Предыдущий агент)
 
 <!-- id: key-team-previousagent; covers: command:team.previousAgent -->

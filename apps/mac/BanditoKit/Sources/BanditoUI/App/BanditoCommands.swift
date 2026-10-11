@@ -26,6 +26,9 @@ public struct BanditoCommands: Commands {
         CommandGroup(after: .help) {
             Button(L10n.Onboarding.showAgain) { onboarding.replay() }
         }
+        CommandGroup(after: .newItem) {
+            Button(L10n.Menu.importClaude) { router.sheet = .importer }
+        }
         // ⌘W is the terminal close in the Terminals mode, so the window closes with ⇧⌘W.
         CommandGroup(replacing: .saveItem) {
             Button(L10n.Keys.closeWindow) { WindowActions.closeKeyWindow() }
@@ -93,10 +96,13 @@ public struct BanditoCommands: Commands {
             Divider()
             item("team.approve") { resolveFirstApproval(.allow) }
                 .disabled(!hasPendingApproval)
+            // While a dictation records, Esc is the dictation's: this item steps aside so the composer gets the key.
             item("team.deny") { resolveFirstApproval(.deny) }
+                .disabled(router.dictationRecording)
                 .disabled(!hasPendingApproval)
             Divider()
             item("team.stop") { interruptSelected() }
+            item("team.dictate") { router.dictationRequest += 1 }
                 .disabled(selectedAgentID == nil)
             pauseAllButton
         }

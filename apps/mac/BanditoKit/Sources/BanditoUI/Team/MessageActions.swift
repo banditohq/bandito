@@ -24,6 +24,8 @@ struct ThreadChat {
     /// The message each reply answers, by the reply's `seq`.
     var replies: [Int64: Int64] = [:]
     var attachments: [Int64: [MessageAttachment]] = [:]
+    /// The `@` mentions each message carries, by `seq`: chips under the bubble.
+    var mentions: [Int64: [Mention]] = [:]
     /// Messages shown while they wait for their turn, by `seq`: they carry a quiet "Queued" line.
     var waiting: Set<Int64> = []
     /// Messages the daemon gave up on (no turn will take them), by `seq`: a quiet "Not delivered" line, and Send again.
@@ -77,6 +79,9 @@ struct MessageContainer<Bubble: View>: View {
     private var mine: String? { seq.flatMap { chat.reactions[$0]?.mine } }
     private var chips: [ReactionChip] { seq.flatMap { chat.reactions[$0]?.chips } ?? [] }
     private var flashing: Bool { chat.highlightedID == itemID }
+    /// This message is the one being read aloud: its menu says "Stop reading".
+    private var reading: Bool { SpeechOutput.shared.speakingKey == itemID }
+    private var readTitle: String { reading ? L10n.Speech.stop : L10n.Speech.read }
     private var rowOpacity: Double {
         MessageActionsPlacement.opacity(
             hovering: hovering, open: reactOpen || selecting || focus != nil, selectingText: dragging, isUser: fromUser,
@@ -235,6 +240,9 @@ struct MessageContainer<Bubble: View>: View {
         Menu {
             Button(L10n.Message.copyAsText, action: copyPlain)
             Button(L10n.Message.selectText) { selecting = true }
+            if !fromUser {
+                Button(readTitle, action: toggleReading)
+            }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .medium))
@@ -273,6 +281,9 @@ struct MessageContainer<Bubble: View>: View {
         Button(L10n.Thread.copy, action: copyRaw)
         Button(L10n.Message.copyAsText, action: copyPlain)
         Button(L10n.Message.selectText) { selecting = true }
+        if !fromUser {
+            Button(readTitle, action: toggleReading)
+        }
     }
 
     // MARK: Actions
@@ -295,6 +306,17 @@ struct MessageContainer<Bubble: View>: View {
 
     private func copyPlain() {
         SystemActions.copy(MessageBlocks.plainText(text))
+    }
+
+    /// Reads the message aloud, or stops it. Markdown is read as plain sentences; a code block is not read.
+    private func toggleReading() {
+        if reading {
+            SpeechOutput.shared.stop()
+            return
+        }
+        let spoken = SpeechText.plain(text, codeSkipped: L10n.Speech.codeSkipped)
+        let voice = SpeechLanguage.voiceTag(for: spoken, appLanguage: SpeechLanguage.appLanguage)
+        SpeechOutput.shared.speak(spoken, key: itemID, voiceTag: voice)
     }
 
     /// A double click on the agent's message likes it, or takes the like off.

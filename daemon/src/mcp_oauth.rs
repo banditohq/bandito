@@ -313,7 +313,7 @@ impl Resp {
 }
 
 /// A `curl` config string: quoted, with a refusal of control characters, which could start another line.
-fn quote(value: &str) -> Result<String> {
+pub(crate) fn quote(value: &str) -> Result<String> {
     if value.chars().any(|c| c.is_control()) {
         bail!("a request value has a control character");
     }
@@ -321,7 +321,7 @@ fn quote(value: &str) -> Result<String> {
 }
 
 /// Kills the process group of a `curl` when dropped.
-struct Group(i32);
+pub(crate) struct Group(pub(crate) i32);
 
 impl Drop for Group {
     fn drop(&mut self) {

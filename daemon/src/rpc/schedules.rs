@@ -190,7 +190,7 @@ const GAP_CHECK_FIRINGS: usize = 6;
 
 /// Refuses a cron whose runs come closer than [`AGENT_MIN_GAP_MS`]. The next few firings are compared, which covers
 /// every form (`every`, `at`, `cron`) and the zone's own rules.
-fn check_agent_interval(cron: &str, tz: &str) -> Result<(), RpcError> {
+pub(super) fn check_agent_interval(cron: &str, tz: &str) -> Result<(), RpcError> {
     check_interval_at(cron, tz, crate::store::now_ms())
 }
 

@@ -45,6 +45,9 @@ pub mod schedules;
 pub mod screen;
 pub mod secrets;
 pub mod setup;
+pub mod skills;
+pub mod telegram;
+pub mod templates;
 pub mod term;
 pub mod tunnel;
 pub mod unix;
@@ -74,6 +77,7 @@ pub fn features() -> Vec<&'static str> {
         "host",
         "setup",
         "commands",
+        "skills",
         "workspaces",
         "browser",
         "update",
@@ -88,8 +92,18 @@ pub fn features() -> Vec<&'static str> {
         "integrations",
         "integrations_probe",
         "integrations_oauth",
+        "integrations_call_tool",
+        "template_updates",
+        "tool_permissions",
+        "integrations_recommend",
+        "integrations_calls",
         "avatar_pictures",
         "lead",
+        "mentions",
+        "agent_templates",
+        "agent_bundles",
+        "sharing",
+        "telegram",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -134,6 +148,8 @@ pub struct App {
     safe_mode: std::sync::OnceLock<String>,
     /// Browser sign-ins to MCP servers that wait for their answer (see docs/ARCHITECTURE.md#integrations).
     pub oauth: crate::mcp_oauth::Flows,
+    /// The Telegram bot (see docs/ARCHITECTURE.md#telegram). Started by `main` unless the daemon is in safe mode.
+    pub telegram: Arc<crate::telegram::Telegram>,
 }
 
 impl App {
@@ -158,6 +174,7 @@ impl App {
         files: FileService,
         data_home: PathBuf,
     ) -> Arc<Self> {
+        let telegram = crate::telegram::Telegram::new(sup.clone());
         Arc::new(Self {
             sup,
             started_at: crate::store::now_ms(),
@@ -175,6 +192,7 @@ impl App {
             models: crate::runtime::models::ModelCache::default(),
             safe_mode: std::sync::OnceLock::new(),
             oauth: crate::mcp_oauth::Flows::default(),
+            telegram,
         })
     }
 
@@ -356,6 +374,8 @@ pub const SCREEN_ERROR: i64 = -32025;
 pub const COMMANDS_ERROR: i64 = -32027;
 /// Workspace failures; `error.data.reason` says which (see docs/ARCHITECTURE.md#workspaces).
 pub const WORKSPACE_ERROR: i64 = -32028;
+/// A Telegram call failed; `error.data.reason` says why and the message starts with it (see rpc::telegram).
+pub const TELEGRAM_ERROR: i64 = -32029;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -624,6 +644,9 @@ struct SendParams {
     /// Paths of files in the agent's attachment folders (see `attachments.upload`).
     #[serde(default)]
     attachments: Vec<String>,
+    /// `@` mentions in the text (feature `mentions`; see docs/ARCHITECTURE.md#mentions).
+    #[serde(default)]
+    mentions: Vec<crate::mentions::Mention>,
 }
 #[derive(Deserialize)]
 struct SinceParams {
@@ -708,6 +731,56 @@ const HISTORY_LINE_CHARS: usize = 600;
 /// Longest history reply, in characters.
 const HISTORY_REPLY_CHARS: usize = 8000;
 const HISTORY_MORE: &str = "… (more; narrow the search)";
+
+/// Creates an agent the way `agents.create` does: the checks, the row, the agent's own folder when it has no cwd, and
+/// `agent_changed(created)`. `agents.create_from_template` shares it. Returns the new agent's id. Nothing is stored
+/// when a check fails; a folder that cannot be made undoes the row.
+pub(super) fn create_agent(app: &App, mut a: NewAgent, workspace_id: Option<String>) -> Result<String, RpcError> {
+    let store = &app.sup.hub().store;
+    a.avatar = a.avatar.map(clean_avatar).transpose()?;
+    check_capabilities(a.runtime, a.capabilities.as_deref())?;
+    check_integration_ids(store, a.integrations.as_deref())?;
+    // No cwd given: the agent's own folder is its cwd, which only exists once it is created.
+    let own_folder = a.cwd.trim().is_empty();
+    if !own_folder {
+        check_cwd(&a.cwd)?;
+    }
+    check_effort(a.runtime, a.effort)?;
+    check_context_budget(a.context_budget)?;
+    if let Some(fallback) = a.fallback_runtime {
+        check_fallback(a.runtime, Some(fallback))?;
+    }
+    let created = store.agent_create_in(a, workspace_id.as_deref().unwrap_or(SHARED_WORKSPACE))?;
+    let folder = home::ensure_agent_home(&app.agents_root, &created.id, &created.name).and_then(|dir| {
+        store.agent_set_home(&created.id, &dir.display().to_string())?;
+        if own_folder {
+            let cwd = dir.display().to_string();
+            store.agent_update(
+                &created.id,
+                AgentPatch {
+                    cwd: Some(cwd),
+                    ..Default::default()
+                },
+            )?;
+        }
+        Ok(dir)
+    });
+    if let Err(e) = folder {
+        // Without its folder the agent is useless: undo the create.
+        store.agent_delete(&created.id)?;
+        return Err(RpcError::new(
+            SERVER_ERROR,
+            format!("could not create the agent's folder: {e:#}"),
+        ));
+    }
+    app.sup.hub().emit(
+        &created.id,
+        EventBody::AgentChanged {
+            action: AgentChange::Created,
+        },
+    );
+    Ok(created.id)
+}
 
 fn check_cwd(cwd: &str) -> Result<(), RpcError> {
     let p = std::path::Path::new(cwd);
@@ -1044,6 +1117,25 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     if method.starts_with("screen.") {
         return screen::dispatch(app, peer, method, p).await;
     }
+    if method.starts_with("telegram.") {
+        return telegram::dispatch(app, method, p).await;
+    }
+    if matches!(
+        method,
+        "agents.templates"
+            | "agents.create_from_template"
+            | "agents.bundles"
+            | "agents.create_bundle"
+            | "agents.export"
+            | "agents.create_from_shared"
+    ) {
+        // Answered in `templates.rs`, which shares the agent creation of `agents.create`.
+        return templates::dispatch(app, method, p).await;
+    }
+    if method.starts_with("skills.") {
+        // Every `skills.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
+        return skills::dispatch(app, method, p).await;
+    }
     if method.starts_with("workspaces.") {
         // Every `workspaces.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
         return workspaces::dispatch(app, method, p).await;
@@ -1135,6 +1227,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         | "integrations.catalog"
         | "integrations.add"
         | "integrations.update"
+        | "integrations.update_from_template"
         | "integrations.remove"
         | "integrations.test"
         | "integrations.probe"
@@ -1142,7 +1235,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         | "integrations.oauth_complete"
         | "integrations.oauth_cancel"
         | "integrations.oauth_status"
-        | "integrations.oauth_disconnect" => integrations::dispatch(app, peer, method, p).await,
+        | "integrations.oauth_disconnect"
+        | "integrations.tools"
+        | "integrations.call_tool"
+        | "integrations.recommend"
+        | "integrations.calls"
+        | "integrations.call_stats" => integrations::dispatch(app, peer, method, p).await,
         "agents.avatar_image_set" | "agents.avatar_image_get" | "agents.avatar_image_clear" => {
             avatar::dispatch(app, method, p).await
         }
@@ -1154,55 +1252,11 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
         }
         "agents.create" => {
-            let CreateAgent {
-                agent: mut a,
-                workspace_id,
-            } = params(p)?;
-            a.avatar = a.avatar.map(clean_avatar).transpose()?;
-            check_capabilities(a.runtime, a.capabilities.as_deref())?;
-            check_integration_ids(store, a.integrations.as_deref())?;
-            // No cwd given: the agent's own folder is its cwd, which only exists once it is created.
-            let own_folder = a.cwd.trim().is_empty();
-            if !own_folder {
-                check_cwd(&a.cwd)?;
-            }
-            check_effort(a.runtime, a.effort)?;
-            check_context_budget(a.context_budget)?;
-            if let Some(fallback) = a.fallback_runtime {
-                check_fallback(a.runtime, Some(fallback))?;
-            }
-            let created = store.agent_create_in(a, workspace_id.as_deref().unwrap_or(SHARED_WORKSPACE))?;
-            let folder = home::ensure_agent_home(&app.agents_root, &created.id, &created.name).and_then(|dir| {
-                store.agent_set_home(&created.id, &dir.display().to_string())?;
-                if own_folder {
-                    let cwd = dir.display().to_string();
-                    store.agent_update(
-                        &created.id,
-                        AgentPatch {
-                            cwd: Some(cwd),
-                            ..Default::default()
-                        },
-                    )?;
-                }
-                Ok(dir)
-            });
-            if let Err(e) = folder {
-                // Without its folder the agent is useless: undo the create.
-                store.agent_delete(&created.id)?;
-                return Err(RpcError::new(
-                    SERVER_ERROR,
-                    format!("could not create the agent's folder: {e:#}"),
-                ));
-            }
-            app.sup.hub().emit(
-                &created.id,
-                EventBody::AgentChanged {
-                    action: AgentChange::Created,
-                },
-            );
+            let CreateAgent { agent, workspace_id } = params(p)?;
+            let id = create_agent(app, agent, workspace_id)?;
             ok(store
-                .agent_view(&created.id)?
-                .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {}", created.id)))?)
+                .agent_view(&id)?
+                .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
         }
         "agents.update" => {
             let UpdateAgent { id, mut patch } = params(p)?;
@@ -1366,7 +1420,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let Id { id } = params(p)?;
             app.sup.stop(&id).await;
             let deleted = store.agent_delete(&id)?;
-            crate::avatar::remove(&app.data_home, &id);
+            if deleted {
+                crate::avatar::remove(&app.data_home, &id);
+            }
             if deleted {
                 app.sup.hub().emit(
                     &id,
@@ -1383,6 +1439,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 text,
                 reply_to,
                 attachments,
+                mentions,
             } = params(p)?;
             // Files alone are a message: the prompt then says there is no text (see `chat::runtime_text`).
             if text.trim().is_empty() && attachments.is_empty() {
@@ -1414,6 +1471,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     .as_ref()
                     .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no agent {agent_id}")))?;
                 msg.attachments = chat::attachments_for(app, agent, &attachments)?;
+            }
+            if !mentions.is_empty() {
+                msg.mentions = chat::mentions_for(app, agent.as_ref(), &mentions).await?;
             }
             // A paused agent takes the message into its thread and starts nothing: `queued` says so.
             let queued = app.sup.send_held(&agent_id, msg).await?;
@@ -2169,6 +2229,7 @@ mod history_tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
             queued: false,
         }
     }
@@ -3734,6 +3795,15 @@ mod trust_tests {
         "secrets.set",
         "secrets.delete",
         "agents.create",
+        "agents.templates",
+        "agents.create_from_template",
+        "agents.bundles",
+        "agents.create_bundle",
+        "agents.export",
+        "agents.create_from_shared",
+        "skills.export",
+        "skills.install_shared",
+        "skills.own",
         "agents.update",
         "agents.delete",
         "agents.get",
@@ -3741,6 +3811,9 @@ mod trust_tests {
         "agents.send",
         "agents.interrupt",
         "commands.list",
+        "skills.catalog",
+        "skills.install",
+        "skills.remove",
         "workspaces.list",
         "workspaces.create",
         "workspaces.update",
@@ -3768,6 +3841,12 @@ mod trust_tests {
         "backups.create",
         "backups.restore",
         "backups.leave_safe_mode",
+        "telegram.status",
+        "telegram.set_token",
+        "telegram.remove_token",
+        "telegram.link_start",
+        "telegram.unlink",
+        "telegram.update_chat",
     ];
 
     #[tokio::test]
@@ -4007,6 +4086,7 @@ mod pause_and_logs_tests {
                     command: None,
                     reply_to: None,
                     attachments: Vec::new(),
+                    mentions: Vec::new(),
                     queued: false,
                 },
             )
@@ -4024,6 +4104,7 @@ mod pause_and_logs_tests {
                     command: None,
                     reply_to: None,
                     attachments: Vec::new(),
+                    mentions: Vec::new(),
                     queued: false,
                 },
             )

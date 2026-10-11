@@ -27,4 +27,5 @@ jobs:
             ci
             chore
             i18n
+            release
           requireScope: false

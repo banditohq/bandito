@@ -24,6 +24,29 @@ struct MarketView: View {
     @State private var error: UserFacingMessage?
     @State private var editing: IntegrationTarget?
     @State private var removing: Integration?
+    /// The Bots and Skills pages: what the server offers.
+    @State private var bots = BotsMarketModel()
+    @State private var skills = SkillsMarketModel()
+    /// The panel over the page (a bot or a skill), and whether a create or an install in it is running.
+    @State private var panel: MarketPanelState?
+    @State private var panelBusy = false
+    @State private var removingSkill: SkillRemoval?
+    /// Services that an update from the template is running for, by integration id.
+    @State private var updating: Set<String> = []
+    /// "Suited to the project": what the daemon suggested for `recommendedFor`, and a counter that bumps when the person
+    /// closes a row, so the view reads the stored choice again.
+    @State private var recommendations: [IntegrationRecommendation] = []
+    @State private var hideTick = 0
+    /// The "Tools" section of the open service: the tools its last check listed, by integration id, and the ones whose
+    /// mode or words are being saved.
+    @State private var toolLists: [String: [IntegrationTool]] = [:]
+    @State private var toolsSaving: Set<String> = []
+    @State private var toolsError: UserFacingMessage?
+    /// Calls of the last day by service name, for the cards; and the journal of the open service, by name.
+    @State private var callStats: [String: IntegrationCallStats] = [:]
+    @State private var journals: [String: CallJournal] = [:]
+    @State private var journalLoading: Set<String> = []
+    @State private var journalError: UserFacingMessage?
 
     private let columns = [GridItem(.adaptive(minimum: 240), spacing: 14, alignment: .top)]
 
@@ -37,8 +60,51 @@ struct MarketView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.bg)
+        .overlay { panelOverlay }
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: panel)
         .task(id: loadKey) {
             await loadForCurrentServer()
+        }
+        .task(id: "\(loadKey)|\(tab.rawValue)") {
+            await loadTab()
+            openRequestedBot()
+        }
+        .task(id: router.pendingBotTemplate) {
+            openRequestedBot()
+        }
+        .task(id: recommendationKey) {
+            await loadRecommendations()
+        }
+        .task(id: toolsKey) {
+            await loadTools()
+        }
+        .task(id: toolsKey) {
+            await loadOpenJournal()
+        }
+        .onChange(of: tab) { _, _ in
+            query = ""
+            panel = nil
+        }
+        // A pasted `https://bandito.dev/s/<id>` opens the install sheet of that bot or skill, not a search.
+        .onChange(of: query) { _, text in
+            guard let shareID = ShareLogic.shareID(fromLink: text) else { return }
+            query = ""
+            router.sheet = .installShared(shareID: shareID)
+        }
+        .confirmationDialog(
+            L10n.Market.Skill.removeTitle(name: removingSkill?.name ?? ""),
+            isPresented: Binding(get: { removingSkill != nil }, set: { if !$0 { removingSkill = nil } }),
+            titleVisibility: .visible,
+            presenting: removingSkill
+        ) { removal in
+            Button(L10n.Market.Skill.remove, role: .destructive) {
+                Task { await removeSkill(removal) }
+            }
+            Button(L10n.Common.cancel, role: .cancel) {}
+        } message: { removal in
+            Text(removal.target == .everyone
+                ? L10n.Market.Skill.removeMessageEveryone
+                : L10n.Market.Skill.removeMessageAgent(agent: removal.place))
         }
         .onChange(of: app.oauth.phase) { _, phase in
             if case .connected(_, let id) = phase { Task { await signedIn(id) } }
@@ -80,13 +146,22 @@ struct MarketView: View {
         "\(server?.id.uuidString ?? "")|\(server?.info != nil)"
     }
 
+    /// The pages this server offers, and the one in front.
+    private var availableTabs: [MarketTab] {
+        MarketTab.available { server?.supports($0) ?? false }
+    }
+
+    private var tab: MarketTab {
+        MarketTab.effective(router.marketTab, available: availableTabs)
+    }
+
     private var page: some View {
         let supported = server?.supports("integrations") ?? false
         let entries = MarketLogic.entries(
             catalog: catalog, integrations: integrations, languageCode: ModelDescription.currentLanguageCode)
         let shown = MarketLogic.page(entries, filter: router.marketFilter, query: query)
         let empty = MarketLogic.emptyState(shown, filter: router.marketFilter, query: query)
-        if supported, let open = MarketLogic.entry(withID: router.marketDetail, in: entries) {
+        if tab == .services, supported, let open = MarketLogic.entry(withID: router.marketDetail, in: entries) {
             return AnyView(detailPage(open))
         }
         return AnyView(listPage(supported: supported, shown: shown, empty: empty))
@@ -107,7 +182,142 @@ struct MarketView: View {
             onRemove: { removing = entry.integration },
             onSetEnabled: { on in
                 if let integration = entry.integration { Task { await setEnabled(integration, on) } }
-            })
+            },
+            tools: toolsInput(for: entry),
+            journal: journalInput(for: entry))
+    }
+
+    // MARK: - call journal
+
+    private func journalInput(for entry: MarketEntry) -> JournalSectionInput? {
+        guard let integration = entry.integration, server?.supports("integrations_calls") == true else { return nil }
+        return JournalSectionInput(
+            journal: journals[integration.name] ?? CallJournal(),
+            loading: journalLoading.contains(integration.name),
+            error: journalError,
+            agents: server?.agents ?? [],
+            server: server,
+            onMore: { Task { await loadJournal(integration.name, older: true) } })
+    }
+
+    /// Reads a page of the service's calls: the newest, or the one after the rows read.
+    private func loadJournal(_ name: String, older: Bool) async {
+        guard let server, server.supports("integrations_calls"), !journalLoading.contains(name) else { return }
+        let before = older ? journals[name]?.cursor : nil
+        if older && before == nil { return }
+        journalLoading.insert(name)
+        defer { journalLoading.remove(name) }
+        do {
+            let page = try await server.toolCalls(integration: name, limit: CallJournal.pageSize, before: before)
+            guard !Task.isCancelled else { return }
+            var journal = journals[name] ?? CallJournal()
+            if older { journal.append(page) } else { journal.replace(with: page) }
+            journals[name] = journal
+            journalError = nil
+        } catch {
+            guard !Task.isCancelled else { return }
+            journalError = UserFacingError.message(for: error)
+        }
+    }
+
+    /// How much each service was used in the last day; a failed ask leaves the cards without the line.
+    private func reloadCallStats(of server: ServerModel) async {
+        guard server.supports("integrations_calls") else {
+            callStats = [:]
+            return
+        }
+        if let list = try? await server.toolCallStats() {
+            callStats = Dictionary(list.map { ($0.integration, $0) }, uniquingKeysWith: { first, _ in first })
+        }
+    }
+
+    // MARK: - tool permissions
+
+    /// The "Tools" section of a connected service, when the server can limit tools.
+    private func toolsInput(for entry: MarketEntry) -> ToolsSectionInput? {
+        guard let integration = entry.integration, server?.supports("tool_permissions") == true else { return nil }
+        return ToolsSectionInput(
+            tools: toolLists[integration.id] ?? [],
+            saving: toolsSaving.contains(integration.id),
+            error: toolsError,
+            unreached: ToolPermissionLogic.unreachedAgents(server?.agents ?? [], for: integration),
+            onMode: { mode in
+                guard mode != integration.toolMode else { return }
+                Task { await saveTools(integration, IntegrationPatch(toolMode: mode)) }
+            },
+            onWord: { tool, word in
+                let words = ToolPermissionLogic.overrides(
+                    setting: word, for: tool, mode: integration.toolMode, current: integration.toolOverrides)
+                guard words != integration.toolOverrides else { return }
+                Task { await saveTools(integration, IntegrationPatch(toolOverrides: words)) }
+            },
+            onCheck: { Task { await check(integration.id) } },
+            serviceName: entry.name,
+            serviceOn: integration.enabled,
+            onTry: server?.supports("integrations_call_tool") == true
+                ? { tool, arguments in await tryTool(integration, tool, arguments) } : nil)
+    }
+
+    /// Runs a tool for the owner and gives back its answer, or the words for why the call did not go through.
+    private func tryTool(_ integration: Integration, _ tool: IntegrationTool, _ arguments: JSONValue) async -> ToolTryOutcome {
+        guard let server else { return .failure(UserFacingMessage(text: L10n.Failure.noAnswer)) }
+        do {
+            return .answer(try await server.callTool(integration.id, tool: tool.name, arguments: arguments))
+        } catch {
+            return .failure(ToolTryFailure.message(for: error))
+        }
+    }
+
+    /// The open service's id when its page is open on a server that limits tools: what the section is loaded for.
+    private var toolsKey: String {
+        let open = MarketLogic.entry(withID: router.marketDetail, in: openEntries)?.integration?.id ?? ""
+        return "\(loadKey)|\(tab.rawValue)|\(open)"
+    }
+
+    private var openEntries: [MarketEntry] {
+        MarketLogic.entries(catalog: catalog, integrations: integrations, languageCode: ModelDescription.currentLanguageCode)
+    }
+
+    private func loadTools() async {
+        guard let server, tab == .services, server.supports("tool_permissions"),
+            let integration = MarketLogic.entry(withID: router.marketDetail, in: openEntries)?.integration
+        else { return }
+        await reloadTools(integration.id, from: server)
+    }
+
+    /// The journal of the open service, read when its page opens.
+    private func loadOpenJournal() async {
+        guard let server, tab == .services, server.supports("integrations_calls"),
+            let name = MarketLogic.entry(withID: router.marketDetail, in: openEntries)?.integration?.name
+        else { return }
+        await loadJournal(name, older: false)
+    }
+
+    private func reloadTools(_ id: String, from server: ServerModel) async {
+        do {
+            let list = try await server.integrationTools(id)
+            guard !Task.isCancelled else { return }
+            toolLists[id] = list
+            toolsError = nil
+        } catch {
+            // A daemon that does not list tools yet leaves the section with its "check the service" line.
+            guard !Task.isCancelled else { return }
+            toolLists[id] = toolLists[id] ?? []
+        }
+    }
+
+    /// Saves the mode or the words of one service. The controls wait for the answer; the list is read again.
+    private func saveTools(_ integration: Integration, _ patch: IntegrationPatch) async {
+        guard let server, !toolsSaving.contains(integration.id) else { return }
+        toolsSaving.insert(integration.id)
+        defer { toolsSaving.remove(integration.id) }
+        do {
+            try await server.updateIntegration(integration.id, patch: patch)
+            toolsError = nil
+            await reload()
+        } catch {
+            toolsError = UserFacingError.message(for: error)
+        }
     }
 
     private func listPage(supported: Bool, shown: MarketPage, empty: MarketEmptyState?) -> some View {
@@ -115,11 +325,16 @@ struct MarketView: View {
             header(supported: supported)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if supported {
+                    if tab == .bots {
+                        botsContent
+                    } else if tab == .skills {
+                        skillsContent
+                    } else if supported {
                         if !shown.connected.isEmpty {
                             SectionLabel(L10n.Integrations.connected)
                             connectedRow(shown.connected)
                         }
+                        recommendationRow
                         SectionLabel(L10n.Integrations.catalog)
                         if !shown.grid.isEmpty {
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
@@ -149,27 +364,89 @@ struct MarketView: View {
     }
 
     private func header(supported: Bool) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.Mode.market)
-                    .font(BanditoFont.display(size: 24, weight: 600))
-                    .foregroundStyle(Color.Bandito.text)
-                    // Unbounded is wide: in a narrow window the title shrinks instead of breaking inside the word.
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .layoutPriority(1)
-                Text(L10n.Market.subtitle)
-                    .font(BanditoFont.text(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .lineLimit(1)
+        let tabs = availableTabs
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.Mode.market)
+                        .font(BanditoFont.display(size: 24, weight: 600))
+                        .foregroundStyle(Color.Bandito.text)
+                        // Unbounded is wide: in a narrow window the title shrinks instead of breaking inside the word.
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .layoutPriority(1)
+                    Text(subtitle)
+                        .font(BanditoFont.text(size: 13, weight: 400))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 12)
+                if tabs.count == 1, supported {
+                    // A server with only services keeps the one-row header.
+                    searchField
+                    addOwnButton
+                    mySharesButton
+                }
             }
-            Spacer(minLength: 12)
-            if supported {
-                searchField
-                Button(L10n.Integrations.addOwn) { editing = .custom }
-                    .banditoButton(.quiet())
+            if tabs.count > 1 {
+                HStack(alignment: .center, spacing: 12) {
+                    SegmentedPicker(
+                        selection: Binding(
+                            get: { tab },
+                            set: { chosen in
+                                guard chosen != router.marketTab else { return }
+                                router.marketTab = chosen
+                                router.marketDetail = nil
+                                MarketTabStore.save(chosen)
+                            }),
+                        options: tabs.map { ($0, $0.title) }
+                    )
                     .fixedSize()
+                    Spacer(minLength: 12)
+                    if tab != .services || supported {
+                        searchField
+                    }
+                    if tab == .services, supported {
+                        addOwnButton
+                    }
+                    mySharesButton
+                }
             }
+        }
+    }
+
+    private var subtitle: String {
+        switch tab {
+        case .services: L10n.Market.subtitle
+        case .bots: L10n.Market.Bots.subtitle
+        case .skills: L10n.Market.Skills.subtitle
+        }
+    }
+
+    /// The server has the `sharing` feature: bots and skills can be published, and the list of one's shares exists.
+    private var sharingSupported: Bool {
+        server?.supports("sharing") ?? false
+    }
+
+    /// The account's own shares (bots and skills published as links). Shown only where sharing is supported. One
+    /// placement: beside the action buttons of the header's second row (or the one row of a services-only server).
+    @ViewBuilder
+    private var mySharesButton: some View {
+        if sharingSupported {
+            Button(L10n.Share.Mine.title) { router.sheet = .myShares }
+                .banditoButton(.quiet())
+                .fixedSize()
+        }
+    }
+
+    private var addOwnButton: some View {
+        HStack(spacing: 8) {
+            Button(L10n.ClaudeImport.title) { router.sheet = .importer }
+                .banditoButton(.quiet())
+                .fixedSize()
+            Button(L10n.Integrations.addOwn) { editing = .custom }
+                .banditoButton(.quiet())
+                .fixedSize()
         }
     }
 
@@ -198,6 +475,170 @@ struct MarketView: View {
             .font(BanditoFont.text(size: 13, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
             .padding(.vertical, 6)
+    }
+
+    // MARK: - bots and skills
+
+    private var languageCode: String { ModelDescription.currentLanguageCode }
+
+    @ViewBuilder
+    private var botsContent: some View {
+        BotsPage(
+            model: bots, catalog: catalog, integrations: integrations, query: query, languageCode: languageCode,
+            agents: server?.agents ?? [], canShare: sharingSupported,
+            onView: { panel = .botDetail($0.id) },
+            onCreate: { panel = .botCreate($0.id) },
+            onViewBundle: { panel = .bundle($0.id) },
+            onOpen: { agent in
+                guard let server else { return }
+                router.selectAgent(agent.id, on: server)
+                router.select(mode: .team)
+            },
+            onRetry: { if let server { Task { await bots.load(from: server, force: true) } } })
+        if let error {
+            UserFacingErrorView(message: error)
+        }
+    }
+
+    @ViewBuilder
+    private var skillsContent: some View {
+        SkillsPage(
+            model: skills, query: query, languageCode: languageCode, agents: server?.agents ?? [],
+            onView: { panel = .skillDetail($0.id) },
+            onInstall: { panel = .skillInstall($0.id) },
+            onRemoveEverywhere: { removingSkill = SkillRemoval(skill: $0, target: .everyone, place: "") },
+            onUpdate: { skill in Task { await updateSkill(skill, targets: SkillLogic.updateTargets(skill)) } },
+            onRetry: { if let server { Task { await skills.load(from: server) } } },
+            onShare: { skill in router.sheet = .share(.skill(name: skill.name)) })
+        if let error {
+            UserFacingErrorView(message: error)
+        }
+    }
+
+    private func closePanel() {
+        guard !panelBusy else { return }
+        panel = nil
+    }
+
+    /// The panel over the page, if one is open: a bot's page or its create sheet, a skill's page or its install sheet.
+    /// A panel whose bot or skill is gone (the server changed, the catalog reloaded) closes with the lookup failing.
+    @ViewBuilder
+    private var panelOverlay: some View {
+        if let server, let panel {
+            switch panel {
+            case .botDetail(let id):
+                if let template = bots.templates.first(where: { $0.id == id }) {
+                    MarketPanel(width: 580, canClose: !panelBusy, onClose: closePanel) {
+                        BotDetailPanel(
+                            template: template, services: botServices(template),
+                            skillNames: Dictionary(skills.skills.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first }),
+                            languageCode: languageCode,
+                            onClose: closePanel, onCreate: { self.panel = .botCreate(id) },
+                            onConnect: { connect($0) })
+                    }
+                    .transition(.opacity)
+                }
+            case .botCreate(let id):
+                if let template = bots.templates.first(where: { $0.id == id }) {
+                    MarketPanel(width: 540, canClose: !panelBusy, onClose: closePanel) {
+                        BotCreatePanel(
+                            template: template, server: server, services: botServices(template),
+                            languageCode: languageCode, creating: $panelBusy,
+                            onClose: closePanel, onConnect: { connect($0) })
+                        .id(template.id)
+                    }
+                    .transition(.opacity)
+                }
+            case .bundle(let id):
+                if let bundle = bots.bundles.first(where: { $0.id == id }) {
+                    MarketPanel(width: 580, canClose: !panelBusy, onClose: closePanel) {
+                        BundlePanel(
+                            bundle: bundle, members: BundleLogic.members(of: bundle, templates: bots.templates),
+                            services: BundleLogic.services(
+                                of: bundle, templates: bots.templates, catalog: catalog, integrations: integrations),
+                            server: server, languageCode: languageCode, creating: $panelBusy,
+                            onClose: closePanel, onConnect: { connect($0) })
+                        .id(bundle.id)
+                    }
+                    .transition(.opacity)
+                }
+            case .skillDetail(let id):
+                if let skill = skills.skills.first(where: { $0.id == id }) {
+                    MarketPanel(width: 580, canClose: !panelBusy, onClose: closePanel) {
+                        SkillDetailPanel(
+                            skill: skill, agents: server.agents, languageCode: languageCode, busy: skills.busy,
+                            onClose: closePanel, onInstall: { self.panel = .skillInstall(id) },
+                            onRemove: { target in
+                                removingSkill = SkillRemoval(
+                                    skill: skill, target: target,
+                                    place: { if case .agent(let agent) = target { SkillLogic.agentName(agent, agents: server.agents) } else { "" } }())
+                            },
+                            onUpdate: { target in Task { await updateSkill(skill, targets: [target]) } })
+                    }
+                    .transition(.opacity)
+                }
+            case .skillInstall(let id):
+                if let skill = skills.skills.first(where: { $0.id == id }) {
+                    MarketPanel(width: 500, canClose: !panelBusy, onClose: closePanel) {
+                        SkillInstallPanel(
+                            skill: skill, agents: server.agents, installing: $panelBusy,
+                            onInstall: { target in
+                                await skills.change(skill.id, target: target, install: true, on: server)
+                            },
+                            onClose: closePanel)
+                        .id(skill.id)
+                    }
+                    .transition(.opacity)
+                }
+            }
+        }
+    }
+
+    private func botServices(_ template: BotTemplate) -> [BotLogic.Service] {
+        BotLogic.services(of: template, catalog: catalog, integrations: integrations)
+    }
+
+    private func removeSkill(_ removal: SkillRemoval) async {
+        guard let server else { return }
+        if let failure = await skills.change(removal.skill.id, target: removal.target, install: false, on: server) {
+            error = SkillText.message(for: failure)
+        } else {
+            error = nil
+        }
+    }
+
+    /// The Team home asked for a bot's create panel: it opens once the Bots page has the templates. The request is
+    /// taken once; a template the catalog does not list is dropped.
+    private func openRequestedBot() {
+        guard tab == .bots, server == nil || bots.loaded || bots.failure != nil,
+            let id = router.takePendingBotTemplate()
+        else { return }
+        guard server != nil, bots.templates.contains(where: { $0.id == id }) else { return }
+        panel = .botCreate(id)
+    }
+
+    /// Reads what the open page needs: the bot templates (and the skill names they point to), or the skills.
+    private func loadTab() async {
+        guard let server, server.info != nil else { return }
+        switch tab {
+        case .services:
+            break
+        case .bots:
+            await bots.load(from: server)
+            if server.supports("skills") { await skills.load(from: server) }
+            let categories = BotLogic.categories(in: bots.templates)
+            if router.marketBotCategories != categories { router.marketBotCategories = categories }
+            if case .category(let name) = router.marketBotFilter, !categories.contains(name) {
+                router.marketBotFilter = .all
+            }
+        case .skills:
+            await skills.load(from: server)
+            let categories = SkillLogic.categories(in: skills.skills)
+            if router.marketSkillCategories != categories { router.marketSkillCategories = categories }
+            if case .category(let name) = router.marketSkillFilter, !categories.contains(name) {
+                router.marketSkillFilter = .all
+            }
+        }
     }
 
     // MARK: - cards
@@ -240,6 +681,15 @@ struct MarketView: View {
                     menu(integration)
                 }
                 statusLine(status)
+                if let line = CallJournalText.statsLine(callStats[integration.name]) {
+                    Text(line)
+                        .font(BanditoFont.text(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                }
+                if let update = integration.templateUpdate {
+                    updateLine(integration, update)
+                }
                 if status == .needsLogin {
                     Button(L10n.Integrations.Oauth.signInAgain) { signInAgain(integration) }
                         .banditoButton(.quiet())
@@ -258,6 +708,29 @@ struct MarketView: View {
             .frame(width: 300, alignment: .topLeading)
         }
         .onTapGesture { router.marketDetail = entry.id }
+    }
+
+    /// "Update available · 1.2 → 1.3" and Update: the catalog's definition of this service moved on.
+    private func updateLine(_ integration: Integration, _ update: TemplateUpdate) -> some View {
+        let working = updating.contains(integration.id)
+        return HStack(spacing: 8) {
+            Label {
+                Text(UpdateLine(update).text)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            } icon: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+            }
+            .font(BanditoFont.text(size: 12, weight: 500))
+            .foregroundStyle(Color.Bandito.info)
+            Spacer(minLength: 4)
+            Button(working ? L10n.Market.Update.updating : L10n.Market.Update.button) {
+                Task { await updateFromTemplate(integration) }
+            }
+            .banditoButton(.quiet())
+            .disabled(working)
+            .fixedSize()
+        }
     }
 
     private func menu(_ integration: Integration) -> some View {
@@ -328,7 +801,7 @@ struct MarketView: View {
     private func cardActions(_ entry: MarketEntry) -> some View {
         if let integration = entry.integration {
             Label {
-                Text(L10n.Integrations.connected)
+                Text(L10n.Integrations.Oauth.connected)
             } icon: {
                 Image(systemName: "checkmark")
             }
@@ -357,6 +830,24 @@ struct MarketView: View {
             catalog = []
             router.marketCategories = []
             router.marketDetail = nil
+            router.marketBotCategories = []
+            router.marketSkillCategories = []
+            router.marketBotFilter = .all
+            router.marketSkillFilter = .all
+            bots.reset()
+            skills.reset()
+            recommendations = []
+            updating = []
+            toolLists = [:]
+            toolsSaving = []
+            toolsError = nil
+            callStats = [:]
+            journals = [:]
+            journalLoading = []
+            journalError = nil
+            panel = nil
+            panelBusy = false
+            removingSkill = nil
             tests = [:]
             checking = []
             connections = [:]
@@ -370,6 +861,7 @@ struct MarketView: View {
         do {
             integrations = try await server.integrations()
             await reloadConnections(of: server)
+            await reloadCallStats(of: server)
             if catalog.isEmpty {
                 catalog = try await server.integrationCatalog()
                 router.marketCategories = MarketCategory.present(in: catalog)
@@ -423,6 +915,105 @@ struct MarketView: View {
         await check(id)
     }
 
+    /// Brings a connected service up to its catalog template. The last check no longer says anything about the new
+    /// definition, so it is dropped; the list is read again.
+    private func updateFromTemplate(_ integration: Integration) async {
+        guard let server, !updating.contains(integration.id) else { return }
+        updating.insert(integration.id)
+        defer { updating.remove(integration.id) }
+        do {
+            try await server.updateIntegrationFromTemplate(integration.id)
+            tests[integration.id] = nil
+            await reload()
+        } catch {
+            self.error = UserFacingError.message(for: error)
+        }
+    }
+
+    /// Updates a skill in each place it is behind: the same install, in the same scope.
+    private func updateSkill(_ skill: SkillEntry, targets: [SkillLogic.Target]) async {
+        guard let server else { return }
+        for target in targets {
+            if let failure = await skills.change(skill.id, target: target, install: true, on: server) {
+                error = SkillText.message(for: failure)
+                return
+            }
+        }
+        error = nil
+    }
+
+    // MARK: - suggestions
+
+    /// The agent the row of suggestions is for, when the server can suggest and there is one.
+    private var recommendationAgent: Agent? {
+        guard tab == .services, let server, server.supports("integrations"), server.supports("integrations_recommend")
+        else { return nil }
+        return RecommendationLogic.agent(
+            selected: router.selectedAgentID, remembered: LastOpenedAgent.load(serverID: server.id.uuidString),
+            agents: server.agents)
+    }
+
+    /// Asks again when the server, the agent or the connected services change (a connected service leaves the list).
+    private var recommendationKey: String {
+        "\(loadKey)|\(recommendationAgent?.id ?? "")|\(integrations.map(\.id).joined(separator: ","))"
+    }
+
+    private func isRecommendationHidden(_ agent: Agent) -> Bool {
+        _ = hideTick
+        guard let server else { return true }
+        return RecommendationStore.isHidden(server: server.id.uuidString, agent: agent.id)
+    }
+
+    private func loadRecommendations() async {
+        guard let server, let agent = recommendationAgent, !isRecommendationHidden(agent) else {
+            if !recommendations.isEmpty { recommendations = [] }
+            return
+        }
+        do {
+            let list = try await server.recommendedIntegrations(agentID: agent.id)
+            guard !Task.isCancelled, recommendationAgent?.id == agent.id else { return }
+            recommendations = list
+        } catch {
+            // The row is a hint: a failed ask just leaves it out.
+            guard !Task.isCancelled else { return }
+            recommendations = []
+        }
+    }
+
+    /// "Suited to <agent>'s project": up to six services, shown over the catalog under All with no search.
+    @ViewBuilder
+    private var recommendationRow: some View {
+        if router.marketFilter == .all, query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            let server, let agent = recommendationAgent, !isRecommendationHidden(agent)
+        {
+            let items = RecommendationLogic.items(recommendations, catalog: catalog, integrations: integrations)
+            if !items.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        SectionLabel(L10n.Market.Recommend.title(agent: agent.name))
+                        Spacer(minLength: 8)
+                        Button {
+                            RecommendationStore.hide(server: server.id.uuidString, agent: agent.id)
+                            hideTick += 1
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .banditoButton(.icon(size: 24, label: L10n.Market.Recommend.hide))
+                    }
+                    ScrollView(.horizontal) {
+                        HStack(alignment: .top, spacing: 12) {
+                            ForEach(items) { item in
+                                RecommendationCard(item: item, onConnect: { connect(item.template) })
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .scrollIndicators(.never)
+                }
+            }
+        }
+    }
+
     private func setEnabled(_ integration: Integration, _ on: Bool) async {
         guard let server else { return }
         do {
@@ -440,6 +1031,7 @@ struct MarketView: View {
         do {
             let result = try await server.testIntegration(id)
             tests[id] = result
+            if server.supports("tool_permissions") { await reloadTools(id, from: server) }
             if result.needsLogin { await reloadConnections(of: server) }
         } catch {
             self.error = UserFacingError.message(for: error)
@@ -459,7 +1051,7 @@ struct MarketView: View {
 }
 
 /// The surface of a Marketplace card: the Bandito surface with a hairline border, lighter while the pointer is on it.
-private struct MarketCardFrame<Content: View>: View {
+struct MarketCardFrame<Content: View>: View {
     @ViewBuilder var content: Content
     @State private var hovering = false
 
@@ -508,9 +1100,7 @@ struct MarketTile: View {
     var glow = false
 
     var body: some View {
-        let base = MarketTileStyle.color(of: entry)
-        let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-        Group {
+        MarketTileSurface(color: MarketTileStyle.color(of: entry), size: size, glow: glow) {
             if let template = entry.template {
                 if let logo = ServiceLogo.image(for: template.id) {
                     Image(nsImage: logo)
@@ -527,21 +1117,36 @@ struct MarketTile: View {
                     .font(BanditoFont.display(size: size * 0.42, weight: 700))
             }
         }
-        .foregroundStyle(.white)
-        .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
-        .frame(width: size, height: size)
-        .background(
-            shape.fill(base).overlay(
-                shape.fill(
+    }
+}
+
+/// The look of every Marketplace tile (a service, a bot, a skill): a rounded square in one colour with a soft vertical
+/// gradient (lighter on top), a thin highlight on the upper edge, and a white symbol. With `glow` it casts a soft
+/// shadow of its colour.
+struct MarketTileSurface<Content: View>: View {
+    let color: Color
+    let size: CGFloat
+    var glow = false
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+        content
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+            .frame(width: size, height: size)
+            .background(
+                shape.fill(color).overlay(
+                    shape.fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.24), .clear, .black.opacity(0.14)],
+                            startPoint: .top, endPoint: .bottom))))
+            .overlay(
+                shape.strokeBorder(
                     LinearGradient(
-                        colors: [.white.opacity(0.24), .clear, .black.opacity(0.14)],
-                        startPoint: .top, endPoint: .bottom))))
-        .overlay(
-            shape.strokeBorder(
-                LinearGradient(
-                    colors: [.white.opacity(0.45), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom),
-                lineWidth: 1))
-        .shadow(color: glow ? base.opacity(0.35) : .clear, radius: 16, y: 6)
+                        colors: [.white.opacity(0.45), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom),
+                    lineWidth: 1))
+            .shadow(color: glow ? color.opacity(0.35) : .clear, radius: 16, y: 6)
     }
 }
 
@@ -597,21 +1202,55 @@ struct IntegrationStatusLine: View {
     }
 }
 
-/// Sidebar of the Marketplace: All, Connected, and the categories of the catalog. Picking one sets
-/// `Router.marketFilter` and leaves the page of a service.
+/// Sidebar of the Marketplace. Each page has its own rows: services have All, Connected and the categories; bots have
+/// All and the categories; skills have All, Installed and the categories. Picking one sets the page's filter in
+/// `Router` and leaves the page of a service.
 struct MarketSidebar: View {
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
+
+    private var tab: MarketTab {
+        let server = app.currentServer
+        return MarketTab.effective(
+            router.marketTab, available: MarketTab.available { server?.supports($0) ?? false })
+    }
+
+    private var categories: [String] {
+        switch tab {
+        case .services: router.marketCategories
+        case .bots: router.marketBotCategories
+        case .skills: router.marketSkillCategories
+        }
+    }
+
+    private var current: MarketFilter {
+        switch tab {
+        case .services: router.marketFilter
+        case .bots: router.marketBotFilter
+        case .skills: router.marketSkillFilter
+        }
+    }
+
+    private func choose(_ filter: MarketFilter) {
+        switch tab {
+        case .services: router.marketFilter = filter
+        case .bots: router.marketBotFilter = filter
+        case .skills: router.marketSkillFilter = filter
+        }
+        router.marketDetail = nil
+    }
 
     var body: some View {
+        let rows = tab.filterRows(categories: categories)
+        let firstCategory = rows.first { if case .category = $0 { true } else { false } }
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(MarketFilter.rows(categories: router.marketCategories)) { filter in
-                let selected = router.marketFilter == filter
-                if case .category(let name) = filter, name == router.marketCategories.first {
+            ForEach(rows) { filter in
+                let selected = current == filter
+                if filter == firstCategory {
                     Divider().padding(.vertical, 6).padding(.horizontal, 10)
                 }
                 Button {
-                    router.marketFilter = filter
-                    router.marketDetail = nil
+                    choose(filter)
                 } label: {
                     Text(filter.title)
                         .font(BanditoFont.text(size: 13, weight: selected ? 600 : 400))
@@ -625,6 +1264,7 @@ struct MarketSidebar: View {
                         .contentShape(Rectangle())
                 }
                 .banditoButton(.row(cornerRadius: 9))
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
             Spacer(minLength: 0)
         }

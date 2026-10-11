@@ -69,7 +69,7 @@ public struct LastMessage: Codable, Sendable, Hashable {
     /// and nothing but user and assistant messages counts. Nil for any other event.
     init?(event e: Event) {
         switch e.body {
-        case .messageUser(let text, let source, _, _, _, _) where source != .system:
+        case .messageUser(let text, let source, _, _, _, _, _) where source != .system:
             self.init(role: "user", text: Self.cut(text), ts: e.ts)
         case .messageAssistant(let text):
             self.init(role: "assistant", text: Self.cut(text), ts: e.ts)
@@ -153,6 +153,9 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     /// The main agent of the server: the one that hands out work to the others (`lead`, feature `lead`). One per
     /// server. A daemon without the feature sends none, and the agent is then not main.
     public var lead: Bool
+    /// The agent template this bot was made from (`agents.create_from_template`); `nil` for an agent made by hand, and
+    /// for a daemon that does not send the field. Read only: the app never sends it.
+    public var templateId: String?
     /// The newest user or assistant message; `nil` when there is none, or when the daemon predates the field.
     public var lastMessage: LastMessage?
     /// The status from the agent's newest `agent.status` event; `nil` before any, or when the daemon predates the field.
@@ -188,8 +191,10 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         avatar: AvatarSpec? = nil,
         capabilities: [String]? = nil,
         integrations: [String]? = nil,
-        lead: Bool = false
+        lead: Bool = false,
+        templateId: String? = nil
     ) {
+        self.templateId = templateId
         self.lead = lead
         self.avatar = avatar
         self.capabilities = capabilities
@@ -257,6 +262,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         capabilities = try c.decodeIfPresent([String].self, forKey: .capabilities)
         integrations = try c.decodeIfPresent([String].self, forKey: .integrations)
         lead = try c.decodeIfPresent(Bool.self, forKey: .lead) ?? false
+        templateId = try c.decodeIfPresent(String.self, forKey: .templateId)
         status = try c.decodeIfPresent(AgentStatus.self, forKey: .status)
         pendingApprovals = try c.decodeIfPresent(Int.self, forKey: .pendingApprovals) ?? 0
         pendingApprovalIds = Set(try c.decodeIfPresent([String].self, forKey: .pendingApprovalIds) ?? [])
@@ -407,10 +413,11 @@ public enum EventBody: Sendable, Hashable {
     /// began (it waited). Nil when the message comes right after this event.
     case turnStarted(turnId: String, source: MessageSource, messageSeq: Int64? = nil)
     /// `replyTo` is the `seq` of the message this one answers; `attachments` are the files it carries. `queued`: shown
-    /// while it still waits for its turn (the agent was busy, saving its memory, or paused).
+    /// while it still waits for its turn (the agent was busy, saving its memory, or paused). `mentions`: the `@` mentions
+    /// in the text (feature `mentions`).
     case messageUser(
         text: String, source: MessageSource, fromAgent: String?, replyTo: Int64? = nil,
-        attachments: [AgentAttachment] = [], queued: Bool = false)
+        attachments: [AgentAttachment] = [], queued: Bool = false, mentions: [Mention] = [])
     /// A message shown as waiting (`queued`) will not get a turn (`reason`: crash, stopped, failed, restart).
     case messageDropped(seq: Int64, reason: String)
     case messageAssistant(text: String)
@@ -440,6 +447,8 @@ public enum EventBody: Sendable, Hashable {
     case formAnswered(formId: String, action: FormAction, values: [String: JSONValue]?, comment: String?)
     /// A reaction on the message with that `seq`; no `emoji` means it was taken off.
     case reaction(seq: Int64, emoji: String?, by: ReactionBy)
+    /// The Telegram bot or its linked chats changed (`telegram.changed`, no data). Read `telegram.status` again.
+    case telegramChanged
     /// A kind this app version doesn't know yet. Shown as nothing; kept for forward compatibility.
     case unknown(kind: String)
 }
@@ -469,7 +478,7 @@ extension Event: Decodable {
     private struct MessageDroppedP: Decodable { var seq: Int64; var reason: String }
     private struct MessageUserP: Decodable {
         var text: String; var source: MessageSource; var fromAgent: String?
-        var replyTo: Int64?; var attachments: [AgentAttachment]?; var queued: Bool?
+        var replyTo: Int64?; var attachments: [AgentAttachment]?; var queued: Bool?; var mentions: [Mention]?
     }
     private struct FormRequestedP: Decodable {
         var formId: String
@@ -520,7 +529,7 @@ extension Event: Decodable {
             let x = try p(MessageUserP.self)
             body = .messageUser(
                 text: x.text, source: x.source, fromAgent: x.fromAgent, replyTo: x.replyTo,
-                attachments: x.attachments ?? [], queued: x.queued ?? false)
+                attachments: x.attachments ?? [], queued: x.queued ?? false, mentions: x.mentions ?? [])
         case "message.dropped":
             let x = try p(MessageDroppedP.self); body = .messageDropped(seq: x.seq, reason: x.reason)
         case "message.assistant": body = .messageAssistant(text: try p(TextP.self).text)
@@ -569,6 +578,7 @@ extension Event: Decodable {
             body = .formAnswered(formId: x.formId, action: x.action, values: x.values, comment: x.comment)
         case "reaction":
             let x = try p(ReactionP.self); body = .reaction(seq: x.seq, emoji: x.emoji, by: x.by)
+        case "telegram.changed": body = .telegramChanged
         default: body = .unknown(kind: kind)
         }
     }
