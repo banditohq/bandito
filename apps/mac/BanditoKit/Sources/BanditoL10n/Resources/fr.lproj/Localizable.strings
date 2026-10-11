@@ -2395,6 +2395,7 @@
 "thread.hintSearch" = "⌘K rechercher";
 "thread.hintSend" = "↵ envoyer";
 "thread.hintStop" = "⌘. arrêter";
+"thread.jumpMany" = "99+ nouveaux";
 "thread.jumpToLatest" = "Aller au dernier message";
 "thread.link.fileHelp" = "S'ouvre dans le panneau · ⌥-clic l'affiche dans Fichiers";
 "thread.link.urlHelp" = "S'ouvre dans le panneau du navigateur · ⌘-clic dans votre navigateur";

@@ -17,6 +17,8 @@ struct ThreadView: View {
 
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
     @State private var sendError: UserFacingMessage?
     /// Failures of interrupt, approval and history loading.
     @State private var actionError: UserFacingMessage?
@@ -197,8 +199,18 @@ struct ThreadView: View {
     private func scrollGeometryChanged(_ old: ThreadScrollMetrics?, _ new: ThreadScrollMetrics, _ proxy: ScrollViewProxy) {
         if let old, old.offset != new.offset { ThreadScrollActivity.noteMove() }
         // After a send the thread follows the bottom until the person scrolls up themselves.
-        if scroll.sendPinned, let old, ThreadScroll.leavesBottom(old: old, new: new) { scroll.sendPinned = false }
-        let flags = ThreadScroll.flags(was: atBottom, old: old, new: new, pinned: scroll.sendPinned)
+        // A layout settling (rows rising in, the composer changing height) does not end it; the person's own scroll
+        // up does (see `ThreadFollowRules`).
+        if scroll.sendPinned, let old {
+            scroll.sendPinned = ThreadFollowRules.holds(
+                pinned: true, leavesBottom: ThreadScroll.leavesBottom(old: old, new: new), distance: new.distance,
+                secondsSinceSend: ProcessInfo.processInfo.systemUptime - scroll.sendPinnedAt)
+        }
+        // While the follow holds the thread is at the bottom by definition: the "down" button stays away.
+        let flags =
+            scroll.sendPinned
+            ? (atBottom: true, jump: false)
+            : ThreadScroll.flags(was: atBottom, old: old, new: new, pinned: false)
         setAtBottom(flags.atBottom)
         setJumpVisible(flags.jump)
         if ThreadScroll.shouldFollow(atBottom: flags.atBottom, old: old, new: new) { followBottom(proxy) }
@@ -226,47 +238,50 @@ struct ThreadView: View {
         scroll.skipFollow = false
         setAtBottom(true)
         setJumpVisible(false)
-        withAnimation(.easeOut(duration: 0.15)) {
-            proxy.scrollTo(ThreadScroll.bottomID, anchor: .bottom)
+        scrollToBottomSmoothly(proxy)
+    }
+
+    /// Whether motion is dropped (Reduce Motion, or "Off" in Settings).
+    private var motionReduced: Bool {
+        MotionLevel(stored: motionLevel).reducesMotion(systemReduceMotion: reduceMotion)
+    }
+
+    /// Slides the thread to its bottom: one soft move, or a plain jump while motion is reduced. The bottom marker is
+    /// the end of the last row, so a message taller than the screen shows its end.
+    private func scrollToBottomSmoothly(_ proxy: ScrollViewProxy) {
+        let target = ThreadScroll.bottomID
+        if let animation = ThreadFollowRules.scrollAnimation(reduced: motionReduced) {
+            withAnimation(animation) { proxy.scrollTo(target, anchor: .bottom) }
+        } else {
+            proxy.scrollTo(target, anchor: .bottom)
         }
     }
 
-    /// The "down" button, when it shows. Kept apart from the scroll chain so the type checker keeps up.
-    @ViewBuilder
-    private func jumpOverlay(_ proxy: ScrollViewProxy) -> some View {
-        if jumpVisible {
-            jumpButton { goToBottom(proxy) }
-            .transition(.opacity)
-        }
+    /// The person sent a message: the thread follows the bottom until they scroll up themselves, and the capsule and
+    /// its count stay out of it.
+    private func beginSendFollow() {
+        scroll.sendPinned = true
+        scroll.sendPinnedAt = ProcessInfo.processInfo.systemUptime
+        unseen = 0
+        bottomRequest += 1
     }
 
-    /// The round "down" button, centred over the bottom of the thread (clear of the bubbles on either side), with the
-    /// number of messages that came in meanwhile, if any.
-    private func jumpButton(action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "arrow.down")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.Bandito.text)
-                    .frame(width: 34, height: 34)
-                    .background(Color.Bandito.surface2, in: Circle())
-                    .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
-                    .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-                if unseen > 0 {
-                    Text(unseen > 99 ? "99+" : "\(unseen)")
-                        .font(BanditoFont.text(size: 10, weight: 600))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.Bandito.bg)
-                        .padding(.horizontal, 5)
-                        .frame(minWidth: 17, minHeight: 17)
-                        .background(Color.Bandito.signal, in: Capsule())
-                        .offset(x: 6, y: -6)
-                }
-            }
+    /// An item arrived while the follow after a send is on (the person's message as the daemon echoes it, then the
+    /// answer): the thread slides to its bottom once its row is drawn. At most one planned at a time; the growth that
+    /// follows (rows rising in, a stream) is followed from the scroll geometry.
+    private func followArrival(_ proxy: ScrollViewProxy) {
+        guard scroll.sendPinned else { return }
+        setAtBottom(true)
+        setJumpVisible(false)
+        guard scroll.alive, !scroll.arrivalScrollScheduled else { return }
+        scroll.arrivalScrollScheduled = true
+        scroll.skipFollow = false
+        // After the layout pass that draws the new row, so the bottom marker is where the row ends.
+        DispatchQueue.main.async { [scroll] in
+            scroll.arrivalScrollScheduled = false
+            guard scroll.alive, scroll.sendPinned else { return }
+            scrollToBottomSmoothly(proxy)
         }
-        .banditoButton(.icon(size: 34, label: L10n.Thread.jumpToLatest))
-        .help(L10n.Thread.jumpToLatest)
-        .padding(.bottom, 10)
     }
 
     /// Shows the thread where it was left: the row that was on top, or the newest message.
@@ -357,8 +372,8 @@ struct ThreadView: View {
                     .onChange(of: thread.items.last?.id) { _, _ in
                         // The echo of the person's own message (and the answer to it) is looked at.
                         if scroll.sendPinned {
-                            setAtBottom(true)
-                            setJumpVisible(false)
+                            followArrival(proxy)
+                            return
                         }
                         guard atBottom else { return }
                         followBottom(proxy)
@@ -366,15 +381,18 @@ struct ThreadView: View {
                     .onChange(of: thread.items.count, initial: true) { old, new in
                         pinWindow()
                         slideWindow()
-                        if !atBottom {
+                        if ThreadJumpRules.countsAsUnseen(atBottom: atBottom, sendPinned: scroll.sendPinned) {
                             unseen += ThreadScroll.unseenAdded(previousCount: old, currentCount: new)
+                        } else if scroll.sendPinned, new > old {
+                            // An item that came in after a send (also one that keeps the last id, as an edit of
+                            // the same row does not): the follow takes it.
+                            followArrival(proxy)
                         }
                     }
                     .onChange(of: bottomRequest) { _, _ in goToBottom(proxy) }
                     .overlay(alignment: .bottom) {
-                        jumpOverlay(proxy)
+                        ThreadJumpOverlay(visible: jumpVisible, unseen: unseen) { goToBottom(proxy) }
                     }
-                    .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: jumpVisible)
                     .onAppear {
                         scroll.alive = true
                         restore(proxy)
@@ -583,13 +601,13 @@ struct ThreadView: View {
         let reply = replyDrafts.take(for: id)
         sendError = nil
         // As in any messenger: the person's own message, and the answer to it, are looked at.
-        scroll.sendPinned = true
-        bottomRequest += 1
+        beginSendFollow()
         Task {
             do {
                 try await server.send(text, to: id, replyTo: reply?.seq, attachments: files, mentions: mentions)
                 AttachmentTrays.shared.removeSent(files, agentID: id)
             } catch {
+                scroll.sendPinned = false
                 sendError = UserFacingError.message(for: error)
                 router.restoreDraft(text, for: id)
                 router.restoreMentions(draftMentions, for: id)
@@ -605,13 +623,13 @@ struct ThreadView: View {
         _ = router.takeMentions(for: id)
         guard !text.isEmpty else { return }
         sendError = nil
-        scroll.sendPinned = true
-        bottomRequest += 1
+        beginSendFollow()
         Task {
             do {
                 try await server.answerForm(formId, in: id, action: .reply, message: text)
                 Telemetry.count(.formReply)
             } catch {
+                scroll.sendPinned = false
                 sendError = FormPresentation.message(for: error)
                 router.restoreDraft(text, for: id)
             }
@@ -811,6 +829,10 @@ final class ThreadScrollMemory {
     var skipFollow = false
     /// The person sent a message: the thread follows the bottom until they scroll up themselves.
     var sendPinned = false
+    /// When the person sent it (`systemUptime`): the follow is not ended by what happens in its first moments.
+    var sendPinnedAt = 0.0
+    /// The scroll to the person's own message, once its row is drawn, is planned or done.
+    var arrivalScrollScheduled = false
 }
 
 /// Reports the scroll geometry of the thread (macOS 15 and later): the distance to the bottom, the height of the

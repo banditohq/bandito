@@ -2395,6 +2395,7 @@
 "thread.hintSearch" = "⌘K поиск";
 "thread.hintSend" = "↵ отправить";
 "thread.hintStop" = "⌘. стоп";
+"thread.jumpMany" = "99+ новых";
 "thread.jumpToLatest" = "К последнему сообщению";
 "thread.link.fileHelp" = "Откроется в панели · ⌥-клик покажет в «Файлах»";
 "thread.link.urlHelp" = "Откроется во вкладке браузера · ⌘-клик откроет в браузере Mac";

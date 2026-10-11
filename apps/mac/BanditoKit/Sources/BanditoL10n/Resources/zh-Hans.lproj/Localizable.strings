@@ -2395,6 +2395,7 @@
 "thread.hintSearch" = "⌘K 搜索";
 "thread.hintSend" = "↵ 发送";
 "thread.hintStop" = "⌘. 停止";
+"thread.jumpMany" = "99+ 条新消息";
 "thread.jumpToLatest" = "跳到最新消息";
 "thread.link.fileHelp" = "在面板中打开 · ⌥-点击则在“文件”中显示";
 "thread.link.urlHelp" = "在面板浏览器中打开 · ⌘-点击则在 Mac 浏览器中打开";

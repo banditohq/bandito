@@ -1969,6 +1969,10 @@
   "composer.newChapter.afterTurn": "将在当前回复结束后开始",
   "composer.newChapter.continue": "继续",
   "thread.jumpToLatest": "跳到最新消息",
+  "thread.jumpNew": {
+    "other": "{count} 条新消息"
+  },
+  "thread.jumpMany": "99+ 条新消息",
   "viewer.emptyFile": "文件为空",
   "keys.teamHome": "团队主页",
   "team.home.title": "我的团队",

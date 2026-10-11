@@ -1995,6 +1995,11 @@
   "composer.newChapter.afterTurn": "Começa depois da resposta atual",
   "composer.newChapter.continue": "Continuar",
   "thread.jumpToLatest": "Ir para a mensagem mais recente",
+  "thread.jumpNew": {
+    "one": "{count} nova",
+    "other": "{count} novas"
+  },
+  "thread.jumpMany": "99+ novas",
   "viewer.emptyFile": "O arquivo está vazio",
   "keys.teamHome": "Início da equipe",
   "team.home.title": "Sua equipe",

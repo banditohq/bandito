@@ -1969,6 +1969,10 @@
   "composer.newChapter.afterTurn": "현재 답변이 끝난 뒤 시작돼요",
   "composer.newChapter.continue": "계속",
   "thread.jumpToLatest": "최신 메시지로 이동",
+  "thread.jumpNew": {
+    "other": "새 메시지 {count}개"
+  },
+  "thread.jumpMany": "새 메시지 99+개",
   "viewer.emptyFile": "파일이 비어 있어요",
   "keys.teamHome": "팀 홈",
   "team.home.title": "내 팀",

@@ -1994,6 +1994,11 @@
   "composer.newChapter.afterTurn": "Beginnt nach der aktuellen Antwort",
   "composer.newChapter.continue": "Fortfahren",
   "thread.jumpToLatest": "Zur neuesten Nachricht",
+  "thread.jumpNew": {
+    "one": "{count} neu",
+    "other": "{count} neu"
+  },
+  "thread.jumpMany": "99+ neu",
   "viewer.emptyFile": "Datei ist leer",
   "keys.teamHome": "Startseite des Teams",
   "team.home.title": "Ihr Team",

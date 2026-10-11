@@ -2395,6 +2395,7 @@
 "thread.hintSearch" = "⌘K 검색";
 "thread.hintSend" = "↵ 보내기";
 "thread.hintStop" = "⌘. 중지";
+"thread.jumpMany" = "새 메시지 99+개";
 "thread.jumpToLatest" = "최신 메시지로 이동";
 "thread.link.fileHelp" = "패널에서 열림 · ⌥-클릭은 파일에서 보기";
 "thread.link.urlHelp" = "패널 브라우저에서 열림 · ⌘-클릭은 Mac 브라우저에서 열기";
