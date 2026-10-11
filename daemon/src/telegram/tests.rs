@@ -6,6 +6,7 @@ use super::api::{Api, ApiError, curl_argv, curl_config, scrub};
 use super::fake::FakeTelegram;
 use super::format::{format_answer, markdown_to_html, truncate_chars};
 use super::strings::{self, LANGUAGES, tr};
+use super::typing::Typing;
 use super::{Telegram, Timing, map_language};
 use crate::event::{Decision, Event, EventBody, TurnStatus};
 use crate::hub::Hub;
@@ -16,7 +17,7 @@ use crate::supervisor::{Inbound, Runtimes, Supervisor};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
 const TOKEN: &str = "123456789:AAH_testtoken_0123456789abcdefghij_xyz";
@@ -1548,11 +1549,8 @@ fn every_string_the_code_asks_for_exists_and_none_is_unused() {
 
 #[tokio::test]
 async fn messages_to_one_chat_are_spaced() {
-    let rig = rig_with(Timing {
-        send_gap: Duration::from_millis(150),
-        ..fast()
-    })
-    .await;
+    let send_gap = Duration::from_millis(150);
+    let rig = rig_with(Timing { send_gap, ..fast() }).await;
     rig.link(OWNER);
     rig.link(2);
     for _ in 0..3 {
@@ -1562,9 +1560,12 @@ async fn messages_to_one_chat_are_spaced() {
     let calls = rig.fake.calls_full("sendMessage");
     let mine: Vec<_> = calls.iter().filter(|c| c.body["chat_id"] == OWNER).collect();
     assert_eq!(mine.len(), 3);
+    // The fake stamps each request when it arrives, and a request leaves a little after the bot decided to send it
+    // (curl starts), so the arrivals may come closer than the gap; 0.8 of the gap still shows the spacing.
+    let least = send_gap.mul_f64(0.8);
     for pair in mine.windows(2) {
         let gap = pair[1].at - pair[0].at;
-        assert!(gap >= Duration::from_millis(140), "{gap:?}");
+        assert!(gap >= least, "{gap:?} < {least:?}");
     }
 }
 
@@ -2120,4 +2121,164 @@ async fn the_wait_after_a_slow_empty_poll_is_only_what_is_left_of_the_cycle() {
         fake.calls("getUpdates").len()
     );
     tg.stop_for_test().await;
+}
+
+// ---- 8. "typing…" while a turn that Telegram started runs ----
+
+/// Sends `text` from the owner's chat to the chat's current agent, and feeds the events up to the echo of the message,
+/// which is what starts the turn's "typing…".
+async fn telegram_turn(rig: &mut Rig, text: &str) {
+    let forge = rig.agent.clone();
+    rig.store.tg_chat_set_current(OWNER, Some(&forge)).unwrap();
+    rig.tg.handle_update(msg(OWNER, text)).await;
+    rig.wait_log_prefix(&format!("send {text}")).await;
+    rig.feed_until(|b| matches!(b, EventBody::MessageUser { .. })).await;
+}
+
+fn finished(status: TurnStatus) -> RuntimeOutput {
+    RuntimeOutput::Event(EventBody::TurnCompleted {
+        turn_id: String::new(),
+        status,
+        usage: None,
+        cost_usd: None,
+    })
+}
+
+#[tokio::test]
+async fn a_turn_from_telegram_shows_typing_until_it_completes() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    telegram_turn(&mut rig, "from telegram").await;
+    let calls = rig.fake.wait_calls("sendChatAction", 2).await;
+    assert!(
+        calls
+            .iter()
+            .all(|c| *c == json!({ "chat_id": OWNER, "action": "typing" })),
+        "{calls:?}"
+    );
+    let forge = rig.agent.clone();
+    rig.push(&forge, assistant("answer")).await;
+    rig.push(&forge, done()).await;
+    rig.feed_until(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+    // A request already on its way may still land; after that, the turn shows nothing.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let settled = rig.fake.calls("sendChatAction").len();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(rig.fake.calls("sendChatAction").len(), settled);
+}
+
+#[tokio::test]
+async fn a_turn_that_ends_in_error_also_stops_typing() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    telegram_turn(&mut rig, "will fail").await;
+    rig.fake.wait_calls("sendChatAction", 1).await;
+    let forge = rig.agent.clone();
+    rig.push(&forge, finished(TurnStatus::Error)).await;
+    rig.feed_until(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let settled = rig.fake.calls("sendChatAction").len();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(rig.fake.calls("sendChatAction").len(), settled);
+}
+
+#[tokio::test]
+async fn a_turn_from_the_app_shows_no_typing() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    let forge = rig.agent.clone();
+    rig.sup.send(&forge, Inbound::user("from the app")).await.unwrap();
+    rig.wait_log_prefix("send from the app").await;
+    rig.push(&forge, assistant("answer")).await;
+    rig.push(&forge, done()).await;
+    rig.feed_until(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert!(rig.fake.calls("sendChatAction").is_empty());
+}
+
+#[tokio::test]
+async fn a_turn_longer_than_the_cap_stops_typing() {
+    let mut rig = rig_with(Timing {
+        typing_max: Duration::from_millis(400),
+        ..fast()
+    })
+    .await;
+    rig.link(OWNER);
+    telegram_turn(&mut rig, "a long one").await;
+    rig.fake.wait_calls("sendChatAction", 2).await;
+    // Past the cap, nothing more goes out, though the turn is still running.
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    let stopped = rig.fake.calls("sendChatAction").len();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(rig.fake.calls("sendChatAction").len(), stopped);
+    assert!(stopped >= 2, "{stopped}");
+}
+
+#[tokio::test]
+async fn removing_the_token_stops_typing() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    telegram_turn(&mut rig, "keep going").await;
+    rig.fake.wait_calls("sendChatAction", 1).await;
+    rig.tg.remove_token().await.unwrap();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let stopped = rig.fake.calls("sendChatAction").len();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(rig.fake.calls("sendChatAction").len(), stopped);
+}
+
+#[tokio::test]
+async fn a_failed_action_is_forgotten_but_a_refused_token_ends_the_task() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    rig.fake
+        .fail_next("sendChatAction", 400, "Bad Request: chat not found", None);
+    rig.fake.fail_next("sendChatAction", 401, "Unauthorized", None);
+    telegram_turn(&mut rig, "refused").await;
+    // The 400 is ignored (the task goes on), the 401 ends it: two calls in all.
+    rig.fake.wait_calls("sendChatAction", 2).await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(rig.fake.calls("sendChatAction").len(), 2);
+}
+
+#[tokio::test]
+async fn unlinking_a_chat_in_telegram_stops_its_typing() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    telegram_turn(&mut rig, "bye soon").await;
+    rig.fake.wait_calls("sendChatAction", 1).await;
+    rig.tg.handle_update(msg(OWNER, "/unlink")).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let stopped = rig.fake.calls("sendChatAction").len();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(rig.fake.calls("sendChatAction").len(), stopped);
+}
+
+#[tokio::test]
+async fn unlinking_a_chat_in_the_app_stops_its_typing() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    telegram_turn(&mut rig, "bye soon").await;
+    rig.fake.wait_calls("sendChatAction", 1).await;
+    rig.tg.unlink(OWNER).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let stopped = rig.fake.calls("sendChatAction").len();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(rig.fake.calls("sendChatAction").len(), stopped);
+}
+
+#[test]
+fn one_typing_action_per_chat_per_gap() {
+    assert_eq!(Timing::default().typing_every, Duration::from_secs(4));
+    assert_eq!(Timing::default().typing_max, Duration::from_secs(600));
+    let mut typing = Typing::default();
+    let t0 = Instant::now();
+    let gap = Duration::from_secs(4);
+    assert!(typing.allow(OWNER, t0, gap));
+    assert!(!typing.allow(OWNER, t0 + Duration::from_secs(3), gap));
+    assert!(
+        typing.allow(7, t0 + Duration::from_secs(3), gap),
+        "another chat has its own gap"
+    );
+    assert!(typing.allow(OWNER, t0 + Duration::from_secs(4), gap));
 }

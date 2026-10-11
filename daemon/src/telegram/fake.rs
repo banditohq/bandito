@@ -254,7 +254,7 @@ async fn handle(
             200,
             json!({ "ok": true, "result": { "message_id": body["message_id"], "chat": { "id": body["chat_id"] } } }),
         ),
-        "answerCallbackQuery" | "leaveChat" | "deleteWebhook" | "setMyCommands" => {
+        "answerCallbackQuery" | "leaveChat" | "deleteWebhook" | "setMyCommands" | "sendChatAction" => {
             answer(200, json!({ "ok": true, "result": true }))
         }
         other => answer(404, error_body(404, &format!("Not Found: {other}"), None)),
