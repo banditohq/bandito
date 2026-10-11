@@ -53,7 +53,7 @@ final class MySharesModel {
     }
 
     /// Exports the bot or skill again from the place it was shared from, and saves that as the next version.
-    /// Returns the problem text, or nil when the update went through.
+    /// Sets `problem` when the update does not go through; nothing changes on the platform then.
     func updateToCurrent(_ item: ShareSummary, servers: [ServerModel], client: () async throws -> AccountClient) async {
         guard !busy.contains(item.id) else { return }
         guard let source = ShareSourceStore.load()[item.id],
@@ -269,6 +269,8 @@ struct MySharesView: View {
     }
 }
 
+#if DEBUG
+// Previews and their sample data are for development builds only.
 #Preview("My shares: empty") {
     MySharesView(servers: [], model: MySharesModel(phase: .loaded, items: []))
         .environment(AccountHub())
@@ -284,3 +286,4 @@ struct MySharesView: View {
         .padding(40)
         .background(Color.Bandito.bg)
 }
+#endif

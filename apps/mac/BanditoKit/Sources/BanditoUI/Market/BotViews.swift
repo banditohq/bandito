@@ -66,6 +66,8 @@ struct BotsPage: View {
     let languageCode: String
     /// The agents of the server; the My bots filter takes the ones made from a template.
     let agents: [Agent]
+    /// The server has the `sharing` feature: My bots offers Share... on each bot.
+    var canShare: Bool = false
     var onView: (BotTemplate) -> Void
     var onCreate: (BotTemplate) -> Void
     var onViewBundle: (AgentBundle) -> Void = { _ in }
@@ -92,7 +94,9 @@ struct BotsPage: View {
             if !bots.isEmpty {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
                     ForEach(bots) { bot in
-                        MyBotCard(bot: bot, languageCode: languageCode, onOpen: { onOpen(bot.agent) })
+                        MyBotCard(
+                            bot: bot, languageCode: languageCode, canShare: canShare,
+                            onOpen: { onOpen(bot.agent) })
                     }
                 }
             } else {
@@ -230,6 +234,8 @@ struct BotCard: View {
 struct MyBotCard: View {
     let bot: BotLogic.MyBot
     let languageCode: String
+    /// The server has the `sharing` feature: the menu with Share... is there only then.
+    var canShare: Bool = false
     var onOpen: () -> Void
 
     @Environment(Router.self) private var router
@@ -255,18 +261,20 @@ struct MyBotCard: View {
                 }
                 Spacer(minLength: 0)
                 HStack(spacing: 8) {
-                    Menu {
-                        Button(L10n.Share.menu) { router.sheet = .share(.bot(agentID: bot.agent.id)) }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.Bandito.text2)
-                            .frame(width: 30, height: 26)
+                    if canShare {
+                        Menu {
+                            Button(L10n.Share.menu) { router.sheet = .share(.bot(agentID: bot.agent.id)) }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.Bandito.text2)
+                                .frame(width: 30, height: 26)
+                        }
+                        .menuStyle(.button)
+                        .menuIndicator(.hidden)
+                        .banditoButton(.icon(size: 30, label: L10n.Share.menu))
+                        .fixedSize()
                     }
-                    .menuStyle(.button)
-                    .menuIndicator(.hidden)
-                    .banditoButton(.icon(size: 30, label: L10n.Share.menu))
-                    .fixedSize()
                     Spacer(minLength: 0)
                     Button(L10n.Market.MyBots.open, action: onOpen)
                         .banditoButton(.lightPill())

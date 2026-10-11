@@ -385,8 +385,8 @@ struct MarketView: View {
                     // A server with only services keeps the one-row header.
                     searchField
                     addOwnButton
+                    mySharesButton
                 }
-                mySharesButton
             }
             if tabs.count > 1 {
                 HStack(alignment: .center, spacing: 12) {
@@ -423,11 +423,20 @@ struct MarketView: View {
         }
     }
 
-    /// The account's own shares (bots and skills published as links). Not tied to the server: it is the account.
+    /// The server has the `sharing` feature: bots and skills can be published, and the list of one's shares exists.
+    private var sharingSupported: Bool {
+        server?.supports("sharing") ?? false
+    }
+
+    /// The account's own shares (bots and skills published as links). Shown only where sharing is supported. One
+    /// placement: beside the action buttons of the header's second row (or the one row of a services-only server).
+    @ViewBuilder
     private var mySharesButton: some View {
-        Button(L10n.Share.Mine.title) { router.sheet = .myShares }
-            .banditoButton(.quiet())
-            .fixedSize()
+        if sharingSupported {
+            Button(L10n.Share.Mine.title) { router.sheet = .myShares }
+                .banditoButton(.quiet())
+                .fixedSize()
+        }
     }
 
     private var addOwnButton: some View {
@@ -476,7 +485,7 @@ struct MarketView: View {
     private var botsContent: some View {
         BotsPage(
             model: bots, catalog: catalog, integrations: integrations, query: query, languageCode: languageCode,
-            agents: server?.agents ?? [],
+            agents: server?.agents ?? [], canShare: sharingSupported,
             onView: { panel = .botDetail($0.id) },
             onCreate: { panel = .botCreate($0.id) },
             onViewBundle: { panel = .bundle($0.id) },

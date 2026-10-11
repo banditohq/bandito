@@ -1,6 +1,8 @@
 import BanditoKit
 import Foundation
 
+#if DEBUG
+
 /// Sample shares for the previews of the share screens. No network, no server: the states are set directly.
 @MainActor
 enum ShareSamples {
@@ -67,3 +69,4 @@ enum ShareSamples {
             lang: "en", version: 4, installs: 3, hidden: true, createdAt: 0, updatedAt: 0),
     ]
 }
+#endif

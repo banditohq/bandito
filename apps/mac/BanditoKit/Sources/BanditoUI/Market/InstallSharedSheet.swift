@@ -47,6 +47,8 @@ final class InstallSharedModel {
     private(set) var outcome: Outcome?
     private(set) var problem: String?
     private(set) var reported = false
+    /// A report is on its way: the menu is off until it answers.
+    private(set) var reporting = false
 
     init(load: Load = .loading) {
         self.load = load
@@ -95,7 +97,7 @@ final class InstallSharedModel {
     var canInstall: Bool {
         guard let info else { return false }
         return ShareLogic.canInstall(
-            hasServer: true, hasItem: item != nil, executables: info.executables, acknowledged: acknowledged,
+            hasServer: true, hasItem: item != nil, scripts: info.scripts, acknowledged: acknowledged,
             inFlight: inFlight) && outcome == nil
     }
 
@@ -139,7 +141,9 @@ final class InstallSharedModel {
 
     /// Sends one report. The item stays installed on this Mac; the platform hides it after five reporters.
     func report(_ reason: ShareReportReason, client: () async throws -> AccountClient) async {
-        guard let item, !reported else { return }
+        guard let item, !reported, !reporting else { return }
+        reporting = true
+        defer { reporting = false }
         do {
             let accountClient = try await client()
             try await accountClient.reportShare(id: item.id, reason: reason, note: "")
@@ -324,11 +328,11 @@ struct InstallSharedSheet: View {
             Text(L10n.Share.Install.files(count: info.files.count))
                 .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
-            if !info.executables.isEmpty {
-                Text(L10n.Share.Install.scripts(count: info.executables.count))
+            if !info.scripts.isEmpty {
+                Text(L10n.Share.Install.scripts(count: info.scripts.count))
                     .font(BanditoFont.text(size: 12.5, weight: 600))
                     .foregroundStyle(Color.Bandito.danger)
-                Text(info.executables.joined(separator: "\n"))
+                Text(info.scripts.joined(separator: "\n"))
                     .font(BanditoFont.mono(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 Toggle(isOn: $model.acknowledged) {
@@ -428,7 +432,7 @@ struct InstallSharedSheet: View {
         .menuIndicator(.hidden)
         .banditoButton(.quiet())
         .fixedSize()
-        .disabled(model.item == nil || model.reported)
+        .disabled(model.item == nil || model.reported || model.reporting)
     }
 
     /// Opens the bot's chat with its first message in the input field, as the bot creation from a template does.
@@ -442,6 +446,8 @@ struct InstallSharedSheet: View {
     }
 }
 
+#if DEBUG
+// Previews and their sample data are for development builds only.
 #Preview("Install a bot") {
     InstallSharedSheet(
         shareID: "k3HqT9vZ2Lm8pXcR4wBn7e", server: nil,
@@ -461,3 +467,4 @@ struct InstallSharedSheet: View {
         .padding(40)
         .background(Color.Bandito.bg)
 }
+#endif
