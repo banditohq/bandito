@@ -14,7 +14,10 @@ struct MessageBodyView: View {
 
     var body: some View {
         let _ = PerfCounters.hit("MessageBody")
-        let message = MessageRenderCache.shared.message(for: text, markdown: markdown, cached: !streaming)
+        let message =
+            streaming
+            ? MessageRenderCache.shared.streamingMessage(for: text, markdown: markdown)
+            : MessageRenderCache.shared.message(for: text, markdown: markdown)
         // A message with a web link shows the link hint on hover; the others are drawn without any hover tracking.
         // The first web link was found when the message was parsed, not on every draw.
         if let link = message.firstWebLink {
@@ -129,6 +132,17 @@ final class MessageRenderCache: @unchecked Sendable {
         return built
     }
 
+    /// A message that is still streaming in. Every token used to parse the whole text again (Markdown, links), so a
+    /// long reply cost more with every word. The finished paragraphs (up to the last blank line outside a code block)
+    /// are parsed once and kept; only the paragraph being written is parsed at each token, and the two are joined.
+    func streamingMessage(for text: String, markdown: Bool) -> RenderedMessage {
+        guard let split = StreamingSplit.stableEnd(of: text) else { return message(for: text, markdown: markdown, cached: false) }
+        let head = message(for: String(text[..<split]), markdown: markdown)
+        let tail = message(for: String(text[split...]), markdown: markdown, cached: false)
+        return RenderedMessage(
+            blocks: StreamingSplit.join(head.blocks, tail.blocks), firstWebLink: head.firstWebLink ?? tail.firstWebLink)
+    }
+
     static func rendered(_ text: String, markdown: Bool) -> RenderedMessage {
         let blocks = build(text, markdown: markdown)
         return RenderedMessage(blocks: blocks, firstWebLink: ChatLinkRouting.firstWebLink(in: blocks))
@@ -148,6 +162,42 @@ final class MessageRenderCache: @unchecked Sendable {
             case .code(let language, let code, _): return .code(language: language, code: code)
             }
         }
+    }
+}
+
+/// Where a streaming message splits into the part that will not change and the part being written. Pure, tested.
+enum StreamingSplit {
+    /// The end of the last blank line (`\n\n`) that is outside a code fence, or nil when there is none (or the text
+    /// is short enough to parse whole).
+    static func stableEnd(of text: String) -> String.Index? {
+        guard text.utf8.count > 400 else { return nil }
+        var fenceOpen = false
+        var lastSplit: String.Index?
+        var index = text.startIndex
+        var lineStart = true
+        while index < text.endIndex {
+            let character = text[index]
+            if lineStart, text[index...].hasPrefix("```") { fenceOpen.toggle() }
+            if character == "\n" {
+                let next = text.index(after: index)
+                if !fenceOpen, next < text.endIndex, text[next] == "\n" {
+                    lastSplit = text.index(after: next)
+                }
+                lineStart = true
+            } else if character != " " {
+                lineStart = false
+            }
+            index = text.index(after: index)
+        }
+        guard let lastSplit, lastSplit < text.endIndex else { return nil }
+        return lastSplit
+    }
+
+    /// The blocks of the finished part followed by those of the part being written. Two running texts that meet are
+    /// one text, as a parse of the whole would give.
+    static func join(_ head: [RenderedBlock], _ tail: [RenderedBlock]) -> [RenderedBlock] {
+        guard case .text(let last)? = head.last, case .text(let first)? = tail.first else { return head + tail }
+        return head.dropLast() + [.text(last + first)] + tail.dropFirst()
     }
 }
 

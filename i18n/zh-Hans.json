@@ -2971,5 +2971,6 @@
   "perfCheck.page.market": "市场",
   "perfCheck.page.settings": "设置",
   "perfCheck.page.modes": "模式与服务器",
-  "perfCheck.page.overlays": "菜单、面板与提示"
+  "perfCheck.page.overlays": "菜单、面板与提示",
+  "perfCheck.page.stream": "聊天：回复流式输出"
 }

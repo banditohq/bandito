@@ -53,7 +53,8 @@ struct QuickOpenPalette: View {
             searchBar
             Rectangle().fill(Color.Bandito.line).frame(height: 1)
             ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
+                // Lazy: a palette over forty agents built every row (avatar and all) before it could show.
+                LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(sections, id: \.title) { section in
                         Text(section.title)
                             .font(BanditoFont.text(size: 10.5, weight: 600))

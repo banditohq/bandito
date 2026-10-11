@@ -12,7 +12,7 @@ import QuartzCore
 
 /// The scenarios, by the word of the QA command `perf <scenario>`.
 enum PerfScenario: String, CaseIterable, Sendable {
-    case team, thread, threadfast, typing, inspector, newagent
+    case team, thread, threadfast, typing, stream, inspector, newagent
     case `switch`, files, terminals, browser, screen, server, market, settings, modes, overlays
 
     /// The page's name in the results.
@@ -22,6 +22,7 @@ enum PerfScenario: String, CaseIterable, Sendable {
         case .thread: L10n.PerfCheck.Page.thread
         case .threadfast: L10n.PerfCheck.Page.threadFast
         case .typing: L10n.PerfCheck.Page.typing
+        case .stream: L10n.PerfCheck.Page.stream
         case .inspector: L10n.PerfCheck.Page.inspector
         case .newagent: L10n.PerfCheck.Page.newAgent
         case .switch: L10n.PerfCheck.Page.switchAgents
@@ -132,6 +133,7 @@ private struct PerfSteps {
         case .thread: try await thread()
         case .threadfast: try await threadFast()
         case .typing: try await typing()
+        case .stream: try await stream()
         case .inspector: try await inspector()
         case .newagent: try await newAgent()
         case .switch: try await switchAgents()
@@ -285,6 +287,41 @@ private struct PerfSteps {
         // Leave the draft empty.
         editor.insertText("", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
         return "\(PerfDemoWorld.threadRows) rows, 200 characters typed into the composer, one a frame"
+    }
+
+    /// An agent writes a long reply, a few words a frame (the daemon's `message.delta`), while its chat is on screen;
+    /// then another agent writes one while the first chat stays on screen.
+    func stream() async throws -> String {
+        try await openThread()
+        let transport = world.primaryTransport
+        let words = "the agent reads the module and the three call sites and writes down what it found and why ".split(
+            separator: " ")
+        func write(_ agentID: String, frames: Int) async throws {
+            let turn = "demo-turn-\(agentID)-\(frames)"
+            await transport.emitEvent(
+                agentID: agentID, kind: "turn.started", payload: ["turn_id": turn, "source": "user"], persisted: true)
+            var text = ""
+            for index in 0..<frames {
+                try check()
+                let chunk = (0..<3).map { String(words[(index * 3 + $0) % words.count]) }.joined(separator: " ") + " "
+                text += chunk
+                if index % 40 == 39 { text += "\n\n" }
+                await transport.emitEvent(agentID: agentID, kind: "message.delta", payload: ["text": chunk], persisted: false)
+                await recorder.nextFrame()
+            }
+            await transport.emitEvent(agentID: agentID, kind: "message.assistant", payload: ["text": text], persisted: true)
+            await transport.emitEvent(
+                agentID: agentID, kind: "turn.completed", payload: ["turn_id": turn, "status": "ok"], persisted: true)
+            await settle(30)
+        }
+        recorder.begin()
+        recorder.beginSegment()
+        try await write(PerfFixtures.threadAgentID, frames: 240)
+        recorder.endSegment("shown agent")
+        recorder.beginSegment()
+        try await write(world.agentIDs[3], frames: 240)
+        recorder.endSegment("other agent")
+        return "a reply streamed three words a frame for 4 s into the chat on screen, then into another agent's chat"
     }
 
     func inspector() async throws -> String {

@@ -331,10 +331,18 @@ enum PictureSource {
         return bitmap.representation(using: .png, properties: [:])
     }
 
-    /// True when the clipboard has a picture and no text, so a paste of a picture is not a paste of text.
-    static var clipboardHoldsOnlyPicture: Bool {
-        NSPasteboard.general.string(forType: .string) == nil && NSImage(pasteboard: .general) != nil
+    /// True when the clipboard has a picture and no text, so a paste of a picture is not a paste of text. The composer
+    /// asks at every redraw (each typed letter): the answer is kept until the clipboard changes, and the types are
+    /// checked without reading the picture itself.
+    @MainActor static var clipboardHoldsOnlyPicture: Bool {
+        let board = NSPasteboard.general
+        if board.changeCount == clipboardChecked.change { return clipboardChecked.onlyPicture }
+        let onlyPicture = board.string(forType: .string) == nil && NSImage.canInit(with: board)
+        clipboardChecked = (board.changeCount, onlyPicture)
+        return onlyPicture
     }
+
+    @MainActor private static var clipboardChecked: (change: Int, onlyPicture: Bool) = (-1, false)
 }
 
 /// The highlight over the chat while files are dragged over it: a dashed frame and the words "Drop to attach".

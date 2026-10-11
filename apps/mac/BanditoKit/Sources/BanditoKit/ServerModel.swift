@@ -251,7 +251,10 @@ public final class ServerModel: Identifiable {
     /// A retry is waiting out its delay.
     @ObservationIgnored private var agentsRetryScheduled = false
     private static let log = Logger(subsystem: "dev.bandito", category: "agents")
-    public private(set) var threads: [String: AgentThread] = [:]
+    /// The threads of the agents, each in an observed box of its own (`AgentThreadState`): a token streamed into one
+    /// agent's thread redraws the views that read that thread, not every view that reads any thread (the sidebar, the
+    /// chat on screen, the menu bar all did, at every token of every agent).
+    public let threads = ThreadStates()
     public private(set) var runtimes: [RuntimeStatus] = []
     /// When `runtimes` was last read from the daemon; nil until the first answer.
     public private(set) var runtimesFetchedAt: Date?
@@ -333,6 +336,12 @@ public final class ServerModel: Identifiable {
         threads[agentId] ?? AgentThread()
     }
 
+    /// The parts of an agent's thread the team shows without the thread itself (status, waiting approvals, a running
+    /// turn). Each changes only when its value does, so a streamed token redraws none of their readers.
+    public func threadSummary(for agentId: String) -> AgentThreadState {
+        threads.box(agentId)
+    }
+
     /// Agents that need a human first, then by name.
     public var sortedAgents: [Agent] {
         // Whether each agent needs a person is found once, not in every comparison: `needsPerson(_:)` looks the agent
@@ -346,31 +355,33 @@ public final class ServerModel: Identifiable {
 
     /// `needsPerson(_:)` for an agent at hand.
     private func needsPerson(_ agent: Agent) -> Bool {
-        let status = agent.status ?? threads[agent.id]?.status ?? .idle
+        let summary = threads.box(agent.id)
+        let status = agent.status ?? summary.loadedStatus ?? .idle
         if status == .needsYou { return true }
         let pending =
             agent.reportsPendingApprovalIds
             ? agent.pendingApprovalIds.count
-            : max(agent.pendingApprovals, threads[agent.id]?.pendingApprovals.count ?? 0)
+            : max(agent.pendingApprovals, summary.pendingApprovalCount)
         return pending > 0
     }
 
     /// The status the team shows for an agent, whether or not its thread is loaded: the newest `agent.status` the app
     /// knows (the daemon's answer, then the live events), else the thread's, else idle.
     public func status(of agentId: String) -> AgentStatus {
-        agents.first { $0.id == agentId }?.status ?? threads[agentId]?.status ?? .idle
+        agents.first { $0.id == agentId }?.status ?? threads.box(agentId).loadedStatus ?? .idle
     }
 
     /// Approvals of the agent that wait for an answer. A daemon that sends the ids counts the ids (a replayed event
     /// adds or removes nothing twice). An older one sends only a count: the larger of that and the loaded thread's.
     public func pendingApprovalCount(of agentId: String) -> Int {
+        let summary = threads.box(agentId)
         guard let agent = agents.first(where: { $0.id == agentId }) else {
-            return thread(for: agentId).pendingApprovals.count
+            return summary.pendingApprovalCount
         }
         if agent.reportsPendingApprovalIds {
             return agent.pendingApprovalIds.count
         }
-        return max(agent.pendingApprovals, thread(for: agentId).pendingApprovals.count)
+        return max(agent.pendingApprovals, summary.pendingApprovalCount)
     }
 
     /// Needs a person: the status says so, or an approval waits. Drives the "needs you" group and the menu bar.

@@ -102,6 +102,25 @@ public actor DemoDaemonTransport: RPCTransport {
         continuation.yield("{\"jsonrpc\":\"2.0\",\"method\":\"term.output\",\"params\":\(params)}")
     }
 
+    /// The last persisted event the demo daemon sent (`events.subscribe` answers 1).
+    private var eventSeq: Int64 = 1
+
+    /// Sends a live event of an agent, as the daemon does while the agent works: `persisted` events take the next `seq`,
+    /// the others (`message.delta`) carry 0.
+    public func emitEvent(agentID: String, kind: String, payload: [String: Any], persisted: Bool) {
+        guard !closed else { return }
+        var seq: Int64 = 0
+        if persisted {
+            eventSeq += 1
+            seq = eventSeq
+        }
+        let event: [String: Any] = [
+            "seq": seq, "agent_id": agentID, "ts": Int64(Date().timeIntervalSince1970 * 1000), "kind": kind,
+            "payload": payload,
+        ]
+        continuation.yield("{\"jsonrpc\":\"2.0\",\"method\":\"event\",\"params\":\(DemoJSON.text(event))}")
+    }
+
     // MARK: answers
 
     private func answer(_ method: String, _ params: [String: Any]) -> Result<String, RPCError> {
@@ -113,7 +132,7 @@ public actor DemoDaemonTransport: RPCTransport {
             // The app installs the demo agents itself, with their threads (see `ServerModel.installSyntheticAgent`).
             return .success("[]")
         case "events.subscribe":
-            return .success("{\"last_seq\":1}")
+            return .success("{\"last_seq\":\(eventSeq)}")
         case "events.page", "events.since", "history.search", "history.day":
             return .success("[]")
         case "runtimes.status":
@@ -209,7 +228,7 @@ public actor DemoDaemonTransport: RPCTransport {
     private func daemonInfo(now: Int64) -> [String: Any] {
         [
             "version": DemoDaemon.version, "hostname": setup.hostname, "os": "macos", "arch": "aarch64",
-            "pid": 4242, "started_at": startedAt, "last_seq": 1, "features": DemoDaemon.features,
+            "pid": 4242, "started_at": startedAt, "last_seq": eventSeq, "features": DemoDaemon.features,
             "last_restore": NSNull(), "safe_mode": false, "safe_mode_error": NSNull(),
             "update": ["available": false, "checked_at": now, "current": DemoDaemon.version, "latest": DemoDaemon.version],
         ]

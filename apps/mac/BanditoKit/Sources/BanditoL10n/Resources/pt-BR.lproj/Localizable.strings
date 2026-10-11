@@ -1660,6 +1660,7 @@
 "perfCheck.page.screen" = "Tela";
 "perfCheck.page.server" = "Servidor";
 "perfCheck.page.settings" = "Ajustes";
+"perfCheck.page.stream" = "Chat: resposta chegando";
 "perfCheck.page.switchAgents" = "Troca de agente";
 "perfCheck.page.team" = "Equipe: agentes e início";
 "perfCheck.page.terminals" = "Terminais";

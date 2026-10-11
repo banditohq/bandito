@@ -1660,6 +1660,7 @@
 "perfCheck.page.screen" = "画面";
 "perfCheck.page.server" = "サーバー";
 "perfCheck.page.settings" = "設定";
+"perfCheck.page.stream" = "チャット: 返信のストリーミング";
 "perfCheck.page.switchAgents" = "エージェントの切り替え";
 "perfCheck.page.team" = "チーム: エージェントとホーム";
 "perfCheck.page.terminals" = "ターミナル";

@@ -82,6 +82,16 @@ public enum ThreadRows {
         return rows
     }
 
+    /// The rows of `new` made from the rows of `old` when only the last item changed and it is a stream (no time, its
+    /// own row, its own id); nil otherwise (then the rows are built again).
+    public static func replacingLast(_ rows: [ThreadRow], from old: [ThreadItem], to new: [ThreadItem]) -> [ThreadRow]? {
+        guard old.count == new.count, let last = new.last, let previous = old.last, last.id == previous.id,
+            case .streaming = last, case .item(let shown)? = rows.last, shown.id == last.id,
+            old.dropLast().elementsEqual(new.dropLast())
+        else { return nil }
+        return rows.dropLast() + [.item(last)]
+    }
+
     /// Timestamp in Unix milliseconds, when the item has one.
     static func timestamp(of item: ThreadItem) -> Int64? { item.timestamp }
 }

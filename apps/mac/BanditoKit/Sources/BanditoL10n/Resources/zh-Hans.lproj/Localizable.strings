@@ -1660,6 +1660,7 @@
 "perfCheck.page.screen" = "屏幕";
 "perfCheck.page.server" = "服务器";
 "perfCheck.page.settings" = "设置";
+"perfCheck.page.stream" = "聊天：回复流式输出";
 "perfCheck.page.switchAgents" = "切换智能体";
 "perfCheck.page.team" = "团队：智能体与主页";
 "perfCheck.page.terminals" = "终端";

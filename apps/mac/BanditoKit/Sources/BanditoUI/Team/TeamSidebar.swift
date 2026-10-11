@@ -54,8 +54,13 @@ struct TeamSidebar: View {
                             .padding(.bottom, 6)
                         VStack(spacing: 8) {
                             ForEach(waiting) { agent in
-                                ThreadReader(server: server, agentID: agent.id) { thread in
-                                    waitingCard(agent, thread: thread, server: server)
+                                ThreadReader(server: server, agentID: agent.id) { facts in
+                                    Memo(key: SidebarRowKey(
+                                        agent: agent, facts: facts, status: .needsYou, selected: false, isLead: false,
+                                        pinned: pins.isPinned(agent.id))) {
+                                        waitingCard(agent, facts: facts, server: server)
+                                    }
+                                    .equatable()
                                 }
                             }
                         }
@@ -79,10 +84,16 @@ struct TeamSidebar: View {
                     .padding(.bottom, 2)
                     VStack(spacing: 2) {
                         ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
-                            ThreadReader(server: server, agentID: agent.id) { thread in
-                                teamRow(
-                                    agent, thread: thread, server: server, selected: shown == agent.id,
-                                    isLead: lead == agent.id)
+                            ThreadReader(server: server, agentID: agent.id) { facts in
+                                let status = server.status(of: agent.id)
+                                Memo(key: SidebarRowKey(
+                                    agent: agent, facts: facts, status: status, selected: shown == agent.id,
+                                    isLead: lead == agent.id, pinned: pins.isPinned(agent.id))) {
+                                    teamRow(
+                                        agent, facts: facts, status: status, server: server, selected: shown == agent.id,
+                                        isLead: lead == agent.id)
+                                }
+                                .equatable()
                             }
                             .banditoRise(delay: Double(index) * 0.06)
                         }
@@ -119,8 +130,11 @@ struct TeamSidebar: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(agents) { agent in
-                    ThreadReader(server: server, agentID: agent.id) { thread in
+                    ThreadReader(server: server, agentID: agent.id) { facts in
                     let status = server.status(of: agent.id)
+                    Memo(key: SidebarRowKey(
+                        agent: agent, facts: facts, status: status, selected: shown == agent.id, isLead: false,
+                        pinned: true)) {
                     Button {
                         router.selectAgent(agent.id, on: server)
                     } label: {
@@ -128,7 +142,7 @@ struct TeamSidebar: View {
                             ZStack(alignment: .bottomTrailing) {
                                 AgentAvatarView(
                                     agent: agent, server: server, size: 36,
-                                    mood: AvatarMood.make(status: status, turnRunning: thread.turnRunning, paused: agent.paused))
+                                    mood: AvatarMood.make(status: status, turnRunning: facts.turnRunning, paused: agent.paused))
                                 StatusDot(status: status, size: 10, ringColor: Color.Bandito.surface1)
                             }
                             Text(agent.name)
@@ -145,6 +159,8 @@ struct TeamSidebar: View {
                     .help(agent.name)
                     .contextMenu { menu(for: agent, server: server) }
                     }
+                    .equatable()
+                    }
                 }
             }
             .padding(.horizontal, 18)
@@ -154,7 +170,7 @@ struct TeamSidebar: View {
 
     // MARK: waiting
 
-    private func waitingCard(_ agent: Agent, thread: AgentThread, server: ServerModel) -> some View {
+    private func waitingCard(_ agent: Agent, facts: SidebarThreadFacts, server: ServerModel) -> some View {
         Button {
             router.selectAgent(agent.id, on: server)
         } label: {
@@ -169,11 +185,11 @@ struct TeamSidebar: View {
                             .truncationMode(.tail)
                         if !agent.role.isEmpty { Chip(text: agent.role) }
                         Spacer(minLength: 4)
-                        Text(lastActivityLabel(agent, thread: thread))
+                        Text(TeamTime.label(ms: facts.lastActivityMs))
                             .font(BanditoFont.text(size: 11, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
-                    Text(thread.pendingApprovals.first?.title ?? AgentPreview.text(thread: thread, agent: agent) ?? "")
+                    Text(facts.pendingTitle ?? facts.preview ?? "")
                         .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.signalGlow)
                         .lineLimit(1)
@@ -198,21 +214,19 @@ struct TeamSidebar: View {
 
     // MARK: team
 
-    private func teamRow(_ agent: Agent, thread: AgentThread, server: ServerModel, selected: Bool, isLead: Bool) -> some View {
+    private func teamRow(
+        _ agent: Agent, facts: SidebarThreadFacts, status: AgentStatus, server: ServerModel, selected: Bool, isLead: Bool
+    ) -> some View {
         return Button {
             router.selectAgent(agent.id, on: server)
         } label: {
             AgentRow(
-                agent: agent, server: server, thread: thread, status: server.status(of: agent.id), isSelected: selected,
-                lastActivity: lastActivityLabel(agent, thread: thread), isLead: isLead)
+                agent: agent, server: server, facts: facts, status: status, isSelected: selected,
+                lastActivity: TeamTime.label(ms: facts.lastActivityMs), isLead: isLead)
                 .contentShape(Rectangle())
         }
         .banditoButton(.row(cornerRadius: 10))
         .contextMenu { menu(for: agent, server: server) }
-    }
-
-    private func lastActivityLabel(_ agent: Agent, thread: AgentThread) -> String {
-        TeamTime.label(ms: AgentPreview.timestamp(thread: thread, agent: agent))
     }
 
     // MARK: menu
@@ -285,16 +299,55 @@ struct TeamSidebar: View {
 }
 
 /// Reads the thread of one agent for a row of the sidebar. The sidebar itself does not read threads: a stream writes
-/// the threads several times a second, and every view that read them was built again. Here only the rows are, and a
-/// row is a few views.
+/// the threads several times a second, and every view that read them was built again. Here only this reader is, and
+/// it hands the row the few facts it shows (`SidebarThreadFacts`): a row whose facts did not change is not built again
+/// (`Memo`), so a token streamed into an agent's thread costs its row nothing.
 private struct ThreadReader<Content: View>: View {
     let server: ServerModel
     let agentID: String
-    @ViewBuilder var content: (AgentThread) -> Content
+    @ViewBuilder var content: (SidebarThreadFacts) -> Content
 
     var body: some View {
-        content(server.thread(for: agentID))
+        content(SidebarThreadFacts(thread: server.thread(for: agentID), agent: server.agents.first { $0.id == agentID }))
     }
+}
+
+/// What a row of the sidebar shows of an agent's thread.
+struct SidebarThreadFacts: Equatable {
+    /// The last message as one line, or nil.
+    var preview: String?
+    /// When the agent last did something (Unix ms).
+    var lastActivityMs: Int64
+    var turnRunning: Bool
+    /// The title of the oldest approval that waits, if any.
+    var pendingTitle: String?
+
+    init(thread: AgentThread, agent: Agent?) {
+        preview = agent.flatMap { AgentPreview.text(thread: thread, agent: $0) }
+        lastActivityMs = agent.map { AgentPreview.timestamp(thread: thread, agent: $0) } ?? 0
+        turnRunning = thread.turnRunning
+        pendingTitle = thread.pendingApprovals.first?.title
+    }
+}
+
+/// Builds `content` again only when `key` changes (with `.equatable()`).
+struct Memo<Key: Equatable, Content: View>: View, Equatable {
+    let key: Key
+    @ViewBuilder let content: () -> Content
+
+    nonisolated static func == (lhs: Memo, rhs: Memo) -> Bool { lhs.key == rhs.key }
+
+    var body: some View { content() }
+}
+
+/// Everything a row of the team list depends on.
+private struct SidebarRowKey: Equatable {
+    var agent: Agent
+    var facts: SidebarThreadFacts
+    var status: AgentStatus
+    var selected: Bool
+    var isLead: Bool
+    var pinned: Bool
 }
 
 /// One agent in the team list: avatar with its status dot, name, role, the time of the last event and a preview.
@@ -302,7 +355,8 @@ struct AgentRow: View {
     var agent: Agent
     /// The server the agent lives on, for its picture.
     var server: ServerModel?
-    var thread: AgentThread
+    /// What the row shows of the thread.
+    var facts: SidebarThreadFacts
     /// The status the team shows (see `ServerModel.status(of:)`); the thread may not be loaded.
     var status: AgentStatus
     var isSelected = false
@@ -311,12 +365,32 @@ struct AgentRow: View {
     /// The server's main agent: a crown on the avatar.
     var isLead = false
 
+    init(
+        agent: Agent, server: ServerModel? = nil, facts: SidebarThreadFacts, status: AgentStatus,
+        isSelected: Bool = false, lastActivity: String = "", isLead: Bool = false
+    ) {
+        self.agent = agent
+        self.server = server
+        self.facts = facts
+        self.status = status
+        self.isSelected = isSelected
+        self.lastActivity = lastActivity
+        self.isLead = isLead
+    }
+
+    /// A row made from the whole thread (pictures of the row in tests).
+    init(agent: Agent, server: ServerModel? = nil, thread: AgentThread, status: AgentStatus, isSelected: Bool = false) {
+        self.init(
+            agent: agent, server: server, facts: SidebarThreadFacts(thread: thread, agent: agent), status: status,
+            isSelected: isSelected)
+    }
+
     var body: some View {
         let _ = PerfCounters.hit("AgentRow")
         HStack(alignment: .center, spacing: 11) {
             AgentAvatarView(
                 agent: agent, server: server, size: 40,
-                mood: AvatarMood.make(status: status, turnRunning: thread.turnRunning, paused: agent.paused))
+                mood: AvatarMood.make(status: status, turnRunning: facts.turnRunning, paused: agent.paused))
                 .overlay(alignment: .bottomTrailing) {
                     StatusDot(status: status, size: 11, ringColor: Color.Bandito.surface1)
                         .offset(x: 2, y: 2)
@@ -348,7 +422,7 @@ struct AgentRow: View {
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }
-                Text(AgentPreview.text(thread: thread, agent: agent) ?? L10n.Team.noMessages)
+                Text(facts.preview ?? L10n.Team.noMessages)
                     .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(status == .needsYou ? Color.Bandito.signalGlow : Color.Bandito.text3)
                     .lineLimit(1)

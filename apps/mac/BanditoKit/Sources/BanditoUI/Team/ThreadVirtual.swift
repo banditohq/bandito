@@ -326,6 +326,12 @@ final class ThreadVirtualHost {
     /// The rows of `items`, built again only when the items changed.
     func rows(of items: [ThreadItem]) -> [ThreadRow] {
         if items.count == builtFrom.count, !built.isEmpty || items.isEmpty, items == builtFrom { return built }
+        // A stream changes only the last item, and its row is that item: only the row is replaced.
+        if let row = ThreadRows.replacingLast(built, from: builtFrom, to: items) {
+            builtFrom = items
+            built = row
+            return built
+        }
         builtFrom = items
         built = ThreadRows.build(items)
         return built

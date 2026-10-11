@@ -2301,6 +2301,7 @@ public enum L10n {
             public static var screen: String { L10n.tr("perfCheck.page.screen") }
             public static var server: String { L10n.tr("perfCheck.page.server") }
             public static var settings: String { L10n.tr("perfCheck.page.settings") }
+            public static var stream: String { L10n.tr("perfCheck.page.stream") }
             public static var switchAgents: String { L10n.tr("perfCheck.page.switchAgents") }
             public static var team: String { L10n.tr("perfCheck.page.team") }
             public static var terminals: String { L10n.tr("perfCheck.page.terminals") }

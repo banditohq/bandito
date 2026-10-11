@@ -1660,6 +1660,7 @@
 "perfCheck.page.screen" = "화면";
 "perfCheck.page.server" = "서버";
 "perfCheck.page.settings" = "설정";
+"perfCheck.page.stream" = "채팅: 답변 스트리밍";
 "perfCheck.page.switchAgents" = "에이전트 전환";
 "perfCheck.page.team" = "팀: 에이전트와 홈";
 "perfCheck.page.terminals" = "터미널";

@@ -1660,6 +1660,7 @@
 "perfCheck.page.screen" = "Экран";
 "perfCheck.page.server" = "Сервер";
 "perfCheck.page.settings" = "Настройки";
+"perfCheck.page.stream" = "Чат: ответ печатается";
 "perfCheck.page.switchAgents" = "Смена агента";
 "perfCheck.page.team" = "Команда: агенты и главная";
 "perfCheck.page.terminals" = "Терминалы";

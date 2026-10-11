@@ -1660,6 +1660,7 @@
 "perfCheck.page.screen" = "Screen";
 "perfCheck.page.server" = "Server";
 "perfCheck.page.settings" = "Settings";
+"perfCheck.page.stream" = "Chat: a reply streams in";
 "perfCheck.page.switchAgents" = "Switching agents";
 "perfCheck.page.team" = "Team: agents and home";
 "perfCheck.page.terminals" = "Terminals";

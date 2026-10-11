@@ -2971,5 +2971,6 @@
   "perfCheck.page.market": "마켓플레이스",
   "perfCheck.page.settings": "설정",
   "perfCheck.page.modes": "모드와 서버",
-  "perfCheck.page.overlays": "메뉴, 시트, 알림"
+  "perfCheck.page.overlays": "메뉴, 시트, 알림",
+  "perfCheck.page.stream": "채팅: 답변 스트리밍"
 }

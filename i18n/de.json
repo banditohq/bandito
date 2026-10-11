@@ -3006,5 +3006,6 @@
   "perfCheck.page.market": "Marktplatz",
   "perfCheck.page.settings": "Einstellungen",
   "perfCheck.page.modes": "Modi und Server",
-  "perfCheck.page.overlays": "Menüs, Fenster und Hinweise"
+  "perfCheck.page.overlays": "Menüs, Fenster und Hinweise",
+  "perfCheck.page.stream": "Chat: eine Antwort kommt herein"
 }

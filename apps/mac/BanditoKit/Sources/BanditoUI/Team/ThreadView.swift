@@ -74,14 +74,14 @@ struct ThreadView: View {
     }
 
     private var thread: AgentThread { server.thread(for: agent.id) }
+    /// What the frame of the chat (header, composer, banners) shows of the thread. Its body reads this, not `thread`:
+    /// a streamed token changes the thread, not the summary, and must not build the header and the composer again.
+    /// Only the rows (`ThreadRowsScope`) and the watcher (`ThreadWatch`) read the thread itself.
+    private var summary: AgentThreadState { server.threadSummary(for: agent.id) }
 
     /// The tools the agent is running now, by name (a tool row without a result yet).
     private var runningToolNames: [String] {
-        let rows: [ToolRow] = thread.items.compactMap { item in
-            if case .tool(let row) = item { return row }
-            return nil
-        }
-        return WorkbenchRules.runningToolNames(rows, now: Int64(Date().timeIntervalSince1970 * 1000))
+        WorkbenchRules.runningToolNames(summary.unfinishedTools, now: Int64(Date().timeIntervalSince1970 * 1000))
     }
 
     /// The agent's details in the workbench, on their details tab (the capsule and the schedules button).
@@ -374,8 +374,8 @@ struct ThreadView: View {
             ThreadHeader(
                 agent: agent,
                 server: server,
-                status: thread.status,
-                turnRunning: thread.turnRunning,
+                status: summary.loadedStatus ?? .idle,
+                turnRunning: summary.turnRunning,
                 changes: server.info?.supports("changes") == true ? changes : nil,
                 showsChanges: server.info?.supports("changes") == true,
                 showsTerminal: server.supports("terminals"),
@@ -395,28 +395,22 @@ struct ThreadView: View {
 
             ScrollViewReader { proxy in
                 ThreadRowsScope(ticker: scroll.virtual.ticker) { rows(proxy) }
-                    // Follow a new item only while the bottom is on screen: prepending older history, or reading
-                    // further up, must not jump to the bottom. (Growth of the last item, a stream or an opened
-                    // card, is followed from the scroll geometry.)
-                    .onChange(of: thread.items.last?.id) { _, _ in
-                        // The echo of the person's own message (and the answer to it) is looked at.
-                        if scroll.sendPinned {
-                            followArrival(proxy)
-                            return
-                        }
-                        guard atBottom else { return }
-                        followBottom(proxy)
-                    }
-                    .onChange(of: thread.items.count, initial: true) { old, new in
-                        pinWindow()
-                        slideWindow()
-                        if ThreadJumpRules.countsAsUnseen(atBottom: atBottom, sendPinned: scroll.sendPinned) {
-                            unseen += ThreadScroll.unseenAdded(previousCount: old, currentCount: new)
-                        } else if scroll.sendPinned, new > old {
-                            // An item that came in after a send (also one that keeps the last id, as an edit of
-                            // the same row does not): the follow takes it.
-                            followArrival(proxy)
-                        }
+                    .background {
+                        ThreadWatch(
+                            server: server, agentID: agent.id, windowStartID: windowStartID,
+                            onLastItem: {
+                                lastItemChanged(proxy)
+                                readNewReply()
+                            },
+                            onCount: { old, new in countChanged(old, new, proxy) },
+                            onFilled: {
+                                guard scroll.restorePending else { return }
+                                DispatchQueue.main.async {
+                                    guard scroll.alive, scroll.restorePending else { return }
+                                    restore(proxy)
+                                }
+                            },
+                            onFirstShown: { firstShownChanged(proxy) })
                     }
                     .onChange(of: bottomRequest) { _, _ in goToBottom(proxy) }
                     .overlay(alignment: .bottom) {
@@ -425,31 +419,6 @@ struct ThreadView: View {
                     .onAppear {
                         scroll.alive = true
                         restore(proxy)
-                    }
-                    .onChange(of: thread.items.isEmpty) { _, isEmpty in
-                        guard !isEmpty, scroll.restorePending else { return }
-                        DispatchQueue.main.async {
-                            guard scroll.alive, scroll.restorePending else { return }
-                            restore(proxy)
-                        }
-                    }
-                    // Rows put above the one on top (older history drawn): the row stays where it was.
-                    .onChange(of: shownItems.first?.id) { _, _ in
-                        guard let id = scroll.anchorRow else { return }
-                        scroll.anchorRow = nil
-                        DispatchQueue.main.async {
-                            guard scroll.alive else { return }
-                            reveal(id) { proxy.scrollTo(id, anchor: .top) }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                scroll.skipFollow = false
-                                // Still at the top after the rows were drawn: once more, not in a loop (an empty
-                                // answer never gets here, and the retry is re-armed only after the top was left).
-                                if scroll.alive, scroll.nearTop, !scroll.topRetried {
-                                    scroll.topRetried = true
-                                    topReached()
-                                }
-                            }
-                        }
                     }
                     .onChange(of: scrollRequest) { _, request in
                         guard let request else { return }
@@ -463,11 +432,11 @@ struct ThreadView: View {
             .overlay {
                 // The first screen of a thread with no message. It waits for the history: `hasMoreHistory` is set once the
                 // first page is read, so a thread that has messages on the server never flashes it.
-                if thread.items.isEmpty, server.hasMoreHistory[agent.id] != nil {
+                if summary.isEmpty, server.hasMoreHistory[agent.id] != nil {
                     ThreadEmptyState(agent: agent, server: server, onPick: pickSuggestion)
                 }
             }
-            if thread.status == .error, let detail = thread.statusDetail {
+            if summary.loadedStatus == .error, let detail = summary.statusDetail {
                 Banner(text: detail)
             }
             if let kind = server.lastError {
@@ -485,23 +454,23 @@ struct ThreadView: View {
             }
             Composer(
                 agentName: agent.name,
-                running: thread.turnRunning,
+                running: summary.turnRunning,
                 contextFraction: ContextUsage.fraction(tokens: agent.contextTokens, budget: agent.contextBudget),
                 agent: agent,
                 server: server,
                 reply: replyDrafts.target(for: agent.id),
                 onCancelReply: { replyDrafts.set(nil, for: agent.id) },
-                waitingForm: server.supports("forms") ? thread.pendingForms.last : nil,
+                waitingForm: server.supports("forms") ? summary.pendingForms.last : nil,
                 onGoToForm: { scrollTo(id: "form-\($0)") },
                 waitingConnect: connectWait,
                 onGoToConnect: { scrollTo(id: "connect-\($0)") },
                 replyFormId: ComposerSendMode.formToAnswer(
-                    in: thread.pendingForms, supportsReply: server.supports("form_reply")),
+                    in: summary.pendingForms, supportsReply: server.supports("form_reply")),
                 onReplyToForm: replyToForm,
                 onSend: send,
                 onStop: stop,
                 onNewChapter: startNewChapter,
-                showsHints: thread.items.isEmpty)
+                showsHints: summary.isEmpty)
                 .frame(maxWidth: 780)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 14)
@@ -552,15 +521,56 @@ struct ThreadView: View {
             }
         }
         // The change counts are refreshed when a turn ends.
-        .onChange(of: thread.turnRunning) { wasRunning, isRunning in
+        .onChange(of: summary.turnRunning) { wasRunning, isRunning in
             if wasRunning && !isRunning {
                 Task { await loadChanges() }
             }
             readNewReply()
         }
-        // A final message arrives as the last item; it is read when its turn has ended (see `ReadAloudTracker`).
-        .onChange(of: thread.items.last?.id) { _, _ in readNewReply() }
         .onChange(of: agent.id) { _, _ in readAloud.reset() }
+    }
+
+    /// A new last item: the echo of the person's own message (and the answer to it) is looked at; else the bottom is
+    /// followed while it is on screen. Prepending older history, or reading further up, must not jump to the bottom.
+    /// (Growth of the last item, a stream or an opened card, is followed from the scroll geometry.)
+    private func lastItemChanged(_ proxy: ScrollViewProxy) {
+        if scroll.sendPinned {
+            followArrival(proxy)
+            return
+        }
+        guard atBottom else { return }
+        followBottom(proxy)
+    }
+
+    private func countChanged(_ old: Int, _ new: Int, _ proxy: ScrollViewProxy) {
+        pinWindow()
+        slideWindow()
+        if ThreadJumpRules.countsAsUnseen(atBottom: atBottom, sendPinned: scroll.sendPinned) {
+            unseen += ThreadScroll.unseenAdded(previousCount: old, currentCount: new)
+        } else if scroll.sendPinned, new > old {
+            // An item that came in after a send (also one that keeps the last id, as an edit of the same row does
+            // not): the follow takes it.
+            followArrival(proxy)
+        }
+    }
+
+    /// Rows put above the one on top (older history drawn): the row stays where it was.
+    private func firstShownChanged(_ proxy: ScrollViewProxy) {
+        guard let id = scroll.anchorRow else { return }
+        scroll.anchorRow = nil
+        DispatchQueue.main.async {
+            guard scroll.alive else { return }
+            reveal(id) { proxy.scrollTo(id, anchor: .top) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                scroll.skipFollow = false
+                // Still at the top after the rows were drawn: once more, not in a loop (an empty answer never gets
+                // here, and the retry is re-armed only after the top was left).
+                if scroll.alive, scroll.nearTop, !scroll.topRetried {
+                    scroll.topRetried = true
+                    topReached()
+                }
+            }
+        }
     }
 
     /// Reads a new final reply aloud when the agent has "Read replies aloud" on and Bandito is the active app. A reply
@@ -676,18 +686,13 @@ struct ThreadView: View {
     // MARK: Messages: replies, reactions, forms
 
     /// How many connect cards the thread holds; a change of it reads the catalog.
-    private var connectCardCount: Int {
-        thread.items.reduce(0) { count, item in
-            if case .connect = item { return count + 1 }
-            return count
-        }
-    }
+    private var connectCardCount: Int { summary.connectCardCount }
 
     /// The service an agent waits on the person to connect, for the hint above the field.
     private var connectWait: ConnectWait? {
         guard server.supports("agent_connect") else { return nil }
         return AgentConnectRules.waiting(
-            in: thread.pendingConnects, catalog: MentionServices.shared.snapshot(for: server)?.catalog ?? [])
+            in: summary.pendingConnects, catalog: MentionServices.shared.snapshot(for: server)?.catalog ?? [])
     }
 
     /// Pressing Connect on a card: the same connection as the Marketplace (see `AgentConnectRules`). The daemon sees
@@ -908,6 +913,34 @@ private struct RowHeightReporter: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// Watches one agent's thread for the changes the chat answers to: a new last item, a new number of items, the first
+/// items of an empty thread, another first row drawn. The chat itself does not read the thread (see
+/// `ThreadView.summary`): a streamed token builds this empty view again, not the chat's header and composer.
+private struct ThreadWatch: View {
+    let server: ServerModel
+    let agentID: String
+    /// The id of the first item the window draws (see `ThreadScroll.windowStart`).
+    let windowStartID: String?
+    var onLastItem: () -> Void
+    var onCount: (Int, Int) -> Void
+    /// The thread was empty and has items now.
+    var onFilled: () -> Void
+    var onFirstShown: () -> Void
+
+    var body: some View {
+        let items = server.thread(for: agentID).items
+        let start = items.isEmpty ? 0 : ThreadScroll.windowStart(ids: items.map(\.id), startID: windowStartID)
+        let firstShown = items.isEmpty ? nil : items[start].id
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onChange(of: items.last?.id) { _, _ in onLastItem() }
+            .onChange(of: items.count, initial: true) { old, new in onCount(old, new) }
+            .onChange(of: items.isEmpty) { _, isEmpty in if !isEmpty { onFilled() } }
+            .onChange(of: firstShown) { _, _ in onFirstShown() }
+            .accessibilityHidden(true)
     }
 }
 
