@@ -468,9 +468,9 @@ public final class ServerModel: Identifiable {
     /// Counts the `telegram.changed` events this model applied. The Telegram section reads the status again on each
     /// change of this number.
     public internal(set) var telegramRevision = 0
-    /// True when the daemon answered `method not found` to the Telegram RPCs (a daemon from before 0.1.8). The Settings
-    /// window then leaves the Telegram section out. Set by `checkTelegramSupport()`.
-    public internal(set) var telegramUnsupported = false
+    /// Whether the daemon knows the Telegram RPCs. `unknown` until `checkTelegramSupport()` has answered; the Settings
+    /// window shows the Telegram section only for `supported`.
+    public internal(set) var telegramSupport = TelegramSupport.unknown
 
     /// Fold one event into the model (also used by tests).
     public func apply(_ e: Event) {

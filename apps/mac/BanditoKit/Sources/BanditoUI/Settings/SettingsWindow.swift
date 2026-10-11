@@ -31,10 +31,11 @@ public struct SettingsWindow: View {
 
     public init() {}
 
-    /// The sections the current server can show: Telegram is left out on a daemon that does not know it.
+    /// The sections the current server can show. Telegram is listed only once the probe has answered that the daemon
+    /// knows it: while the probe runs, or on an older daemon, the item is not there.
     private var sections: [SettingsSection] {
-        let telegramHidden = app.currentServer?.telegramUnsupported ?? false
-        return SettingsSection.allCases.filter { $0 != .telegram || !telegramHidden }
+        let telegramShown = app.currentServer?.telegramSupport == .supported
+        return SettingsSection.allCases.filter { $0 != .telegram || telegramShown }
     }
 
     /// Asks the current server once it is connected, and again when another server is chosen.
@@ -64,9 +65,9 @@ public struct SettingsWindow: View {
         .task(id: TelegramProbe(server: app.currentServer?.id, connected: app.currentServer?.info != nil)) {
             await app.currentServer?.checkTelegramSupport()
         }
-        // A daemon that turns out not to know Telegram takes the section away; the window moves to General.
-        .onChange(of: app.currentServer?.telegramUnsupported ?? false) { _, hidden in
-            if hidden, section == .telegram { section = .general }
+        // Without a confirmed Telegram daemon the section is not listed; the window then moves to General.
+        .onChange(of: app.currentServer?.telegramSupport ?? .unknown) { _, support in
+            if support != .supported, section == .telegram { section = .general }
         }
     }
 

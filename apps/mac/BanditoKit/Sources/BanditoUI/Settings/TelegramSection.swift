@@ -11,7 +11,19 @@ struct TelegramSection: View {
 
     var body: some View {
         if let server = app.currentServer {
-            TelegramServerPage(server: server)
+            // Nothing is read from the server until the probe has answered: no raw error from an older daemon.
+            switch server.telegramSupport {
+            case .supported:
+                TelegramServerPage(server: server)
+            case .unknown:
+                SettingsPage(title: SettingsSection.telegram.title, intro: L10n.Settings.Telegram.intro) {
+                    ProgressView().controlSize(.small)
+                }
+            case .unsupported:
+                SettingsPage(title: SettingsSection.telegram.title, intro: L10n.Settings.Telegram.intro) {
+                    EmptyView()
+                }
+            }
         } else {
             SettingsPage(title: SettingsSection.telegram.title, intro: L10n.Settings.Telegram.intro) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -34,15 +46,20 @@ private struct TelegramServerPage: View {
     let server: ServerModel
     @State private var status: TelegramStatus?
     @State private var loadError: UserFacingMessage?
+    /// The read in flight. A new read cancels it, and only the newest read applies its answer.
+    @State private var loadTask: Task<Void, Never>?
 
     var body: some View {
         TelegramPage(status: status, loadError: loadError, actions: actions)
             .task(id: server.id) {
                 status = nil
-                await load()
+                load()
             }
             .onChange(of: server.telegramRevision) { _, _ in
-                Task { await load() }
+                load()
+            }
+            .onDisappear {
+                loadTask?.cancel()
             }
     }
 
@@ -51,31 +68,39 @@ private struct TelegramServerPage: View {
         return TelegramActions(
             setToken: { token in
                 _ = try await server.telegramSetToken(token)
-                await load()
+                load()
             },
             removeToken: {
                 try await server.telegramRemoveToken()
-                await load()
+                load()
             },
             linkStart: {
                 try await server.telegramLinkStart()
             },
             unlink: { chatId in
                 try await server.telegramUnlink(chatId: chatId)
-                await load()
+                load()
             },
             updateChat: { chatId, approvals, answers in
                 try await server.telegramUpdateChat(chatId: chatId, approvals: approvals, answers: answers)
-                await load()
+                load()
             })
     }
 
-    private func load() async {
-        do {
-            status = try await server.telegramStatus()
-            loadError = nil
-        } catch {
-            loadError = UserFacingError.message(for: error)
+    /// Reads the status. A read that starts while another runs cancels it, and an answer is applied only if its read was
+    /// not cancelled: a slow old reply cannot overwrite a newer one.
+    private func load() {
+        loadTask?.cancel()
+        loadTask = Task {
+            do {
+                let fresh = try await server.telegramStatus()
+                guard !Task.isCancelled else { return }
+                status = fresh
+                loadError = nil
+            } catch {
+                guard !Task.isCancelled else { return }
+                loadError = UserFacingError.message(for: error)
+            }
         }
     }
 }

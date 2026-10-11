@@ -70,7 +70,15 @@ import Testing
         let (model, _) = makeModel([fake])
         await model.connect()
         await model.checkTelegramSupport()
-        #expect(model.telegramUnsupported)
+        #expect(model.telegramSupport == .unsupported)
+    }
+
+    @Test func theProbeIsUnknownUntilItAnswer() async throws {
+        let (model, _) = makeModel([FakeTransport(handlers: [:])])
+        #expect(model.telegramSupport == .unknown)
+        // Not connected: the probe cannot answer, so the state stays unknown.
+        await model.checkTelegramSupport()
+        #expect(model.telegramSupport == .unknown)
     }
 
     @Test func aDaemonWithTelegramKeepsTheSection() async throws {
@@ -81,6 +89,6 @@ import Testing
         let (model, _) = makeModel([fake])
         await model.connect()
         await model.checkTelegramSupport()
-        #expect(!model.telegramUnsupported)
+        #expect(model.telegramSupport == .supported)
     }
 }

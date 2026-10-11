@@ -3,6 +3,11 @@ import Foundation
 // The Telegram bot of this server: approvals and agent replies go to the chats linked to it, and the owner writes to
 // the agents from there. Owner and app methods only. Needs a daemon from 0.1.8 (`method not found` otherwise).
 
+/// Whether a daemon knows the Telegram RPCs: `unknown` until the probe has answered, then `supported` or `unsupported`.
+public enum TelegramSupport: Sendable, Hashable {
+    case unknown, supported, unsupported
+}
+
 /// The bot the daemon polls. `username` has no `@`.
 public struct TelegramBot: Codable, Sendable, Hashable {
     public var username: String
@@ -119,15 +124,15 @@ extension ServerModel {
         try await rpc().call("telegram.update_chat", params, timeout: .seconds(30))
     }
 
-    /// Asks whether this daemon knows the Telegram RPCs. A daemon from before 0.1.8 answers `method not found`, and then
-    /// `telegramUnsupported` is set and the section is left out. Any other failure keeps the last answer: the section
-    /// shows its own error when it asks.
+    /// Asks whether this daemon knows the Telegram RPCs. A daemon from before 0.1.8 answers `method not found`, which
+    /// sets `telegramSupport` to `unsupported`. Any other failure (not connected, link dropped) keeps the last answer,
+    /// which is `unknown` until the first real one.
     public func checkTelegramSupport() async {
         do {
             _ = try await telegramStatus()
-            telegramUnsupported = false
+            telegramSupport = .supported
         } catch let error as RPCError where error.code == RPCError.methodNotFound {
-            telegramUnsupported = true
+            telegramSupport = .unsupported
         } catch {
             // Not connected, or the link dropped: the last answer stands.
         }
