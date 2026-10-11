@@ -73,7 +73,9 @@ impl FakeTelegram {
             wake: tokio::sync::Notify::new(),
             task: Mutex::new(None),
         });
-        let app = Router::new().route("/{bot}/{method}", post(handle)).with_state(fake.clone());
+        let app = Router::new()
+            .route("/{bot}/{method}", post(handle))
+            .with_state(fake.clone());
         let task = tokio::spawn(async move {
             let _ = axum::serve(listener, app).await;
         });
@@ -162,10 +164,6 @@ impl FakeTelegram {
     pub fn last_message_id(&self) -> i64 {
         self.inner.lock().unwrap().next_message_id
     }
-
-    pub fn pending_updates(&self) -> usize {
-        self.inner.lock().unwrap().updates.len()
-    }
 }
 
 fn answer(status: u16, body: Value) -> Response {
@@ -207,13 +205,17 @@ async fn handle(
         return answer(401, error_body(401, "Unauthorized", None));
     }
     if let Some(fail) = failure {
-        return answer(fail.status, error_body(fail.status, &fail.description, fail.retry_after));
+        return answer(
+            fail.status,
+            error_body(fail.status, &fail.description, fail.retry_after),
+        );
     }
     match method.as_str() {
         "getMe" => answer(
             200,
             json!({ "ok": true, "result": {
-                "id": 424242, "is_bot": true, "first_name": "Bandito Test", "username": "bandito_test_bot" } }),
+                "id": bot.trim_start_matches("bot").split(':').next().and_then(|n| n.parse::<i64>().ok()).unwrap_or(0),
+                "is_bot": true, "first_name": "Bandito Test", "username": "bandito_test_bot" } }),
         ),
         "getUpdates" => {
             let offset = body["offset"].as_i64().unwrap_or(0);

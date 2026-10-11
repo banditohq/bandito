@@ -3,7 +3,7 @@
 //! See docs/ARCHITECTURE.md#secrets.
 
 use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, RpcError, RpcResult, ok, params};
-use crate::integrations::OAUTH_SECRET_PREFIX;
+use crate::integrations::is_daemon_secret;
 use crate::store::{check_agents, check_name, check_value};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -24,11 +24,11 @@ struct SetParams {
 pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
     let store = &app.sup.hub().store;
     match method {
-        // The daemon's own sign-in tokens (`mcp_oauth.rs`) are not for the secrets screen.
+        // The daemon's own sign-in tokens (`mcp_oauth.rs`) and the Telegram bot's token are not for the secrets screen.
         "secrets.list" => ok(store
             .secret_list()?
             .into_iter()
-            .filter(|s| !s.name.starts_with(OAUTH_SECRET_PREFIX))
+            .filter(|s| !is_daemon_secret(&s.name))
             .collect::<Vec<_>>()),
         "secrets.set" => {
             let p: SetParams = params(p)?;
@@ -56,9 +56,9 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
     }
 }
 
-/// The sign-in secrets belong to the daemon: disconnect the integration instead.
+/// The sign-in secrets and the bot's token belong to the daemon: disconnect the integration or the bot instead.
 fn check_not_oauth(name: &str) -> Result<(), RpcError> {
-    if name.starts_with(OAUTH_SECRET_PREFIX) {
+    if is_daemon_secret(name) {
         return Err(RpcError::new(INVALID_PARAMS, format!("{name} is reserved")));
     }
     Ok(())

@@ -98,9 +98,7 @@ async fn rig() -> Rig {
 impl Rig {
     /// Links a chat the way a finished `/start <code>` does: private chat `id`, owned by user `id`.
     fn link(&self, chat: i64) {
-        self.store
-            .tg_chat_link(chat, chat, "Ann", "en", now_ms())
-            .unwrap();
+        self.store.tg_chat_link(chat, chat, "Ann", "en", now_ms()).unwrap();
     }
 
     fn chat(&self, chat: i64) -> crate::store::TgChat {
@@ -276,7 +274,10 @@ async fn link_start_gives_an_eight_letter_code_and_a_deep_link() {
     rig.tg
         .handle_update(msg(OWNER, &format!("/start {}", reply["code"].as_str().unwrap())))
         .await;
-    assert!(rig.store.tg_chat_get(OWNER).unwrap().is_none(), "the replaced code still worked");
+    assert!(
+        rig.store.tg_chat_get(OWNER).unwrap().is_none(),
+        "the replaced code still worked"
+    );
     rig.tg
         .handle_update(msg(OWNER, &format!("/start {}", second["code"].as_str().unwrap())))
         .await;
@@ -313,12 +314,13 @@ async fn the_right_code_links_the_chat_once() {
     assert!(matches!(ev.body, EventBody::TelegramChanged));
 
     // The same code from another chat does nothing.
-    rig.tg
-        .handle_update(msg(200, &format!("/start {code}")))
-        .await;
+    rig.tg.handle_update(msg(200, &format!("/start {code}"))).await;
     assert!(rig.store.tg_chat_get(200).unwrap().is_none());
     assert_eq!(rig.store.tg_chat_list().unwrap().len(), 1);
-    assert_eq!(text_of(rig.fake.sent_to(200).last().unwrap()), tr("en", "bad_code", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(200).last().unwrap()),
+        tr("en", "bad_code", &[])
+    );
 }
 
 #[tokio::test]
@@ -332,7 +334,10 @@ async fn an_expired_code_does_not_link() {
     tokio::time::sleep(Duration::from_millis(5)).await;
     rig.tg.handle_update(msg(OWNER, &format!("/start {code}"))).await;
     assert!(rig.store.tg_chat_get(OWNER).unwrap().is_none());
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "bad_code", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "bad_code", &[])
+    );
 }
 
 #[tokio::test]
@@ -357,7 +362,10 @@ async fn ten_wrong_codes_burn_the_code() {
         rig.tg.handle_update(msg(500 + i, "/start WRONGCOD")).await;
     }
     rig.tg.handle_update(msg(OWNER, &format!("/start {code}"))).await;
-    assert!(rig.store.tg_chat_get(OWNER).unwrap().is_none(), "a burned code linked a chat");
+    assert!(
+        rig.store.tg_chat_get(OWNER).unwrap().is_none(),
+        "a burned code linked a chat"
+    );
 }
 
 #[tokio::test]
@@ -424,7 +432,10 @@ async fn a_sixth_chat_is_refused() {
     rig.tg.handle_update(msg(OWNER, &format!("/start {code}"))).await;
     assert_eq!(rig.store.tg_chat_list().unwrap().len(), 5);
     assert!(rig.store.tg_chat_get(OWNER).unwrap().is_none());
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "too_many_chats", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "too_many_chats", &[])
+    );
 
     // Once a chat is removed, the same code (not used up) works.
     rig.store.tg_chat_delete(5).unwrap();
@@ -474,7 +485,10 @@ async fn an_unlinked_chat_gets_one_notice_an_hour_and_no_commands() {
     assert_eq!(sent.len(), 1, "{sent:?}");
     assert_eq!(text_of(&sent[0]), notice);
     assert!(!notice.contains("Secret"));
-    assert!(rig.sent_log().is_empty(), "a command of an unlinked chat reached an agent");
+    assert!(
+        rig.sent_log().is_empty(),
+        "a command of an unlinked chat reached an agent"
+    );
     // Later, the notice may come again.
     tokio::time::sleep(Duration::from_millis(350)).await;
     rig.tg.handle_update(msg(300, "hello?")).await;
@@ -511,9 +525,13 @@ async fn a_callback_from_the_wrong_user_or_chat_does_not_resolve_the_approval() 
     let card = rig.fake.last_message_id();
 
     // Right chat, wrong user.
-    rig.tg.handle_update(callback(OWNER, 999, card, &format!("a:{id}:y"))).await;
+    rig.tg
+        .handle_update(callback(OWNER, 999, card, &format!("a:{id}:y")))
+        .await;
     // A chat that is not linked at all.
-    rig.tg.handle_update(callback(555, 555, card, &format!("a:{id}:y"))).await;
+    rig.tg
+        .handle_update(callback(555, 555, card, &format!("a:{id}:y")))
+        .await;
     // Right user id in a group chat.
     let in_group = json!({ "callback_query": {
         "id": "cb-g", "from": from(OWNER, "en"), "data": format!("a:{id}:y"),
@@ -564,7 +582,9 @@ async fn a_card_with_buttons_and_allow_from_telegram() {
     assert!(keys.iter().all(|(_, data)| data.len() <= 64));
     let message_id = rig.fake.last_message_id();
 
-    rig.tg.handle_update(callback(OWNER, OWNER, message_id, &format!("a:{id}:y"))).await;
+    rig.tg
+        .handle_update(callback(OWNER, OWNER, message_id, &format!("a:{id}:y")))
+        .await;
 
     let stored = rig.store.approval_get(&id).unwrap().unwrap();
     assert_eq!(stored.status, ApprovalStatus::Resolved);
@@ -575,12 +595,17 @@ async fn a_card_with_buttons_and_allow_from_telegram() {
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0]["message_id"], message_id);
     assert_eq!(edits[0]["chat_id"], OWNER);
-    assert!(text_of(&edits[0]).contains(&tr("en", "approval_allowed_tg", &[])), "{}", text_of(&edits[0]));
+    assert!(
+        text_of(&edits[0]).contains(&tr("en", "approval_allowed_tg", &[])),
+        "{}",
+        text_of(&edits[0])
+    );
     assert!(buttons(&edits[0]).is_empty());
     assert_eq!(edits[0]["reply_markup"]["inline_keyboard"], json!([]));
 
     // The resolved event that follows does not edit the card a second time.
-    rig.feed_until(|b| matches!(b, EventBody::ApprovalResolved { .. })).await;
+    rig.feed_until(|b| matches!(b, EventBody::ApprovalResolved { .. }))
+        .await;
     assert_eq!(rig.fake.calls("editMessageText").len(), 1);
 }
 
@@ -606,12 +631,17 @@ async fn an_approval_resolved_in_the_app_edits_the_card() {
     let card = rig.fake.last_message_id();
 
     rig.sup.resolve(&id, Decision::Allow, false).await.unwrap();
-    rig.feed_until(|b| matches!(b, EventBody::ApprovalResolved { .. })).await;
+    rig.feed_until(|b| matches!(b, EventBody::ApprovalResolved { .. }))
+        .await;
 
     let edits = rig.fake.calls("editMessageText");
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0]["message_id"], card);
-    assert!(text_of(&edits[0]).contains(&tr("en", "approval_allowed_app", &[])), "{}", text_of(&edits[0]));
+    assert!(
+        text_of(&edits[0]).contains(&tr("en", "approval_allowed_app", &[])),
+        "{}",
+        text_of(&edits[0])
+    );
     assert_eq!(edits[0]["reply_markup"]["inline_keyboard"], json!([]));
 }
 
@@ -623,7 +653,9 @@ async fn a_second_press_says_the_approval_is_decided() {
     let card = rig.fake.last_message_id();
     rig.sup.resolve(&id, Decision::Deny, false).await.unwrap();
 
-    rig.tg.handle_update(callback(OWNER, OWNER, card, &format!("a:{id}:y"))).await;
+    rig.tg
+        .handle_update(callback(OWNER, OWNER, card, &format!("a:{id}:y")))
+        .await;
     let answers = rig.fake.calls("answerCallbackQuery");
     assert_eq!(answers.len(), 1);
     assert_eq!(answers[0]["text"], tr("en", "approval_already", &[]));
@@ -631,8 +663,13 @@ async fn a_second_press_says_the_approval_is_decided() {
     let stored = rig.store.approval_get(&id).unwrap().unwrap();
     assert_eq!(stored.decision, Some(Decision::Deny));
     // An id that never existed is answered the same way.
-    rig.tg.handle_update(callback(OWNER, OWNER, card, "a:no-such-approval:y")).await;
-    assert_eq!(rig.fake.calls("answerCallbackQuery")[1]["text"], tr("en", "approval_already", &[]));
+    rig.tg
+        .handle_update(callback(OWNER, OWNER, card, "a:no-such-approval:y"))
+        .await;
+    assert_eq!(
+        rig.fake.calls("answerCallbackQuery")[1]["text"],
+        tr("en", "approval_already", &[])
+    );
 }
 
 #[tokio::test]
@@ -645,7 +682,10 @@ async fn a_chat_with_approvals_off_gets_no_card_and_cannot_decide() {
     assert_eq!(rig.cards(OWNER).len(), 1);
     assert!(rig.cards(101).is_empty());
     rig.tg.handle_update(callback(101, 101, 1, &format!("a:{id}:y"))).await;
-    assert_eq!(rig.store.approval_get(&id).unwrap().unwrap().status, ApprovalStatus::Pending);
+    assert_eq!(
+        rig.store.approval_get(&id).unwrap().unwrap().status,
+        ApprovalStatus::Pending
+    );
 }
 
 #[tokio::test]
@@ -696,7 +736,10 @@ async fn approvals_command_lists_the_waiting_ones_as_cards() {
     let mut rig = rig().await;
     rig.link(OWNER);
     rig.tg.handle_update(msg(OWNER, "/approvals")).await;
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "approvals_none", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "approvals_none", &[])
+    );
     let id = rig.pending_approval("git push origin main").await;
     rig.fake.clear_calls();
     rig.tg.handle_update(msg(OWNER, "/approvals")).await;
@@ -760,9 +803,15 @@ async fn ask_with_no_match_lists_every_agent() {
     // No text after the name: a hint, not a message.
     rig.tg.handle_update(msg(OWNER, "/ask fox")).await;
     assert!(rig.sent_log().is_empty());
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "ask_usage", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "ask_usage", &[])
+    );
     rig.tg.handle_update(msg(OWNER, "/ask")).await;
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "ask_usage", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "ask_usage", &[])
+    );
 }
 
 #[tokio::test]
@@ -773,10 +822,18 @@ async fn plain_text_without_a_current_agent_asks_which_one() {
     assert!(rig.sent_log().is_empty());
     let picker = rig.cards(OWNER).pop().expect("a picker");
     assert_eq!(text_of(&picker), tr("en", "pick_agent", &[]));
-    assert_eq!(buttons(&picker), vec![("Forge".to_string(), format!("s:{}", rig.agent))]);
+    assert_eq!(
+        buttons(&picker),
+        vec![("Forge".to_string(), format!("s:{}", rig.agent))]
+    );
 
     rig.tg
-        .handle_update(callback(OWNER, OWNER, rig.fake.last_message_id(), &format!("s:{}", rig.agent)))
+        .handle_update(callback(
+            OWNER,
+            OWNER,
+            rig.fake.last_message_id(),
+            &format!("s:{}", rig.agent),
+        ))
         .await;
     rig.wait_log_prefix("send build the thing").await;
     assert_eq!(rig.chat(OWNER).current_agent.as_deref(), Some(rig.agent.as_str()));
@@ -802,7 +859,12 @@ async fn a_held_text_expires() {
     rig.tg.handle_update(msg(OWNER, "old news")).await;
     tokio::time::sleep(Duration::from_millis(120)).await;
     rig.tg
-        .handle_update(callback(OWNER, OWNER, rig.fake.last_message_id(), &format!("s:{}", rig.agent)))
+        .handle_update(callback(
+            OWNER,
+            OWNER,
+            rig.fake.last_message_id(),
+            &format!("s:{}", rig.agent),
+        ))
         .await;
     assert!(rig.sent_log().is_empty());
     assert_eq!(rig.chat(OWNER).current_agent.as_deref(), Some(rig.agent.as_str()));
@@ -827,7 +889,9 @@ async fn a_reply_to_an_answer_goes_to_that_agent() {
     let answer_id = rig.fake.last_message_id();
     rig.store.tg_chat_set_current(OWNER, Some(&rig.agent)).unwrap();
 
-    rig.tg.handle_update(reply_msg(OWNER, answer_id, "make it shorter")).await;
+    rig.tg
+        .handle_update(reply_msg(OWNER, answer_id, "make it shorter"))
+        .await;
     rig.wait_log_prefix("send make it shorter").await;
     // It went to Fox, not to the current agent Forge.
     assert!(!rig.out.lock().unwrap().contains_key(&rig.agent));
@@ -851,7 +915,10 @@ async fn a_reply_to_a_deleted_agent_says_so() {
     let answer_id = rig.fake.last_message_id();
     rig.store.agent_delete(&fox).unwrap();
     rig.tg.handle_update(reply_msg(OWNER, answer_id, "still there?")).await;
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "agent_gone", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "agent_gone", &[])
+    );
 }
 
 #[tokio::test]
@@ -872,7 +939,10 @@ async fn text_with_no_agents_says_so() {
     rig.link(OWNER);
     rig.store.agent_delete(&rig.agent).unwrap();
     rig.tg.handle_update(msg(OWNER, "hello")).await;
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "no_agents", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "no_agents", &[])
+    );
 }
 
 #[tokio::test]
@@ -911,7 +981,10 @@ async fn a_too_long_message_is_refused() {
     rig.store.tg_chat_set_current(OWNER, Some(&rig.agent)).unwrap();
     rig.tg.handle_update(msg(OWNER, &"x".repeat(101 * 1024))).await;
     assert!(rig.sent_log().is_empty());
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "message_too_long", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "message_too_long", &[])
+    );
 }
 
 #[tokio::test]
@@ -928,7 +1001,10 @@ async fn agents_command_lists_agents_with_role_and_status() {
     let keys = buttons(&list);
     assert_eq!(keys.len(), 2);
     assert!(keys.iter().all(|(_, d)| d.starts_with("c:")));
-    assert!(keys.iter().any(|(label, d)| d == &format!("c:{}", rig.agent) && label.starts_with('✓')));
+    assert!(
+        keys.iter()
+            .any(|(label, d)| d == &format!("c:{}", rig.agent) && label.starts_with('✓'))
+    );
 
     // Making one current needs no pending text.
     let fox = keys.iter().find(|(l, _)| l.contains("Fox")).unwrap().1.clone();
@@ -980,7 +1056,10 @@ async fn help_unknown_commands_and_the_bot_name_suffix() {
     rig.tg.handle_update(msg(OWNER, "/help")).await;
     assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "help", &[]));
     rig.tg.handle_update(msg(OWNER, "/nonsense")).await;
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "unknown_command", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "unknown_command", &[])
+    );
     rig.tg.handle_update(msg(OWNER, "/help@bandito_test_bot")).await;
     assert_eq!(rig.fake.sent_to(OWNER).len(), 3);
     // A command for another bot is not ours.
@@ -994,10 +1073,16 @@ async fn unlink_says_goodbye_and_forgets_the_chat() {
     rig.link(OWNER);
     rig.tg.handle_update(msg(OWNER, "/unlink")).await;
     assert!(rig.store.tg_chat_get(OWNER).unwrap().is_none());
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "unlinked_bye", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "unlinked_bye", &[])
+    );
     // The chat is a stranger now.
     rig.tg.handle_update(msg(OWNER, "/agents")).await;
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "not_linked", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "not_linked", &[])
+    );
 }
 
 #[tokio::test]
@@ -1034,7 +1119,10 @@ async fn telegram_unlink_and_update_chat_from_the_app() {
 
     rig.tg.unlink(OWNER).await.unwrap();
     // The farewell went out before the chat was removed.
-    assert_eq!(text_of(rig.fake.sent_to(OWNER).last().unwrap()), tr("en", "unlinked_bye", &[]));
+    assert_eq!(
+        text_of(rig.fake.sent_to(OWNER).last().unwrap()),
+        tr("en", "unlinked_bye", &[])
+    );
     assert!(rig.store.tg_chat_get(OWNER).unwrap().is_none());
     assert!(rig.tg.unlink(OWNER).await.is_err());
 }
@@ -1098,7 +1186,10 @@ async fn a_queued_telegram_message_is_still_recognised() {
     rig.push(&forge, assistant("answer to busy")).await;
     rig.push(&forge, done()).await;
     rig.feed_until(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
-    assert!(rig.fake.sent_to(OWNER).is_empty(), "the app turn leaked to a `telegram` chat");
+    assert!(
+        rig.fake.sent_to(OWNER).is_empty(),
+        "the app turn leaked to a `telegram` chat"
+    );
     rig.wait_log_prefix("send queued one").await;
     rig.push(&forge, assistant("answer to queued")).await;
     rig.push(&forge, done()).await;
@@ -1134,7 +1225,11 @@ async fn long_answers_are_cut_with_a_pointer_to_the_app() {
     rig.feed_until(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
     let text = text_of(&rig.fake.sent_to(OWNER)[0]);
     assert!(text.chars().count() <= 4096, "{}", text.chars().count());
-    assert!(text.ends_with(&tr("en", "full_in_app", &[])), "{}", &text[text.len().saturating_sub(80)..]);
+    assert!(
+        text.ends_with(&tr("en", "full_in_app", &[])),
+        "{}",
+        &text[text.len().saturating_sub(80)..]
+    );
 }
 
 // ---- 7. the token never shows ----
@@ -1234,7 +1329,10 @@ async fn the_token_is_a_hidden_secret_for_no_agent() {
 #[test]
 fn markdown_is_escaped_and_converted() {
     assert_eq!(markdown_to_html("a < b & c > d"), "a &lt; b &amp; c &gt; d");
-    assert_eq!(markdown_to_html("**жирный** и `код`"), "<b>жирный</b> и <code>код</code>");
+    assert_eq!(
+        markdown_to_html("**жирный** и `код`"),
+        "<b>жирный</b> и <code>код</code>"
+    );
     assert_eq!(markdown_to_html("`a<b>&c`"), "<code>a&lt;b&gt;&amp;c</code>");
     assert_eq!(markdown_to_html("**<i>x</i>**"), "<b>&lt;i&gt;x&lt;/i&gt;</b>");
     assert_eq!(
@@ -1279,11 +1377,22 @@ fn an_answer_always_fits_in_one_message() {
         // No entity is cut in half, and every tag is closed.
         for (i, _) in html.match_indices('&') {
             let rest = &html[i..];
-            assert!(rest.starts_with("&lt;") || rest.starts_with("&gt;") || rest.starts_with("&amp;"), "{filler}");
+            assert!(
+                rest.starts_with("&lt;") || rest.starts_with("&gt;") || rest.starts_with("&amp;"),
+                "{filler}"
+            );
         }
         assert_eq!(html.matches("<b>").count(), html.matches("</b>").count(), "{filler}");
-        assert_eq!(html.matches("<code>").count(), html.matches("</code>").count(), "{filler}");
-        assert_eq!(html.matches("<pre>").count(), html.matches("</pre>").count(), "{filler}");
+        assert_eq!(
+            html.matches("<code>").count(),
+            html.matches("</code>").count(),
+            "{filler}"
+        );
+        assert_eq!(
+            html.matches("<pre>").count(),
+            html.matches("</pre>").count(),
+            "{filler}"
+        );
     }
     // A fence cut in the middle is closed.
     let text = format!("```\n{}", "x".repeat(6000));
@@ -1324,10 +1433,14 @@ fn every_string_is_in_all_nine_languages_with_the_same_placeholders() {
         assert_eq!(names, want, "{key}: languages differ");
         let english = placeholders(langs["en"].as_str().unwrap());
         for lang in LANGUAGES {
-            let text = langs[lang].as_str().unwrap_or_else(|| panic!("{key}.{lang} is not a string"));
+            let text = langs[lang]
+                .as_str()
+                .unwrap_or_else(|| panic!("{key}.{lang} is not a string"));
             assert!(!text.trim().is_empty(), "{key}.{lang} is empty");
             assert_eq!(placeholders(text), english, "{key}.{lang}: placeholders differ");
             assert!(text.chars().count() <= 1500, "{key}.{lang} is very long");
+            // The texts are sent as HTML: nothing in them may look like markup.
+            assert!(!text.contains(['<', '>', '&']), "{key}.{lang} holds markup characters");
         }
     }
 }
@@ -1338,13 +1451,23 @@ fn the_tone_rules_of_the_languages_hold() {
     for (key, langs) in table.as_object().unwrap() {
         let de = langs["de"].as_str().unwrap().to_lowercase();
         assert!(
-            ![" du ", " dein", " dich ", " dir "].iter().any(|w| format!(" {de} ").contains(w)),
+            ![" du ", " dein", " dich ", " dir "]
+                .iter()
+                .any(|w| format!(" {de} ").contains(w)),
             "{key}.de is not formal"
         );
         let fr = langs["fr"].as_str().unwrap().to_lowercase();
-        assert!(![" tu ", " ton ", " ta ", " tes "].iter().any(|w| format!(" {fr} ").contains(w)), "{key}.fr says tu");
+        assert!(
+            ![" tu ", " ton ", " ta ", " tes "]
+                .iter()
+                .any(|w| format!(" {fr} ").contains(w)),
+            "{key}.fr says tu"
+        );
         let zh = langs["zh-Hans"].as_str().unwrap();
-        assert!(!zh.contains("智能体") && !zh.contains("助手"), "{key}.zh uses another word for agents");
+        assert!(
+            !zh.contains("智能体") && !zh.contains("助手"),
+            "{key}.zh uses another word for agents"
+        );
     }
     assert!(tr("zh-Hans", "help", &[]).contains("代理"));
 }
@@ -1372,28 +1495,52 @@ fn every_string_the_code_asks_for_exists_and_none_is_unused() {
         include_str!("handlers.rs"),
         include_str!("events.rs"),
     ];
-    let mut used = BTreeSet::new();
+    // What the code asks for: the first literal after the comma of a `tr(lang, "key"` or `say(chat, "key"` call.
+    let mut asked = BTreeSet::new();
+    // Every literal that names a key of the table, wherever it is (a `match` arm returns a key too).
+    let mut named = BTreeSet::new();
+    let table: Value = serde_json::from_str(include_str!("../telegram_strings.json")).unwrap();
+    let keys: BTreeSet<String> = table.as_object().unwrap().keys().cloned().collect();
     for source in sources {
-        for (at, _) in source.match_indices("tr(") {
-            // The key is the first string literal after the language argument.
-            let rest = &source[at..];
-            let Some(comma) = rest.find(", \"") else { continue };
-            let after = &rest[comma + 3..];
-            if let Some(end) = after.find('"') {
-                let key = &after[..end];
-                if key.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
-                    used.insert(key.to_string());
+        for opener in ["tr(", "say("] {
+            for (at, _) in source.match_indices(opener) {
+                let before = source[..at].chars().last().unwrap_or(' ');
+                if before.is_ascii_alphanumeric() || before == '_' {
+                    continue;
+                }
+                let rest = &source[at..];
+                let Some(comma) = rest.find(", \"") else { continue };
+                // The literal must be the call's own second argument, not a later one.
+                if comma > 40 || rest[..comma].contains([';', '"', '{']) {
+                    continue;
+                }
+                let after = &rest[comma + 3..];
+                if let Some(end) = after.find('"') {
+                    let key = &after[..end];
+                    if key.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
+                        asked.insert(key.to_string());
+                    }
                 }
             }
         }
+        for part in source.split('"').skip(1).step_by(2) {
+            if keys.contains(part) {
+                named.insert(part.to_string());
+            }
+        }
     }
-    assert!(used.len() >= 25, "found only {used:?}");
-    for key in &used {
-        assert!(strings::has_key(key), "the code asks for the string {key}, which the table lacks");
+    assert!(asked.len() >= 20, "found only {asked:?}");
+    for key in &asked {
+        assert!(
+            strings::has_key(key),
+            "the code asks for the string {key}, which the table lacks"
+        );
     }
-    let table: Value = serde_json::from_str(include_str!("../telegram_strings.json")).unwrap();
-    for key in table.as_object().unwrap().keys() {
-        assert!(used.contains(key), "the string {key} is in the table but nothing asks for it");
+    for key in &keys {
+        assert!(
+            named.contains(key),
+            "the string {key} is in the table but nothing names it"
+        );
     }
 }
 
@@ -1425,7 +1572,8 @@ async fn messages_to_one_chat_are_spaced() {
 async fn a_rate_limited_send_is_retried_after_the_wait() {
     let rig = rig().await;
     rig.link(OWNER);
-    rig.fake.fail_next("sendMessage", 429, "Too Many Requests: retry after 1", Some(1));
+    rig.fake
+        .fail_next("sendMessage", 429, "Too Many Requests: retry after 1", Some(1));
     rig.tg.handle_update(msg(OWNER, "/help")).await;
     assert_eq!(rig.fake.calls("sendMessage").len(), 2);
 }
@@ -1438,8 +1586,12 @@ async fn html_that_telegram_rejects_is_sent_again_as_plain_text() {
     let forge = rig.agent.clone();
     rig.sup.send(&forge, Inbound::user("x")).await.unwrap();
     rig.wait_log_prefix("send x").await;
-    rig.fake
-        .fail_next("sendMessage", 400, "Bad Request: can't parse entities: Unsupported start tag", None);
+    rig.fake.fail_next(
+        "sendMessage",
+        400,
+        "Bad Request: can't parse entities: Unsupported start tag",
+        None,
+    );
     rig.push(&forge, assistant("Use **bold** & <tags>")).await;
     rig.push(&forge, done()).await;
     rig.feed_until(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
@@ -1448,7 +1600,10 @@ async fn html_that_telegram_rejects_is_sent_again_as_plain_text() {
     assert!(sent[1].get("parse_mode").is_none());
     let plain = text_of(&sent[1]);
     assert!(!plain.contains("<b>") && !plain.contains("&lt;"), "{plain}");
-    assert!(plain.contains("Forge") && plain.contains("bold") && plain.contains("<tags>"), "{plain}");
+    assert!(
+        plain.contains("Forge") && plain.contains("bold") && plain.contains("<tags>"),
+        "{plain}"
+    );
 }
 
 #[tokio::test]
@@ -1457,10 +1612,12 @@ async fn an_error_from_one_chat_does_not_stop_the_others() {
     rig.link(11);
     rig.link(12);
     // The bot was blocked in chat 11: Telegram says so, and chat 12 still gets its card.
-    rig.fake.fail_next("sendMessage", 403, "Forbidden: bot was blocked by the user", None);
-    rig.pending_approval("ls").await;
+    rig.fake
+        .fail_next("sendMessage", 403, "Forbidden: bot was blocked by the user", None);
+    let id = rig.pending_approval("ls").await;
+    // Both were tried (the fake records the refused call too), and one card is kept.
     assert_eq!(rig.fake.sent_to(11).len() + rig.fake.sent_to(12).len(), 2);
-    assert_eq!(rig.cards(12).len() + rig.cards(11).len(), 1);
+    assert_eq!(rig.store.tg_msgs_for_ref("approval", &id).unwrap().len(), 1);
 }
 
 // ---- the poll loop and the token calls ----
@@ -1477,26 +1634,41 @@ async fn setting_a_token_checks_it_and_starts_polling() {
         json!({ "configured": false, "bot": null, "running": false, "last_error": null, "chats": [] })
     );
     // Not the right shape: refused before any request.
-    for bad in ["", "abc", "123:short", "12345:has space in it 0123456789abcdefghijkl", "123456789:AAH\n0123456789abcdefghijklmnop"] {
+    for bad in [
+        "",
+        "abc",
+        "123:short",
+        "12345:has space in it 0123456789abcdefghijkl",
+        "123456789:AAH\n0123456789abcdefghijklmnop",
+    ] {
         let err = tg.set_token(bad).await.unwrap_err();
         assert_eq!(err.reason, "invalid_token", "{bad:?}");
     }
     assert!(fake.all_calls().is_empty());
     // The right shape, but Telegram does not know it.
-    let err = tg.set_token("999999999:ZZZ_unknown_token_0123456789abcdefghij").await.unwrap_err();
+    let err = tg
+        .set_token("999999999:ZZZ_unknown_token_0123456789abcdefghij")
+        .await
+        .unwrap_err();
     assert_eq!(err.reason, "invalid_token");
     assert!(!err.message.contains("ZZZ_unknown"));
     assert!(store.secret_get(super::TOKEN_SECRET).unwrap().is_none());
 
     let status = tg.set_token(TOKEN).await.unwrap();
     assert_eq!(status["configured"], true);
-    assert_eq!(status["bot"], json!({ "username": "bandito_test_bot", "name": "Bandito Test" }));
+    assert_eq!(
+        status["bot"],
+        json!({ "username": "bandito_test_bot", "name": "Bandito Test" })
+    );
     assert_eq!(status["last_error"], Value::Null);
     assert_eq!(store.secret_get(super::TOKEN_SECRET).unwrap().as_deref(), Some(TOKEN));
     // The poll starts by dropping any webhook, then polls with the long timeout and the right updates.
     fake.wait_calls("deleteWebhook", 1).await;
     let polls = fake.wait_calls("getUpdates", 1).await;
-    assert_eq!(polls[0]["allowed_updates"], json!(["message", "callback_query", "my_chat_member"]));
+    assert_eq!(
+        polls[0]["allowed_updates"],
+        json!(["message", "callback_query", "my_chat_member"])
+    );
     let all = fake.all_calls();
     let webhook = all.iter().position(|c| c.method == "deleteWebhook").unwrap();
     let first_poll = all.iter().position(|c| c.method == "getUpdates").unwrap();
@@ -1535,6 +1707,12 @@ async fn polled_updates_are_handled_and_the_offset_is_kept() {
     }
     assert_eq!(store.tg_state_get("offset").unwrap(), Some((id + 1).to_string()));
     // The next poll asks from the saved offset.
+    for _ in 0..300 {
+        if fake.calls("getUpdates").iter().any(|p| p["offset"] == id + 1) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
     let polls = fake.calls("getUpdates");
     assert!(polls.iter().any(|p| p["offset"] == id + 1), "{polls:?}");
     tg.stop_for_test().await;
@@ -1558,7 +1736,12 @@ async fn a_conflict_is_reported_and_polling_goes_on() {
     let store = Arc::new(Store::open_in_memory().unwrap());
     let sup = Supervisor::new(Hub::new(store.clone()), Runtimes::default(), None);
     let tg = Telegram::with_base(sup, &fake.base, fast());
-    fake.fail_next("getUpdates", 409, "Conflict: terminated by other getUpdates request", None);
+    fake.fail_next(
+        "getUpdates",
+        409,
+        "Conflict: terminated by other getUpdates request",
+        None,
+    );
     tg.set_token(TOKEN).await.unwrap();
     wait_for(|| tg.status().unwrap()["last_error"] == "conflict").await;
     assert_eq!(tg.status().unwrap()["running"], true);
