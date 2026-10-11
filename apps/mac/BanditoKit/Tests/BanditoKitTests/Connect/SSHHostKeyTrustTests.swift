@@ -67,7 +67,7 @@ actor FakeKeyRunner: CommandRunner {
 
     @Test func configIsReadWithoutConnectingAndArgumentsAreAnArray() throws {
         let arguments = SSHHostKeyTrust.configArguments(for: try target("deploy@server.example:2222"))
-        #expect(arguments == ["-G", "-p", "2222", "deploy@server.example"])
+        #expect(arguments == ["-G", "-p", "2222", "--", "deploy@server.example"])
     }
 
     @Test func injectionAttemptsDoNotBecomeArguments() {
@@ -102,7 +102,7 @@ actor FakeKeyRunner: CommandRunner {
 
     @Test func keyscanAsksForOneTypeAtATime() {
         #expect(SSHHostKeyTrust.keyscanArguments(host: "203.0.113.7", port: 22, keyType: "ed25519")
-            == ["-T", "5", "-t", "ed25519", "-p", "22", "203.0.113.7"])
+            == ["-T", "5", "-t", "ed25519", "-p", "22", "--", "203.0.113.7"])
     }
 
     @Test func previewTriesEd25519FirstThenEcdsaThenRsa() async throws {

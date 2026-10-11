@@ -8,11 +8,14 @@ public struct SSHTarget: Hashable, Sendable, CustomStringConvertible {
     public var user: String?
     public var host: String
     public var port: Int?
+    /// A private key file for ssh (`-i`). nil leaves the choice to ssh and its config.
+    public var identityFile: String?
 
-    public init(user: String?, host: String, port: Int?) {
+    public init(user: String?, host: String, port: Int?, identityFile: String? = nil) {
         self.user = user
         self.host = host
         self.port = port
+        self.identityFile = identityFile
     }
 
     /// Parses what the user typed. Nil when it is empty, has spaces, or is not a plain host name.
@@ -59,14 +62,16 @@ public struct SSHTarget: Hashable, Sendable, CustomStringConvertible {
         user.map { "\($0)@\(host)" } ?? host
     }
 
-    /// Arguments for ssh before the remote command: `-p N` when a port is set, then the destination.
+    /// Arguments for ssh before the remote command: `-i FILE` and `-p N` when they are set, then `--` and the
+    /// destination. The `--` ends the options, so a destination can never be read as one (`-oProxyCommand=…`).
     public var sshArguments: [String] {
-        (port.map { ["-p", String($0)] } ?? []) + [destination]
+        (identityFile.map { ["-i", $0] } ?? []) + (port.map { ["-p", String($0)] } ?? []) + ["--", destination]
     }
 
     /// Arguments for scp copying `local` to `remotePath` on this target (the port is `-P`).
     public func scpArguments(local: String, remotePath: String) -> [String] {
-        (port.map { ["-P", String($0)] } ?? []) + [local, "\(destination):\(remotePath)"]
+        (identityFile.map { ["-i", $0] } ?? []) + (port.map { ["-P", String($0)] } ?? [])
+            + ["--", local, "\(destination):\(remotePath)"]
     }
 
     /// Letters, digits, dot, dash and underscore, not starting with a dash: safe as a host, alias or user name.

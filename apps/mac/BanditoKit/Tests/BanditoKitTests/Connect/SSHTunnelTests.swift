@@ -16,7 +16,7 @@ import Testing
                     "-o", "ServerAliveInterval=15",
                     "-o", "ServerAliveCountMax=3",
                     "-L", "127.0.0.1:49152:127.0.0.1:7878",
-                    "-p", "2222", "deploy@example.com",
+                    "-p", "2222", "--", "deploy@example.com",
                 ])
     }
 

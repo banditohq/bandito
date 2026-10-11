@@ -45,6 +45,22 @@ enum FilePanels {
         #endif
     }
 
+    /// A private key file for ssh, starting in `~/.ssh`, or `nil` if the user cancelled.
+    static func keyFileURL(message: String) -> URL? {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.showsHiddenFiles = true
+        panel.message = message
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".ssh", directoryHint: .isDirectory)
+        return panel.runModal() == .OK ? panel.url : nil
+        #else
+        return nil
+        #endif
+    }
+
     /// A JSON file to open, or `nil` if the user cancelled.
     static func openURL() -> URL? {
         #if os(macOS)

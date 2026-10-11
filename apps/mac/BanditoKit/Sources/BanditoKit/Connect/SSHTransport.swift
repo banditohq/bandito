@@ -5,14 +5,27 @@ import Foundation
 /// The RPC channel to a server over ssh: opens an `SSHTunnel`, then the WebSocket on the tunnel's local port.
 /// Closing the transport closes both. Single use, like `WebSocketTransport`.
 public actor SSHTransport: RPCTransport {
-    private let target: String
+    /// nil when the text of the address was refused (`init(target: String, …)`): connecting then fails.
+    private let target: SSHTarget?
     private let remotePort: Int
     private let token: String?
     private let sshPath: String
     private var tunnel: SSHTunnel?
     private var socket: WebSocketTransport?
 
-    public init(target: String, remotePort: Int, token: String?, sshPath: String = SSHTunnel.sshPath) {
+    public init(target: SSHTarget, remotePort: Int, token: String?, sshPath: String = SSHTunnel.sshPath) {
+        self.target = target
+        self.remotePort = remotePort
+        self.token = token
+        self.sshPath = sshPath
+    }
+
+    /// From the text of an address (`[user@]host[:port]` or an alias).
+    public init(target text: String, remotePort: Int, token: String?, sshPath: String = SSHTunnel.sshPath) {
+        self.init(target: SSHTarget.parse(text), remotePort: remotePort, token: token, sshPath: sshPath)
+    }
+
+    private init(target: SSHTarget?, remotePort: Int, token: String?, sshPath: String) {
         self.target = target
         self.remotePort = remotePort
         self.token = token
@@ -20,7 +33,8 @@ public actor SSHTransport: RPCTransport {
     }
 
     public func connect() async throws {
-        let tunnel = try SSHTunnel(target: target, remotePort: remotePort, sshPath: sshPath)
+        guard let target else { throw SSHTunnelError.invalidTarget }
+        let tunnel = SSHTunnel(target: target, remotePort: remotePort, sshPath: sshPath)
         self.tunnel = tunnel
         try await tunnel.start()
         guard let url = await tunnel.localURL else {

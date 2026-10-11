@@ -204,9 +204,9 @@ struct PairSheet: View {
             return (url.host ?? "") + port
         case .local:
             return server.info?.hostname ?? ""
-        case .ssh(let target, _):
+        case .ssh(let server, _):
             // The new device reaches the server over SSH too: the target is what it needs.
-            return target
+            return server.targetText
         }
     }
 }

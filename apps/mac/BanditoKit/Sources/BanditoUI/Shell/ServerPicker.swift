@@ -69,7 +69,7 @@ struct ServerPicker: View {
         switch server.config.endpoint {
         case .local: return thisMacLabel
         case .webSocket(let url): return url.host ?? url.absoluteString
-        case .ssh(let target, _): return target
+        case .ssh(let server, _): return server.targetText
         }
     }
 
@@ -89,10 +89,24 @@ struct ServerPicker: View {
         isThisMac(server) ? L10n.Server.Add.thisMac : L10n.Server.Picker.kindRemote
     }
 
-    /// The symbol of the server's device: a laptop or a desktop for this Mac (by its model), a server rack otherwise.
+    /// The symbol of the server: the icon the person chose, else a laptop or a desktop for this Mac (by its model),
+    /// else a server rack.
     static func symbol(_ server: ServerModel) -> String {
+        if let icon = server.config.icon { return icon.rawValue }
         guard isThisMac(server) else { return "server.rack" }
         return DeviceIcon.symbol(platform: nil, name: MacModel.current() ?? "")
+    }
+
+    /// The color of the server's icon: grey while the server is switched off, else the one the person chose (nil for
+    /// the default).
+    static func tint(_ server: ServerModel) -> Color? {
+        if server.config.disabled { return Color.Bandito.text3 }
+        return server.config.tint?.color
+    }
+
+    /// The address line of a row in the menu. A server switched off says so after its address.
+    static func rowAddress(_ server: ServerModel) -> String {
+        server.config.disabled ? "\(address(server)) · \(L10n.ServerSettings.Connection.Off.badge)" : address(server)
     }
 
     /// The servers to switch to, built by `SelectChoices.servers` from each server's name, address and state.
@@ -100,8 +114,9 @@ struct ServerPicker: View {
         SelectChoices.servers(
             servers.map { candidate in
                 SelectChoices.ServerRow(
-                    id: candidate.id, name: name(candidate), address: address(candidate),
-                    isOnline: isOnline(candidate), hasUpdate: hasUpdate(candidate), icon: symbol(candidate))
+                    id: candidate.id, name: name(candidate), address: rowAddress(candidate),
+                    isOnline: isOnline(candidate), hasUpdate: hasUpdate(candidate), icon: symbol(candidate),
+                    tint: tint(candidate))
             },
             updateText: L10n.Updates.available)
     }
@@ -123,7 +138,7 @@ struct ServerPicker: View {
                 .shadow(color: Self.statusColor(server).opacity(0.6), radius: 4)
             Image(systemName: Self.symbol(server))
                 .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(Color.Bandito.text2)
+                .foregroundStyle(Self.tint(server) ?? Color.Bandito.text2)
                 .frame(width: 18)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {

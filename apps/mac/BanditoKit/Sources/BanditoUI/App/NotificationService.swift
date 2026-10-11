@@ -20,6 +20,16 @@ public enum AgentNotice: Equatable, Sendable {
         case .approval(let id, _, _, _, _), .finished(let id, _), .failed(let id, _, _), .resolveFailed(let id): id
         }
     }
+
+    /// The kind a server's notification scope is checked against. An answer that did not go through concerns a
+    /// waiting approval, so it counts as `needsYou`.
+    public var kind: ServerNoticeKind {
+        switch self {
+        case .approval, .resolveFailed: .needsYou
+        case .finished: .finished
+        case .failed: .failed
+        }
+    }
 }
 
 /// Which kinds of notice the user wants. Set in Settings → Notifications; all on by default.
@@ -75,6 +85,8 @@ public struct NotificationContent: Equatable, Sendable {
     public var agentID: String
     /// The approval the buttons answer, for approval notices. Also the notification's identifier.
     public var approvalID: String?
+    /// The server the notice came from, when the app knows it (`handle(_:serverID:)` sets it).
+    public var serverID: UUID?
 
     /// Allow and Deny.
     public static let approvalCategory = "bandito.approval"
@@ -163,27 +175,34 @@ public final class NotificationService {
     private let windowActive: () -> Bool
     private let selectedAgentID: () -> String?
     private let resolve: (_ agentID: String, _ approvalID: String, _ decision: Decision) async throws -> Void
+    private let scope: (UUID) -> NotificationScope
 
+    /// `scope` says which notifications each server sends (`ServerConfig.notifications`). The default lets all through.
     public init(
         sink: Sink,
         settings: @escaping () -> NotificationSettings,
         windowActive: @escaping () -> Bool,
         selectedAgentID: @escaping () -> String?,
-        resolve: @escaping (_ agentID: String, _ approvalID: String, _ decision: Decision) async throws -> Void
+        resolve: @escaping (_ agentID: String, _ approvalID: String, _ decision: Decision) async throws -> Void,
+        scope: @escaping (UUID) -> NotificationScope = { _ in .all }
     ) {
         self.sink = sink
         self.settings = settings
         self.windowActive = windowActive
         self.selectedAgentID = selectedAgentID
         self.resolve = resolve
+        self.scope = scope
     }
 
-    /// Shows the notice when the rules allow it.
-    public func handle(_ notice: AgentNotice) {
+    /// Shows the notice when the rules allow it. With a `serverID`, the server's notification scope is checked first.
+    public func handle(_ notice: AgentNotice, serverID: UUID? = nil) {
+        if let serverID, !scope(serverID).allows(notice.kind) { return }
         guard NotificationRules.shouldDeliver(
             notice, settings: settings(), windowActive: windowActive(), selectedAgentID: selectedAgentID())
         else { return }
-        sink.post(NotificationContent.make(notice))
+        var content = NotificationContent.make(notice)
+        content.serverID = serverID
+        sink.post(content)
     }
 
     /// A button on an approval notification was pressed. Clicks on the body answer nothing.

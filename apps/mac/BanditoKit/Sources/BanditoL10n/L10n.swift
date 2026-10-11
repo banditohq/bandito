@@ -19,17 +19,15 @@ public enum L10n {
     }
 
     /// Tests only (`@testable import`): the strings of one language, whatever the system language is. Nothing in the app
-    /// sets it; the layout audit uses it to look at German and Russian without touching the Mac's settings.
-    nonisolated(unsafe) static var testingLanguage: (code: String, bundle: Bundle)?
+    /// sets it. It is task-local: only the code run by `withLanguageForTests` sees it, so suites that run in parallel
+    /// with it keep the system language.
+    @TaskLocal static var testingLanguage: (code: String, bundle: Bundle)? = nil
 
-    /// Tests only: `useLanguageForTests("de")` switches every string; `nil` goes back to the system language.
-    static func useLanguageForTests(_ code: String?) {
-        guard let code else { testingLanguage = nil; return }
-        guard let path = Bundle.module.path(forResource: code, ofType: "lproj"), let bundle = Bundle(path: path) else {
-            testingLanguage = nil
-            return
-        }
-        testingLanguage = (code, bundle)
+    /// Tests only: runs `body` with every string in `code` (for example `"de"`); an unknown code gives the system language.
+    static func withLanguageForTests<T>(_ code: String, _ body: () throws -> T) rethrows -> T {
+        let path = Bundle.module.path(forResource: code, ofType: "lproj")
+        let language = path.flatMap { Bundle(path: $0) }.map { (code: code, bundle: $0) }
+        return try $testingLanguage.withValue(language, operation: body)
     }
 
     /// One `Locale` per language identifier: making a `Locale` for every string was a hot spot.
@@ -2775,6 +2773,83 @@ public enum L10n {
             public static var working: String { L10n.tr("serverSettings.backupNow.working") }
         }
 
+        public enum Connection {
+            public static var title: String { L10n.tr("serverSettings.connection.title") }
+
+            public enum Address {
+                public static var hint: String { L10n.tr("serverSettings.connection.Address.hint") }
+                public static var placeholder: String { L10n.tr("serverSettings.connection.Address.placeholder") }
+                public static var title: String { L10n.tr("serverSettings.connection.Address.title") }
+            }
+
+            public enum Check {
+                public static func answered(milliseconds: String) -> String { L10n.tr("serverSettings.connection.Check.answered", milliseconds) }
+                public static var button: String { L10n.tr("serverSettings.connection.Check.button") }
+                public static var hint: String { L10n.tr("serverSettings.connection.Check.hint") }
+                public static var title: String { L10n.tr("serverSettings.connection.Check.title") }
+                public static var working: String { L10n.tr("serverSettings.connection.Check.working") }
+            }
+
+            public enum Host {
+                public static var hint: String { L10n.tr("serverSettings.connection.Host.hint") }
+                public static var placeholder: String { L10n.tr("serverSettings.connection.Host.placeholder") }
+                public static var title: String { L10n.tr("serverSettings.connection.Host.title") }
+            }
+
+            public enum Key {
+                public static var choose: String { L10n.tr("serverSettings.connection.Key.choose") }
+                public static var clear: String { L10n.tr("serverSettings.connection.Key.clear") }
+                public static var message: String { L10n.tr("serverSettings.connection.Key.message") }
+                public static var none: String { L10n.tr("serverSettings.connection.Key.none") }
+                public static var title: String { L10n.tr("serverSettings.connection.Key.title") }
+            }
+
+            public enum Off {
+                public static var badge: String { L10n.tr("serverSettings.connection.Off.badge") }
+                public static var hint: String { L10n.tr("serverSettings.connection.Off.hint") }
+                public static var title: String { L10n.tr("serverSettings.connection.Off.title") }
+            }
+
+            public enum Port {
+                public static var hint: String { L10n.tr("serverSettings.connection.Port.hint") }
+                public static var placeholder: String { L10n.tr("serverSettings.connection.Port.placeholder") }
+                public static var title: String { L10n.tr("serverSettings.connection.Port.title") }
+            }
+
+            public enum Problem {
+                public static var host: String { L10n.tr("serverSettings.connection.Problem.host") }
+                public static var identityFile: String { L10n.tr("serverSettings.connection.Problem.identityFile") }
+                public static var port: String { L10n.tr("serverSettings.connection.Problem.port") }
+                public static var url: String { L10n.tr("serverSettings.connection.Problem.url") }
+                public static var user: String { L10n.tr("serverSettings.connection.Problem.user") }
+            }
+
+            public enum Reconnect {
+                public static var button: String { L10n.tr("serverSettings.connection.Reconnect.button") }
+                public static var hint: String { L10n.tr("serverSettings.connection.Reconnect.hint") }
+                public static var title: String { L10n.tr("serverSettings.connection.Reconnect.title") }
+            }
+
+            public enum Remove {
+                public static var button: String { L10n.tr("serverSettings.connection.Remove.button") }
+                public static func confirmTitle(name: String) -> String { L10n.tr("serverSettings.connection.Remove.confirmTitle", name) }
+                public static var hint: String { L10n.tr("serverSettings.connection.Remove.hint") }
+                public static var message: String { L10n.tr("serverSettings.connection.Remove.message") }
+                public static var title: String { L10n.tr("serverSettings.connection.Remove.title") }
+            }
+
+            public enum ThisMac {
+                public static var hint: String { L10n.tr("serverSettings.connection.ThisMac.hint") }
+                public static var title: String { L10n.tr("serverSettings.connection.ThisMac.title") }
+            }
+
+            public enum User {
+                public static var hint: String { L10n.tr("serverSettings.connection.User.hint") }
+                public static var placeholder: String { L10n.tr("serverSettings.connection.User.placeholder") }
+                public static var title: String { L10n.tr("serverSettings.connection.User.title") }
+            }
+        }
+
         public enum Folder {
             public static var choose: String { L10n.tr("serverSettings.folder.choose") }
             public static var message: String { L10n.tr("serverSettings.folder.message") }
@@ -2800,6 +2875,42 @@ public enum L10n {
             public static var hint: String { L10n.tr("serverSettings.logs.hint") }
             public static var `open`: String { L10n.tr("serverSettings.logs.open") }
             public static var title: String { L10n.tr("serverSettings.logs.title") }
+        }
+
+        public enum Main {
+            public static var primaryBadge: String { L10n.tr("serverSettings.main.primaryBadge") }
+            public static var title: String { L10n.tr("serverSettings.main.title") }
+
+            public enum Icon {
+                public static var hint: String { L10n.tr("serverSettings.main.icon.hint") }
+                public static var option: String { L10n.tr("serverSettings.main.icon.option") }
+                public static var title: String { L10n.tr("serverSettings.main.icon.title") }
+            }
+
+            public enum Name {
+                public static var hint: String { L10n.tr("serverSettings.main.name.hint") }
+                public static var placeholder: String { L10n.tr("serverSettings.main.name.placeholder") }
+                public static var title: String { L10n.tr("serverSettings.main.name.title") }
+            }
+
+            public enum Notify {
+                public static var all: String { L10n.tr("serverSettings.main.notify.all") }
+                public static var hint: String { L10n.tr("serverSettings.main.notify.hint") }
+                public static var needsYou: String { L10n.tr("serverSettings.main.notify.needsYou") }
+                public static var off: String { L10n.tr("serverSettings.main.notify.off") }
+                public static var title: String { L10n.tr("serverSettings.main.notify.title") }
+            }
+
+            public enum Primary {
+                public static var hint: String { L10n.tr("serverSettings.main.primary.hint") }
+                public static var title: String { L10n.tr("serverSettings.main.primary.title") }
+            }
+
+            public enum Tint {
+                public static var hint: String { L10n.tr("serverSettings.main.tint.hint") }
+                public static var option: String { L10n.tr("serverSettings.main.tint.option") }
+                public static var title: String { L10n.tr("serverSettings.main.tint.title") }
+            }
         }
 
         public enum Maintenance {
@@ -2994,6 +3105,7 @@ public enum L10n {
             public static var deleteMessage: String { L10n.tr("settings.servers.deleteMessage") }
             public static func deleteTitle(name: String) -> String { L10n.tr("settings.servers.deleteTitle", name) }
             public static var intro: String { L10n.tr("settings.servers.intro") }
+            public static var reorderHint: String { L10n.tr("settings.servers.reorderHint") }
         }
 
         public enum Sounds {

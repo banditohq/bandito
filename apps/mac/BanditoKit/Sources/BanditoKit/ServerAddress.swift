@@ -11,12 +11,8 @@ public enum ServerAddress: Equatable, Sendable {
         switch endpoint {
         case .local:
             self = .thisMac
-        case .ssh(let target, _):
-            if let parsed = SSHTarget.parse(target) {
-                self = .remote(parsed.user.map { "\($0)@\(parsed.host)" } ?? parsed.host)
-            } else {
-                self = .remote(target)
-            }
+        case .ssh(let server, _):
+            self = .remote(server.user.map { "\($0)@\(server.host)" } ?? server.host)
         case .webSocket(let url):
             var host = url.host() ?? ""
             if host.contains(":"), !host.hasPrefix("[") {

@@ -89,7 +89,7 @@ public struct SSHHostKeyTrust: Sendable {
 
     /// `ssh-keyscan -T 5 -t TYPE -p PORT HOST`, from the resolved endpoint.
     static func keyscanArguments(host: String, port: Int, keyType: String) -> [String] {
-        ["-T", "5", "-t", keyType, "-p", String(port), host]
+        ["-T", "5", "-t", keyType, "-p", String(port), "--", host]
     }
 
     /// Reads the keys of `ssh -G` output: `hostname`, `port`, `hostkeyalias`, `proxyjump`, `proxycommand`.

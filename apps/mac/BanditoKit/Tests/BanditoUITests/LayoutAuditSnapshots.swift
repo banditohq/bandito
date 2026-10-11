@@ -1,9 +1,9 @@
 import BanditoDesign
 @testable import BanditoKit
-import BanditoL10n
 import SwiftUI
 import Testing
 
+@testable import BanditoL10n
 @testable import BanditoUI
 
 /// The layout audit: every sheet, dialog and Settings section at its narrowest width, in the two languages with the
@@ -37,6 +37,12 @@ import Testing
         AuditCase(name: "settings-server-detail-old", width: settingsColumn, scrolls: true) { env in
             env.serverInfo(version: "0.1.4", features: ["host"])
             return AnyView(ServerSettingsPage(server: env.server, onBack: {}, previewStats: serverHostPreview))
+        },
+        AuditCase(name: "settings-server-detail-ssh", width: settingsColumn, scrolls: true) { _ in
+            AnyView(
+                ServerSettingsPage(
+                    server: sshServerForAudit(), onBack: {}, preview: serverSettingsPreview,
+                    previewStats: serverHostPreview))
         },
         AuditCase(name: "settings-approvals", width: settingsColumn, scrolls: true) { _ in AnyView(ApprovalsSection()) },
         AuditCase(name: "settings-usage", width: settingsColumn, scrolls: true) { _ in AnyView(UsageSection()) },
@@ -107,6 +113,22 @@ import Testing
         defaults: ServerSettingValues(
             screenIdleMinutes: 30, maxRunningAgents: 0, backupEveryHours: 24, backupKeep: 14, autoUpdate: .notify,
             updateChannel: "stable", defaultApprovalMode: .risky))
+
+    /// A server reached over ssh with a key file, that answers the features of the settings page (never connected).
+    static func sshServerForAudit() -> ServerModel {
+        let server = ServerModel(
+            config: ServerConfig(
+                name: "Build machine in the Frankfurt datacenter",
+                endpoint: .ssh(
+                    server: SSHServerAddress(
+                        host: "build-frankfurt-01.example.internal", user: "deploy", port: 2222,
+                        identityFile: "/Users/anna/.ssh/id_ed25519_build"),
+                    remotePort: 7878)))
+        server.info = decode(
+            DaemonInfo.self,
+            #"{"version":"0.1.11","hostname":"audit","os":"linux","arch":"x86_64","started_at":1,"last_seq":0,"features":["server_settings","backups","host","logs"]}"#)
+        return server
+    }
 
     static let serverHostPreview = decode(
         HostStats.self,
@@ -356,12 +378,12 @@ import Testing
     /// Text that is cut inside a box, or hidden behind another element, is not found by numbers: look at the pictures.
     @Test(.enabled(if: LayoutAudit.outputDirectory != nil)) func gallery() throws {
         let directory = try #require(LayoutAudit.outputDirectory)
-        defer { LayoutAudit.finish() }
         var findings: [AuditFinding] = []
         for language in Self.languages {
-            LayoutAudit.use(language: language)
-            for item in Self.cases {
-                findings.append(LayoutAudit.audit(item, language: language, into: directory))
+            L10n.withLanguageForTests(language) {
+                for item in Self.cases {
+                    findings.append(LayoutAudit.audit(item, language: language, into: directory))
+                }
             }
         }
         print("AUDIT \(findings.count) pictures in \(directory.path)")
