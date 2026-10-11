@@ -156,6 +156,7 @@ final class FirstAgentModel {
                 systemPrompt: template.instructions.isEmpty ? nil : template.instructions,
                 effort: template.effort,
                 workspaceId: workspaceID))
+            Telemetry.count(.agentCreate(template == .scratch ? .plain : .template))
             return agent
         } catch {
             errorText = WorkspaceText.failure(error).map { UserFacingMessage(text: $0) } ?? SignInMessages.text(for: error)

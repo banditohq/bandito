@@ -1,3 +1,4 @@
+import BanditoKit
 import BanditoL10n
 import Foundation
 import Observation
@@ -86,6 +87,7 @@ final class DictationController {
             return
         }
         apply(.granted)
+        Telemetry.count(.dictationUse)
         silence = SilenceWatch(since: Date())
         startWatchdog()
     }

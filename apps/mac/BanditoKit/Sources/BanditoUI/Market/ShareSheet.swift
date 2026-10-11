@@ -107,6 +107,7 @@ final class ShareModel {
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 summary: summary.trimmingCharacters(in: .whitespacesAndNewlines), payload: payload)
             let created = try await client().createShare(draft)
+            Telemetry.count(.sharePublish)
             ShareSourceStore.remember(source(on: server), for: created.id)
             phase = .published(created)
         } catch let failure as ShareFailure {

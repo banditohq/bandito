@@ -155,7 +155,11 @@ enum InspectorTab: String, CaseIterable, Hashable, Sendable {
 @MainActor
 @Observable
 public final class Router {
-    public private(set) var mode: AppMode
+    public private(set) var mode: AppMode {
+        didSet {
+            if mode != oldValue, let screen = mode.telemetryScreen { Telemetry.count(.screen(screen)) }
+        }
+    }
 
     /// Team: the agent whose chat is open. Choosing one leaves the team home.
     public var selectedAgentID: String? {

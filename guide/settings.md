@@ -275,3 +275,12 @@ The version of this app and of the daemon on the server. You can check for a new
 1. Read App (Приложение) and Daemon on the server (Демон на сервере). Latest release (Последний релиз) shows the newest version, or unknown.
 2. Click Check now (Проверить сейчас) to check again.
 3. Click Open Server → Updates (Обновления) to update the server's daemon (see [server.md](server.md)).
+
+## Privacy (Конфиденциальность)
+
+<!-- id: set-privacy; covers: settings:privacy -->
+What Bandito sends to its team: anonymous counts of the features you use, a daily check-in (version, system, number of servers and agents as ranges), and crash reports if you allow them. Nothing about your messages, code, files, server addresses or keys is sent. Anonymous statistics are on by default; turning them off stops sending and erases the counts. With them off, Bandito still asks the team for announcements every 6 hours, sending only the interface language and the app and system versions (no install id). "Delete my data" removes what this Mac sent from our servers. The first-run notice and the crash question each appear once; the strip at the top of the window shows a message from the team once.
+Где: Settings (⌘,) → Privacy (Конфиденциальность)
+1. Turn Anonymous statistics (Анонимная статистика) off to stop sending counts.
+2. Turn Crash reports (Отчёты о сбоях) on to send the error type and function names after a crash.
+3. Delete my data (Удалить мои данные) asks for confirmation, then deletes what was sent. The privacy policy link opens bandito.dev/privacy.

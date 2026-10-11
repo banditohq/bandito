@@ -610,6 +610,7 @@ struct ThreadView: View {
         Task {
             do {
                 try await server.answerForm(formId, in: id, action: .reply, message: text)
+                Telemetry.count(.formReply)
             } catch {
                 sendError = FormPresentation.message(for: error)
                 router.restoreDraft(text, for: id)

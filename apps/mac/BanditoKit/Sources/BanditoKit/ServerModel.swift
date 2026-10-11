@@ -512,7 +512,11 @@ public final class ServerModel: Identifiable {
                 } else {
                     agents[i].pendingApprovals = max(0, agents[i].pendingApprovals - 1)
                 }
-            case .turnCompleted:
+            case .turnCompleted(_, let status, _, _):
+                Telemetry.count(.turnComplete)
+                if status != .ok {
+                    Telemetry.count(.turnFail(TelemetryEvent.TurnFailure(status: status)))
+                }
                 // The daemon stores the context the turn left when the turn ends; the ring and the memory tab read it
                 // from the list.
                 requestAgentsRefresh()
@@ -865,6 +869,7 @@ public final class ServerModel: Identifiable {
     public func resolve(_ approvalId: String, _ decision: Decision, remember: Bool = false) async throws {
         struct P: Encodable { var approvalId: String; var decision: Decision; var remember: Bool }
         try await rpc().call("approvals.resolve", P(approvalId: approvalId, decision: decision, remember: remember))
+        Telemetry.count(.approval(decision == .allow ? .allow : .deny))
     }
 
     @discardableResult

@@ -75,7 +75,9 @@ private struct TelegramServerPage: View {
                 load()
             },
             linkStart: {
-                try await server.telegramLinkStart()
+                let link = try await server.telegramLinkStart()
+                Telemetry.count(.telegramLink)
+                return link
             },
             unlink: { chatId in
                 try await server.telegramUnlink(chatId: chatId)

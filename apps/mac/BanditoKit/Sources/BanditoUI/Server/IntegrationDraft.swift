@@ -53,6 +53,8 @@ public struct IntegrationSave: Sendable {
 public struct IntegrationDraft: Equatable, Sendable {
     /// The id of the integration being edited; nil when it is new.
     public var editingID: String?
+    /// The catalog entry this draft was made from, for the connect counts. Nil for a custom integration.
+    public var catalogID: String?
     /// The name the integration had when it was opened: it may keep that name.
     public var originalName: String?
     public var name = ""
@@ -95,6 +97,7 @@ public struct IntegrationDraft: Equatable, Sendable {
     /// A new integration from a catalog template. The secret headers are typed in; the name is the template's id.
     public static func fromCatalog(_ entry: IntegrationCatalogEntry) -> IntegrationDraft {
         var draft = IntegrationDraft()
+        draft.catalogID = entry.id
         draft.name = entry.id
         draft.kind = entry.kind
         draft.commandLine = entry.command.map { ShellWords.join([$0] + entry.args) } ?? ""

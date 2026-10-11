@@ -1,4 +1,5 @@
 import BanditoDesign
+import BanditoKit
 import BanditoL10n
 import SwiftUI
 
@@ -60,7 +61,10 @@ public struct SettingsWindow: View {
         }
         .frame(minWidth: 760, idealWidth: 900, maxWidth: .infinity, minHeight: 520, idealHeight: 640, maxHeight: .infinity)
         .preferredColorScheme(.dark)
-        .onAppear(perform: takeRequest)
+        .onAppear {
+            Telemetry.count(.screen(.settings))
+            takeRequest()
+        }
         .onChange(of: SettingsNavigation.shared.requested) { _, _ in takeRequest() }
         .task(id: TelegramProbe(server: app.currentServer?.id, connected: app.currentServer?.info != nil)) {
             await app.currentServer?.checkTelegramSupport()
@@ -135,6 +139,7 @@ public struct SettingsWindow: View {
         case .sounds: SoundsSection()
         case .appearance: AppearanceSection()
         case .updates: UpdatesSection()
+        case .privacy: PrivacySection()
         }
     }
 }

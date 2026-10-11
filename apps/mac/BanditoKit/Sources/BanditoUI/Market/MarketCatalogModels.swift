@@ -118,6 +118,7 @@ final class SkillsMarketModel {
         do {
             if install {
                 try await server.installSkill(skillID, scope: target.scope)
+                Telemetry.count(.skillInstall)
             } else {
                 try await server.removeSkill(skillID, scope: target.scope)
             }

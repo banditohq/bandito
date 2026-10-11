@@ -128,6 +128,7 @@ final class InstallSharedModel {
                     problem = L10n.Share.Problem.generic
                     return
                 }
+                Telemetry.count(.agentCreate(.shared))
                 outcome = .bot(
                     BotResult(
                         agent: agent, scheduleCount: created.scheduleIds.count,
@@ -139,6 +140,7 @@ final class InstallSharedModel {
                     shareID: item.id, version: item.version, payload: item.payload, agentID: nil)
                 outcome = .skill
             }
+            Telemetry.count(.shareInstall)
             // The count is best effort: a failed count does not undo an install that worked.
             if let accountClient = try? await client() {
                 try? await accountClient.markInstalled(id: item.id)

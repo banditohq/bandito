@@ -930,7 +930,7 @@ struct Composer: View {
         }
         let draft = NewIntegration(name: template.id, kind: .http, url: url)
         Task {
-            await app.oauth.begin(server: server, target: .draft(draft), name: template.name)
+            await app.oauth.begin(server: server, target: .draft(draft), name: template.name, catalogID: template.id)
             if case .waiting = app.oauth.phase {
                 mention.connecting = MentionMenuModel.Connecting(
                     agentID: agentID, name: template.name, template: templateID, known: known)
