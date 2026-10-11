@@ -41,6 +41,7 @@ pub mod connect;
 pub mod files;
 pub mod host;
 pub mod integrations;
+pub mod migrate;
 pub mod preview;
 pub mod schedules;
 pub mod screen;
@@ -110,6 +111,7 @@ pub fn features() -> Vec<&'static str> {
         "sharing",
         "telegram",
         "agent_connect",
+        "agent_migrate",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -160,6 +162,8 @@ pub struct App {
     pub telegram: Arc<crate::telegram::Telegram>,
     /// The agents' requests to connect a catalog service that wait for the person (see docs/ARCHITECTURE.md#connect-requests).
     pub connects: connect::Requests,
+    /// The agent archives waiting to be read and the uploads being received (see docs/ARCHITECTURE.md#agent-migration).
+    pub migrate: crate::migrate::Registry,
 }
 
 impl App {
@@ -205,6 +209,7 @@ impl App {
             device: crate::mcp_oauth::device::DeviceFlows::default(),
             telegram,
             connects: connect::Requests::default(),
+            migrate: crate::migrate::Registry::default(),
         })
     }
 
@@ -390,6 +395,8 @@ pub const COMMANDS_ERROR: i64 = -32027;
 pub const WORKSPACE_ERROR: i64 = -32028;
 /// A Telegram call failed; `error.data.reason` says why and the message starts with it (see rpc::telegram).
 pub const TELEGRAM_ERROR: i64 = -32029;
+/// An agent migration step failed; `error.data.reason` says why (see rpc::migrate).
+pub const MIGRATE_ERROR: i64 = -32030;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -1145,6 +1152,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     ) {
         // Answered in `templates.rs`, which shares the agent creation of `agents.create`.
         return templates::dispatch(app, method, p).await;
+    }
+    if method.starts_with("agents.migrate_") {
+        // Every `agents.migrate_*` name is answered there, unknown ones with METHOD_NOT_FOUND.
+        return migrate::dispatch(app, method, p).await;
     }
     if method.starts_with("skills.") {
         // Every `skills.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
@@ -3821,6 +3832,12 @@ mod trust_tests {
         "agents.create_bundle",
         "agents.export",
         "agents.create_from_shared",
+        "agents.migrate_export",
+        "agents.migrate_read",
+        "agents.migrate_done",
+        "agents.migrate_import_begin",
+        "agents.migrate_import_write",
+        "agents.migrate_import_commit",
         "skills.export",
         "skills.install_shared",
         "skills.own",

@@ -16,6 +16,7 @@ mod checkpoints;
 mod forms;
 mod history;
 mod integrations;
+mod migrate;
 mod reactions;
 mod rules;
 mod schedules;
@@ -34,6 +35,7 @@ pub use integrations::{
     Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, IntegrationTool, NewIntegration, ToolMode,
     ToolOverride,
 };
+pub use migrate::{ExportedEvent, NewEvent};
 pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
@@ -67,6 +69,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0022_agent_template_id.sql"),
     include_str!("../../migrations/0023_telegram.sql"),
     include_str!("../../migrations/0024_integration_auth_device.sql"),
+    include_str!("../../migrations/0025_agent_migrated.sql"),
 ];
 
 pub struct Store {

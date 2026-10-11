@@ -156,6 +156,13 @@ pub struct Agent {
     /// `Store::agent_set_template` only, never by a patch (see docs/ARCHITECTURE.md#agent-templates).
     #[serde(default)]
     pub template_id: Option<String>,
+    /// The name of the server this agent was moved to (`agents.migrate_done`); `null` for an agent that was not moved
+    /// (see docs/ARCHITECTURE.md#agent-migration).
+    #[serde(default)]
+    pub migrated_to: Option<String>,
+    /// When it was moved (Unix milliseconds); `null` with `migrated_to`.
+    #[serde(default)]
+    pub migrated_at: Option<i64>,
     /// The newest user or assistant message; `null` when there is none. Only set by `agent_view` and
     /// `agent_list_view`, the reads the wire uses (see docs/ARCHITECTURE.md#team-preview).
     #[serde(default)]
@@ -245,7 +252,11 @@ pub struct AgentPatch {
     pub lead: Option<bool>,
 }
 
-const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings, avatar_color, avatar_face, capabilities, avatar_emoji, avatar_image, avatar_image_rev, integrations, lead, template_id";
+/// The columns a new row is written with. `migrated_to` and `migrated_at` are set only by `agent_mark_migrated`.
+const INSERT_COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings, avatar_color, avatar_face, capabilities, avatar_emoji, avatar_image, avatar_image_rev, integrations, lead, template_id";
+
+/// Every agent column, in the order `from_row` reads them.
+const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings, avatar_color, avatar_face, capabilities, avatar_emoji, avatar_image, avatar_image_rev, integrations, lead, template_id, migrated_to, migrated_at";
 
 /// The newest message of the agent in `agents.id`, as one JSON array `[kind, ts, text]` (text cut to
 /// `LAST_MESSAGE_CHARS` in SQL too, so a long message is not read in full). One correlated subquery per agent, served by
@@ -300,6 +311,8 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         integrations: integrations_column(r, 30)?,
         lead: r.get::<_, i64>(31)? != 0,
         template_id: r.get(32)?,
+        migrated_to: r.get(33)?,
+        migrated_at: r.get(34)?,
         last_message: None,
         status: None,
         pending_approval_ids: Vec::new(),
@@ -310,9 +323,9 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
 /// `from_row` for `view_sql()`: the agent columns, then the message, the status and the pending count.
 fn from_row_view(r: &Row) -> rusqlite::Result<Agent> {
     let mut agent = from_row(r)?;
-    agent.last_message = last_message_column(r, 33)?;
-    agent.status = status_column(r, 34)?;
-    agent.pending_approval_ids = pending_ids_column(r, 35)?;
+    agent.last_message = last_message_column(r, 35)?;
+    agent.status = status_column(r, 36)?;
+    agent.pending_approval_ids = pending_ids_column(r, 37)?;
     agent.pending_approvals = agent.pending_approval_ids.len() as u32;
     Ok(agent)
 }
@@ -456,6 +469,8 @@ impl Store {
             integrations: a.integrations,
             lead: false,
             template_id: None,
+            migrated_to: None,
+            migrated_at: None,
             last_message: None,
             status: None,
             pending_approval_ids: Vec::new(),
@@ -465,7 +480,7 @@ impl Store {
         let integrations = integrations_json(agent.integrations.as_deref())?;
         let res = self.conn().execute(
             &format!(
-                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33)"
+                "INSERT INTO agents ({INSERT_COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33)"
             ),
             params![
                 agent.id,

@@ -661,6 +661,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
         sup.recover()?;
     }
     let app = App::new_in_home(sup.clone(), agents_root, App::default_files(), home.to_path_buf());
+    // Archives and uploads of an agent move that an earlier daemon left are removed once they are an hour old.
+    rpc::migrate::cleanup_at_start(home);
     if let Some(why) = &safe_mode {
         app.enter_safe_mode(why);
     }

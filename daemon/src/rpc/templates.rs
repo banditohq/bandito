@@ -24,7 +24,7 @@ const INTEGRATIONS_JSON: &str = include_str!("../integrations_catalog.json");
 /// Serializes the making of agents from templates and bundles. A name is picked (`free_name`) and the agent made in
 /// the same step: without the lock, two requests could pick the same free name. Held around one template's name and
 /// creation at a time, and never taken inside `create_from`, which the holders call.
-static CREATE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+pub(super) static CREATE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// What `agents.create_from_template` takes. `runtime` defaults to the template's, `model` to none.
 #[derive(Deserialize)]
@@ -392,7 +392,7 @@ fn export_agent(app: &App, id: &str) -> RpcResult {
 
 /// The catalog ids of the integrations the agent may use: every enabled one when its list is null, else the enabled ones
 /// it lists. A custom integration (not a catalog service) is left out.
-fn shared_services(store: &Store, agent: &Agent) -> Result<Vec<String>, RpcError> {
+pub(super) fn shared_services(store: &Store, agent: &Agent) -> Result<Vec<String>, RpcError> {
     let mut out: Vec<String> = Vec::new();
     for integration in store.integration_list()? {
         if !integration.enabled {
@@ -631,7 +631,7 @@ fn store_effort(e: TemplateEffort) -> Effort {
 }
 
 /// The url of catalog entry `id`, if the entry has one (stdio entries have none).
-fn catalog_url(id: &str) -> Option<String> {
+pub(super) fn catalog_url(id: &str) -> Option<String> {
     let entries: Vec<Value> = serde_json::from_str(INTEGRATIONS_JSON).ok()?;
     entries
         .iter()

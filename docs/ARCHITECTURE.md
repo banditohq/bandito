@@ -224,7 +224,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 
 ## Store (SQLite)
 
-- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime, paused, use_personal_settings, avatar_color, avatar_face, capabilities)`: `avatar_color` and `avatar_face` are the [avatar](#capabilities) (both NULL = derived from the name); `capabilities` is a JSON array of [capabilities](#capabilities), NULL = all. `fallback_runtime`, `fallback_model` and `active_runtime` are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`. `paused` is the [pause](#pause) flag
+- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime, paused, use_personal_settings, avatar_color, avatar_face, capabilities)`: `avatar_color` and `avatar_face` are the [avatar](#capabilities) (both NULL = derived from the name); `capabilities` is a JSON array of [capabilities](#capabilities), NULL = all. `fallback_runtime`, `fallback_model` and `active_runtime` are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`. `migrated_to` (the other server's name) and `migrated_at` (Unix ms) are NULL until [`agents.migrate_done`](#agent-migration) marks the agent as moved; `paused` is the [pause](#pause) flag
 - `events(seq INTEGER PRIMARY KEY, agent_id, ts, kind, payload JSON)`
 - `tool_calls(id INTEGER PRIMARY KEY, at_ms, agent_id, integration, tool, duration_ms, ok, error, decision)`: the [call journal](#call-journal) of integration tools; kept 30 days and at most 20 000 rows
 - `approvals(id, agent_id, call_id, tool, title, payload JSON, status, decision, created_at, resolved_at)`
@@ -1059,6 +1059,64 @@ A bot or a skill can be shared by a link (`https://bandito.dev/s/<id>`; the plat
 **Locks.** `skills.install_shared` takes one process-wide lock (`SHARED_INSTALL_LOCK`, as `CREATE_LOCK` for the agents), so two installs of one name never interleave their folder writes.
 
 **Rights.** The owner's CLI and paired devices only. Agents may not call the four methods: they are not in `AGENT_METHODS`, and the trust tests of `rpc/mod.rs` list them.
+
+## Agent migration
+
+An agent can be moved from one of the owner's servers to another: its settings, its memory folder and its history. The app drives it (source → app → target); the daemons only pack, serve, receive and unpack. Code: `daemon/src/migrate.rs` (the archive, the safe unpacking, the registry of archives and uploads), `daemon/src/rpc/migrate.rs` (the methods), `daemon/src/store/migrate.rs` (history read and write, the mark). Feature string: `"agent_migrate"` (the app offers "Move to…" only when both servers list it). The archive format is `1`.
+
+**What moves.** The name, role, system prompt, runtime, model, effort, approval mode, memory mode and context budget, fallback runtime and model, personal-settings flag, capabilities, avatar (color, face, emoji, and the picture), the catalog ids of the services it used, its schedules, the agent's own folder (the memory: `MEMORY.md`, notes, journal, files, a project's skills in it), and its history. **What does not:** the project folder (`cwd`), secrets, integration accounts, tokens, workspaces, terminals and the browser, approvals and rules, `.git` folders inside the agent's folder, links, and the marker file `.bandito-agent` (it names the owner of a folder, and the new agent gets its own). Anything left out for being unreadable or unfit is named in the manifest's `skipped` and counted in the export reply.
+
+**The flow.**
+
+1. Source: `agents.migrate_export` packs the agent into `<home>/run/migrate/<token>.tgz`; the app reads it with `agents.migrate_read` in pieces.
+2. Target: `agents.migrate_import_begin`, then `agents.migrate_import_write` for each piece, then `agents.migrate_import_commit`.
+3. Source: after the target answered, `agents.migrate_done` with `moved_to` pauses the agent and marks it; deleting it stays the owner's own act.
+
+An error on any step leaves the source as it was. Nothing on the source changes until `migrate_done`.
+
+| method | params | result | refusals (`error.data.reason`) |
+|---|---|---|---|
+| `agents.migrate_export` | `agent_id` | `{token, size, sha256, files, events, skipped}`: the archive waits under `token` for one hour. The history is cut at the newest event at the time of the call; the agent keeps running | `unknown_agent`, `too_many_exports` (5 wait at once), `too_many_files`, `too_large`, `io` |
+| `agents.migrate_read` | `token`, `offset`, `length` (1 to 1 MiB; more is cut to 1 MiB) | `{data, eof}`: `data` is base64 of at most `length` bytes from `offset`; `eof` is true when this piece reaches the end. `offset == size` gives `{data: "", eof: true}` | `unknown_token`, `bad_offset` (past the end) |
+| `agents.migrate_done` | `token`, `moved_to?` (1 to 64 characters, no control characters) | `{ok: true, agent}`. Deletes the archive. With `moved_to`: sets `migrated_to` and `migrated_at` (agent view fields, also in `agents.get` and `agents.list`), pauses the agent and emits `agent_changed`; `agent` is its view. Without: `agent` is `null` and nothing else changes. The token is spent: a second call is `unknown_token` | `unknown_token`, `unknown_agent` (deleted meanwhile; the archive is deleted anyway); `moved_to` that is empty, too long or has control characters is `INVALID_PARAMS` and keeps the archive |
+| `agents.migrate_import_begin` | `size` (bytes of the archive), `sha256` (hex of the whole archive) | `{upload_id}`; the file is `<home>/run/migrate/in-<id>.tgz`, mode 0600. At most 2 uploads at once | `too_large` (over 2 GiB), `size_mismatch` (size 0), `checksum_mismatch` (not 64 hex characters), `too_many_uploads` |
+| `agents.migrate_import_write` | `upload_id`, `offset`, `data` (base64, at most 4 MiB decoded) | `{written}`: the size so far. Strictly in order: `offset` must equal the size so far | `bad_offset`, `size_mismatch` (more than `size`), `busy` (being unpacked), `unknown_upload`; a bad or oversized `data` is `INVALID_PARAMS` |
+| `agents.migrate_import_commit` | `upload_id`, `cwd?` (absolute path of an existing folder; default: the agent's own folder), `name?` (default: the archive's) | `{agent, missing_services, schedule_ids, events, files, errors}`; `events` is how many history events were written, `files` how many memory files were moved in | see below |
+
+`agents.migrate_import_commit` checks, in this order: `cwd` and `name` (`bad_folder`, `bad_name`: the upload stays, so the app can ask again); the size and the hash of the upload (`size_mismatch`: the upload stays; `checksum_mismatch`: the upload is removed); then the archive (`bad_archive`, `bad_path`, `too_many_files`, `too_large`, `bad_manifest`, `unsupported_format`, `hash_mismatch`, `bad_events`; the upload is removed); then the agent's settings (a refusal of the same checks as `agents.create`, such as a capability the runtime lacks, is `INVALID_PARAMS`). **Until here nothing has been made**: no agent, no folder, no file outside `<home>/run/migrate`, and the unpack folder is removed. A second commit of the same upload is `unknown_upload`; two at once: one runs, the other gets `busy` (or `unknown_upload`, if the first has already finished).
+
+Then the agent is made by the same function as `agents.create`, in the shared workspace, with the same locking as the template agents (`CREATE_LOCK`): the name is `name`/the archive's, and `" 2"`, `" 3"`… when another agent has it (compared without case; the base is cut so the name stays within 32 characters). From here nothing is rolled back: a step that fails is listed in `errors` (`[{step, message, index?}]` with `step` one of `agent`, `memory`, `avatar`, `events`, `schedule`, `integrations`), as `agents.create_from_shared` does.
+
+- **Memory.** The unpacked `memory/` goes into the new agent's folder by renames (a copy, when the folders are on different file systems). A file replaces the one that is there (the template `MEMORY.md`); folders are merged.
+- **Services.** The agent may use the enabled integrations here whose catalog id it used there, and no other. A service with no enabled integration here (or one this daemon's catalog does not know) is listed in `missing_services`; the app offers to connect it.
+- **Schedules.** All created **off**, with their cron, zone, prompt and title; the owner turns them on. An invalid one is listed in `errors` and the rest are made.
+- **History.** Written in one transaction: every event or none (`step: events` on failure). Each event gets a new `seq`, the new agent's id and keeps its time. Carried kinds: `turn.started`, `message.user`, `message.dropped`, `message.assistant`, `tool.call`, `tool.result`, `turn.completed`, `session.rotated`, `runtime.switched`, `reaction`, `error`. Not carried (they describe things whose records stay on the source): approvals, forms, connect requests, `agent.status`, `agent_changed`, `usage.limits`. Links follow the new seqs (`reply_to`, `turn.started.message_seq`, `message.dropped.seq`, `reaction.seq`); a reply or a turn whose message was not carried loses the link, and a drop or a reaction of such a message is left out. A message that was still `queued` is written as a normal message: nothing on the new server would ever take it. An attachment whose file is in the agent's moved folder points at the new path; every other attachment becomes a line `[attachment not moved: <name>]` at the end of the message text, so the history still reads. The app reads the new agent's thread through `events.page` as any other.
+- The agent is not paused and has no session; the first message starts one. `lead`, `template_id` and `runtime_session_id` are not carried.
+
+**The archive.** A `tar.gz` made with GNU headers. Only these entries are accepted:
+
+| entry | content |
+|---|---|
+| `manifest.json` | `{format: 1, bandito_version, agent: {…settings…, services, schedules, source_home}, events_count, files: [{path, size, sha256}], skipped}`; the last entry written, but its position is not required |
+| `events.jsonl` | one `{seq, ts, kind, payload}` JSON line per event, oldest first, `seq` rising |
+| `avatar.png` or `avatar.jpg` | the avatar picture (PNG or JPEG, at most 1 MB) |
+| `memory/…` | the agent's folder: regular files and folders; the executable bit of a file is kept for the owner only (0700 / 0600) |
+
+**Unpacking is ours, not the tar crate's.** The daemon reads the tar headers itself (`for_each_entry`) and writes every file itself, into a fresh unpack folder `<home>/run/migrate/x-<random>` (mode 0700) with `create_new`. It refuses, with the whole archive:
+
+- a path that is absolute, has a `..`, `.`, empty or backslash part, a NUL, a part over 255 bytes, a path over 4096 bytes, is not UTF-8, has a `.git` part, is `memory/.bandito-agent`, or is outside the table above (`bad_path`);
+- any entry that is not a regular file or a folder: symbolic and hard links, devices, pipes, pax headers (they can rename the next entry), sparse files, long link names, base-256 sizes (`bad_archive`);
+- the same path twice, or a file and a folder of one name (`bad_archive`);
+- more than 50 000 files, or more than 50 000 folders (`too_many_files`); more than 2 GiB of files together, counted from the headers **before** the data is read (`too_large`); a manifest over 16 MiB (`bad_manifest`); a history line over 8 MiB (`bad_events`);
+- a truncated or corrupt archive, a wrong header checksum (`bad_archive`);
+- a manifest that is not JSON, has no `format` (`bad_manifest`), or has a `format` other than 1 (`unsupported_format`: update Bandito on the server that reads it); a file listed and not in the archive, in the archive and not listed, or listed twice; an invalid listed path; a name that is not a valid agent name; more than 100 services or schedules; `events.jsonl` not listed (`bad_manifest`); a file whose size or sha256 differs from the manifest (`hash_mismatch`);
+- a history with a kind that is not carried, an event that does not decode, `seq`s that do not rise, or a count other than `events_count` (`bad_events`).
+
+The sha256 of the whole archive is checked against `agents.migrate_import_begin` before any of this.
+
+**Temporary files.** All in `<home>/run/migrate/` (mode 0700), mode 0600, named from 16 random bytes (`mg_<hex>.tgz`, `in-up_<hex>.tgz`, `x-<hex>`, `ev-mg_<hex>.tmp`), never from a request. A token or an id the daemon does not hold in memory is `unknown_token` / `unknown_upload` and never reaches a path. Files older than one hour (an export, an upload with no write for an hour, an unpack folder, anything else in the folder) are removed by every `agents.migrate_*` call and when the daemon starts. A daemon restart forgets the open exports and uploads (the app starts again).
+
+**Rights.** The owner's CLI and paired devices only, like `daemon.update_apply`. The methods are not in `AGENT_METHODS`; agents and anonymous peers get `UNAUTHORIZED` and the trust tests list the six names. Errors of this feature are `-32030` with `error.data.reason`; a parameter of the wrong type or shape is `-32602`.
 
 ## Workspaces
 
