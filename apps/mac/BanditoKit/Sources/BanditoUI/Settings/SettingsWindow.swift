@@ -11,6 +11,8 @@ final class SettingsNavigation {
     static let shared = SettingsNavigation()
 
     var requested: SettingsSection?
+    /// The server whose settings page the Servers section opens on, asked for with `requested = .servers`.
+    var requestedServer: UUID?
 }
 
 /// Hands a route over to the main window: Settings closes, the main window comes forward with the route applied.

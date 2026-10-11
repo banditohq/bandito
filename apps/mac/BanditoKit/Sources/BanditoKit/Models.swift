@@ -477,6 +477,9 @@ public enum EventBody: Sendable, Hashable {
     case reaction(seq: Int64, emoji: String?, by: ReactionBy)
     /// The Telegram bot or its linked chats changed (`telegram.changed`, no data). Read `telegram.status` again.
     case telegramChanged
+    /// The owner changed the server's settings (`server.settings_changed`); `keys` are the names that changed. Read
+    /// `server.settings_get` again. Broadcast only, never stored.
+    case serverSettingsChanged(keys: [String])
     /// A kind this app version doesn't know yet. Shown as nothing; kept for forward compatibility.
     case unknown(kind: String)
 }
@@ -542,6 +545,7 @@ extension Event: Decodable {
     }
     private struct AgentStatusP: Decodable { var status: AgentStatus; var detail: String? }
     private struct UsageLimitsP: Decodable { var runtime: String; var windows: [LimitWindow] }
+    private struct SettingsChangedP: Decodable { var keys: [String] }
     private struct SessionRotatedP: Decodable { var chapter: Int; var reason: String; var contextTokens: Int }
     private struct RuntimeSwitchedP: Decodable { var from: String; var to: String; var until: Int64? }
     private struct ErrorP: Decodable { var message: String }
@@ -617,6 +621,7 @@ extension Event: Decodable {
         case "reaction":
             let x = try p(ReactionP.self); body = .reaction(seq: x.seq, emoji: x.emoji, by: x.by)
         case "telegram.changed": body = .telegramChanged
+        case "server.settings_changed": body = .serverSettingsChanged(keys: try p(SettingsChangedP.self).keys)
         default: body = .unknown(kind: kind)
         }
     }

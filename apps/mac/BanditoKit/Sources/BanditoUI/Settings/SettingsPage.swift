@@ -41,6 +41,8 @@ struct SettingsGroup<Content: View>: View {
 struct SettingsPage<Content: View>: View {
     var title: String
     var intro: String?
+    /// How many lines the title may take. A page titled with a person's name (a server) allows two.
+    var titleLines = 1
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -50,7 +52,7 @@ struct SettingsPage<Content: View>: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(BanditoFont.display(size: 20, weight: 600))
-                        .lineLimit(1)
+                        .lineLimit(titleLines)
                         .truncationMode(.tail)
                         .foregroundStyle(Color.Bandito.text)
                     if let intro {

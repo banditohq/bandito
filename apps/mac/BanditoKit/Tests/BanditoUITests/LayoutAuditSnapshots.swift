@@ -28,6 +28,16 @@ import Testing
         AuditCase(name: "settings-general", width: settingsColumn, scrolls: true) { _ in AnyView(GeneralSection()) },
         AuditCase(name: "settings-account", width: settingsColumn, scrolls: true) { _ in AnyView(AccountSection()) },
         AuditCase(name: "settings-servers", width: settingsColumn, scrolls: true) { _ in AnyView(ServersSection()) },
+        AuditCase(name: "settings-server-detail", width: settingsColumn, scrolls: true) { env in
+            env.serverInfo(features: ["server_settings", "backups", "host", "logs"])
+            return AnyView(
+                ServerSettingsPage(
+                    server: env.server, onBack: {}, preview: serverSettingsPreview, previewStats: serverHostPreview))
+        },
+        AuditCase(name: "settings-server-detail-old", width: settingsColumn, scrolls: true) { env in
+            env.serverInfo(version: "0.1.4", features: ["host"])
+            return AnyView(ServerSettingsPage(server: env.server, onBack: {}, previewStats: serverHostPreview))
+        },
         AuditCase(name: "settings-approvals", width: settingsColumn, scrolls: true) { _ in AnyView(ApprovalsSection()) },
         AuditCase(name: "settings-usage", width: settingsColumn, scrolls: true) { _ in AnyView(UsageSection()) },
         AuditCase(name: "settings-terminal-files", width: settingsColumn, scrolls: true) { _ in AnyView(TerminalFilesSection()) },
@@ -88,6 +98,19 @@ import Testing
     ]
 
     // MARK: sheets with data
+
+    /// The settings page's values and host numbers without a server: long names and the largest choices on purpose.
+    static let serverSettingsPreview = ServerSettingsSnapshot(
+        settings: ServerSettingValues(
+            screenIdleMinutes: 240, maxRunningAgents: 50, backupEveryHours: 168, backupKeep: 60, autoUpdate: .install,
+            updateChannel: "stable", defaultApprovalMode: .always),
+        defaults: ServerSettingValues(
+            screenIdleMinutes: 30, maxRunningAgents: 0, backupEveryHours: 24, backupKeep: 14, autoUpdate: .notify,
+            updateChannel: "stable", defaultApprovalMode: .risky))
+
+    static let serverHostPreview = decode(
+        HostStats.self,
+        #"{"os":"Ubuntu 24.04.2 LTS","kernel":"6.8.0-45-generic","arch":"x86_64","hostname":"audit","cpus":16,"cpu_percent":12.5,"load":[0.4,0.3,0.2],"mem_total":68719476736,"mem_used":17179869184,"swap_total":0,"swap_used":0,"disks":[{"mount":"/","total":1000000000000,"used":412000000000}],"net_rx_bps":0,"net_tx_bps":0,"net_supported":true,"uptime_s":1900000}"#)
 
     static func decode<T: Decodable>(_ type: T.Type, _ raw: String) -> T {
         // The test fails at once, with the text, if a sample no longer decodes.

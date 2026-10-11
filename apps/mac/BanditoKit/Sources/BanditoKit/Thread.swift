@@ -376,7 +376,7 @@ public struct AgentThread: Sendable, Hashable {
             }
         case .reaction(let seq, let emoji, let by):
             reactions[seq, default: MessageReactions()].set(by: by, emoji: emoji, eventSeq: e.seq)
-        case .usageLimits, .agentChanged, .telegramChanged, .unknown:
+        case .usageLimits, .agentChanged, .telegramChanged, .serverSettingsChanged, .unknown:
             // Not part of a thread: the team's agent list reads its own records, Telegram has its own section.
             break
         }

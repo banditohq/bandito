@@ -502,6 +502,46 @@
 			<string>работает %1$lld часов</string>
 		</dict>
 	</dict>
+	<key>serverSettings.copies</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld копии</string>
+			<key>many</key>
+			<string>%1$lld копий</string>
+			<key>one</key>
+			<string>%1$lld копия</string>
+			<key>other</key>
+			<string>%1$lld копий</string>
+		</dict>
+	</dict>
+	<key>serverSettings.info.cores</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld ядра</string>
+			<key>many</key>
+			<string>%1$lld ядер</string>
+			<key>one</key>
+			<string>%1$lld ядро</string>
+			<key>other</key>
+			<string>%1$lld ядра</string>
+		</dict>
+	</dict>
 	<key>setup.showFullLog</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

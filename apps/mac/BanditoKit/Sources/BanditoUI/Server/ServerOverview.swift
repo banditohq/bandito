@@ -143,8 +143,20 @@ struct ServerOverview: View {
                     }),
                 options: [(HostHistoryRange.hour, L10n.Server.range1h), (HostHistoryRange.day, L10n.Server.range24h)])
             .fixedSize()
+            if let server {
+                Button(L10n.ServerSettings.openLink) { openServerSettings(server) }
+                    .banditoButton(.quiet())
+                    .fixedSize()
+            }
         }
         .fixedSize()
+    }
+
+    /// Opens Settings on this server's settings page (Settings → Servers → the server).
+    private func openServerSettings(_ server: ServerModel) {
+        SettingsNavigation.shared.requestedServer = server.id
+        SettingsNavigation.shared.requested = .servers
+        WindowActions.showSettings()
     }
 
     /// Page width from which the cards sit in two columns; narrower pages stack them in one.

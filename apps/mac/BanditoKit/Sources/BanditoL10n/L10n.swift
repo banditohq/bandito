@@ -2669,6 +2669,110 @@ public enum L10n {
         }
     }
 
+    public enum ServerSettings {
+        public static var back: String { L10n.tr("serverSettings.back") }
+        public static func copies(count: Int) -> String { L10n.tr("serverSettings.copies", count) }
+        public static var intro: String { L10n.tr("serverSettings.intro") }
+        public static var loadFailed: String { L10n.tr("serverSettings.loadFailed") }
+        public static var loading: String { L10n.tr("serverSettings.loading") }
+        public static func minutes(count: Int) -> String { L10n.tr("serverSettings.minutes", count) }
+        public static var openLink: String { L10n.tr("serverSettings.openLink") }
+        public static var saveFailed: String { L10n.tr("serverSettings.saveFailed") }
+        public static var saved: String { L10n.tr("serverSettings.saved") }
+        public static var saving: String { L10n.tr("serverSettings.saving") }
+        public static var unsupported: String { L10n.tr("serverSettings.unsupported") }
+
+        public enum Agents {
+            public static var title: String { L10n.tr("serverSettings.agents.title") }
+        }
+
+        public enum Approval {
+            public static var hint: String { L10n.tr("serverSettings.approval.hint") }
+            public static var title: String { L10n.tr("serverSettings.approval.title") }
+        }
+
+        public enum AutoUpdate {
+            public static var hint: String { L10n.tr("serverSettings.autoUpdate.hint") }
+            public static var install: String { L10n.tr("serverSettings.autoUpdate.install") }
+            public static var notify: String { L10n.tr("serverSettings.autoUpdate.notify") }
+            public static var off: String { L10n.tr("serverSettings.autoUpdate.off") }
+            public static var title: String { L10n.tr("serverSettings.autoUpdate.title") }
+        }
+
+        public enum BackupEvery {
+            public static var h12: String { L10n.tr("serverSettings.backupEvery.h12") }
+            public static var h168: String { L10n.tr("serverSettings.backupEvery.h168") }
+            public static var h24: String { L10n.tr("serverSettings.backupEvery.h24") }
+            public static var h48: String { L10n.tr("serverSettings.backupEvery.h48") }
+            public static var h6: String { L10n.tr("serverSettings.backupEvery.h6") }
+            public static var hint: String { L10n.tr("serverSettings.backupEvery.hint") }
+            public static var title: String { L10n.tr("serverSettings.backupEvery.title") }
+        }
+
+        public enum BackupKeep {
+            public static var hint: String { L10n.tr("serverSettings.backupKeep.hint") }
+            public static var title: String { L10n.tr("serverSettings.backupKeep.title") }
+        }
+
+        public enum BackupNow {
+            public static var button: String { L10n.tr("serverSettings.backupNow.button") }
+            public static var failed: String { L10n.tr("serverSettings.backupNow.failed") }
+            public static var hint: String { L10n.tr("serverSettings.backupNow.hint") }
+            public static func made(name: String) -> String { L10n.tr("serverSettings.backupNow.made", name) }
+            public static var title: String { L10n.tr("serverSettings.backupNow.title") }
+            public static var working: String { L10n.tr("serverSettings.backupNow.working") }
+        }
+
+        public enum Folder {
+            public static var choose: String { L10n.tr("serverSettings.folder.choose") }
+            public static var message: String { L10n.tr("serverSettings.folder.message") }
+            public static var none: String { L10n.tr("serverSettings.folder.none") }
+            public static var title: String { L10n.tr("serverSettings.folder.title") }
+        }
+
+        public enum Info {
+            public static func cores(count: Int) -> String { L10n.tr("serverSettings.info.cores", count) }
+            public static var cpu: String { L10n.tr("serverSettings.info.cpu") }
+            public static var daemon: String { L10n.tr("serverSettings.info.daemon") }
+            public static var disk: String { L10n.tr("serverSettings.info.disk") }
+            public static var memory: String { L10n.tr("serverSettings.info.memory") }
+            public static var statsFailed: String { L10n.tr("serverSettings.info.statsFailed") }
+            public static var system: String { L10n.tr("serverSettings.info.system") }
+            public static var title: String { L10n.tr("serverSettings.info.title") }
+            public static var unavailable: String { L10n.tr("serverSettings.info.unavailable") }
+            public static var uptime: String { L10n.tr("serverSettings.info.uptime") }
+            public static func usedOf(used: String, total: String) -> String { L10n.tr("serverSettings.info.usedOf", used, total) }
+        }
+
+        public enum Logs {
+            public static var hint: String { L10n.tr("serverSettings.logs.hint") }
+            public static var `open`: String { L10n.tr("serverSettings.logs.open") }
+            public static var title: String { L10n.tr("serverSettings.logs.title") }
+        }
+
+        public enum Maintenance {
+            public static var title: String { L10n.tr("serverSettings.maintenance.title") }
+        }
+
+        public enum MaxRunning {
+            public static var hint: String { L10n.tr("serverSettings.maxRunning.hint") }
+            public static var none: String { L10n.tr("serverSettings.maxRunning.none") }
+            public static var title: String { L10n.tr("serverSettings.maxRunning.title") }
+        }
+
+        public enum ScreenIdle {
+            public static var hint: String { L10n.tr("serverSettings.screenIdle.hint") }
+            public static var title: String { L10n.tr("serverSettings.screenIdle.title") }
+        }
+
+        public enum Support {
+            public static var copied: String { L10n.tr("serverSettings.support.copied") }
+            public static var copy: String { L10n.tr("serverSettings.support.copy") }
+            public static var hint: String { L10n.tr("serverSettings.support.hint") }
+            public static var title: String { L10n.tr("serverSettings.support.title") }
+        }
+    }
+
     public enum Settings {
         public static var approvals: String { L10n.tr("settings.approvals") }
         public static var approvalsIntro: String { L10n.tr("settings.approvalsIntro") }
