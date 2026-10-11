@@ -419,9 +419,10 @@ struct MarketView: View {
     ) -> some View {
         let actions = cardActions
         LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-            Color.clear.frame(height: MarketSectionMetrics.topInset)
-                .id(MarketScrollDriver.topAnchorID)
-                .marketAnchor { tracker.reportTop($0) }
+            ForEach([MarketScrollDriver.topID], id: \.self) { _ in
+                Color.clear.frame(height: MarketSectionMetrics.topInset)
+                    .marketAnchor { tracker.reportTop($0) }
+            }
             switch content {
             case .sections(let sections):
                 if let recommendation, !firstIsConnected {
@@ -429,9 +430,8 @@ struct MarketView: View {
                         .padding(.horizontal, MarketGridLayout.sidePadding)
                         .padding(.bottom, 14)
                 }
-                ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
+                ForEach(Array(sections.enumerated()), id: \.element.scrollID) { index, section in
                     Color.clear.frame(height: 0)
-                        .id(MarketScrollDriver.anchorID(section))
                         .marketAnchor { y in
                             if tracker.report(index: index, minY: y) { onActive(tracker.active) }
                         }

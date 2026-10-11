@@ -23,6 +23,9 @@ struct MarketSection: Identifiable, Equatable {
         }
     }
 
+    /// The identity the scroll view knows the block by: what `ForEach` takes as the element id and what a jump scrolls to.
+    var scrollID: String { id }
+
     /// The category name of a category section; nil for the others.
     var categoryName: String? {
         if case .category(let name) = kind { return name }
@@ -297,6 +300,16 @@ enum MarketSidebarLogic {
         case .top: return .top
         case .category(let name):
             return sections.firstIndex { $0.categoryName == name }.map { .section($0) }
+        }
+    }
+}
+
+extension MarketSidebarLogic {
+    /// The id a jump hands to `scrollTo`: the top's, or the `scrollID` of the block (the element id of the page's `ForEach`).
+    static func scrollID(for landing: MarketLanding, sections: [MarketSection]) -> String {
+        switch landing {
+        case .top: MarketScrollDriver.topID
+        case .section(let index): sections[index].scrollID
         }
     }
 }
