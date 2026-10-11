@@ -2949,10 +2949,17 @@
   "agentCreate.servicesNone": "无",
   "agentCreate.servicesAll": "所有已启用的",
   "agentCreate.schedules": "定时运行",
-  "agentCreate.runLine": "{when}：{what}",
   "agentCreate.folder": "文件夹",
   "agentCreate.folderNew": "专属的新文件夹",
   "agentCreate.instructions": "指令",
   "quickReplies.group": "快捷回复",
-  "quickReplies.progress": "{done} / {total}"
+  "quickReplies.progress": "{done} / {total}",
+  "thread.viaButton": "通过按钮回复",
+  "agentCreate.scrollHint": "请将上方文字滚动到末尾后再允许",
+  "agentCreate.chars": {
+    "other": "{count} 个字符"
+  },
+  "agentCreate.lines": {
+    "other": "{count} 行"
+  }
 }

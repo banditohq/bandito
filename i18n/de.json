@@ -2983,10 +2983,19 @@
   "agentCreate.servicesNone": "Keine",
   "agentCreate.servicesAll": "Alle aktivierten",
   "agentCreate.schedules": "Läufe",
-  "agentCreate.runLine": "{when}: {what}",
   "agentCreate.folder": "Ordner",
   "agentCreate.folderNew": "Ein neuer eigener Ordner",
   "agentCreate.instructions": "Anweisungen",
   "quickReplies.group": "Schnellantworten",
-  "quickReplies.progress": "{done} von {total}"
+  "quickReplies.progress": "{done} von {total}",
+  "thread.viaButton": "per Schaltfläche geantwortet",
+  "agentCreate.scrollHint": "Zum Erlauben den Text oben bis zum Ende scrollen",
+  "agentCreate.chars": {
+    "one": "{count} Zeichen",
+    "other": "{count} Zeichen"
+  },
+  "agentCreate.lines": {
+    "one": "{count} Zeile",
+    "other": "{count} Zeilen"
+  }
 }

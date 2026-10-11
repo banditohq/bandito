@@ -216,6 +216,7 @@ fn user(text: &str) -> EventBody {
         reply_to: None,
         attachments: vec![],
         mentions: vec![],
+        via_button: false,
         queued: false,
     }
 }

@@ -71,9 +71,9 @@
 "agentCreate.instructions" = "指示";
 "agentCreate.nothingExtra" = "追加なし";
 "agentCreate.role" = "役割";
-"agentCreate.runLine" = "%1$@：%2$@";
 "agentCreate.runsOn" = "実行環境";
 "agentCreate.schedules" = "定期実行";
+"agentCreate.scrollHint" = "許可するには、上の文章を最後までスクロールしてください";
 "agentCreate.services" = "サービス";
 "agentCreate.servicesAll" = "有効なものすべて";
 "agentCreate.servicesNone" = "なし";
@@ -2642,6 +2642,7 @@
 "thread.stop" = "停止";
 "thread.stopped" = "停止しました";
 "thread.today" = "今日";
+"thread.viaButton" = "ボタンで返信";
 "thread.yesterday" = "昨日";
 "tour.agents.text" = "エージェントごとに独立したチャットがあります。オレンジの点は、あなたの判断を待っていることを示します。";
 "tour.agents.title" = "エージェント一覧";

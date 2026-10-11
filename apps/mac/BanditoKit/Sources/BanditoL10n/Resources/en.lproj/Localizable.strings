@@ -71,9 +71,9 @@
 "agentCreate.instructions" = "Instructions";
 "agentCreate.nothingExtra" = "Nothing extra";
 "agentCreate.role" = "Role";
-"agentCreate.runLine" = "%1$@: %2$@";
 "agentCreate.runsOn" = "Runs on";
 "agentCreate.schedules" = "Runs";
+"agentCreate.scrollHint" = "Scroll the text above to its end to allow";
 "agentCreate.services" = "Services";
 "agentCreate.servicesAll" = "All enabled";
 "agentCreate.servicesNone" = "None";
@@ -2642,6 +2642,7 @@
 "thread.stop" = "Stop";
 "thread.stopped" = "Stopped";
 "thread.today" = "Today";
+"thread.viaButton" = "answered with a button";
 "thread.yesterday" = "Yesterday";
 "tour.agents.text" = "Each agent is its own chat. The orange dot means someone is waiting for your decision.";
 "tour.agents.title" = "Your agents";

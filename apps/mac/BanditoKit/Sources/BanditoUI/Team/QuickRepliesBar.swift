@@ -45,6 +45,8 @@ struct QuickRepliesBar: View {
 
     var body: some View {
         let buttons = QuickRepliesRules.buttons(replies)
+        // A button with a second line is taller than the compact size.
+        let size: BanditoButtonSize = buttons.contains { $0.subtitle != nil } ? .regular : .compact
         let link = QuickRepliesRules.link(replies)
         let progress = QuickRepliesRules.progressText(replies.progress)
         VStack(alignment: .leading, spacing: 8) {
@@ -53,30 +55,45 @@ struct QuickRepliesBar: View {
                     Button {
                         onReply(button.reply)
                     } label: {
-                        Text(button.label)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(maxWidth: 300, alignment: .leading)
-                            .fixedSize(horizontal: true, vertical: false)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(button.label)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            if let subtitle = button.subtitle {
+                                Text(subtitle)
+                                    .font(BanditoFont.text(size: 10.5, weight: 400))
+                                    .opacity(0.65)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+                        .frame(maxWidth: 280, alignment: .leading)
+                        .fixedSize(horizontal: true, vertical: false)
                     }
-                    .banditoButton(button.isPrimary ? .signal(size: .compact) : .quiet(size: .compact))
+                    .banditoButton(button.isPrimary ? .signal(size: size) : .quiet(size: size))
                     .help(button.help ?? "")
                 }
                 if let link {
                     Button {
                         onOpen(link.url)
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 4) {
+                            // The label gives way when the line is long; the host never does: it says where the link goes.
                             Text(link.label)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
-                                .frame(maxWidth: 260, alignment: .leading)
-                                .fixedSize(horizontal: true, vertical: false)
+                            Text("· \(QuickRepliesRules.shownHost(link.host))")
+                                .lineLimit(1)
+                                .fixedSize()
+                                .opacity(0.7)
                             Image(systemName: "arrow.up.right")
                                 .font(.system(size: 10, weight: .semibold))
                         }
+                        .frame(maxWidth: 280, alignment: .leading)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .accessibilityLabel(QuickRepliesRules.caption(label: link.label, host: link.host))
                     }
-                    .banditoButton(.quiet(size: .compact))
+                    .banditoButton(.quiet(size: size))
                     .help(link.url.absoluteString)
                 }
             }

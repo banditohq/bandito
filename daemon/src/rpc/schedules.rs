@@ -161,10 +161,12 @@ fn target_of(app: &App, me: &str, key: Option<&str>) -> Result<crate::store::Age
 /// One schedule of an agent for its owner's request, checked: the run's timing, prompt and title. Nothing is stored.
 /// Returns the row to store (its `agent_id` is left empty) and a line for a card.
 pub fn check_new_for_agent(a: &AgentCreate, tz: &str) -> Result<(NewSchedule, Value), RpcError> {
-    if a.prompt.trim().is_empty() {
+    // Cleaned before it is shown and stored: what the person reads is what runs.
+    let prompt = crate::sanitize::block(&a.prompt);
+    if prompt.is_empty() {
         return Err(RpcError::new(INVALID_PARAMS, "prompt is empty"));
     }
-    if a.prompt.chars().count() > AGENT_PROMPT_CHARS {
+    if prompt.chars().count() > AGENT_PROMPT_CHARS {
         return Err(RpcError::new(
             INVALID_PARAMS,
             format!("prompt is longer than {AGENT_PROMPT_CHARS} characters"),
@@ -172,11 +174,11 @@ pub fn check_new_for_agent(a: &AgentCreate, tz: &str) -> Result<(NewSchedule, Va
     }
     let cron = cron_from_forms(a)?;
     check_agent_interval(&cron, tz)?;
-    let title = clean_title(a.title.clone())?;
+    let title = clean_title(a.title.as_deref().map(crate::sanitize::line))?;
     let (human_en, human_ru) = schedule_text::describe(&cron);
     let line = json!({
         "title": title,
-        "prompt": a.prompt.trim().chars().take(160).collect::<String>(),
+        "prompt": prompt,
         "human_en": human_en,
         "human_ru": human_ru,
     });
@@ -185,7 +187,7 @@ pub fn check_new_for_agent(a: &AgentCreate, tz: &str) -> Result<(NewSchedule, Va
             agent_id: String::new(),
             cron,
             tz: tz.to_string(),
-            prompt: a.prompt.clone(),
+            prompt,
             enabled: true,
             title,
         },

@@ -73,6 +73,8 @@ pub struct Inbound {
     pub attachments: Vec<Attachment>,
     /// `@` mentions of the message (a human's message only), checked by `agents.send`.
     pub mentions: Vec<Mention>,
+    /// The person pressed a quick-reply button the agent offered (checked by `agents.send` against the buttons shown).
+    pub via_button: bool,
 }
 
 impl Inbound {
@@ -88,6 +90,7 @@ impl Inbound {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         }
     }
 
@@ -103,6 +106,7 @@ impl Inbound {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         }
     }
 }
@@ -282,6 +286,9 @@ const LEAD_BRIEFING: &str = "Вы главный в команде. Делите
 /// Put in the system prompt of every other agent when the crew has a main one. `{name}` is replaced by its name.
 const LEAD_NOTICE: &str =
     "Главный в команде — {name}. Задачи от него выполняйте как от человека и отвечайте ему кратко итогом.";
+
+/// Put before a message the person sent by pressing a button the agent had offered with `reply_buttons`.
+const BUTTON_NOTE: &str = "[The person pressed a button that you offered with reply_buttons; the text below is that button's reply, not words they typed.]";
 
 /// Put before a message from the main agent, so the runtime knows who wrote it. `{name}` is replaced by its name.
 const FROM_LEAD: &str = "Сообщение от главного в команде ({name}):";
@@ -670,6 +677,7 @@ impl Supervisor {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
@@ -1268,6 +1276,7 @@ impl Actor {
                 attachments: msg.attachments.clone(),
                 mentions: msg.mentions.clone(),
                 queued,
+                via_button: msg.via_button,
             },
         );
         ev.seq
@@ -1659,6 +1668,7 @@ impl Actor {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         match self.start_turn(msg, None).await {
             Ok(()) => true,
@@ -1798,6 +1808,9 @@ impl Actor {
         );
         if let Some(name) = self.lead_sender(&msg) {
             prompt = format!("{}\n\n{prompt}", FROM_LEAD.replace("{name}", &name));
+        }
+        if msg.via_button {
+            prompt = format!("{BUTTON_NOTE}\n\n{prompt}");
         }
         let turn_id = new_id();
         self.turn = Some(turn_id.clone());
@@ -4037,6 +4050,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
             queued: true,
         };
         let lost = w.store.append_event(&w.agent, queued("lost")).unwrap().seq;
@@ -4175,6 +4189,7 @@ mod tests {
                 reply_to: None,
                 attachments: Vec::new(),
                 mentions: Vec::new(),
+                via_button: false,
                 queued: false,
             }
         );
@@ -4257,6 +4272,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -4379,6 +4395,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -4502,6 +4519,25 @@ mod tests {
             assert!(prompt.contains("reply_buttons"));
         }
         assert!(!plain.contains("crew_create_agent"));
+    }
+
+    #[tokio::test]
+    async fn a_button_press_is_marked_in_the_thread_and_in_what_the_agent_reads() {
+        let mut w = world(ApprovalMode::Risky);
+        let mut msg = Inbound::user("Connected");
+        msg.via_button = true;
+        w.sup.send(&w.agent, msg).await.unwrap();
+        // The agent reads that it is a press of its own button, then the reply.
+        w.wait_log(&format!("send {BUTTON_NOTE}\n\nConnected")).await;
+        let marked = w.store.events_since(0, 100, Some(&w.agent)).unwrap().into_iter().any(
+            |e| matches!(e.body, EventBody::MessageUser { via_button: true, ref text, .. } if text == "Connected"),
+        );
+        assert!(marked, "the thread marks it");
+        w.push(done()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+        // A message typed by the person is neither marked nor prefixed.
+        w.sup.send(&w.agent, Inbound::user("typed")).await.unwrap();
+        w.wait_log("send typed").await;
     }
 
     #[tokio::test]
@@ -5506,6 +5542,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         w.sup.send(&w.agent, wrap_up).await.unwrap();
         w.wait_log("send wrap up").await;

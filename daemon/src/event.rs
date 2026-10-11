@@ -159,6 +159,10 @@ pub enum EventBody {
         /// for a new chapter, or paused). The turn that takes it carries its seq in `turn.started.message_seq`.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         queued: bool,
+        /// True when the person sent this by pressing a quick-reply button the agent offered
+        /// (see docs/ARCHITECTURE.md#quick-replies); the thread marks it, and so does the agent's prompt.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        via_button: bool,
     },
     /// A message shown as waiting (`message.user` with `queued: true`) will not get a turn: the queue was lost
     /// (a crash, a stop, a restart) or the session could not start. `reason`: `crash`, `stopped`, `failed`,

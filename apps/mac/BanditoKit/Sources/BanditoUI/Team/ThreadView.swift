@@ -659,7 +659,8 @@ struct ThreadView: View {
         sendError = nil
         beginSendFollow()
         do {
-            try await server.send(text, to: agent.id)
+            // The text is a button's reply: the daemon marks it so, after checking it is one of the buttons shown.
+            try await server.send(text, to: agent.id, viaButton: true)
             return true
         } catch {
             scroll.sendPinned = false
@@ -762,6 +763,7 @@ struct ThreadView: View {
             replies: current.replies,
             attachments: current.attachments,
             mentions: current.mentions,
+            viaButton: current.viaButton,
             waiting: current.waitingSeqs,
             undelivered: current.undeliveredSeqs,
             onResend: { seq in resend(seq) },

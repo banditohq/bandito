@@ -54,6 +54,8 @@ struct ThreadRowKey: Equatable {
     var quoted: ReplyTarget?
     /// The mentions of the message, drawn as chips under it.
     var mentions: [Mention]
+    /// The message was sent by pressing a button of the agent's.
+    var viaButton: Bool
     var flashing: Bool
     var isLastAgent: Bool
     /// 0 for a message that is not waiting, 1 while it is queued, 2 when it was not delivered.
@@ -77,6 +79,7 @@ struct ThreadRowKey: Equatable {
             reactions = seq.flatMap { chat.reactions[$0] }
             quoted = (chat.repliesOn ? seq.flatMap { chat.replies[$0] } : nil).flatMap { chat.original($0) }
             mentions = seq.flatMap { chat.mentions[$0] } ?? []
+            viaButton = seq.map { chat.viaButton.contains($0) } ?? false
             flashing = chat.highlightedID == item.id
             isLastAgent = chat.lastAgentID == item.id
             waiting = seq.map { chat.waiting.contains($0) ? 1 : chat.undelivered.contains($0) ? 2 : 0 } ?? 0
@@ -85,6 +88,7 @@ struct ThreadRowKey: Equatable {
             reactions = nil
             quoted = nil
             mentions = []
+            viaButton = false
             flashing = false
             isLastAgent = false
         }
@@ -172,6 +176,12 @@ private struct ItemView: View {
                             UserBubble(text: text) { quote(forSeq: seq) }
                             if let seq, let mentions = chat.mentions[seq], !mentions.isEmpty {
                                 MessageMentions(mentions: mentions, agentID: agentID, server: server)
+                            }
+                            if let seq, chat.viaButton.contains(seq) {
+                                Text(L10n.Thread.viaButton)
+                                    .font(BanditoFont.text(size: 11.5, weight: 400))
+                                    .foregroundStyle(Color.Bandito.text3)
+                                    .padding(.trailing, 4)
                             }
                             if let seq, chat.waiting.contains(seq) || chat.undelivered.contains(seq) {
                                 Text(chat.undelivered.contains(seq) ? L10n.Thread.notDelivered : L10n.Thread.queued)

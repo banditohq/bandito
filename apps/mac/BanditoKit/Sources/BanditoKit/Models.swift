@@ -69,7 +69,7 @@ public struct LastMessage: Codable, Sendable, Hashable {
     /// and nothing but user and assistant messages counts. Nil for any other event.
     init?(event e: Event) {
         switch e.body {
-        case .messageUser(let text, let source, _, _, _, _, _) where source != .system:
+        case .messageUser(let text, let source, _, _, _, _, _, _) where source != .system:
             self.init(role: "user", text: Self.cut(text), ts: e.ts)
         case .messageAssistant(let text):
             self.init(role: "assistant", text: Self.cut(text), ts: e.ts)
@@ -441,7 +441,7 @@ public enum EventBody: Sendable, Hashable {
     /// in the text (feature `mentions`).
     case messageUser(
         text: String, source: MessageSource, fromAgent: String?, replyTo: Int64? = nil,
-        attachments: [AgentAttachment] = [], queued: Bool = false, mentions: [Mention] = [])
+        attachments: [AgentAttachment] = [], queued: Bool = false, mentions: [Mention] = [], viaButton: Bool = false)
     /// A message shown as waiting (`queued`) will not get a turn (`reason`: crash, stopped, failed, restart).
     case messageDropped(seq: Int64, reason: String)
     case messageAssistant(text: String)
@@ -518,6 +518,7 @@ extension Event: Decodable {
     private struct MessageUserP: Decodable {
         var text: String; var source: MessageSource; var fromAgent: String?
         var replyTo: Int64?; var attachments: [AgentAttachment]?; var queued: Bool?; var mentions: [Mention]?
+        var viaButton: Bool?
     }
     private struct FormRequestedP: Decodable {
         var formId: String
@@ -581,7 +582,8 @@ extension Event: Decodable {
             let x = try p(MessageUserP.self)
             body = .messageUser(
                 text: x.text, source: x.source, fromAgent: x.fromAgent, replyTo: x.replyTo,
-                attachments: x.attachments ?? [], queued: x.queued ?? false, mentions: x.mentions ?? [])
+                attachments: x.attachments ?? [], queued: x.queued ?? false, mentions: x.mentions ?? [],
+                viaButton: x.viaButton ?? false)
         case "message.dropped":
             let x = try p(MessageDroppedP.self); body = .messageDropped(seq: x.seq, reason: x.reason)
         case "message.assistant": body = .messageAssistant(text: try p(TextP.self).text)

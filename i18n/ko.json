@@ -2949,10 +2949,17 @@
   "agentCreate.servicesNone": "없음",
   "agentCreate.servicesAll": "켜져 있는 모든 서비스",
   "agentCreate.schedules": "정기 실행",
-  "agentCreate.runLine": "{when}: {what}",
   "agentCreate.folder": "폴더",
   "agentCreate.folderNew": "전용 새 폴더",
   "agentCreate.instructions": "지침",
   "quickReplies.group": "빠른 답장",
-  "quickReplies.progress": "{total}개 중 {done}개"
+  "quickReplies.progress": "{total}개 중 {done}개",
+  "thread.viaButton": "버튼으로 답함",
+  "agentCreate.scrollHint": "허용하려면 위의 글을 끝까지 스크롤하세요",
+  "agentCreate.chars": {
+    "other": "{count}자"
+  },
+  "agentCreate.lines": {
+    "other": "{count}줄"
+  }
 }

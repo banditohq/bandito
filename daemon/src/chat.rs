@@ -145,7 +145,7 @@ pub const QUICK_BUTTONS_MAX: usize = 4;
 /// Longest label of a button or a link, in characters.
 pub const QUICK_LABEL_CHARS: usize = 40;
 /// Longest reply a button sends, in characters.
-pub const QUICK_REPLY_CHARS: usize = 500;
+pub const QUICK_REPLY_CHARS: usize = 200;
 /// Longest link address, in characters.
 pub const QUICK_URL_CHARS: usize = 2000;
 /// Most steps "2 of 6" may count.
@@ -168,14 +168,17 @@ fn one_line(v: &serde_json::Value, what: &str, max: usize) -> Result<String, Str
     if text.chars().count() > max {
         return Err(format!("{what} is longer than {max} characters"));
     }
-    if text.chars().any(char::is_control) {
+    if text
+        .chars()
+        .any(|c| c.is_control() || crate::sanitize::is_format(c) || matches!(c, '\u{2028}' | '\u{2029}'))
+    {
         return Err(format!("{what} must be one line without control characters"));
     }
     Ok(text.to_string())
 }
 
 /// Checks the arguments of `reply_buttons`: 1 to 4 buttons `{label, reply}` (label up to 40 characters on one line,
-/// reply up to 500, labels different), an optional `link` `{label, url}` with an https address, and an optional
+/// reply one line up to 200, labels different), an optional `link` `{label, url}` with an https address, and an optional
 /// `progress` `{done, total}`. Returns the text of the first mistake, for the agent to fix.
 pub fn check_quick_replies(args: &serde_json::Value) -> Result<QuickReplies, String> {
     let list = args
@@ -192,26 +195,19 @@ pub fn check_quick_replies(args: &serde_json::Value) -> Result<QuickReplies, Str
             &format!("label of button {}", i + 1),
             QUICK_LABEL_CHARS,
         )?;
-        let reply_text = b
-            .get("reply")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default()
-            .trim();
-        if reply_text.is_empty() {
-            return Err(format!("reply of button {} is empty", i + 1));
-        }
-        if reply_text.chars().count() > QUICK_REPLY_CHARS {
-            return Err(format!(
-                "reply of button {} is longer than {QUICK_REPLY_CHARS} characters",
-                i + 1
-            ));
-        }
+        // One line like the label: what is sent is what the button stands for, and a line break could pass for two
+        // messages.
+        let reply_text = one_line(
+            b.get("reply").unwrap_or(&serde_json::Value::Null),
+            &format!("reply of button {}", i + 1),
+            QUICK_REPLY_CHARS,
+        )?;
         if buttons.iter().any(|x| x.label.to_lowercase() == label.to_lowercase()) {
             return Err(format!("two buttons are called {label}: give each its own label"));
         }
         buttons.push(crate::event::QuickButton {
             label,
-            reply: reply_text.to_string(),
+            reply: reply_text,
         });
     }
     let link = match args.get("link").filter(|v| !v.is_null()) {
@@ -316,8 +312,12 @@ mod tests {
         };
         assert!(one(&"é".repeat(40), "x").is_ok());
         assert!(one(&"é".repeat(41), "x").is_err());
-        assert!(one("ok", &"я".repeat(500)).is_ok());
-        assert!(one("ok", &"я".repeat(501)).is_err());
+        assert!(one("ok", &"я".repeat(200)).is_ok());
+        assert!(one("ok", &"я".repeat(201)).is_err());
+        // A reply is one line, like a label: a line break could pass for two messages.
+        for broken in ["one\ntwo", "one\r\ntwo", "one\u{2028}two", "tab\there", "nul\u{0}"] {
+            assert!(one("ok", broken).unwrap_err().contains("one line"), "{broken:?}");
+        }
         assert!(one("", "x").is_err());
         assert!(one("   ", "x").is_err());
         assert!(one("ok", "  ").is_err());

@@ -11,6 +11,17 @@ enum AgentCreateRows {
         var value: String
         /// A path: drawn in the mono font.
         var mono = false
+        /// A long text the new agent is given (its instructions, what a run says): drawn whole, in a box that scrolls
+        /// when it is long, and the person must have scrolled it to the end before Create is offered.
+        var isBlock = false
+
+        /// True when this row is drawn in a scrolling box.
+        var scrolls: Bool { isBlock && AgentCreateRows.scrolls(value) }
+    }
+
+    /// Whether Create is offered: every block that scrolls has been scrolled to its end (`reached` holds their ids).
+    static func canCreate(_ rows: [Row], reached: Set<String>) -> Bool {
+        rows.filter(\.scrolls).allSatisfy { reached.contains($0.id) }
     }
 
     /// The summary of an `agent.create` approval; `nil` for any other approval, and for one whose input does not read.
@@ -30,9 +41,6 @@ enum AgentCreateRows {
         instructions.count > scrollCharacters || instructions.split(separator: "\n", omittingEmptySubsequences: false).count > scrollLines
     }
 
-    /// Longest name of a run in the list, in characters; the rest is cut.
-    static let runNameLimit = 80
-
     static func rows(_ summary: AgentCreateSummary, languageCode: String = ModelDescription.currentLanguageCode) -> [Row] {
         var out: [Row] = []
         let role = summary.role.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -41,17 +49,31 @@ enum AgentCreateRows {
         out.append(Row(id: "mode", label: L10n.AgentCreate.approvals, value: summary.approvalMode.title))
         out.append(Row(id: "can", label: L10n.AgentCreate.canUse, value: capabilitiesLine(summary)))
         out.append(Row(id: "services", label: L10n.AgentCreate.services, value: servicesLine(summary)))
-        if !summary.runs.isEmpty {
-            let lines = summary.runs.map { runLine($0, languageCode: languageCode) }
-            out.append(Row(id: "runs", label: L10n.AgentCreate.schedules, value: lines.joined(separator: "\n")))
-        }
         let folder = summary.folderIsNew ? L10n.AgentCreate.folderNew : summary.folderPath
         out.append(Row(id: "folder", label: L10n.AgentCreate.folder, value: folder, mono: !summary.folderIsNew))
         let instructions = summary.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
         if !instructions.isEmpty {
-            out.append(Row(id: instructionsID, label: L10n.AgentCreate.instructions, value: instructions))
+            out.append(
+                Row(id: instructionsID, label: instructionsLabel(instructions), value: instructions, isBlock: true))
+        }
+        // Each run says when, its name, and, in full, what it tells the agent to do.
+        for (index, run) in summary.runs.enumerated() {
+            let when = run.timing(languageCode: languageCode)
+            let name = run.title.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
+            let label = [L10n.AgentCreate.schedules, when, name].compactMap { $0 }.filter { !$0.isEmpty }
+            out.append(
+                Row(
+                    id: "run-\(index)", label: label.joined(separator: " · "),
+                    value: run.prompt.trimmingCharacters(in: .whitespacesAndNewlines), isBlock: true))
         }
         return out
+    }
+
+    /// "Instructions · 480 characters · 7 lines": how much text there is to read.
+    static func instructionsLabel(_ text: String) -> String {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).count
+        return [L10n.AgentCreate.instructions, L10n.AgentCreate.chars(count: text.count), L10n.AgentCreate.lines(count: lines)]
+            .joined(separator: " · ")
     }
 
     /// "Claude · sonnet": the runtime, and the model when one is chosen.
@@ -75,13 +97,6 @@ enum AgentCreateRows {
             return names.isEmpty ? L10n.AgentCreate.servicesAll : "\(L10n.AgentCreate.servicesAll) · \(names)"
         }
         return names.isEmpty ? L10n.AgentCreate.servicesNone : names
-    }
-
-    static func runLine(_ run: AgentCreateSummary.Run, languageCode: String) -> String {
-        let name = run.shownName.replacingOccurrences(of: "\n", with: " ")
-        let shown = name.count > runNameLimit ? String(name.prefix(runNameLimit - 1)) + "…" : name
-        let when = run.timing(languageCode: languageCode)
-        return when.isEmpty ? shown : L10n.AgentCreate.runLine(when: when, what: shown)
     }
 
     /// The line a card folds into once it is over; `nil` while it waits.

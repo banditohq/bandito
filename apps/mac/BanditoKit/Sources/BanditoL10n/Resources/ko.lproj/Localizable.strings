@@ -71,9 +71,9 @@
 "agentCreate.instructions" = "지침";
 "agentCreate.nothingExtra" = "추가 권한 없음";
 "agentCreate.role" = "역할";
-"agentCreate.runLine" = "%1$@: %2$@";
 "agentCreate.runsOn" = "실행 환경";
 "agentCreate.schedules" = "정기 실행";
+"agentCreate.scrollHint" = "허용하려면 위의 글을 끝까지 스크롤하세요";
 "agentCreate.services" = "서비스";
 "agentCreate.servicesAll" = "켜져 있는 모든 서비스";
 "agentCreate.servicesNone" = "없음";
@@ -2642,6 +2642,7 @@
 "thread.stop" = "중지";
 "thread.stopped" = "중지됨";
 "thread.today" = "오늘";
+"thread.viaButton" = "버튼으로 답함";
 "thread.yesterday" = "어제";
 "tour.agents.text" = "에이전트마다 자기만의 채팅이 있어요. 주황색 점은 누군가 결정을 기다리고 있다는 뜻이에요.";
 "tour.agents.title" = "에이전트";

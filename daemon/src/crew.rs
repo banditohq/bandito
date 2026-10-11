@@ -494,7 +494,7 @@ fn reply_buttons_tool() -> Value {
                         "type": "object",
                         "properties": {
                             "label": { "type": "string", "description": "Text on the button, at most 40 characters, one line" },
-                            "reply": { "type": "string", "description": "What is sent as the person's message when they press it, at most 500 characters" },
+                            "reply": { "type": "string", "description": "What is sent as the person's message when they press it: one line, at most 200 characters. The button shows it in small print under the label when it differs from the label, so make it say what the person means" },
                         },
                         "required": ["label", "reply"],
                     },
@@ -2467,7 +2467,7 @@ mod tests {
             json!({}),
             json!({ "buttons": [] }),
             json!({ "buttons": [{ "label": "x".repeat(41), "reply": "y" }] }),
-            json!({ "buttons": [{ "label": "ok", "reply": "y".repeat(501) }] }),
+            json!({ "buttons": [{ "label": "ok", "reply": "y".repeat(201) }] }),
             json!({ "buttons": [{ "label": "ok", "reply": "y" }], "link": { "label": "go", "url": "http://insecure.example" } }),
             json!({ "buttons": [{ "label": "ok", "reply": "y" }], "progress": { "done": 5, "total": 2 } }),
         ] {

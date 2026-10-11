@@ -3057,10 +3057,23 @@
   "agentCreate.servicesNone": "Нет",
   "agentCreate.servicesAll": "Все включённые",
   "agentCreate.schedules": "Запуски",
-  "agentCreate.runLine": "{when}: {what}",
   "agentCreate.folder": "Папка",
   "agentCreate.folderNew": "Новая собственная папка",
   "agentCreate.instructions": "Инструкции",
   "quickReplies.group": "Быстрые ответы",
-  "quickReplies.progress": "{done} из {total}"
+  "quickReplies.progress": "{done} из {total}",
+  "thread.viaButton": "ответ кнопкой",
+  "agentCreate.scrollHint": "Чтобы разрешить, долистайте текст выше до конца",
+  "agentCreate.chars": {
+    "one": "{count} символ",
+    "few": "{count} символа",
+    "many": "{count} символов",
+    "other": "{count} символа"
+  },
+  "agentCreate.lines": {
+    "one": "{count} строка",
+    "few": "{count} строки",
+    "many": "{count} строк",
+    "other": "{count} строки"
+  }
 }

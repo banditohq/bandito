@@ -170,6 +170,7 @@ mod tests {
             reply_to: None,
             attachments: vec![],
             mentions: vec![],
+            via_button: false,
             queued: false,
         }
     }

@@ -71,9 +71,9 @@
 "agentCreate.instructions" = "Instruções";
 "agentCreate.nothingExtra" = "Nada extra";
 "agentCreate.role" = "Função";
-"agentCreate.runLine" = "%1$@: %2$@";
 "agentCreate.runsOn" = "Roda em";
 "agentCreate.schedules" = "Execuções";
+"agentCreate.scrollHint" = "Para permitir, role o texto acima até o fim";
 "agentCreate.services" = "Serviços";
 "agentCreate.servicesAll" = "Todos os ativados";
 "agentCreate.servicesNone" = "Nenhum";
@@ -2642,6 +2642,7 @@
 "thread.stop" = "Parar";
 "thread.stopped" = "Parado";
 "thread.today" = "Hoje";
+"thread.viaButton" = "respondido com um botão";
 "thread.yesterday" = "Ontem";
 "tour.agents.text" = "Cada agente é um chat próprio. A bolinha laranja significa que alguém está esperando sua decisão.";
 "tour.agents.title" = "Seus agentes";

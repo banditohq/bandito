@@ -129,8 +129,11 @@ public struct MenuBarContent: View {
                 Spacer(minLength: 0)
                 Button(L10n.Approval.deny) { resolve(row, .deny) }
                     .banditoButton(.quiet(size: .regular))
-                Button(L10n.Approval.approve) { resolve(row, .allow) }
-                    .banditoButton(.signal(size: .regular))
+                // A request to create an agent is allowed on its own card, after it has been read.
+                if !row.approval.mustBeReadOnItsCard {
+                    Button(L10n.Approval.approve) { resolve(row, .allow) }
+                        .banditoButton(.signal(size: .regular))
+                }
             }
         }
         .padding(10)

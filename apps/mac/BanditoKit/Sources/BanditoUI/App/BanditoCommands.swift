@@ -95,7 +95,7 @@ public struct BanditoCommands: Commands {
             }
             Divider()
             item("team.approve") { resolveFirstApproval(.allow) }
-                .disabled(!hasPendingApproval)
+                .disabled(!hasAllowableApproval)
             // While a dictation records, Esc is the dictation's: this item steps aside so the composer gets the key.
             item("team.deny") { resolveFirstApproval(.deny) }
                 .disabled(router.dictationRecording)
@@ -146,6 +146,12 @@ public struct BanditoCommands: Commands {
         return !server.thread(for: id).pendingApprovals.isEmpty
     }
 
+    /// A request that may be allowed from a key: one that is not a creation (that is allowed on its own card only).
+    private var hasAllowableApproval: Bool {
+        guard let server = app.currentServer, let id = selectedAgentID else { return false }
+        return server.thread(for: id).pendingApprovals.contains { !$0.mustBeReadOnItsCard }
+    }
+
     private func selectWhoNeedsYou() {
         guard let server = app.currentServer else { return }
         guard let agent = server.sortedAgents.first(where: { server.thread(for: $0.id).status == .needsYou }) else {
@@ -172,7 +178,9 @@ public struct BanditoCommands: Commands {
 
     private func resolveFirstApproval(_ decision: Decision) {
         guard let server = app.currentServer, let id = selectedAgentID,
-            let approval = server.thread(for: id).pendingApprovals.first
+            let approval = server.thread(for: id).pendingApprovals.first(where: {
+                decision == .deny || !$0.mustBeReadOnItsCard
+            })
         else { return }
         Task { try? await server.resolve(approval.approvalId, decision) }
     }

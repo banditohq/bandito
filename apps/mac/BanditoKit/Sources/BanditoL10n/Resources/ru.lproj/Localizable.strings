@@ -71,9 +71,9 @@
 "agentCreate.instructions" = "Инструкции";
 "agentCreate.nothingExtra" = "Ничего лишнего";
 "agentCreate.role" = "Роль";
-"agentCreate.runLine" = "%1$@: %2$@";
 "agentCreate.runsOn" = "Работает на";
 "agentCreate.schedules" = "Запуски";
+"agentCreate.scrollHint" = "Чтобы разрешить, долистайте текст выше до конца";
 "agentCreate.services" = "Сервисы";
 "agentCreate.servicesAll" = "Все включённые";
 "agentCreate.servicesNone" = "Нет";
@@ -2642,6 +2642,7 @@
 "thread.stop" = "Остановить";
 "thread.stopped" = "Остановлен";
 "thread.today" = "Сегодня";
+"thread.viaButton" = "ответ кнопкой";
 "thread.yesterday" = "Вчера";
 "tour.agents.text" = "Каждый агент — отдельный чат. Оранжевая точка значит, что агент ждёт вашего решения.";
 "tour.agents.title" = "Ваши агенты";

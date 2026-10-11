@@ -2984,10 +2984,19 @@
   "agentCreate.servicesNone": "Nenhum",
   "agentCreate.servicesAll": "Todos os ativados",
   "agentCreate.schedules": "Execuções",
-  "agentCreate.runLine": "{when}: {what}",
   "agentCreate.folder": "Pasta",
   "agentCreate.folderNew": "Uma pasta nova só dele",
   "agentCreate.instructions": "Instruções",
   "quickReplies.group": "Respostas rápidas",
-  "quickReplies.progress": "{done} de {total}"
+  "quickReplies.progress": "{done} de {total}",
+  "thread.viaButton": "respondido com um botão",
+  "agentCreate.scrollHint": "Para permitir, role o texto acima até o fim",
+  "agentCreate.chars": {
+    "one": "{count} caractere",
+    "other": "{count} caracteres"
+  },
+  "agentCreate.lines": {
+    "one": "{count} linha",
+    "other": "{count} linhas"
+  }
 }

@@ -234,4 +234,45 @@ import Testing
         #expect(done.input == input)
         #expect(done.state == .approved(by: .user, remember: false))
     }
+
+    // MARK: a message sent by pressing a button
+
+    @Test func aButtonPressReadsFromTheWireAndIsMarkedInTheThread() throws {
+        let e = try decode(
+            #"{"seq":8,"agent_id":"a","ts":9,"kind":"message.user","payload":{"text":"Connected","source":"user","via_button":true}}"#)
+        guard case .messageUser(_, _, _, _, _, _, _, let pressed) = e.body else {
+            Issue.record("wrong body \(e.body)")
+            return
+        }
+        #expect(pressed)
+        var t = AgentThread()
+        t.apply(e)
+        #expect(t.viaButton == [8])
+        // A message the person typed has no mark, and an old daemon's event reads as typed.
+        let typed = try decode(#"{"seq":9,"agent_id":"a","ts":9,"kind":"message.user","payload":{"text":"hi","source":"user"}}"#)
+        t.apply(typed)
+        #expect(t.viaButton == [8])
+        // The mark survives a merge with an older page of the same thread.
+        var older = AgentThread()
+        older.apply(try decode(#"{"seq":3,"agent_id":"a","ts":9,"kind":"message.user","payload":{"text":"x","source":"user","via_button":true}}"#))
+        t.mergeMessageMeta(from: older)
+        #expect(t.viaButton == [3, 8])
+    }
+
+    @Test func theSendRequestSaysViaButtonOnlyWhenItIsOne() throws {
+        let plain = try RPCClient.encoder.encode(AgentSendRequest(agentId: "a1", text: "hi", attachments: nil))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("via_button"))
+        let pressed = try RPCClient.encoder.encode(
+            AgentSendRequest(agentId: "a1", text: "Connected", attachments: nil, viaButton: true))
+        #expect(String(decoding: pressed, as: UTF8.self).contains(#""via_button":true"#))
+    }
+
+    @Test func aCreationRequestIsAllowedOnItsCardOnly() {
+        let row = ApprovalRow(
+            approvalId: "p", tool: AgentCreateSummary.tool, title: "t", command: nil, diff: nil, reason: "r", state: .pending)
+        #expect(row.mustBeReadOnItsCard)
+        var other = row
+        other.tool = "Bash"
+        #expect(!other.mustBeReadOnItsCard)
+    }
 }

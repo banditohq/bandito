@@ -36,6 +36,8 @@ pub const APPROVAL_LIMIT: Duration = Duration::from_secs(10 * 60);
 /// The tool name of the approval, which the apps draw a card for.
 pub const APPROVAL_TOOL: &str = "agent.create";
 
+/// Refusals by the person within an hour after which a creator's requests are turned away for an hour.
+const MAX_REFUSALS: usize = 3;
 /// Most agents one agent may create in an hour (counted when they are made).
 const MAX_PER_HOUR: usize = 10;
 const HOUR_MS: i64 = 60 * 60 * 1000;
@@ -46,8 +48,6 @@ const MAX_SCHEDULES: usize = 20;
 /// Longest role, instructions, in characters.
 const ROLE_CHARS: usize = 200;
 const INSTRUCTIONS_CHARS: usize = 6_000;
-/// How much of the instructions the plain-lines summary quotes (the card in the app shows all of them).
-const SUMMARY_LINE_CHARS: usize = 200;
 /// How many model ids an unknown-model error names.
 const MODELS_SHOWN: usize = 12;
 
@@ -86,6 +86,10 @@ pub struct Creations {
 struct CreationState {
     open: HashSet<String>,
     made: HashMap<String, VecDeque<i64>>,
+    /// When the person said no, per creator, within the last hour.
+    refused: HashMap<String, VecDeque<i64>>,
+    /// Until when a creator that was refused too often is not asked about again.
+    cooldown: HashMap<String, i64>,
 }
 
 /// Holds the creator's one open request; frees it when dropped (answered, refused, or the call went away).
@@ -108,6 +112,19 @@ impl Creations {
     /// Takes the creator's slot, or refuses: one request at a time, and a limit per hour.
     fn begin(&self, creator: &str, now: i64) -> Result<OpenSlot<'_>, RpcError> {
         let mut state = self.lock();
+        if let Some(until) = state.cooldown.get(creator).copied() {
+            if until > now {
+                let minutes = ((until - now) + 59_999) / 60_000;
+                return Err(RpcError::with_data(
+                    INVALID_PARAMS,
+                    format!(
+                        "declined_too_often: the person said no {MAX_REFUSALS} times in an hour, so new requests are not shown for {minutes} more minutes. Do not ask again; tell the person what you wanted to create and let them ask"
+                    ),
+                    json!({ "reason": "declined_too_often", "retry_after_minutes": minutes }),
+                ));
+            }
+            state.cooldown.remove(creator);
+        }
         if state.open.contains(creator) {
             return Err(RpcError::new(
                 INVALID_PARAMS,
@@ -129,6 +146,20 @@ impl Creations {
             creations: self,
             creator: creator.to_string(),
         })
+    }
+
+    /// The person refused a request of this creator. The third refusal within an hour starts the cooldown.
+    fn refused(&self, creator: &str, now: i64) {
+        let mut state = self.lock();
+        let recent = state.refused.entry(creator.to_string()).or_default();
+        while recent.front().is_some_and(|t| *t < now - HOUR_MS) {
+            recent.pop_front();
+        }
+        recent.push_back(now);
+        if recent.len() >= MAX_REFUSALS {
+            recent.clear();
+            state.cooldown.insert(creator.to_string(), now + HOUR_MS);
+        }
     }
 
     fn made(&self, creator: &str, now: i64) {
@@ -298,19 +329,40 @@ pub fn folder_for_new(asked: Option<&str>, data_home: &Path, in_container: bool)
             "folder must be \"new\" or an absolute path of a folder on the server",
         ));
     }
+    if crate::sanitize::has_hidden(asked) {
+        return Err(invalid("invalid: folder has invisible or control characters"));
+    }
     let real = std::fs::canonicalize(path).map_err(|_| invalid(format!("folder not found on the server: {asked}")))?;
     if !real.is_dir() {
         return Err(invalid(format!("folder not found on the server: {asked}")));
     }
-    let data = std::fs::canonicalize(data_home).unwrap_or_else(|_| data_home.to_path_buf());
-    if real.starts_with(&data) {
-        return Err(not_allowed("folder", "Bandito's own files are off limits to agents"));
+    let shown = real.display().to_string();
+    if crate::sanitize::has_hidden(&shown) {
+        return Err(invalid("invalid: folder has invisible or control characters"));
     }
-    Ok(Some(real.display().to_string()))
+    let data = std::fs::canonicalize(data_home).unwrap_or_else(|_| data_home.to_path_buf());
+    // Inside Bandito's folder, or a folder that holds it (its parents, the whole home folder, the root): the agent
+    // would work in a place where Bandito's files are part of its project.
+    if real.starts_with(&data) || data.starts_with(&real) {
+        return Err(not_allowed(
+            "folder",
+            "Bandito's own files are off limits to agents: pick a folder that is neither inside Bandito's data folder nor one that contains it (not / and not the whole home folder)",
+        ));
+    }
+    let home = dirs::home_dir().and_then(|h| std::fs::canonicalize(h).ok());
+    if home.as_ref() == Some(&real) {
+        return Err(not_allowed(
+            "folder",
+            "the whole home folder is too much: pick a folder inside it",
+        ));
+    }
+    Ok(Some(shown))
 }
 
 /// What the call comes to, checked and ready to run.
 struct Plan {
+    /// Everything that will be created, as data: compared after the person answers, so what is made is what was shown.
+    fingerprint: Value,
     agent: NewAgent,
     workspace_id: String,
     schedules: Vec<NewSchedule>,
@@ -355,7 +407,17 @@ async fn plan(app: &App, p: &CreateParams) -> Result<Plan, RpcError> {
         return Err(not_allowed("team", "only the main agent of the crew can create agents"));
     }
     let name = p.name.trim().to_string();
-    crate::store::validate_name(&name).map_err(|e| invalid(format!("{e:#}")))?;
+    if crate::sanitize::has_hidden(&name) {
+        return Err(invalid(
+            "invalid: name has invisible or control characters (a line break, a zero-width or direction mark)",
+        ));
+    }
+    crate::store::validate_name(&name).map_err(|e| invalid(format!("invalid: name: {e:#}")))?;
+    if crate::sanitize::mixes_scripts(&name) {
+        return Err(invalid(
+            "invalid: name mixes letters of different alphabets in one word (it could pass for another name)",
+        ));
+    }
     if store.agent_by_name(&name).map_err(server)?.is_some() {
         return Err(invalid(format!(
             "there is already an agent named {name}: pick another name"
@@ -367,11 +429,11 @@ async fn plan(app: &App, p: &CreateParams) -> Result<Plan, RpcError> {
             "the crew already has {crew} agents: ask the person to remove some"
         )));
     }
-    let role = p.role.as_deref().map(str::trim).unwrap_or_default().to_string();
+    let role = crate::sanitize::line(p.role.as_deref().unwrap_or_default());
     if role.chars().count() > ROLE_CHARS {
         return Err(invalid(format!("role is longer than {ROLE_CHARS} characters")));
     }
-    let instructions = p.instructions.trim().to_string();
+    let instructions = crate::sanitize::block(&p.instructions);
     if instructions.is_empty() {
         return Err(invalid("instructions are empty: say what the agent is for"));
     }
@@ -451,7 +513,7 @@ async fn plan(app: &App, p: &CreateParams) -> Result<Plan, RpcError> {
 
     // What the card shows, in the names a person knows.
     let usable = integrations::for_agent(&all_integrations, integration_ids.as_deref());
-    let service_names: Vec<&str> = usable.iter().map(|row| row.name.as_str()).collect();
+    let service_names: Vec<String> = usable.iter().map(|row| crate::sanitize::line(&row.name)).collect();
     let folder = match &cwd {
         Some(path) => json!({ "mode": "existing", "path": path }),
         None => json!({ "mode": "new", "path": app.agents_root.join(home::slug(&name)).display().to_string() }),
@@ -472,7 +534,16 @@ async fn plan(app: &App, p: &CreateParams) -> Result<Plan, RpcError> {
         "instructions": instructions,
         "creator": creator.name,
     });
+    let fingerprint = json!({
+        "summary": summary,
+        "integration_ids": integration_ids,
+        "capabilities": capabilities.as_ref().map(|c| capability_names(Some(c))),
+        "cwd": cwd,
+        "workspace": creator.workspace_id,
+        "schedules": schedule_rows.iter().map(|r| json!([r.cron, r.tz, r.prompt, r.title])).collect::<Vec<_>>(),
+    });
     Ok(Plan {
+        fingerprint,
         agent,
         workspace_id: creator.workspace_id.clone(),
         schedules: schedule_rows,
@@ -498,7 +569,16 @@ pub fn summary_text(summary: &Value) -> String {
     if !text("model").is_empty() {
         head.push_str(&format!(" {}", text("model")));
     }
-    let mut lines = vec![head, format!("Approval mode: {}", text("approval_mode"))];
+    let folder = &summary["folder"];
+    let mut lines = vec![
+        head,
+        format!(
+            "Folder: {}{}",
+            if folder["mode"] == json!("new") { "new, " } else { "" },
+            folder["path"].as_str().unwrap_or_default()
+        ),
+        format!("Approval mode: {}", text("approval_mode")),
+    ];
     let capabilities = list("capabilities");
     lines.push(format!(
         "Can use: {}",
@@ -519,6 +599,15 @@ pub fn summary_text(summary: &Value) -> String {
             services.join(", ")
         }
     ));
+    // The instructions and the runs last, whole: they are the long part, and what a person must be able to read.
+    let instructions = text("instructions");
+    if !instructions.is_empty() {
+        lines.push(format!(
+            "Instructions ({} characters, {} lines):\n{instructions}",
+            instructions.chars().count(),
+            instructions.lines().count()
+        ));
+    }
     for run in summary
         .get("schedules")
         .and_then(Value::as_array)
@@ -526,29 +615,12 @@ pub fn summary_text(summary: &Value) -> String {
         .unwrap_or_default()
     {
         let when = run["human_en"].as_str().unwrap_or_default();
-        let what = run["title"]
-            .as_str()
-            .filter(|t| !t.is_empty())
-            .or(run["prompt"].as_str())
-            .unwrap_or_default();
-        lines.push(format!("Runs {when}: {what}"));
-    }
-    let folder = &summary["folder"];
-    lines.push(format!(
-        "Folder: {}{}",
-        if folder["mode"] == json!("new") { "new, " } else { "" },
-        folder["path"].as_str().unwrap_or_default()
-    ));
-    let instructions = text("instructions");
-    let total = instructions.chars().count();
-    if total > 0 {
-        let head: String = instructions
-            .chars()
-            .take(SUMMARY_LINE_CHARS)
-            .collect::<String>()
-            .replace('\n', " ");
-        let cut = if total > SUMMARY_LINE_CHARS { "…" } else { "" };
-        lines.push(format!("Instructions ({total} characters): {head}{cut}"));
+        let title = run["title"].as_str().filter(|t| !t.is_empty());
+        let prompt = run["prompt"].as_str().unwrap_or_default();
+        lines.push(match title {
+            Some(title) => format!("Runs {when}: {title}\n{prompt}"),
+            None => format!("Runs {when}:\n{prompt}"),
+        });
     }
     lines.join("\n")
 }
@@ -580,16 +652,30 @@ pub(super) async fn create_within(app: &App, p: Value, limit: Duration) -> RpcRe
             reason: "agent: create".to_string(),
             input: first.summary.clone(),
         };
+        let asked_at = std::time::Instant::now();
         let decision = app.sup.ask_external(&p.agent_id, spec, limit).await.map_err(server)?;
         if decision != crate::event::Decision::Allow {
+            // A no from the person counts; running out of time does not.
+            if asked_at.elapsed() < limit {
+                app.creations.refused(&p.agent_id, crate::store::now_ms());
+            }
             return Err(RpcError::with_data(
                 INVALID_PARAMS,
                 "declined: the person did not allow this agent. Do not try again unless they ask for it",
                 json!({ "reason": "declined" }),
             ));
         }
-        // The crew may have changed while the card waited: check again, and create what is checked now.
-        (DecidedBy::User, plan(app, &p).await?)
+        // The crew, a folder or a service may have changed while the card waited: check again, and create only
+        // what the person was shown.
+        let second = plan(app, &p).await?;
+        if second.fingerprint != first.fingerprint {
+            return Err(RpcError::with_data(
+                INVALID_PARAMS,
+                "changed_since_approval: something the card showed (a folder, a service, a name, the crew) is different now, so nothing was created. Ask again if the person still wants it",
+                json!({ "reason": "changed_since_approval" }),
+            ));
+        }
+        (DecidedBy::User, second)
     };
     let created = make(app, &creator, plan, approved_by)?;
     app.creations.made(&p.agent_id, crate::store::now_ms());
@@ -869,15 +955,21 @@ mod tests {
     }
 
     #[test]
-    fn the_plain_summary_says_how_long_the_instructions_are() {
+    fn the_plain_summary_has_the_order_and_the_whole_text() {
         let long = "word ".repeat(100);
         let lines = summary_text(&json!({
             "name": "Mailer", "role": "", "runtime": "claude", "approval_mode": "risky",
             "capabilities": ["browser"], "integrations": [], "integrations_all": false, "schedules": [],
             "folder": { "mode": "existing", "path": "/work" }, "instructions": long,
         }));
-        assert!(lines.contains("Instructions (500 characters): word word"), "{lines}");
-        assert!(lines.lines().last().unwrap().ends_with('…'), "{lines}");
+        assert!(
+            lines.contains("Instructions (500 characters, 1 lines):\nword word"),
+            "{lines}"
+        );
+        assert!(
+            lines.contains(long.trim_end()),
+            "the whole text is there, not a start of it"
+        );
         assert!(lines.contains("Folder: /work\n"), "{lines}");
         assert!(lines.contains("Services: none"), "{lines}");
     }
@@ -1064,7 +1156,7 @@ mod tests {
             assert_eq!(input["creator"], "Forge");
             assert_eq!(input["instructions"], "Watch the mailbox and report new letters.");
             assert!(
-                lines.contains("Instructions (41 characters): Watch the mailbox"),
+                lines.contains("Instructions (41 characters, 1 lines):\nWatch the mailbox and report new letters."),
                 "{lines}"
             );
             assert!(events_of(&w, &w.lead).iter().any(|e| matches!(e,
@@ -1318,5 +1410,235 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.message.starts_with("rate_limited"), "{}", err.message);
+    }
+
+    // ---- the review of the security of creation: what is read is what is made ----
+
+    #[test]
+    fn the_plain_summary_lists_folder_mode_rights_services_then_instructions_and_runs() {
+        let lines = summary_text(&json!({
+            "name": "Mailer", "role": "mail watcher", "runtime": "claude", "model": "sonnet", "approval_mode": "always",
+            "capabilities": ["browser"], "integrations": ["Gmail"], "integrations_all": false,
+            "schedules": [{ "title": "Mail", "prompt": "Check the mail.\nSay nothing else.", "human_en": "every 5 minutes", "human_ru": "" }],
+            "folder": { "mode": "existing", "path": "/work" }, "instructions": "Watch the mail.",
+        }));
+        let at = |needle: &str| lines.find(needle).unwrap_or_else(|| panic!("{needle} in {lines}"));
+        assert!(at("Mailer (mail watcher)") < at("Folder:"));
+        assert!(at("Folder:") < at("Approval mode:"));
+        assert!(at("Approval mode:") < at("Can use:"));
+        assert!(at("Can use:") < at("Services:"));
+        assert!(at("Services:") < at("Instructions"));
+        assert!(at("Instructions") < at("Runs every 5 minutes: Mail"));
+        // A run says its whole prompt, not only its title.
+        assert!(lines.ends_with("Check the mail.\nSay nothing else."), "{lines}");
+    }
+
+    #[tokio::test]
+    async fn a_schedule_prompt_reaches_the_card_whole() {
+        let w = world(json!({}));
+        let prompt = format!("Check the mail. {}", "Then report it. ".repeat(40));
+        assert!(prompt.chars().count() > 160);
+        let app = w.app.clone();
+        let lead = w.lead.clone();
+        let sent = prompt.clone();
+        let call = tokio::spawn(async move {
+            create_within(
+                &app,
+                req(json!({ "agent_id": lead, "schedules": [{ "every": "15m", "prompt": sent, "title": "Mail" }] })),
+                Duration::from_secs(20),
+            )
+            .await
+        });
+        let card = pending_card(&w).await;
+        assert_eq!(card.payload["input"]["schedules"][0]["prompt"], prompt.trim());
+        assert!(card.payload["command"].as_str().unwrap().contains(prompt.trim()));
+        w.app.sup.resolve(&card.id, Decision::Deny, false).await.unwrap();
+        let _ = call.await;
+    }
+
+    #[tokio::test]
+    async fn hidden_characters_never_reach_the_card_or_the_agent() {
+        let w = world(json!({ "approval_mode": "never" }));
+        let made = create_as(
+            &w,
+            &w.lead,
+            req(json!({
+                "role": "mail\u{202E} watcher\nbot\u{200B}",
+                "instructions": "Watch\u{200D} the mail.\u{202E}\r\n\r\n\r\n\r\n\r\nNever send.\u{0000}",
+                "schedules": [{ "every": "15m", "prompt": "Check\u{2066} mail\n\n\n\n\nnow", "title": "Mail\nLine\u{200B}" }],
+            })),
+        )
+        .await
+        .unwrap();
+        let store = &w.app.sup.hub().store;
+        let agent = store.agent_get(made["agent_id"].as_str().unwrap()).unwrap().unwrap();
+        assert_eq!(agent.role, "mail watcher bot");
+        assert_eq!(agent.system_prompt.as_deref(), Some("Watch the mail.\n\n\nNever send."));
+        let run = &store.schedule_list(Some(&agent.id)).unwrap()[0];
+        assert_eq!(run.prompt, "Check mail\n\n\nnow");
+        assert_eq!(run.title.as_deref(), Some("Mail Line"));
+    }
+
+    #[tokio::test]
+    async fn a_name_with_hidden_characters_or_mixed_alphabets_is_refused() {
+        let w = world(json!({ "approval_mode": "never" }));
+        // Zero-width, a right-to-left override, a line break; a Cyrillic "а" inside a Latin word and the reverse.
+        for name in [
+            "Mail\u{200B}er",
+            "Mail\u{202E}er",
+            "Mail\ner",
+            "M\u{0430}iler",
+            "Почт\u{0061}",
+            "Ｍailer",
+        ] {
+            let err = create_as(&w, &w.lead, req(json!({ "name": name }))).await.unwrap_err();
+            assert!(err.message.starts_with("invalid: name"), "{name:?}: {}", err.message);
+        }
+        // Words of one alphabet each, in one name, are fine.
+        create_as(&w, &w.lead, req(json!({ "name": "Mail Почта" })))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_folder_swapped_after_the_card_means_nothing_is_created() {
+        let w = world(json!({}));
+        let a = w.root.join("a");
+        let b = w.root.join("b");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let link = w.root.join("work");
+        std::os::unix::fs::symlink(&a, &link).unwrap();
+        let app = w.app.clone();
+        let lead = w.lead.clone();
+        let path = link.display().to_string();
+        let call = tokio::spawn(async move {
+            create_within(
+                &app,
+                req(json!({ "agent_id": lead, "folder": path })),
+                Duration::from_secs(20),
+            )
+            .await
+        });
+        let card = pending_card(&w).await;
+        assert_eq!(
+            card.payload["input"]["folder"]["path"],
+            std::fs::canonicalize(&a).unwrap().display().to_string()
+        );
+        // The link is pointed somewhere else while the card waits.
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&b, &link).unwrap();
+        w.app.sup.resolve(&card.id, Decision::Allow, false).await.unwrap();
+        let err = call.await.unwrap().unwrap_err();
+        assert!(err.message.starts_with("changed_since_approval"), "{}", err.message);
+        assert_eq!(w.app.sup.hub().store.agent_list().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_service_list_that_changed_after_the_card_means_nothing_is_created() {
+        let w = world(json!({}));
+        let app = w.app.clone();
+        let lead = w.lead.clone();
+        let call = tokio::spawn(async move {
+            create_within(&app, req(json!({ "agent_id": lead })), Duration::from_secs(20)).await
+        });
+        let card = pending_card(&w).await;
+        // A service is connected meanwhile: the creator has "all enabled", so the new agent would get it too.
+        w.app
+            .sup
+            .hub()
+            .store
+            .integration_create(NewIntegration {
+                name: "gmail".into(),
+                kind: IntegrationKind::Http,
+                command: None,
+                args: Vec::new(),
+                url: Some("https://example.com/mcp".into()),
+                env: Default::default(),
+                headers: Default::default(),
+                enabled: true,
+                auth: Default::default(),
+            })
+            .unwrap();
+        w.app.sup.resolve(&card.id, Decision::Allow, false).await.unwrap();
+        let err = call.await.unwrap().unwrap_err();
+        assert!(err.message.starts_with("changed_since_approval"), "{}", err.message);
+        assert_eq!(w.app.sup.hub().store.agent_list().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn three_refusals_in_an_hour_close_the_door_for_an_hour() {
+        let w = world(json!({}));
+        for _ in 0..MAX_REFUSALS {
+            let app = w.app.clone();
+            let lead = w.lead.clone();
+            let call = tokio::spawn(async move {
+                create_within(&app, req(json!({ "agent_id": lead })), Duration::from_secs(20)).await
+            });
+            let card = pending_card(&w).await;
+            w.app.sup.resolve(&card.id, Decision::Deny, false).await.unwrap();
+            let err = call.await.unwrap().unwrap_err();
+            assert!(err.message.starts_with("declined:"), "{}", err.message);
+        }
+        // The next request is turned away at once, with the reason, and no card is shown.
+        let err = create_within(&w.app, req(json!({ "agent_id": w.lead })), Duration::from_secs(2))
+            .await
+            .unwrap_err();
+        assert!(err.message.starts_with("declined_too_often"), "{}", err.message);
+        assert!(
+            err.message.contains("59 more minutes") || err.message.contains("60 more minutes"),
+            "{}",
+            err.message
+        );
+        assert!(w.app.sup.hub().store.approval_list_pending(None).unwrap().is_empty());
+        // After the hour it is open again.
+        let later = crate::store::now_ms() + HOUR_MS + 1;
+        assert!(w.app.creations.begin(&w.lead, later).is_ok());
+    }
+
+    #[tokio::test]
+    async fn running_out_of_time_is_not_a_refusal() {
+        let w = world(json!({}));
+        for _ in 0..MAX_REFUSALS + 1 {
+            let err = create_within(&w.app, req(json!({ "agent_id": w.lead })), Duration::from_millis(30))
+                .await
+                .unwrap_err();
+            assert!(err.message.starts_with("declined:"), "{}", err.message);
+        }
+    }
+
+    #[test]
+    fn a_folder_that_holds_bandito_or_is_the_home_or_the_root_is_refused() {
+        let tmp = std::env::temp_dir().join(format!("bandito-folder-{}", crate::store::new_id()));
+        let data = tmp.join("deep").join("data");
+        std::fs::create_dir_all(&data).unwrap();
+        // The parents of the data folder: they contain it.
+        for holder in [tmp.clone(), tmp.join("deep")] {
+            let err = folder_for_new(Some(holder.to_str().unwrap()), &data, false).unwrap_err();
+            assert_eq!(err.code, UNAUTHORIZED, "{}", holder.display());
+        }
+        let err = folder_for_new(Some("/"), &data, false).unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
+        // A sibling that is not an ancestor is fine.
+        let sibling = tmp.join("deep").join("work");
+        std::fs::create_dir_all(&sibling).unwrap();
+        assert!(
+            folder_for_new(Some(sibling.to_str().unwrap()), &data, false)
+                .unwrap()
+                .is_some()
+        );
+        // The whole home folder, even when Bandito's folder is somewhere else.
+        if let Some(home) = dirs::home_dir().filter(|h| h.is_dir()) {
+            let err = folder_for_new(Some(home.to_str().unwrap()), &data, false).unwrap_err();
+            assert_eq!(err.code, UNAUTHORIZED, "{}", home.display());
+        }
+        // Invisible characters in a path.
+        std::fs::create_dir_all(tmp.join("odd")).unwrap();
+        let odd = format!("{}\u{200B}", tmp.join("odd").display());
+        assert_eq!(
+            folder_for_new(Some(&odd), &data, false).unwrap_err().code,
+            INVALID_PARAMS
+        );
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

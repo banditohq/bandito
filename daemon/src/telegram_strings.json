@@ -427,5 +427,27 @@
   "ko": "…외 {count}개",
   "pt-BR": "…e mais {count}",
   "zh-Hans": "…另有 {count} 个"
+ },
+ "btn_open_app": {
+  "en": "📱 Open in the app",
+  "ru": "📱 Открыть в приложении",
+  "de": "📱 In der App öffnen",
+  "es": "📱 Abrir en la app",
+  "fr": "📱 Ouvrir dans l'app",
+  "ja": "📱 アプリで開く",
+  "ko": "📱 앱에서 열기",
+  "pt-BR": "📱 Abrir no app",
+  "zh-Hans": "📱 在应用中打开"
+ },
+ "approval_full_in_app": {
+  "en": "The full card is in the app: decide there.",
+  "ru": "Полная карточка — в приложении: решайте там.",
+  "de": "Die vollständige Karte ist in der App: Entscheiden Sie dort.",
+  "es": "La tarjeta completa está en la app: decide allí.",
+  "fr": "La fiche complète est dans l'app : décidez-y.",
+  "ja": "全文はアプリにあります。そこで判断してください。",
+  "ko": "전체 카드는 앱에 있습니다. 앱에서 결정하세요.",
+  "pt-BR": "O cartão completo está no app: decida lá.",
+  "zh-Hans": "完整卡片在应用中，请在那里决定。"
  }
 }

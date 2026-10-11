@@ -263,6 +263,28 @@ impl Store {
             .query_row("SELECT COALESCE(MAX(seq), 0) FROM events", [], |r| r.get(0))?)
     }
 
+    /// The newest event of an agent of this kind (`agent.quick_replies`), if there is one.
+    pub fn last_event_of_kind(&self, agent_id: &str, kind: &str) -> Result<Option<Event>> {
+        let row = self
+            .conn()
+            .query_row(
+                "SELECT seq, ts, payload FROM events WHERE agent_id = ?1 AND kind = ?2 ORDER BY seq DESC LIMIT 1",
+                params![agent_id, kind],
+                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?)),
+            )
+            .optional()?;
+        let Some((seq, ts, payload)) = row else {
+            return Ok(None);
+        };
+        let payload: Value = serde_json::from_str(&payload)?;
+        Ok(Some(Event {
+            seq,
+            agent_id: agent_id.to_string(),
+            ts,
+            body: EventBody::from_parts(kind, payload)?,
+        }))
+    }
+
     /// One event of an agent by its seq, if it is stored.
     pub fn event_at(&self, agent_id: &str, seq: i64) -> Result<Option<Event>> {
         let row = self
@@ -291,6 +313,16 @@ impl Store {
             ts,
             body: EventBody::from_parts(&kind, payload)?,
         }))
+    }
+
+    /// The seq of the newest message the person wrote to the agent (queued ones too), if any.
+    pub fn last_user_message_seq(&self, agent_id: &str) -> Result<Option<i64>> {
+        Ok(self.conn().query_row(
+            "SELECT MAX(seq) FROM events WHERE agent_id = ?1 AND kind = 'message.user'
+               AND json_extract(payload, '$.source') = 'user'",
+            [agent_id],
+            |r| r.get(0),
+        )?)
     }
 
     /// The seq of the human message the agent is answering: the one the newest human turn took

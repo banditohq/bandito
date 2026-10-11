@@ -119,6 +119,10 @@ public struct ApprovalRow: Sendable, Hashable {
     public var state: ApprovalState
     /// What the answer is about, for a question the daemon asks itself (`agent.create`); nil for the rest.
     public var input: JSONValue? = nil
+
+    /// True for a request that is allowed only on its own card, after the person has read all of it: a request to
+    /// create an agent. A shortcut, the menu bar, a notification or a message from another client never allows it.
+    public var mustBeReadOnItsCard: Bool { tool == AgentCreateSummary.tool }
 }
 
 /// The visible state of one agent, folded from its events.
@@ -153,6 +157,8 @@ public struct AgentThread: Sendable, Hashable {
     public private(set) var attachments: [Int64: [MessageAttachment]] = [:]
     /// The `@` mentions each message carries (feature `mentions`), by its `seq`: chips under the message.
     public private(set) var mentions: [Int64: [Mention]] = [:]
+    /// The messages the person sent by pressing a quick-reply button the agent offered, by `seq`: a quiet mark under them.
+    public private(set) var viaButton: Set<Int64> = []
     /// How each form ended, by form id. Kept apart from the rows because a page of history may hold the answer and not
     /// the question (the question comes with an older page).
     private var formOutcomes: [String: FormOutcome] = [:]
@@ -252,12 +258,13 @@ public struct AgentThread: Sendable, Hashable {
             if let messageSeq { startedAt[messageSeq] = e.seq }
         case .messageDropped(let seq, _):
             droppedAt[seq] = e.seq
-        case .messageUser(let text, let source, let from, let replyTo, let files, let queued, let mentioned):
+        case .messageUser(let text, let source, let from, let replyTo, let files, let queued, let mentioned, let pressed):
             if queued, source != .system, e.seq > 0 { queuedSeqs.insert(e.seq) }
             if source != .system {
                 if let replyTo { replies[e.seq] = replyTo }
                 if !files.isEmpty { attachments[e.seq] = files }
                 if !mentioned.isEmpty { mentions[e.seq] = mentioned }
+                if pressed { viaButton.insert(e.seq) }
             }
             switch source {
             case .user:
@@ -497,6 +504,7 @@ public struct AgentThread: Sendable, Hashable {
         for (seq, to) in other.replies where replies[seq] == nil { replies[seq] = to }
         for (seq, files) in other.attachments where attachments[seq] == nil { attachments[seq] = files }
         for (seq, list) in other.mentions where mentions[seq] == nil { mentions[seq] = list }
+        viaButton.formUnion(other.viaButton)
         for (id, outcome) in other.formOutcomes where formOutcomes[id] == nil { formOutcomes[id] = outcome }
         for (id, outcome) in other.connectOutcomes where connectOutcomes[id] == nil { connectOutcomes[id] = outcome }
         for (i, item) in items.enumerated() {

@@ -12,6 +12,8 @@ struct ApprovalCard: View {
     var onDecide: (Decision, Bool) -> Void
 
     @State private var remember = false
+    /// The blocks of a creation card the person has scrolled to the end of (see `AgentCreateRows.canCreate`).
+    @State private var reached: Set<String> = []
 
     /// The summary of an agent the asking agent wants to create; `nil` for every other approval.
     private var createSummary: AgentCreateSummary? { AgentCreateRows.summary(for: row) }
@@ -71,7 +73,7 @@ struct ApprovalCard: View {
             }
 
             if let summary = createSummary {
-                AgentCreateDetails(summary: summary)
+                AgentCreateDetails(summary: summary, reached: $reached)
             } else {
                 commandBlock
             }
@@ -89,11 +91,21 @@ struct ApprovalCard: View {
                 .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
-            if createSummary != nil {
-                // Nothing is remembered for a creation: Decline and Create only.
-                ActionRow {
-                    createDeclineButton
-                    createButton
+            if let summary = createSummary {
+                // Nothing is remembered for a creation: Decline and Create only. Create waits until every long text
+                // above has been read to its end.
+                let ready = AgentCreateRows.canCreate(AgentCreateRows.rows(summary), reached: reached)
+                VStack(alignment: .trailing, spacing: 6) {
+                    ActionRow {
+                        createDeclineButton
+                        createButton(enabled: ready)
+                    }
+                    if !ready {
+                        Text(L10n.AgentCreate.scrollHint)
+                            .font(BanditoFont.text(size: 11.5, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .multilineTextAlignment(.trailing)
+                    }
                 }
             } else {
                 standardActions
@@ -177,16 +189,15 @@ struct ApprovalCard: View {
         .banditoButton(.quiet())
     }
 
-    private var createButton: some View {
+    /// Create has no shortcut: a key must not allow what the person has not read.
+    private func createButton(enabled: Bool) -> some View {
         Button {
             onDecide(.allow, false)
         } label: {
-            HStack(spacing: 8) {
-                Text(L10n.AgentCreate.create)
-                KeyCap(text: "⌘↵")
-            }
+            Text(L10n.AgentCreate.create)
         }
         .banditoButton(.signal())
+        .disabled(!enabled)
     }
 
     /// The quiet line a creation folds into once it is answered or over.
@@ -336,6 +347,8 @@ enum ApprovalReason {
 /// pressing Create. Rows come from `AgentCreateRows`; a label sits above its value, so no column is squeezed.
 struct AgentCreateDetails: View {
     var summary: AgentCreateSummary
+    /// The ids of the long blocks scrolled to their end; written when a block's end comes into view.
+    @Binding var reached: Set<String>
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
@@ -349,10 +362,17 @@ struct AgentCreateDetails: View {
                     Text(row.label)
                         .font(BanditoFont.text(size: 11.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text3)
-                    if row.id == AgentCreateRows.instructionsID, AgentCreateRows.scrolls(row.value) {
+                    if row.scrolls {
                         // All of it, in a box that scrolls: what the new agent is told is what the person allows.
+                        // The mark at the end of the text tells when the person has got there.
                         ScrollView {
-                            valueText(row)
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                valueText(row)
+                                Color.clear.frame(height: 1)
+                                    .onAppear {
+                                        if !reached.contains(row.id) { reached.insert(row.id) }
+                                    }
+                            }
                         }
                         .frame(height: AgentCreateRows.instructionsBoxHeight)
                     } else {

@@ -102,6 +102,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
             queued: false,
         }
     }
@@ -194,6 +195,7 @@ mod tests {
                     reply_to: None,
                     attachments: Vec::new(),
                     mentions: Vec::new(),
+                    via_button: false,
                     queued: false,
                 },
             )

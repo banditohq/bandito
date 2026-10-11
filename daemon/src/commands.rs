@@ -411,6 +411,7 @@ impl Prepared {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         }
     }
 }

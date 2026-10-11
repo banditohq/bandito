@@ -2984,10 +2984,19 @@
   "agentCreate.servicesNone": "Aucun",
   "agentCreate.servicesAll": "Tous ceux qui sont activés",
   "agentCreate.schedules": "Exécutions",
-  "agentCreate.runLine": "{when} : {what}",
   "agentCreate.folder": "Dossier",
   "agentCreate.folderNew": "Un nouveau dossier à lui",
   "agentCreate.instructions": "Instructions",
   "quickReplies.group": "Réponses rapides",
-  "quickReplies.progress": "{done} sur {total}"
+  "quickReplies.progress": "{done} sur {total}",
+  "thread.viaButton": "réponse par bouton",
+  "agentCreate.scrollHint": "Pour autoriser, faites défiler le texte ci-dessus jusqu’à la fin",
+  "agentCreate.chars": {
+    "one": "{count} caractère",
+    "other": "{count} caractères"
+  },
+  "agentCreate.lines": {
+    "one": "{count} ligne",
+    "other": "{count} lignes"
+  }
 }

@@ -38,7 +38,7 @@ import Testing
     @Test func theRowsSayEverythingThePersonDecidesOn() throws {
         L10n.withLanguageForTests("en") {
             let rows = AgentCreateRows.rows(summary, languageCode: "en")
-            #expect(rows.map(\.id) == ["role", "runtime", "mode", "can", "services", "runs", "folder", "instructions"])
+            #expect(rows.map(\.id) == ["role", "runtime", "mode", "can", "services", "folder", "instructions", "run-0"])
             let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.value) })
             #expect(byID["role"] == "mail watcher")
             #expect(byID["runtime"] == "Claude · sonnet")
@@ -46,7 +46,10 @@ import Testing
             // The chips' names in their order; a capability this app does not know is shown as sent.
             #expect(byID["can"] == "\(AgentCapability.browser.title) · \(AgentCapability.team.title) · telepathy")
             #expect(byID["services"] == "Gmail, Notion")
-            #expect(byID["runs"] == "every 5 minutes: Mail")
+            // A run says when, its name and, whole, what it tells the agent to do.
+            #expect(rows.first { $0.id == "run-0" }?.label == "Runs · every 5 minutes · Mail")
+            #expect(byID["run-0"] == "Check the mail")
+            #expect(rows.first { $0.id == "instructions" }?.label == "Instructions · 41 characters · 1 line")
             #expect(byID["folder"] == "A new folder of its own")
             #expect(byID["instructions"] == "Watch the mailbox and report new letters.")
             #expect(rows.first { $0.id == "folder" }?.mono == false)
@@ -56,7 +59,7 @@ import Testing
     @Test func theRunsSpeakTheLanguageOfTheApp() {
         L10n.withLanguageForTests("ru") {
             let rows = AgentCreateRows.rows(summary, languageCode: "ru")
-            #expect(rows.first { $0.id == "runs" }?.value == "каждые 5 минут: Mail")
+            #expect(rows.first { $0.id == "run-0" }?.label.contains("каждые 5 минут") == true)
         }
     }
 
@@ -83,13 +86,68 @@ import Testing
         }
     }
 
-    @Test func aLongRunIsCutAndAnEmptyTimingIsLeftOut() {
-        let long = AgentCreateSummary.Run(title: nil, prompt: String(repeating: "word ", count: 40), humanEn: "", humanRu: "")
-        let line = AgentCreateRows.runLine(long, languageCode: "en")
-        #expect(line.count == AgentCreateRows.runNameLimit && line.hasSuffix("…"))
+    @Test func anEmptyTimingFallsBackToEnglishAndIsLeftOutOfTheLabel() {
         let timed = AgentCreateSummary.Run(title: "Mail", prompt: "x", humanEn: "every hour", humanRu: "")
         // Russian words that the daemon did not send fall back to the English ones.
         #expect(timed.timing(languageCode: "ru") == "every hour")
+        let bare = AgentCreateSummary.Run(title: nil, prompt: "x", humanEn: "", humanRu: "")
+        let input = JSONValue.object([
+            "name": .string("X"),
+            "schedules": .array([.object(["prompt": .string("Do it"), "humanEn": .string("")])]),
+        ])
+        L10n.withLanguageForTests("en") {
+            let rows = AgentCreateRows.rows(AgentCreateSummary(input: input)!, languageCode: "en")
+            #expect(rows.first { $0.id == "run-0" }?.label == "Runs")
+        }
+        #expect(bare.shownName == "x")
+    }
+
+    @Test func aRunKeepsItsWholePrompt() throws {
+        let prompt = String(repeating: "Check the mail and tell me. ", count: 40)
+        let input = JSONValue.object([
+            "name": .string("X"),
+            "schedules": .array([.object(["prompt": .string(prompt), "humanEn": .string("every hour")])]),
+        ])
+        let rows = AgentCreateRows.rows(try #require(AgentCreateSummary(input: input)), languageCode: "en")
+        let run = try #require(rows.first { $0.id == "run-0" })
+        #expect(run.value == prompt.trimmingCharacters(in: .whitespaces))
+        #expect(run.scrolls, "a long prompt goes in a box that scrolls")
+    }
+
+    @Test func createWaitsForEveryLongTextToBeScrolledToItsEnd() throws {
+        let long = String(repeating: "Rule: report each letter. ", count: 40)
+        let input = JSONValue.object([
+            "name": .string("X"), "instructions": .string(long),
+            "schedules": .array([.object(["prompt": .string(long), "humanEn": .string("every hour")])]),
+        ])
+        let rows = AgentCreateRows.rows(try #require(AgentCreateSummary(input: input)), languageCode: "en")
+        #expect(rows.filter(\.scrolls).map(\.id) == ["instructions", "run-0"])
+        #expect(!AgentCreateRows.canCreate(rows, reached: []))
+        #expect(!AgentCreateRows.canCreate(rows, reached: ["instructions"]))
+        #expect(!AgentCreateRows.canCreate(rows, reached: ["run-0"]))
+        #expect(AgentCreateRows.canCreate(rows, reached: ["instructions", "run-0"]))
+        // Short texts have no box, so nothing to scroll: Create is there at once.
+        let short = JSONValue.object(["name": .string("X"), "instructions": .string("Watch the mail.")])
+        let shortRows = AgentCreateRows.rows(try #require(AgentCreateSummary(input: short)), languageCode: "en")
+        #expect(AgentCreateRows.canCreate(shortRows, reached: []))
+    }
+
+    @Test func theInstructionsSayHowMuchThereIsToRead() {
+        L10n.withLanguageForTests("en") {
+            #expect(AgentCreateRows.instructionsLabel("one") == "Instructions · 3 characters · 1 line")
+            #expect(AgentCreateRows.instructionsLabel("a\nb\nc") == "Instructions · 5 characters · 3 lines")
+        }
+        L10n.withLanguageForTests("ru") {
+            #expect(AgentCreateRows.instructionsLabel("a\nb\nc").contains("3 строки"))
+        }
+    }
+
+    @Test func aCreationIsAllowedOnItsOwnCardOnly() {
+        #expect(Self.row().mustBeReadOnItsCard)
+        #expect(!Self.row(tool: "Bash").mustBeReadOnItsCard)
+        // The notification of a creation has no Allow: its summary is several lines, so it is reviewed in the app.
+        #expect(
+            NotificationContent.approvalCategoryID(command: Self.row().command) == NotificationContent.approvalReviewCategory)
     }
 
     @Test func theFoldedLinesSayWhatHappened() {
@@ -141,9 +199,18 @@ import Testing
         #expect(shown.map(\.label) == ["Done", "Later"])
         #expect(shown.map(\.isPrimary) == [true, false])
         #expect(shown.map(\.reply) == ["Connected", "Not now"])
-        // The label is the whole reply: nothing to tell on hover.
-        #expect(QuickRepliesRules.buttons(set([("Yes", "Yes")]))[0].help == nil)
-        #expect(shown[0].help == "Connected")
+        // The label is the whole reply: nothing to tell on hover, no second line.
+        let same = QuickRepliesRules.buttons(set([("Yes", "yes")]))[0]
+        #expect(same.help == nil && same.subtitle == nil)
+        // A reply that is not the label is on the button, in small print, and whole on hover.
+        #expect(shown[0].help == "Connected" && shown[0].subtitle == "Connected")
+    }
+
+    @Test func theSecondLineIsCutAndTheHoverHasAllOfIt() {
+        let reply = String(repeating: "word ", count: 30).trimmingCharacters(in: .whitespaces)
+        let button = QuickRepliesRules.buttons(set([("Go", reply)]))[0]
+        #expect(button.subtitle?.count == QuickRepliesRules.subtitleLimit && button.subtitle?.hasSuffix("…") == true)
+        #expect(button.help == reply && button.reply == reply)
     }
 
     @Test func buttonsAreBoundedAndOneLine() {
@@ -174,6 +241,14 @@ import Testing
         let ok = set([("a", "b")], link: QuickReplyLink(label: " Open Gmail ", url: "https://mail.google.com"))
         #expect(QuickRepliesRules.link(ok)?.label == "Open Gmail")
         #expect(QuickRepliesRules.link(ok)?.url.host == "mail.google.com")
+        // The host stands next to the label, so a label cannot hide where the link goes.
+        #expect(QuickRepliesRules.link(ok)?.host == "mail.google.com")
+        let www = set([("a", "b")], link: QuickReplyLink(label: "Docs", url: "https://WWW.Example.com/page"))
+        #expect(QuickRepliesRules.shownHost("example.com") == "example.com")
+        let farHost = "very-long-subdomain-name.another-long-label.example.com"
+        #expect(QuickRepliesRules.shownHost(farHost).hasSuffix("example.com") && QuickRepliesRules.shownHost(farHost).hasPrefix("…"))
+        #expect(QuickRepliesRules.shownHost(farHost).count == 32)
+        #expect(QuickRepliesRules.link(www).map { QuickRepliesRules.caption(label: $0.label, host: $0.host) } == "Docs · example.com")
         #expect(QuickRepliesRules.link(set([("a", "b")], link: QuickReplyLink(label: "", url: "https://example.com"))) == nil)
     }
 

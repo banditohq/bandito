@@ -30,7 +30,8 @@ Only the main agent of the crew can create agents, and you decide on a card each
 Где: Team → main agent's thread → card "wants to create an agent"
 1. Check Can use and Services on the card: they are what the new agent may touch.
 2. Check Asks you: a new agent never asks less than its creator.
-3. If the main agent's approvals are set to About nothing, it creates agents without a card; the thread says "without asking".
+3. Allowing needs the card in the app: the shortcut, the menu bar and a notification do not allow a creation, and in Telegram only a summary that fits a whole message can be allowed (otherwise it says to open the app). If you say no three times within an hour, that agent's requests are turned away for an hour.
+4. If the main agent's approvals are set to About nothing, it creates agents without a card; the thread says "without asking".
 
 ## Rules: allow, ask, deny (Approvals)
 

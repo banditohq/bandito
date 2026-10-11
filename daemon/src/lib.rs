@@ -36,6 +36,7 @@ pub mod recommend;
 pub mod redact;
 pub mod rpc;
 pub mod runtime;
+pub mod sanitize;
 pub mod schedule_text;
 pub mod scheduler;
 pub mod screen;

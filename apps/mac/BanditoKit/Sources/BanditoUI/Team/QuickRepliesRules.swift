@@ -16,9 +16,15 @@ enum QuickRepliesRules {
         var reply: String
         /// The first button is the primary one.
         var isPrimary: Bool
-        /// What a pointer over the button tells when the label is not the whole reply.
+        /// What a pointer over the button tells when the label is not the whole reply: all of the reply.
         var help: String?
+        /// A second line in small print under the label: the reply, cut, when it is not the label. What a click sends
+        /// is on the button, so a label cannot stand for other words.
+        var subtitle: String?
     }
+
+    /// Longest second line, in characters.
+    static let subtitleLimit = 48
 
     /// The buttons to draw. A button with no label or no reply is not drawn, because pressing it could send nothing.
     static func buttons(_ replies: QuickReplies) -> [Shown] {
@@ -28,19 +34,38 @@ enum QuickRepliesRules {
             let reply = button.reply.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !label.isEmpty, !reply.isEmpty, out.count < maxButtons else { continue }
             let shown = label.count > labelLimit ? String(label.prefix(labelLimit - 1)) + "…" : label
+            let differs = reply.caseInsensitiveCompare(label) != .orderedSame
+            let subtitle = reply.count > subtitleLimit ? String(reply.prefix(subtitleLimit - 1)) + "…" : reply
             out.append(
-                Shown(id: out.count, label: shown, reply: reply, isPrimary: out.isEmpty, help: reply == shown ? nil : reply))
+                Shown(
+                    id: out.count, label: shown, reply: reply, isPrimary: out.isEmpty, help: differs ? reply : nil,
+                    subtitle: differs ? subtitle : nil))
         }
         return out
     }
 
     /// A link button's label (one line, cut), or `nil` when the link is not one the app opens.
-    static func link(_ replies: QuickReplies) -> (label: String, url: URL)? {
-        guard let link = replies.link, let url = webURL(link.url) else { return nil }
+    static func link(_ replies: QuickReplies) -> (label: String, host: String, url: URL)? {
+        guard let link = replies.link, let url = webURL(link.url), let host = host(of: url) else { return nil }
         let label = oneLine(link.label)
         guard !label.isEmpty else { return nil }
-        return (label.count > labelLimit ? String(label.prefix(labelLimit - 1)) + "…" : label, url)
+        return (label.count > labelLimit ? String(label.prefix(labelLimit - 1)) + "…" : label, host, url)
     }
+
+    /// The host a link goes to, as the person reads it next to the label: without a leading `www.`.
+    static func host(of url: URL) -> String? {
+        guard var host = url.host?.lowercased(), !host.isEmpty else { return nil }
+        if host.hasPrefix("www.") { host.removeFirst(4) }
+        return host
+    }
+
+    /// The host as drawn: all of it, or, when it is very long, its end (the part that tells whose site it is).
+    static func shownHost(_ host: String) -> String {
+        host.count > 32 ? "…" + host.suffix(31) : host
+    }
+
+    /// "Open settings · mail.google.com": the label and where it leads.
+    static func caption(label: String, host: String) -> String { "\(label) · \(host)" }
 
     /// An address the app opens from an agent's button: https, with a host, no user name, no spaces. Anything else
     /// (`http`, `file`, `javascript`, `https://user@host`) is not a link.

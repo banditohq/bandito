@@ -1139,6 +1139,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
             queued: false,
         };
         s.append_event(&a.id, user("hi", Source::User)).unwrap();

@@ -71,9 +71,9 @@
 "agentCreate.instructions" = "Anweisungen";
 "agentCreate.nothingExtra" = "Nichts Zusätzliches";
 "agentCreate.role" = "Rolle";
-"agentCreate.runLine" = "%1$@: %2$@";
 "agentCreate.runsOn" = "Läuft auf";
 "agentCreate.schedules" = "Läufe";
+"agentCreate.scrollHint" = "Zum Erlauben den Text oben bis zum Ende scrollen";
 "agentCreate.services" = "Dienste";
 "agentCreate.servicesAll" = "Alle aktivierten";
 "agentCreate.servicesNone" = "Keine";
@@ -2642,6 +2642,7 @@
 "thread.stop" = "Stopp";
 "thread.stopped" = "Gestoppt";
 "thread.today" = "Heute";
+"thread.viaButton" = "per Schaltfläche geantwortet";
 "thread.yesterday" = "Gestern";
 "tour.agents.text" = "Jeder Agent ist ein eigener Chat. Der orangefarbene Punkt bedeutet, dass jemand auf Ihre Entscheidung wartet.";
 "tour.agents.title" = "Ihre Agenten";

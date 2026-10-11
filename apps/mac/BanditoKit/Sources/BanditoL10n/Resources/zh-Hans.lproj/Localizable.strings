@@ -71,9 +71,9 @@
 "agentCreate.instructions" = "指令";
 "agentCreate.nothingExtra" = "无额外权限";
 "agentCreate.role" = "角色";
-"agentCreate.runLine" = "%1$@：%2$@";
 "agentCreate.runsOn" = "运行于";
 "agentCreate.schedules" = "定时运行";
+"agentCreate.scrollHint" = "请将上方文字滚动到末尾后再允许";
 "agentCreate.services" = "服务";
 "agentCreate.servicesAll" = "所有已启用的";
 "agentCreate.servicesNone" = "无";
@@ -2642,6 +2642,7 @@
 "thread.stop" = "停止";
 "thread.stopped" = "已停止";
 "thread.today" = "今天";
+"thread.viaButton" = "通过按钮回复";
 "thread.yesterday" = "昨天";
 "tour.agents.text" = "每个代理都有自己的聊天。橙色圆点表示有人在等待决定。";
 "tour.agents.title" = "代理列表";

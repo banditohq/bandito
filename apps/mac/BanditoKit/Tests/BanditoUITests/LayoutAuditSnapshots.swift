@@ -370,7 +370,8 @@ import Testing
             "integrations": .array([.string("Gmail"), .string("Notion")]), "integrationsAll": .bool(false),
             "schedules": .array([
                 .object([
-                    "title": .string("Eingehende Rechnungen prüfen"), "prompt": .string("Check the mail"),
+                    "title": .string("Eingehende Rechnungen prüfen"),
+                    "prompt": .string(String(repeating: "Prüfe das Postfach und fasse jede neue Rechnung zusammen. ", count: 8)),
                     "humanEn": .string("every 5 minutes"), "humanRu": .string("каждые 5 минут"),
                 ])
             ]),
@@ -382,7 +383,7 @@ import Testing
 
     static let longQuickReplies = QuickReplies(
         buttons: [
-            QuickReplyButton(label: "Postfach ist verbunden, weiter geht's", reply: "Verbunden"),
+            QuickReplyButton(label: "Postfach ist verbunden, weiter geht's", reply: "Das Postfach ist jetzt mit Bandito verbunden, mach weiter"),
             QuickReplyButton(label: "Подключил почту, продолжай работу", reply: "Подключено"),
             QuickReplyButton(label: "1", reply: "Option 1"),
             QuickReplyButton(label: String(repeating: "W", count: 40), reply: "Option 2"),

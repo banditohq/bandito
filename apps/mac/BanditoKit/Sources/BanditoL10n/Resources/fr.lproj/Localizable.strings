@@ -71,9 +71,9 @@
 "agentCreate.instructions" = "Instructions";
 "agentCreate.nothingExtra" = "Rien de plus";
 "agentCreate.role" = "Rôle";
-"agentCreate.runLine" = "%1$@ : %2$@";
 "agentCreate.runsOn" = "Fonctionne avec";
 "agentCreate.schedules" = "Exécutions";
+"agentCreate.scrollHint" = "Pour autoriser, faites défiler le texte ci-dessus jusqu’à la fin";
 "agentCreate.services" = "Services";
 "agentCreate.servicesAll" = "Tous ceux qui sont activés";
 "agentCreate.servicesNone" = "Aucun";
@@ -2642,6 +2642,7 @@
 "thread.stop" = "Arrêter";
 "thread.stopped" = "Arrêté";
 "thread.today" = "Aujourd'hui";
+"thread.viaButton" = "réponse par bouton";
 "thread.yesterday" = "Hier";
 "tour.agents.text" = "Chaque agent a son propre chat. Le point orange signifie qu’un agent attend votre décision.";
 "tour.agents.title" = "Vos agents";

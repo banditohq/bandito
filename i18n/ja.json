@@ -2949,10 +2949,17 @@
   "agentCreate.servicesNone": "なし",
   "agentCreate.servicesAll": "有効なものすべて",
   "agentCreate.schedules": "定期実行",
-  "agentCreate.runLine": "{when}：{what}",
   "agentCreate.folder": "フォルダ",
   "agentCreate.folderNew": "専用の新しいフォルダ",
   "agentCreate.instructions": "指示",
   "quickReplies.group": "クイック返信",
-  "quickReplies.progress": "{total} 件中 {done} 件"
+  "quickReplies.progress": "{total} 件中 {done} 件",
+  "thread.viaButton": "ボタンで返信",
+  "agentCreate.scrollHint": "許可するには、上の文章を最後までスクロールしてください",
+  "agentCreate.chars": {
+    "other": "{count} 文字"
+  },
+  "agentCreate.lines": {
+    "other": "{count} 行"
+  }
 }
