@@ -423,6 +423,291 @@ fn catalog_url(id: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// `agents.export` and `agents.create_from_shared` (see docs/ARCHITECTURE.md#sharing). The payload rules are tested in
+/// `crate::shared`; these tests cover the methods: what is read, what is made, and what is refused.
+#[cfg(test)]
+mod share_tests {
+    use super::*;
+    use crate::hub::Hub;
+    use crate::rpc::{Peer, UNAUTHORIZED, dispatch};
+    use crate::shared::{self, BotPayload};
+    use crate::store::{ApprovalMode, Integration, IntegrationKind, MemoryMode, NewIntegration, NewSchedule, Store};
+    use crate::supervisor::{Runtimes, Supervisor};
+    use serde_json::json;
+    use std::path::Path;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    const SHARE: &str = "AbCdEfGhIjKlMnOpQrStUv";
+
+    fn app(root: &Path) -> (Arc<App>, Arc<Store>) {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let sup = Supervisor::new(Hub::new(store.clone()), Runtimes::default(), None);
+        (App::new(sup, root.join("agents")), store)
+    }
+
+    async fn call(app: &App, method: &str, p: Value) -> RpcResult {
+        dispatch(app, &Peer::Local, method, p).await
+    }
+
+    fn bot() -> Value {
+        json!({
+            "schema": 1,
+            "name": "Scout",
+            "role": "Finds sources",
+            "system_prompt": "You find sources.",
+            "capabilities": ["browser", "files"],
+            "services": ["notion"],
+            "schedules": [{"text": "0 9 * * *", "prompt": "Morning digest"}],
+        })
+    }
+
+    fn new_agent(name: &str, cwd: &Path, integrations: Option<Vec<String>>) -> NewAgent {
+        NewAgent {
+            use_personal_settings: false,
+            avatar: None,
+            capabilities: None,
+            integrations,
+            name: name.into(),
+            role: "Scout role".into(),
+            runtime: RuntimeKind::Claude,
+            model: None,
+            cwd: cwd.display().to_string(),
+            approval_mode: ApprovalMode::Risky,
+            system_prompt: Some("Find sources.".into()),
+            effort: None,
+            memory_mode: MemoryMode::Smart,
+            context_budget: None,
+            fallback_runtime: None,
+            fallback_model: None,
+        }
+    }
+
+    fn agent(store: &Store, name: &str, cwd: &Path, integrations: Option<Vec<String>>) -> String {
+        store.agent_create(new_agent(name, cwd, integrations)).unwrap().id
+    }
+
+    fn connect(store: &Store, name: &str, url: Option<&str>, enabled: bool) -> Integration {
+        store
+            .integration_create(NewIntegration {
+                name: name.into(),
+                kind: if url.is_some() { IntegrationKind::Http } else { IntegrationKind::Stdio },
+                command: url.is_none().then(|| "true".to_string()),
+                args: vec![],
+                url: url.map(str::to_string),
+                env: Default::default(),
+                headers: Default::default(),
+                enabled,
+                auth: Default::default(),
+            })
+            .unwrap()
+    }
+
+    // ---- agents.export ----
+
+    #[tokio::test]
+    async fn agents_export_holds_the_bot_and_no_secret_path_or_account() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let cwd = TempDir::new().unwrap();
+        let id = agent(&store, "Scout", cwd.path(), None);
+        connect(&store, "notion", None, true);
+        store
+            .secret_set("SHARE_TEST_TOKEN", "tok-live-SECRETVALUE-0123456789", std::slice::from_ref(&id))
+            .unwrap();
+        store
+            .schedule_create(
+                NewSchedule {
+                    agent_id: id.clone(),
+                    cron: "0 9 * * *".into(),
+                    tz: "UTC".into(),
+                    prompt: "Morning digest".into(),
+                    enabled: true,
+                    title: None,
+                },
+                None,
+            )
+            .unwrap();
+
+        let reply = call(&app, "agents.export", json!({"agent_id": id})).await.unwrap();
+        let text = reply.to_string();
+        assert!(!text.contains("SECRETVALUE"), "no secret value");
+        assert!(!text.contains("SHARE_TEST_TOKEN"), "no secret name");
+        assert!(!text.contains(&cwd.path().display().to_string()), "no folder path");
+        assert!(!text.contains(&id), "no id of the agent");
+        let p: BotPayload = serde_json::from_value(reply["payload"].clone()).unwrap();
+        assert_eq!(p.name, "Scout");
+        assert_eq!(p.role, "Scout role");
+        assert_eq!(p.system_prompt, "Find sources.");
+        assert_eq!(p.capabilities, vec!["terminal", "files", "browser", "team", "screen"], "null means all");
+        assert_eq!(p.services, vec!["notion".to_string()]);
+        assert_eq!(p.schedules.len(), 1);
+        assert_eq!(p.schedules[0].text, "0 9 * * *");
+        assert_eq!(p.schedules[0].prompt, "Morning digest");
+        assert_eq!(p.starter, None, "an agent has no starter of its own");
+    }
+
+    #[tokio::test]
+    async fn agents_export_lists_only_enabled_catalog_services_of_the_agent() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let cwd = TempDir::new().unwrap();
+        connect(&store, "notion", None, true);
+        let github = connect(&store, "github", None, false);
+        connect(&store, "my-own-tool", Some("https://example.invalid/mcp"), true);
+        let every = agent(&store, "Every", cwd.path(), None);
+        let only_github = agent(&store, "Github", cwd.path(), Some(vec![github.id.clone()]));
+        for (id, expected) in [(every, vec!["notion".to_string()]), (only_github, vec![])] {
+            let reply = call(&app, "agents.export", json!({"agent_id": id})).await.unwrap();
+            let p: BotPayload = serde_json::from_value(reply["payload"].clone()).unwrap();
+            assert_eq!(p.services, expected, "custom and disabled integrations are not exported");
+        }
+    }
+
+    #[tokio::test]
+    async fn agents_export_refuses_an_unknown_agent_and_a_bot_over_the_limits() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let err = call(&app, "agents.export", json!({"agent_id": "nobody"})).await.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+
+        let cwd = TempDir::new().unwrap();
+        let id = agent(&store, "Scout", cwd.path(), None);
+        store
+            .agent_update(
+                &id,
+                crate::store::AgentPatch {
+                    role: Some("r".repeat(shared::BOT_ROLE_MAX + 1)),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let err = call(&app, "agents.export", json!({"agent_id": id})).await.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert_eq!(err.message, "invalid: role");
+    }
+
+    // ---- agents.create_from_shared ----
+
+    #[tokio::test]
+    async fn create_from_shared_makes_the_agent_and_marks_it_with_its_share() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let reply = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 3, "payload": bot(), "language": "ru"}),
+        )
+        .await
+        .unwrap();
+        let a = &reply["agent"];
+        assert_eq!(a["name"], "Scout");
+        assert_eq!(a["role"], "Finds sources");
+        assert_eq!(a["system_prompt"], "You find sources.");
+        assert_eq!(a["template_id"], format!("shared:{SHARE}"));
+        assert_eq!(reply["unknown_services"], json!([]));
+        assert_eq!(reply["missing_services"], json!(["notion"]), "not connected yet");
+        let id = a["id"].as_str().unwrap();
+        let schedules = store.schedule_list(Some(id)).unwrap();
+        assert_eq!(schedules.len(), 1);
+        assert_eq!(schedules[0].cron, "0 9 * * *");
+        assert_eq!(schedules[0].prompt, "Morning digest");
+        assert!(schedules[0].enabled);
+    }
+
+    #[tokio::test]
+    async fn create_from_shared_drops_unknown_services_and_lists_them() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        connect(&store, "notion", None, true);
+        let mut p = bot();
+        p["services"] = json!(["notion", "not-in-catalog", "also-missing"]);
+        let reply = call(&app, "agents.create_from_shared", json!({"share_id": SHARE, "version": 1, "payload": p}))
+            .await
+            .unwrap();
+        assert_eq!(reply["unknown_services"], json!(["not-in-catalog", "also-missing"]));
+        assert_eq!(reply["missing_services"], json!([]), "notion is connected");
+        assert_eq!(store.agent_list().unwrap().len(), 1, "the bot is made");
+    }
+
+    #[tokio::test]
+    async fn create_from_shared_refuses_a_bad_request_before_anything_is_created() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let mut extra = bot();
+        extra["memory"] = json!("x");
+        let mut bad_cron = bot();
+        bad_cron["schedules"] = json!([{"text": "nonsense", "prompt": "p"}]);
+        let mut long_name = bot();
+        long_name["name"] = json!("n".repeat(33));
+        let cases = [
+            json!({"share_id": "short", "version": 1, "payload": bot()}),
+            json!({"share_id": SHARE, "version": 0, "payload": bot()}),
+            json!({"share_id": SHARE, "version": 1, "payload": extra}),
+            json!({"share_id": SHARE, "version": 1, "payload": bad_cron}),
+            json!({"share_id": SHARE, "version": 1, "payload": long_name}),
+        ];
+        for p in cases {
+            let err = call(&app, "agents.create_from_shared", p.clone()).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{p}");
+        }
+        assert!(store.agent_list().unwrap().is_empty(), "nothing is created");
+    }
+
+    #[tokio::test]
+    async fn create_from_shared_takes_a_free_name_as_a_bundle_does() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let cwd = TempDir::new().unwrap();
+        agent(&store, "Scout", cwd.path(), None);
+        let reply = call(&app, "agents.create_from_shared", json!({"share_id": SHARE, "version": 1, "payload": bot()}))
+            .await
+            .unwrap();
+        assert_eq!(reply["agent"]["name"], "Scout 2");
+    }
+
+    #[tokio::test]
+    async fn an_exported_bot_creates_the_same_bot_elsewhere() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let cwd = TempDir::new().unwrap();
+        connect(&store, "notion", None, true);
+        let id = agent(&store, "Scout", cwd.path(), None);
+        let exported = call(&app, "agents.export", json!({"agent_id": id})).await.unwrap();
+        let made = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": exported["payload"]}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(made["agent"]["role"], "Scout role");
+        assert_eq!(made["agent"]["system_prompt"], "Find sources.");
+        assert_eq!(made["unknown_services"], json!([]));
+        assert_eq!(made["missing_services"], json!([]));
+    }
+
+    #[tokio::test]
+    async fn agents_cannot_export_or_create_from_shared() {
+        let root = TempDir::new().unwrap();
+        let (app, _store) = app(root.path());
+        let agent_peer = Peer::Agent("agent-a".into());
+        let export = dispatch(&app, &agent_peer, "agents.export", json!({"agent_id": "x"}))
+            .await
+            .unwrap_err();
+        assert_eq!(export.code, UNAUTHORIZED);
+        let create = dispatch(
+            &app,
+            &agent_peer,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot()}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(create.code, UNAUTHORIZED);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

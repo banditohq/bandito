@@ -155,6 +155,329 @@ struct SkillParams {
     agent_id: Option<String>,
 }
 
+/// `skills.export` and `skills.install_shared` (see docs/ARCHITECTURE.md#sharing). The payload and folder rules are
+/// tested in `crate::shared`; these tests cover the methods, their replies and their refusals.
+#[cfg(test)]
+mod share_tests {
+    use crate::hub::Hub;
+    use crate::rpc::{App, COMMANDS_ERROR, INVALID_PARAMS, Peer, RpcError, RpcResult, UNAUTHORIZED, dispatch, features};
+    use crate::runtime::RuntimeKind;
+    use crate::shared::{self, SkillPayload};
+    use crate::store::{ApprovalMode, MemoryMode, NewAgent, Store};
+    use crate::supervisor::{Runtimes, Supervisor};
+    use serde_json::{Value, json};
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    use super::dispatch_in;
+
+    const SHARE: &str = "AbCdEfGhIjKlMnOpQrStUv";
+    const OTHER: &str = "ZyXwVuTsRqPoNmLkJiHgFe";
+
+    struct Rig {
+        app: Arc<App>,
+        store: Arc<Store>,
+    }
+
+    fn rig() -> Rig {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let sup = Supervisor::new(Hub::new(store.clone()), Runtimes::default(), None);
+        let app = App::new(sup, PathBuf::from("unused-agents-root"));
+        Rig { app, store }
+    }
+
+    async fn call(r: &Rig, home: &Path, method: &str, p: Value) -> RpcResult {
+        dispatch_in(&r.app, Some(home.to_path_buf()), method, p).await
+    }
+
+    fn agent(store: &Store, cwd: &Path) -> String {
+        store
+            .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
+                integrations: None,
+                name: "Forge".into(),
+                role: String::new(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: cwd.display().to_string(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: MemoryMode::Smart,
+                context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
+            })
+            .unwrap()
+            .id
+    }
+
+    fn skill_md() -> String {
+        "---\nname: release-notes\ndescription: Writes release notes\n---\n\n# Release notes\n".to_string()
+    }
+
+    fn payload() -> Value {
+        json!({
+            "schema": 1,
+            "name": "release-notes",
+            "description": "Writes release notes",
+            "license": "MIT",
+            "files": {
+                "SKILL.md": skill_md(),
+                "scripts/run.sh": "#!/bin/sh\necho hi\n",
+                "docs/notes.md": "details",
+            },
+            "executable": ["scripts/run.sh"],
+        })
+    }
+
+    /// A folder the person made: not Bandito's, so it has no marker.
+    fn own_folder(home: &Path, name: &str) -> PathBuf {
+        let dir = home.join(".claude/skills").join(name);
+        fs::create_dir_all(dir.join("scripts")).unwrap();
+        fs::create_dir_all(dir.join("docs")).unwrap();
+        fs::write(dir.join("SKILL.md"), skill_md()).unwrap();
+        fs::write(dir.join("scripts/run.sh"), "#!/bin/sh\necho hi\n").unwrap();
+        fs::write(dir.join("docs/notes.md"), "details").unwrap();
+        dir
+    }
+
+    fn reason(err: &RpcError) -> String {
+        err.data.as_ref().unwrap()["reason"].as_str().unwrap().to_string()
+    }
+
+    #[cfg(unix)]
+    fn mode_of(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    // ---- skills.export ----
+
+    #[tokio::test]
+    async fn skills_export_reads_a_users_folder_into_a_payload() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        own_folder(home.path(), "release-notes");
+        let reply = call(
+            &r,
+            home.path(),
+            "skills.export",
+            json!({"name": "release-notes", "license": "MIT"}),
+        )
+        .await
+        .unwrap();
+        let p: SkillPayload = serde_json::from_value(reply["payload"].clone()).unwrap();
+        assert_eq!(p.name, "release-notes");
+        assert_eq!(p.description, "Writes release notes");
+        assert_eq!(p.license, "MIT");
+        assert!(p.files.contains_key("docs/notes.md"));
+        assert_eq!(p.executable, vec!["scripts/run.sh".to_string()]);
+        assert!(shared::parse_skill(reply["payload"].clone()).is_ok(), "the export is a valid payload");
+    }
+
+    #[tokio::test]
+    async fn skills_export_refuses_a_catalog_install_and_needs_a_license() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        call(&r, home.path(), "skills.install", json!({"skill_id": "commit", "scope": "user"}))
+            .await
+            .unwrap();
+        let err = call(&r, home.path(), "skills.export", json!({"name": "commit", "license": "MIT"}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, COMMANDS_ERROR);
+        assert_eq!(reason(&err), "catalog_skill");
+
+        own_folder(home.path(), "release-notes");
+        let err = call(&r, home.path(), "skills.export", json!({"name": "release-notes"}))
+            .await
+            .unwrap_err();
+        assert_eq!(reason(&err), "license_required");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn skills_export_names_the_path_of_a_link() {
+        use std::os::unix::fs::symlink;
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        fs::write(outside.path().join("secret.md"), "outside").unwrap();
+        let dir = own_folder(home.path(), "release-notes");
+        symlink(outside.path().join("secret.md"), dir.join("docs/link.md")).unwrap();
+        let err = call(
+            &r,
+            home.path(),
+            "skills.export",
+            json!({"name": "release-notes", "license": "MIT"}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, COMMANDS_ERROR);
+        assert_eq!(reason(&err), "unsafe_path");
+        assert!(err.message.contains("docs/link.md"), "{}", err.message);
+    }
+
+    #[tokio::test]
+    async fn skills_export_refuses_a_bad_name_and_a_missing_folder() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let err = call(&r, home.path(), "skills.export", json!({"name": "../x", "license": "MIT"}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        let err = call(&r, home.path(), "skills.export", json!({"name": "nothing-here", "license": "MIT"}))
+            .await
+            .unwrap_err();
+        assert_eq!(reason(&err), "no_skill");
+    }
+
+    // ---- skills.install_shared ----
+
+    #[tokio::test]
+    async fn skills_install_shared_writes_the_skill_into_the_users_folder() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let reply = call(
+            &r,
+            home.path(),
+            "skills.install_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": payload()}),
+        )
+        .await
+        .unwrap();
+        let folder = home.path().join(".claude/skills/release-notes");
+        assert_eq!(reply["path"], folder.display().to_string());
+        assert_eq!(reply["updated"], false);
+        assert_eq!(fs::read_to_string(folder.join("docs/notes.md")).unwrap(), "details");
+        let marker: Value = serde_json::from_str(&fs::read_to_string(folder.join(".bandito-skill")).unwrap()).unwrap();
+        assert_eq!(marker["source"], format!("shared:{SHARE}"));
+        assert_eq!(marker["version"], 1);
+        #[cfg(unix)]
+        {
+            assert_eq!(mode_of(&folder.join("scripts/run.sh")), 0o755);
+            assert_eq!(mode_of(&folder.join("docs/notes.md")), 0o644);
+        }
+    }
+
+    #[tokio::test]
+    async fn skills_install_shared_goes_to_the_agents_folder_when_agent_id_is_given() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let cwd = TempDir::new().unwrap();
+        let id = agent(&r.store, cwd.path());
+        let reply = call(
+            &r,
+            home.path(),
+            "skills.install_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": payload(), "agent_id": id}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            reply["path"],
+            cwd.path().join(".claude/skills/release-notes").display().to_string()
+        );
+        assert!(!home.path().join(".claude/skills/release-notes").exists(), "the user's folder is not touched");
+    }
+
+    #[tokio::test]
+    async fn skills_install_shared_refuses_a_folder_that_is_not_its_own() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let folder = own_folder(home.path(), "release-notes");
+        let err = call(
+            &r,
+            home.path(),
+            "skills.install_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": payload()}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, COMMANDS_ERROR);
+        assert_eq!(reason(&err), "exists_not_ours");
+        assert_eq!(fs::read_to_string(folder.join("SKILL.md")).unwrap(), skill_md());
+        assert!(!folder.join(".bandito-skill").exists());
+    }
+
+    #[tokio::test]
+    async fn skills_install_shared_updates_its_own_copy_and_keeps_another_shares() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        call(
+            &r,
+            home.path(),
+            "skills.install_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": payload()}),
+        )
+        .await
+        .unwrap();
+        let again = call(
+            &r,
+            home.path(),
+            "skills.install_shared",
+            json!({"share_id": SHARE, "version": 2, "payload": payload()}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(again["updated"], true);
+        let other = call(
+            &r,
+            home.path(),
+            "skills.install_shared",
+            json!({"share_id": OTHER, "version": 1, "payload": payload()}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(reason(&other), "exists_not_ours");
+    }
+
+    #[tokio::test]
+    async fn skills_install_shared_refuses_a_bad_request_before_writing() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let mut outside = payload();
+        outside["executable"] = json!(["docs/notes.md"]);
+        let cases = [
+            json!({"share_id": SHARE, "version": 1, "payload": outside}),
+            json!({"share_id": "short", "version": 1, "payload": payload()}),
+            json!({"share_id": SHARE, "version": 0, "payload": payload()}),
+            json!({"share_id": SHARE, "version": 1, "payload": payload(), "agent_id": "nobody"}),
+        ];
+        for p in cases {
+            let err = call(&r, home.path(), "skills.install_shared", p.clone()).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{p}");
+        }
+        assert!(!home.path().join(".claude").exists(), "nothing is written for a refused call");
+    }
+
+    #[tokio::test]
+    async fn agents_cannot_export_or_install_shared_skills() {
+        let r = rig();
+        let agent_peer = Peer::Agent("agent-a".into());
+        for (method, p) in [
+            ("skills.export", json!({"name": "release-notes", "license": "MIT"})),
+            (
+                "skills.install_shared",
+                json!({"share_id": SHARE, "version": 1, "payload": payload()}),
+            ),
+        ] {
+            let err = dispatch(&r.app, &agent_peer, method, p).await.unwrap_err();
+            assert_eq!(err.code, UNAUTHORIZED, "{method}");
+        }
+    }
+
+    #[test]
+    fn the_skills_share_feature_is_the_sharing_one() {
+        assert!(features().contains(&"sharing"));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::hub::Hub;

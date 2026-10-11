@@ -40,6 +40,7 @@ pub mod scheduler;
 pub mod screen;
 pub mod service;
 pub mod setup;
+pub mod shared;
 pub mod shell;
 pub mod skills;
 pub mod store;
