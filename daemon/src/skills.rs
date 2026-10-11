@@ -146,7 +146,7 @@ pub fn install(base: &Path, id: &str) -> Result<PathBuf, InstallError> {
 
 /// Removes what an interrupted install left beside skill `id`: the folders `.<id>.tmp-*` and `.<id>.old-*`. Only real
 /// folders are removed; a link with that name is left alone.
-fn remove_leftovers(base: &Path, id: &str) -> Result<(), InstallError> {
+pub fn remove_leftovers(base: &Path, id: &str) -> Result<(), InstallError> {
     let skills = base.join(".claude").join("skills");
     let Ok(read) = fs::read_dir(&skills) else {
         return Ok(());

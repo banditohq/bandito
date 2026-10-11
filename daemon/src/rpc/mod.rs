@@ -101,6 +101,7 @@ pub fn features() -> Vec<&'static str> {
         "mentions",
         "agent_templates",
         "agent_bundles",
+        "sharing",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -1110,7 +1111,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     }
     if matches!(
         method,
-        "agents.templates" | "agents.create_from_template" | "agents.bundles" | "agents.create_bundle"
+        "agents.templates"
+            | "agents.create_from_template"
+            | "agents.bundles"
+            | "agents.create_bundle"
+            | "agents.export"
+            | "agents.create_from_shared"
     ) {
         // Answered in `templates.rs`, which shares the agent creation of `agents.create`.
         return templates::dispatch(app, method, p).await;

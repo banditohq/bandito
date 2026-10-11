@@ -4,13 +4,15 @@
 //! and docs/ARCHITECTURE.md#agent-bundles.
 
 use super::schedules;
+use super::skills::share_error;
 use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, RpcError, RpcResult, SERVER_ERROR, create_agent, ok, params};
 use crate::agent_bundles;
 use crate::agent_templates::{self, AgentTemplate, Effort as TemplateEffort, TemplateSchedule};
 use crate::runtime::RuntimeKind;
 use crate::schedule_text;
+use crate::shared::{self, ShareError};
 use crate::skills;
-use crate::store::{Capability, Effort, NewAgent, NewSchedule, validate_name};
+use crate::store::{Agent, Capability, Effort, NewAgent, NewSchedule, Store, validate_name};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -73,6 +75,21 @@ pub(super) async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
                 .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no template {}", req.template_id)))?;
             let _creating = CREATE_LOCK.lock().await;
             create_from(app, &template, req).await
+        }
+        "agents.export" => {
+            let req: ExportAgent = params(p)?;
+            export_agent(app, &req.agent_id)
+        }
+        "agents.create_from_shared" => {
+            let req: CreateFromShared = params(p)?;
+            shared::check_share_id(&req.share_id).map_err(share_error)?;
+            shared::check_version(req.version).map_err(share_error)?;
+            let bot = shared::parse_bot(req.payload).map_err(share_error)?;
+            if req.language.as_deref().is_some_and(|l| l.trim().is_empty()) {
+                return Err(share_error(ShareError::invalid("language")));
+            }
+            let _creating = CREATE_LOCK.lock().await;
+            create_shared(app, &req.share_id, bot).await
         }
         "agents.bundles" => {
             // As with the templates: the file is checked by the tests.
@@ -339,6 +356,176 @@ async fn create_from(app: &App, t: &AgentTemplate, req: CreateFromTemplate) -> R
     }))
 }
 
+/// `agents.export`: the bot as it is shared (see docs/ARCHITECTURE.md#sharing). Its services are the catalog
+/// integrations it may use, and its schedules the enabled ones with their cron. Never a secret, a memory, a folder or an
+/// integration's account: none of them is read here.
+fn export_agent(app: &App, id: &str) -> RpcResult {
+    let store = &app.sup.hub().store;
+    let agent = store
+        .agent_get(id)?
+        .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no agent {id}")))?;
+    let services = shared_services(store, &agent)?;
+    let schedules: Vec<shared::BotSchedule> = store
+        .schedule_list(Some(id))?
+        .into_iter()
+        .filter(|s| s.enabled)
+        .map(|s| shared::BotSchedule {
+            text: s.cron,
+            prompt: s.prompt,
+        })
+        .collect();
+    if schedules.len() > shared::BOT_SCHEDULES_MAX {
+        return Err(share_error(ShareError::invalid("schedules")));
+    }
+    let payload = shared::bot_from_agent(&agent, services, schedules).map_err(share_error)?;
+    ok(json!({ "payload": payload }))
+}
+
+/// The catalog ids of the integrations the agent may use: every enabled one when its list is null, else the enabled ones
+/// it lists. A custom integration (not a catalog service) is left out.
+fn shared_services(store: &Store, agent: &Agent) -> Result<Vec<String>, RpcError> {
+    let mut out: Vec<String> = Vec::new();
+    for integration in store.integration_list()? {
+        if !integration.enabled {
+            continue;
+        }
+        if agent
+            .integrations
+            .as_ref()
+            .is_some_and(|list| !list.contains(&integration.id))
+        {
+            continue;
+        }
+        let Some(service) = shared::catalog_service(&integration.name, integration.url.as_deref()) else {
+            continue;
+        };
+        if !out.contains(&service) {
+            out.push(service);
+        }
+    }
+    Ok(out)
+}
+
+/// `agents.create_from_shared`: the bot of a share, made as `create_from` makes a template's bot, without a template:
+/// no skills, the payload's schedules (enabled, the payload's `text` as cron), and `template_id` = `shared:<share_id>`.
+/// Every check runs before the agent exists. A service the catalog does not have is dropped and listed in
+/// `unknown_services`; a catalog service no enabled integration connects is listed in `missing_services`. The name is
+/// taken as `free_name` takes a bundle's: `<name> 2` when another agent has it.
+async fn create_shared(app: &App, share_id: &str, bot: shared::BotPayload) -> RpcResult {
+    validate_name(bot.name.trim()).map_err(|_| share_error(ShareError::invalid("name")))?;
+    let tz = schedule_text::local_zone();
+    for (index, s) in bot.schedules.iter().enumerate() {
+        schedules::check_agent_interval(&s.text, &tz)
+            .map_err(|_| share_error(ShareError::invalid(format!("schedules[{index}].text"))))?;
+    }
+    let name = free_name(app, bot.name.trim())?;
+    validate_name(&name).map_err(|_| share_error(ShareError::invalid("name")))?;
+    let capabilities = bot
+        .capabilities
+        .iter()
+        .map(|c| Capability::parse(c).ok_or_else(|| share_error(ShareError::invalid("capabilities"))))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut known: Vec<String> = Vec::new();
+    let mut unknown: Vec<String> = Vec::new();
+    for service in &bot.services {
+        let list = if shared::is_catalog_service(service) {
+            &mut known
+        } else {
+            &mut unknown
+        };
+        if !list.contains(service) {
+            list.push(service.clone());
+        }
+    }
+
+    // The defaults of `agents.create` (the serde defaults of NewAgent), then the payload's fields.
+    let mut new_agent: NewAgent = serde_json::from_value(json!({ "name": name, "runtime": RuntimeKind::Claude }))
+        .map_err(|e| RpcError::new(SERVER_ERROR, format!("agent defaults: {e}")))?;
+    new_agent.role = bot.role.clone();
+    new_agent.system_prompt = Some(bot.system_prompt.clone());
+    new_agent.capabilities = Some(capabilities);
+    let id = create_agent(app, new_agent, None)?;
+
+    let store = &app.sup.hub().store;
+    let mut errors: Vec<Value> = Vec::new();
+    // The mark comes first, so the reply's agent carries it. A failure is listed; the agent stays.
+    if let Err(e) = store.agent_set_template(&id, &format!("shared:{share_id}")) {
+        errors.push(
+            json!({ "step": "agent", "message": format!("agent {id} was created but its share is not saved: {e:#}") }),
+        );
+    }
+    let agent = match store.agent_view(&id) {
+        Ok(Some(agent)) => Some(agent),
+        Ok(None) => {
+            errors.push(json!({ "step": "agent", "message": format!("agent {id} was created but is not found") }));
+            None
+        }
+        Err(e) => {
+            errors.push(
+                json!({ "step": "agent", "message": format!("agent {id} was created but cannot be read: {e:#}") }),
+            );
+            None
+        }
+    };
+
+    let mut schedule_ids = Vec::new();
+    for (index, s) in bot.schedules.into_iter().enumerate() {
+        let new = NewSchedule {
+            agent_id: id.clone(),
+            cron: s.text,
+            tz: tz.clone(),
+            prompt: s.prompt,
+            enabled: true,
+            title: None,
+        };
+        match schedules::create(app, new) {
+            Ok(view) => schedule_ids.push(view["id"].clone()),
+            Err(e) => errors.push(json!({ "step": "schedule", "index": index, "message": e.message })),
+        }
+    }
+
+    let mut missing_services = Vec::new();
+    match store.integration_list() {
+        Ok(connected) => {
+            for service in &known {
+                let url = catalog_url(service);
+                let present = connected
+                    .iter()
+                    .any(|i| i.enabled && (i.name == *service || (url.is_some() && i.url == url)));
+                if !present {
+                    missing_services.push(service.clone());
+                }
+            }
+        }
+        Err(e) => errors.push(json!({ "step": "integrations", "message": format!("{e:#}") })),
+    }
+
+    ok(json!({
+        "agent": agent,
+        "schedule_ids": schedule_ids,
+        "unknown_services": unknown,
+        "missing_services": missing_services,
+        "errors": errors,
+    }))
+}
+
+/// What `agents.export` takes.
+#[derive(Deserialize)]
+struct ExportAgent {
+    agent_id: String,
+}
+
+/// What `agents.create_from_shared` takes. `language` is checked when given; the payload's text is in its own language,
+/// so nothing else reads it.
+#[derive(Deserialize)]
+struct CreateFromShared {
+    share_id: String,
+    version: u32,
+    payload: Value,
+    #[serde(default)]
+    language: Option<String>,
+}
+
 /// Every index must name one of the template's schedules, and none may be listed twice.
 fn check_schedule_indexes(t: &AgentTemplate, indexes: &[usize]) -> Result<(), RpcError> {
     let mut seen = HashSet::new();
@@ -491,7 +678,11 @@ mod share_tests {
         store
             .integration_create(NewIntegration {
                 name: name.into(),
-                kind: if url.is_some() { IntegrationKind::Http } else { IntegrationKind::Stdio },
+                kind: if url.is_some() {
+                    IntegrationKind::Http
+                } else {
+                    IntegrationKind::Stdio
+                },
                 command: url.is_none().then(|| "true".to_string()),
                 args: vec![],
                 url: url.map(str::to_string),
@@ -513,7 +704,11 @@ mod share_tests {
         let id = agent(&store, "Scout", cwd.path(), None);
         connect(&store, "notion", None, true);
         store
-            .secret_set("SHARE_TEST_TOKEN", "tok-live-SECRETVALUE-0123456789", std::slice::from_ref(&id))
+            .secret_set(
+                "SHARE_TEST_TOKEN",
+                "tok-live-SECRETVALUE-0123456789",
+                std::slice::from_ref(&id),
+            )
             .unwrap();
         store
             .schedule_create(
@@ -539,7 +734,11 @@ mod share_tests {
         assert_eq!(p.name, "Scout");
         assert_eq!(p.role, "Scout role");
         assert_eq!(p.system_prompt, "Find sources.");
-        assert_eq!(p.capabilities, vec!["terminal", "files", "browser", "team", "screen"], "null means all");
+        assert_eq!(
+            p.capabilities,
+            vec!["terminal", "files", "browser", "team", "screen"],
+            "null means all"
+        );
         assert_eq!(p.services, vec!["notion".to_string()]);
         assert_eq!(p.schedules.len(), 1);
         assert_eq!(p.schedules[0].text, "0 9 * * *");
@@ -560,7 +759,10 @@ mod share_tests {
         for (id, expected) in [(every, vec!["notion".to_string()]), (only_github, vec![])] {
             let reply = call(&app, "agents.export", json!({"agent_id": id})).await.unwrap();
             let p: BotPayload = serde_json::from_value(reply["payload"].clone()).unwrap();
-            assert_eq!(p.services, expected, "custom and disabled integrations are not exported");
+            assert_eq!(
+                p.services, expected,
+                "custom and disabled integrations are not exported"
+            );
         }
     }
 
@@ -568,7 +770,9 @@ mod share_tests {
     async fn agents_export_refuses_an_unknown_agent_and_a_bot_over_the_limits() {
         let root = TempDir::new().unwrap();
         let (app, store) = app(root.path());
-        let err = call(&app, "agents.export", json!({"agent_id": "nobody"})).await.unwrap_err();
+        let err = call(&app, "agents.export", json!({"agent_id": "nobody"}))
+            .await
+            .unwrap_err();
         assert_eq!(err.code, INVALID_PARAMS);
 
         let cwd = TempDir::new().unwrap();
@@ -622,9 +826,13 @@ mod share_tests {
         connect(&store, "notion", None, true);
         let mut p = bot();
         p["services"] = json!(["notion", "not-in-catalog", "also-missing"]);
-        let reply = call(&app, "agents.create_from_shared", json!({"share_id": SHARE, "version": 1, "payload": p}))
-            .await
-            .unwrap();
+        let reply = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": p}),
+        )
+        .await
+        .unwrap();
         assert_eq!(reply["unknown_services"], json!(["not-in-catalog", "also-missing"]));
         assert_eq!(reply["missing_services"], json!([]), "notion is connected");
         assert_eq!(store.agent_list().unwrap().len(), 1, "the bot is made");
@@ -660,9 +868,13 @@ mod share_tests {
         let (app, store) = app(root.path());
         let cwd = TempDir::new().unwrap();
         agent(&store, "Scout", cwd.path(), None);
-        let reply = call(&app, "agents.create_from_shared", json!({"share_id": SHARE, "version": 1, "payload": bot()}))
-            .await
-            .unwrap();
+        let reply = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot()}),
+        )
+        .await
+        .unwrap();
         assert_eq!(reply["agent"]["name"], "Scout 2");
     }
 

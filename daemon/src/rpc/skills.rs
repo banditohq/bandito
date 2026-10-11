@@ -3,6 +3,7 @@
 
 use super::{App, COMMANDS_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND, RpcError, RpcResult, ok, params};
 use crate::commands::InstallError;
+use crate::shared::{self, ShareError};
 use crate::skills;
 use crate::store::Agent;
 use serde::Deserialize;
@@ -38,7 +39,45 @@ pub(super) async fn dispatch_in(app: &App, home: Option<PathBuf>, method: &str, 
             let path = run(move || skills::remove(&base, &id)).await?.map_err(install_error)?;
             ok(json!({ "path": path }))
         }
+        "skills.export" => {
+            let p: ExportSkill = params(p)?;
+            let base = base_dir(app, home, Scope::User, None)?;
+            let payload = run(move || shared::skill_from_folder(&base, &p.name, p.license.as_deref()))
+                .await?
+                .map_err(share_error)?;
+            ok(json!({ "payload": payload }))
+        }
+        "skills.install_shared" => {
+            let p: InstallShared = params(p)?;
+            shared::check_share_id(&p.share_id).map_err(share_error)?;
+            shared::check_version(p.version).map_err(share_error)?;
+            let payload = shared::parse_skill(p.payload).map_err(share_error)?;
+            let scope = if p.agent_id.is_some() {
+                Scope::Project
+            } else {
+                Scope::User
+            };
+            let base = base_dir(app, home, scope, p.agent_id)?;
+            let name = payload.name.clone();
+            let (path, updated) = run(move || shared::install_shared(&base, &name, &p.share_id, p.version, &payload))
+                .await?
+                .map_err(share_error)?;
+            ok(json!({ "path": path, "updated": updated }))
+        }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
+    }
+}
+
+/// What a share call answers. A payload or parameter that is wrong is `INVALID_PARAMS` with `invalid: <field>`; a folder
+/// or file that cannot be used is `COMMANDS_ERROR` with `data.reason` (see docs/ARCHITECTURE.md#sharing).
+pub(super) fn share_error(e: ShareError) -> RpcError {
+    match e {
+        ShareError::Invalid(field) => {
+            RpcError::with_data(INVALID_PARAMS, format!("invalid: {field}"), json!({ "field": field }))
+        }
+        ShareError::Refused { reason, message } => {
+            RpcError::with_data(COMMANDS_ERROR, message, json!({ "reason": reason }))
+        }
     }
 }
 
@@ -155,12 +194,32 @@ struct SkillParams {
     agent_id: Option<String>,
 }
 
+/// What `skills.export` takes: the folder's name under the daemon user's `.claude/skills`, and the owner's license.
+#[derive(Deserialize)]
+struct ExportSkill {
+    name: String,
+    #[serde(default)]
+    license: Option<String>,
+}
+
+/// What `skills.install_shared` takes. The folder is the agent's when `agent_id` is given, else the daemon user's.
+#[derive(Deserialize)]
+struct InstallShared {
+    share_id: String,
+    version: u32,
+    payload: Value,
+    #[serde(default)]
+    agent_id: Option<String>,
+}
+
 /// `skills.export` and `skills.install_shared` (see docs/ARCHITECTURE.md#sharing). The payload and folder rules are
 /// tested in `crate::shared`; these tests cover the methods, their replies and their refusals.
 #[cfg(test)]
 mod share_tests {
     use crate::hub::Hub;
-    use crate::rpc::{App, COMMANDS_ERROR, INVALID_PARAMS, Peer, RpcError, RpcResult, UNAUTHORIZED, dispatch, features};
+    use crate::rpc::{
+        App, COMMANDS_ERROR, INVALID_PARAMS, Peer, RpcError, RpcResult, UNAUTHORIZED, dispatch, features,
+    };
     use crate::runtime::RuntimeKind;
     use crate::shared::{self, SkillPayload};
     use crate::store::{ApprovalMode, MemoryMode, NewAgent, Store};
@@ -277,19 +336,32 @@ mod share_tests {
         assert_eq!(p.license, "MIT");
         assert!(p.files.contains_key("docs/notes.md"));
         assert_eq!(p.executable, vec!["scripts/run.sh".to_string()]);
-        assert!(shared::parse_skill(reply["payload"].clone()).is_ok(), "the export is a valid payload");
+        assert!(
+            shared::parse_skill(reply["payload"].clone()).is_ok(),
+            "the export is a valid payload"
+        );
     }
 
     #[tokio::test]
     async fn skills_export_refuses_a_catalog_install_and_needs_a_license() {
         let r = rig();
         let home = TempDir::new().unwrap();
-        call(&r, home.path(), "skills.install", json!({"skill_id": "commit", "scope": "user"}))
-            .await
-            .unwrap();
-        let err = call(&r, home.path(), "skills.export", json!({"name": "commit", "license": "MIT"}))
-            .await
-            .unwrap_err();
+        call(
+            &r,
+            home.path(),
+            "skills.install",
+            json!({"skill_id": "commit", "scope": "user"}),
+        )
+        .await
+        .unwrap();
+        let err = call(
+            &r,
+            home.path(),
+            "skills.export",
+            json!({"name": "commit", "license": "MIT"}),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(err.code, COMMANDS_ERROR);
         assert_eq!(reason(&err), "catalog_skill");
 
@@ -327,13 +399,23 @@ mod share_tests {
     async fn skills_export_refuses_a_bad_name_and_a_missing_folder() {
         let r = rig();
         let home = TempDir::new().unwrap();
-        let err = call(&r, home.path(), "skills.export", json!({"name": "../x", "license": "MIT"}))
-            .await
-            .unwrap_err();
+        let err = call(
+            &r,
+            home.path(),
+            "skills.export",
+            json!({"name": "../x", "license": "MIT"}),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(err.code, INVALID_PARAMS);
-        let err = call(&r, home.path(), "skills.export", json!({"name": "nothing-here", "license": "MIT"}))
-            .await
-            .unwrap_err();
+        let err = call(
+            &r,
+            home.path(),
+            "skills.export",
+            json!({"name": "nothing-here", "license": "MIT"}),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(reason(&err), "no_skill");
     }
 
@@ -383,7 +465,10 @@ mod share_tests {
             reply["path"],
             cwd.path().join(".claude/skills/release-notes").display().to_string()
         );
-        assert!(!home.path().join(".claude/skills/release-notes").exists(), "the user's folder is not touched");
+        assert!(
+            !home.path().join(".claude/skills/release-notes").exists(),
+            "the user's folder is not touched"
+        );
     }
 
     #[tokio::test]
@@ -450,10 +535,15 @@ mod share_tests {
             json!({"share_id": SHARE, "version": 1, "payload": payload(), "agent_id": "nobody"}),
         ];
         for p in cases {
-            let err = call(&r, home.path(), "skills.install_shared", p.clone()).await.unwrap_err();
+            let err = call(&r, home.path(), "skills.install_shared", p.clone())
+                .await
+                .unwrap_err();
             assert_eq!(err.code, INVALID_PARAMS, "{p}");
         }
-        assert!(!home.path().join(".claude").exists(), "nothing is written for a refused call");
+        assert!(
+            !home.path().join(".claude").exists(),
+            "nothing is written for a refused call"
+        );
     }
 
     #[tokio::test]

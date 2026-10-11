@@ -3,12 +3,17 @@
 //! that the platform accepts is accepted here, and an export never makes a payload the import would refuse.
 //! The RPC layer is `rpc::templates` (bots) and `rpc::skills` (skills).
 
-use crate::commands::InstallError;
-use crate::store::Agent;
+use crate::commands::{self, InstallError};
+use crate::skills::{self, MARKER, Slot};
+use crate::store::{ALL_CAPABILITIES, Agent, Capability};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::collections::BTreeMap;
+use serde_json::{Value, json};
+use std::collections::{BTreeMap, HashSet};
+use std::fs;
 use std::path::{Path, PathBuf};
+
+/// The integrations catalog: the ids of the services a shared bot may name, and their urls.
+const INTEGRATIONS_JSON: &str = include_str!("integrations_catalog.json");
 
 /// The only payload schema this daemon reads and writes.
 pub const SCHEMA: u32 = 1;
@@ -105,56 +110,180 @@ impl From<InstallError> for ShareError {
 
 /// Parses a bot payload and checks it against the limits. An unknown key is `invalid: <key>`.
 pub fn parse_bot(value: Value) -> Result<BotPayload, ShareError> {
-    unimplemented!("step B: parse_bot")
+    let p: BotPayload = serde_json::from_value(value).map_err(serde_field)?;
+    check_bot(&p)?;
+    Ok(p)
 }
 
 /// Parses a skill payload and checks it against the limits.
 pub fn parse_skill(value: Value) -> Result<SkillPayload, ShareError> {
-    unimplemented!("step B: parse_skill")
+    let p: SkillPayload = serde_json::from_value(value).map_err(serde_field)?;
+    check_skill(&p)?;
+    Ok(p)
 }
 
 /// The limits of a bot payload, field by field. The first failing field is named.
 pub fn check_bot(p: &BotPayload) -> Result<(), ShareError> {
-    unimplemented!("step B: check_bot")
+    check_schema(p.schema)?;
+    let name = p.name.trim();
+    if name.is_empty() || name.chars().count() > BOT_NAME_MAX {
+        return Err(ShareError::invalid("name"));
+    }
+    if p.role.chars().count() > BOT_ROLE_MAX {
+        return Err(ShareError::invalid("role"));
+    }
+    if p.system_prompt.chars().count() > BOT_PROMPT_MAX {
+        return Err(ShareError::invalid("system_prompt"));
+    }
+    let mut seen = HashSet::new();
+    for c in &p.capabilities {
+        if Capability::parse(c).is_none() || !seen.insert(c.as_str()) {
+            return Err(ShareError::invalid("capabilities"));
+        }
+    }
+    if p.services.len() > BOT_SERVICES_MAX || p.services.iter().any(|s| !service_id(s)) {
+        return Err(ShareError::invalid("services"));
+    }
+    if p.schedules.len() > BOT_SCHEDULES_MAX {
+        return Err(ShareError::invalid("schedules"));
+    }
+    for (i, s) in p.schedules.iter().enumerate() {
+        if s.text.trim().is_empty() || s.text.chars().count() > BOT_SCHEDULE_TEXT_MAX {
+            return Err(ShareError::invalid(format!("schedules[{i}].text")));
+        }
+        if s.prompt.trim().is_empty() || s.prompt.chars().count() > BOT_SCHEDULE_PROMPT_MAX {
+            return Err(ShareError::invalid(format!("schedules[{i}].prompt")));
+        }
+    }
+    if p.starter.as_ref().is_some_and(|s| s.chars().count() > BOT_STARTER_MAX) {
+        return Err(ShareError::invalid("starter"));
+    }
+    Ok(())
 }
 
 /// The limits of a skill payload: schema, name, description, license, files (count, bytes, paths, `SKILL.md`) and
 /// the executables (under `scripts/`, listed files only).
 pub fn check_skill(p: &SkillPayload) -> Result<(), ShareError> {
-    unimplemented!("step B: check_skill")
+    check_schema(p.schema)?;
+    if !skill_name(&p.name) {
+        return Err(ShareError::invalid("name"));
+    }
+    if p.description.trim().is_empty() || p.description.chars().count() > SKILL_DESCRIPTION_MAX {
+        return Err(ShareError::invalid("description"));
+    }
+    if !LICENSES.contains(&p.license.as_str()) {
+        return Err(ShareError::invalid("license"));
+    }
+    if p.files.len() > SKILL_FILES_MAX {
+        return Err(ShareError::invalid("files"));
+    }
+    let mut total = 0usize;
+    for (path, text) in &p.files {
+        if !valid_path(path) {
+            return Err(ShareError::invalid("files"));
+        }
+        total += text.len();
+    }
+    if total > SKILL_BYTES_MAX {
+        return Err(ShareError::invalid("files"));
+    }
+    // A file cannot also be the folder of another file.
+    for a in p.files.keys() {
+        for b in p.files.keys() {
+            if b.len() > a.len() && b.starts_with(a.as_str()) && b.as_bytes()[a.len()] == b'/' {
+                return Err(ShareError::invalid("files"));
+            }
+        }
+    }
+    if !p.files.contains_key("SKILL.md") {
+        return Err(ShareError::invalid("SKILL.md"));
+    }
+    let mut seen = HashSet::new();
+    for e in &p.executable {
+        let under_scripts = e.starts_with("scripts/");
+        if !under_scripts || !valid_path(e) || !p.files.contains_key(e) || !seen.insert(e.as_str()) {
+            return Err(ShareError::invalid("executable"));
+        }
+    }
+    Ok(())
 }
 
 /// Whether `path` is a safe relative path of a skill: each `/`-separated component is non-empty, does not start with
 /// a dot (so no `.`, `..`, hidden names) and holds only letters, digits, `.`, `_` and `-`. Checked per component.
 pub fn valid_path(path: &str) -> bool {
-    unimplemented!("step B: valid_path")
+    !path.is_empty()
+        && path.split('/').all(|seg| {
+            !seg.is_empty()
+                && !seg.starts_with('.')
+                && !seg.contains("..")
+                && seg
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        })
 }
 
 /// A share id: 22 characters, base62 (`[0-9A-Za-z]`). Anything else is `invalid: share_id`.
 pub fn check_share_id(id: &str) -> Result<(), ShareError> {
-    unimplemented!("step B: check_share_id")
+    if id.len() == 22 && id.bytes().all(|c| c.is_ascii_alphanumeric()) {
+        Ok(())
+    } else {
+        Err(ShareError::invalid("share_id"))
+    }
 }
 
 /// A share version: an integer from 1. Anything else is `invalid: version`.
 pub fn check_version(version: u32) -> Result<(), ShareError> {
-    unimplemented!("step B: check_version")
+    if version >= 1 {
+        Ok(())
+    } else {
+        Err(ShareError::invalid("version"))
+    }
 }
 
 /// Whether `id` is a service of the integrations catalog (`integrations_catalog.json`).
 pub fn is_catalog_service(id: &str) -> bool {
-    unimplemented!("step B: is_catalog_service")
+    catalog_entries().iter().any(|e| e["id"].as_str() == Some(id))
 }
 
 /// The catalog id of an integration with `name` and `url`: `name` when it is a catalog id, else the entry whose url is
 /// `url`. None for a custom integration.
 pub fn catalog_service(name: &str, url: Option<&str>) -> Option<String> {
-    unimplemented!("step B: catalog_service")
+    let entries = catalog_entries();
+    if entries.iter().any(|e| e["id"].as_str() == Some(name)) {
+        return Some(name.to_string());
+    }
+    let url = url?;
+    entries
+        .iter()
+        .find(|e| e["url"].as_str() == Some(url))
+        .and_then(|e| e["id"].as_str())
+        .map(str::to_string)
 }
 
 /// The bot payload of `agent`, with the services and schedules the caller computed (see `rpc::templates`). Fails with
 /// `invalid: <field>` when the agent is over a limit, so an export never makes a payload the import would refuse.
-pub fn bot_from_agent(agent: &Agent, services: Vec<String>, schedules: Vec<BotSchedule>) -> Result<BotPayload, ShareError> {
-    unimplemented!("step B: bot_from_agent")
+pub fn bot_from_agent(
+    agent: &Agent,
+    services: Vec<String>,
+    schedules: Vec<BotSchedule>,
+) -> Result<BotPayload, ShareError> {
+    let capabilities = match &agent.capabilities {
+        Some(list) => list.iter().map(|c| c.as_str().to_string()).collect(),
+        // Null means every capability (see docs/ARCHITECTURE.md#capabilities).
+        None => ALL_CAPABILITIES.iter().map(|c| c.as_str().to_string()).collect(),
+    };
+    let p = BotPayload {
+        schema: SCHEMA,
+        name: agent.name.clone(),
+        role: agent.role.clone(),
+        system_prompt: agent.system_prompt.clone().unwrap_or_default(),
+        capabilities,
+        services,
+        schedules,
+        starter: None,
+    };
+    check_bot(&p)?;
+    Ok(p)
 }
 
 /// The skill payload of the folder `base/.claude/skills/<name>`, for `skills.export`. `license` is the owner's choice
@@ -164,7 +293,77 @@ pub fn bot_from_agent(agent: &Agent, services: Vec<String>, schedules: Vec<BotSc
 /// The marker `.bandito-skill` at the top is never exported. Executables are the files under `scripts/` with an execute
 /// bit. The description is the `description:` line of the SKILL.md front matter.
 pub fn skill_from_folder(base: &Path, name: &str, license: Option<&str>) -> Result<SkillPayload, ShareError> {
-    unimplemented!("step B: skill_from_folder")
+    if !skill_name(name) {
+        return Err(ShareError::invalid("name"));
+    }
+    let license = license.ok_or_else(|| {
+        ShareError::refused(
+            "license_required",
+            "the skill needs a license: pass one of the platform's licenses",
+        )
+    })?;
+    if !LICENSES.contains(&license) {
+        return Err(ShareError::invalid("license"));
+    }
+    let skills_dir = base.join(".claude").join("skills");
+    for link in [base.join(".claude"), skills_dir.clone()] {
+        if fs::symlink_metadata(&link).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(ShareError::refused(
+                "unsafe_path",
+                format!("{} is a link; skills are not shared through it", link.display()),
+            ));
+        }
+    }
+    let dir = skills_dir.join(name);
+    let meta = fs::symlink_metadata(&dir)
+        .map_err(|_| ShareError::refused("no_skill", format!("no skill {name} in {}", skills_dir.display())))?;
+    if meta.file_type().is_symlink() {
+        return Err(ShareError::refused(
+            "unsafe_path",
+            format!("{} is a link; it is not shared", dir.display()),
+        ));
+    }
+    if !meta.is_dir() {
+        return Err(ShareError::refused(
+            "no_skill",
+            format!("{} is not a skill folder", dir.display()),
+        ));
+    }
+    if catalog_marker(&dir, name) {
+        return Err(ShareError::refused(
+            "catalog_skill",
+            format!("{name} is a skill of the catalog: only the owner's own skills are shared"),
+        ));
+    }
+
+    let mut found = Vec::new();
+    walk(&dir, "", &mut found)?;
+    let mut files = BTreeMap::new();
+    let mut executable = Vec::new();
+    for (rel, path, exec) in found {
+        let bytes = fs::read(&path).map_err(|e| io_refused(&path, &e))?;
+        if bytes.len() > SKILL_BYTES_MAX {
+            return Err(ShareError::refused("too_large", format!("{rel} is over 150 KiB")));
+        }
+        let text = String::from_utf8(bytes)
+            .map_err(|_| ShareError::refused("not_utf8", format!("{rel} is not UTF-8 text")))?;
+        if exec && rel.starts_with("scripts/") {
+            executable.push(rel.clone());
+        }
+        files.insert(rel, text);
+    }
+    let skill_md = files.get("SKILL.md").ok_or_else(|| ShareError::invalid("SKILL.md"))?;
+    let description = description_of(skill_md).ok_or_else(|| ShareError::invalid("description"))?;
+    let p = SkillPayload {
+        schema: SCHEMA,
+        name: name.to_string(),
+        description,
+        license: license.to_string(),
+        files,
+        executable,
+    };
+    check_skill(&p)?;
+    Ok(p)
 }
 
 /// Writes a shared skill into `base/.claude/skills/<name>/` as `skills::install` does: the same folder checks, the same
@@ -179,7 +378,221 @@ pub fn install_shared(
     version: u32,
     payload: &SkillPayload,
 ) -> Result<(PathBuf, bool), ShareError> {
-    unimplemented!("step B: install_shared")
+    if name != payload.name {
+        return Err(ShareError::invalid("name"));
+    }
+    check_share_id(share_id)?;
+    check_version(version)?;
+    check_skill(payload)?;
+    if skills::is_catalog_id(name) {
+        return Err(ShareError::refused(
+            "catalog_skill",
+            format!("{name} is the name of a skill in the catalog; a shared skill cannot take it"),
+        ));
+    }
+    let source = format!("shared:{share_id}");
+    let target = commands::checked_skill_folder(base, name)?;
+    let updated = match skills::slot(base, name) {
+        Slot::Absent => false,
+        Slot::Foreign => {
+            return Err(ShareError::refused(
+                "exists_not_ours",
+                format!(
+                    "{} exists and was not installed by Bandito; it is not replaced",
+                    target.display()
+                ),
+            ));
+        }
+        // Only the same share replaces its own copy. A catalog copy or another share's copy is kept.
+        Slot::Ours => {
+            if marker_source(&target).as_deref() != Some(source.as_str()) {
+                return Err(ShareError::refused(
+                    "exists_not_ours",
+                    format!(
+                        "{} was installed from another source; it is not replaced",
+                        target.display()
+                    ),
+                ));
+            }
+            true
+        }
+    };
+    let mut files: Vec<(PathBuf, Vec<u8>, u32)> = payload
+        .files
+        .iter()
+        .map(|(rel, text)| {
+            let mode = if payload.executable.contains(rel) { 0o755 } else { 0o644 };
+            (PathBuf::from(rel), text.as_bytes().to_vec(), mode)
+        })
+        .collect();
+    let marker = json!({ "id": name, "source": source, "version": version }).to_string();
+    files.push((PathBuf::from(MARKER), marker.into_bytes(), 0o644));
+    skills::remove_leftovers(base, name)?;
+    let path = commands::write_skill(base, name, &files)?;
+    Ok((path, updated))
+}
+
+/// The integrations catalog as JSON values. The file is checked by the tests, so the parse cannot fail at run time.
+fn catalog_entries() -> Vec<Value> {
+    serde_json::from_str(INTEGRATIONS_JSON).expect("integrations_catalog.json is valid JSON: the tests check it")
+}
+
+/// The key a serde error names: an unknown key, or a required one that is missing. Any other error is `payload`.
+fn serde_field(e: serde_json::Error) -> ShareError {
+    let text = e.to_string();
+    for prefix in ["unknown field `", "missing field `"] {
+        let named = text.strip_prefix(prefix).and_then(|rest| rest.split_once('`'));
+        if let Some((field, _)) = named {
+            return ShareError::invalid(field);
+        }
+    }
+    ShareError::invalid("payload")
+}
+
+fn check_schema(schema: u32) -> Result<(), ShareError> {
+    if schema == SCHEMA {
+        Ok(())
+    } else {
+        Err(ShareError::invalid("schema"))
+    }
+}
+
+/// A skill name: lowercase letters, digits and `-`, starting with a letter or a digit, 1 to 64 characters.
+fn skill_name(name: &str) -> bool {
+    let b = name.as_bytes();
+    !b.is_empty()
+        && b.len() <= 64
+        && (b[0].is_ascii_lowercase() || b[0].is_ascii_digit())
+        && b.iter()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+}
+
+/// A service id as the catalog writes it: lowercase letters, digits, `-` and `_`, 1 to 64 characters.
+fn service_id(id: &str) -> bool {
+    let b = id.as_bytes();
+    !b.is_empty()
+        && b.len() <= 64
+        && (b[0].is_ascii_lowercase() || b[0].is_ascii_digit())
+        && b.iter()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'-' | b'_'))
+}
+
+/// Whether `folder` holds a marker of a catalog install of `name`: `{"id", "commit"}`, with no `source`. A shared
+/// install has a `source` and no `commit`.
+fn catalog_marker(folder: &Path, name: &str) -> bool {
+    let path = folder.join(MARKER);
+    if !fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+        return false;
+    }
+    let Ok(text) = fs::read_to_string(&path) else {
+        return false;
+    };
+    let Ok(v) = serde_json::from_str::<Value>(&text) else {
+        return false;
+    };
+    v.get("id").and_then(Value::as_str) == Some(name)
+        && v.get("commit").is_some_and(Value::is_string)
+        && v.get("source").is_none()
+}
+
+/// The `source` of a shared install's marker, or None.
+fn marker_source(folder: &Path) -> Option<String> {
+    let text = fs::read_to_string(folder.join(MARKER)).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+    v.get("source")?.as_str().map(str::to_string)
+}
+
+/// Every file under `dir`, relative to the skill folder: `(path, absolute path, executable)`. The marker at the top is
+/// skipped. A link, or a file that is not a regular file, is refused (`unsafe_path`); a path the payload does not allow
+/// is refused (`bad_path`). Both name the path.
+fn walk(dir: &Path, rel: &str, found: &mut Vec<(String, PathBuf, bool)>) -> Result<(), ShareError> {
+    let mut entries: Vec<fs::DirEntry> = fs::read_dir(dir)
+        .map_err(|e| io_refused(dir, &e))?
+        .collect::<Result<_, _>>()
+        .map_err(|e| io_refused(dir, &e))?;
+    entries.sort_by_key(|e| e.file_name());
+    for entry in entries {
+        let os_name = entry.file_name();
+        let Some(file_name) = os_name.to_str() else {
+            return Err(ShareError::refused(
+                "bad_path",
+                format!("{} has a name that is not UTF-8", entry.path().display()),
+            ));
+        };
+        if rel.is_empty() && file_name == MARKER {
+            continue;
+        }
+        let child = if rel.is_empty() {
+            file_name.to_string()
+        } else {
+            format!("{rel}/{file_name}")
+        };
+        let path = entry.path();
+        let meta = fs::symlink_metadata(&path).map_err(|e| io_refused(&path, &e))?;
+        if meta.file_type().is_symlink() {
+            return Err(ShareError::refused(
+                "unsafe_path",
+                format!("{child} is a link; links are not shared"),
+            ));
+        }
+        if meta.is_dir() {
+            walk(&path, &child, found)?;
+            continue;
+        }
+        if !meta.is_file() {
+            return Err(ShareError::refused(
+                "unsafe_path",
+                format!("{child} is not a regular file"),
+            ));
+        }
+        if !valid_path(&child) {
+            return Err(ShareError::refused(
+                "bad_path",
+                format!("{child} is a name a shared skill cannot have"),
+            ));
+        }
+        found.push((child, path, is_executable(&meta)));
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn is_executable(meta: &fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    meta.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn is_executable(_meta: &fs::Metadata) -> bool {
+    false
+}
+
+fn io_refused(path: &Path, e: &std::io::Error) -> ShareError {
+    ShareError::refused("io", format!("{}: {e}", path.display()))
+}
+
+/// The `description:` line of a SKILL.md front matter, without quotes. A folded or literal block (`>`, `|`) is not
+/// read, and an empty value is none: the owner is asked for one line.
+fn description_of(skill_md: &str) -> Option<String> {
+    let mut lines = skill_md.lines();
+    if lines.next()?.trim_end() != "---" {
+        return None;
+    }
+    for line in lines {
+        if line.trim_end() == "---" {
+            break;
+        }
+        if let Some(value) = line.strip_prefix("description:") {
+            let value = value.trim();
+            let quoted = value.len() >= 2
+                && ((value.starts_with('"') && value.ends_with('"'))
+                    || (value.starts_with('\'') && value.ends_with('\'')));
+            let text = if quoted { &value[1..value.len() - 1] } else { value };
+            let block = matches!(value, ">" | "|" | ">-" | "|-" | ">+" | "|+");
+            return (!block && !text.is_empty()).then(|| text.to_string());
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -255,7 +668,11 @@ mod tests {
         let p = parse_bot(bot()).unwrap();
         assert_eq!(p.name, "Scout");
         assert_eq!(p.starter, None);
-        assert_eq!(serde_json::to_value(&p).unwrap(), bot(), "no starter key when there is none");
+        assert_eq!(
+            serde_json::to_value(&p).unwrap(),
+            bot(),
+            "no starter key when there is none"
+        );
     }
 
     #[test]
@@ -266,7 +683,11 @@ mod tests {
     #[test]
     fn schema_must_be_the_number_one() {
         assert_eq!(invalid(with(bot(), "schema", json!(2))), "schema");
-        assert_eq!(invalid(with(bot(), "schema", json!("1"))), "payload", "a string is not the number one");
+        assert_eq!(
+            invalid(with(bot(), "schema", json!("1"))),
+            "payload",
+            "a string is not the number one"
+        );
         let mut no_schema = bot();
         no_schema.as_object_mut().unwrap().remove("schema");
         assert!(parse_bot(no_schema).is_err(), "schema is required");
@@ -281,14 +702,22 @@ mod tests {
     fn bot_name_is_one_to_forty_characters_and_not_blank() {
         assert_eq!(invalid(with(bot(), "name", json!(""))), "name");
         assert_eq!(invalid(with(bot(), "name", json!("   "))), "name");
-        assert!(parse_bot(with(bot(), "name", json!(repeat_chars('а', BOT_NAME_MAX)))).is_ok(), "40 Cyrillic letters");
+        assert!(
+            parse_bot(with(bot(), "name", json!(repeat_chars('а', BOT_NAME_MAX)))).is_ok(),
+            "40 Cyrillic letters"
+        );
         assert_eq!(invalid(with(bot(), "name", json!(repeat_chars('a', 41)))), "name");
     }
 
     #[test]
     fn bot_limits_pass_at_the_edge_and_fail_one_past() {
         let cases: Vec<(&str, Value, Value, &str)> = vec![
-            ("role", json!(repeat_chars('r', BOT_ROLE_MAX)), json!(repeat_chars('r', BOT_ROLE_MAX + 1)), "role"),
+            (
+                "role",
+                json!(repeat_chars('r', BOT_ROLE_MAX)),
+                json!(repeat_chars('r', BOT_ROLE_MAX + 1)),
+                "role",
+            ),
             (
                 "system_prompt",
                 json!(repeat_chars('p', BOT_PROMPT_MAX)),
@@ -323,7 +752,13 @@ mod tests {
     #[test]
     fn schedule_text_and_prompt_limits_pass_at_the_edge() {
         let at = |text: String, prompt: String| with(bot(), "schedules", json!([{"text": text, "prompt": prompt}]));
-        assert!(parse_bot(at(repeat_chars('0', BOT_SCHEDULE_TEXT_MAX), repeat_chars('p', BOT_SCHEDULE_PROMPT_MAX))).is_ok());
+        assert!(
+            parse_bot(at(
+                repeat_chars('0', BOT_SCHEDULE_TEXT_MAX),
+                repeat_chars('p', BOT_SCHEDULE_PROMPT_MAX)
+            ))
+            .is_ok()
+        );
         assert_eq!(
             invalid(at(repeat_chars('0', BOT_SCHEDULE_TEXT_MAX + 1), "p".into())),
             "schedules[0].text"
@@ -336,15 +771,28 @@ mod tests {
 
     #[test]
     fn a_schedule_takes_only_text_and_prompt() {
-        let v = with(bot(), "schedules", json!([{"text": "0 9 * * *", "prompt": "p", "enabled": false}]));
+        let v = with(
+            bot(),
+            "schedules",
+            json!([{"text": "0 9 * * *", "prompt": "p", "enabled": false}]),
+        );
         assert_eq!(invalid(v), "enabled");
     }
 
     #[test]
     fn capabilities_are_the_daemon_names_without_repeats() {
-        assert_eq!(invalid(with(bot(), "capabilities", json!(["teleport"]))), "capabilities");
-        assert_eq!(invalid(with(bot(), "capabilities", json!(["files", "files"]))), "capabilities");
-        assert!(parse_bot(with(bot(), "capabilities", json!([]))).is_ok(), "an empty list is a real choice");
+        assert_eq!(
+            invalid(with(bot(), "capabilities", json!(["teleport"]))),
+            "capabilities"
+        );
+        assert_eq!(
+            invalid(with(bot(), "capabilities", json!(["files", "files"]))),
+            "capabilities"
+        );
+        assert!(
+            parse_bot(with(bot(), "capabilities", json!([]))).is_ok(),
+            "an empty list is a real choice"
+        );
     }
 
     #[test]
@@ -394,9 +842,20 @@ mod tests {
     #[test]
     fn description_is_required_and_at_most_1024_characters() {
         assert_eq!(skill_invalid(with(skill(), "description", json!(""))), "description");
-        assert!(parse_skill(with(skill(), "description", json!(repeat_chars('d', SKILL_DESCRIPTION_MAX)))).is_ok());
+        assert!(
+            parse_skill(with(
+                skill(),
+                "description",
+                json!(repeat_chars('d', SKILL_DESCRIPTION_MAX))
+            ))
+            .is_ok()
+        );
         assert_eq!(
-            skill_invalid(with(skill(), "description", json!(repeat_chars('d', SKILL_DESCRIPTION_MAX + 1)))),
+            skill_invalid(with(
+                skill(),
+                "description",
+                json!(repeat_chars('d', SKILL_DESCRIPTION_MAX + 1))
+            )),
             "description"
         );
     }
@@ -485,7 +944,12 @@ mod tests {
     #[test]
     fn a_share_id_is_22_base62_characters() {
         assert!(check_share_id(SHARE).is_ok());
-        for bad in ["", "AbCdEfGhIjKlMnOpQrStU", "AbCdEfGhIjKlMnOpQrStUvW", "AbCdEfGhIjKlMnOpQrSt-v"] {
+        for bad in [
+            "",
+            "AbCdEfGhIjKlMnOpQrStU",
+            "AbCdEfGhIjKlMnOpQrStUvW",
+            "AbCdEfGhIjKlMnOpQrSt-v",
+        ] {
             assert_eq!(check_share_id(bad), Err(ShareError::invalid("share_id")), "{bad}");
         }
     }
@@ -503,7 +967,9 @@ mod tests {
         assert_eq!(catalog_service("notion", None), Some("notion".to_string()));
         assert_eq!(catalog_service("my-own", None), None);
         let entries: Vec<Value> = serde_json::from_str(include_str!("integrations_catalog.json")).unwrap();
-        let url = entries.iter().find(|e| e["id"] == "notion").unwrap()["url"].as_str().unwrap();
+        let url = entries.iter().find(|e| e["id"] == "notion").unwrap()["url"]
+            .as_str()
+            .unwrap();
         assert_eq!(catalog_service("my-own", Some(url)), Some("notion".to_string()));
         assert_eq!(catalog_service("my-own", Some("https://example.invalid/")), None);
     }
@@ -539,17 +1005,26 @@ mod tests {
         assert_eq!(p.description, "Writes release notes");
         assert_eq!(p.license, "MIT");
         let names: Vec<&str> = p.files.keys().map(String::as_str).collect();
-        assert_eq!(names, vec!["SKILL.md", "docs/notes.md", "scripts/plain.txt", "scripts/run.sh"]);
+        assert_eq!(
+            names,
+            vec!["SKILL.md", "docs/notes.md", "scripts/plain.txt", "scripts/run.sh"]
+        );
         assert_eq!(p.executable, vec!["scripts/run.sh".to_string()]);
-        assert!(parse_skill(serde_json::to_value(&p).unwrap()).is_ok(), "the export is a valid payload");
+        assert!(
+            parse_skill(serde_json::to_value(&p).unwrap()).is_ok(),
+            "the export is a valid payload"
+        );
     }
 
     #[test]
     fn a_catalog_install_is_not_exported() {
         let home = TempDir::new().unwrap();
         let dir = own_skill(home.path(), "commit");
-        fs::write(dir.join(MARKER_NAME), r#"{"id":"commit","commit":"0123456789abcdef0123456789abcdef01234567"}"#)
-            .unwrap();
+        fs::write(
+            dir.join(MARKER_NAME),
+            r#"{"id":"commit","commit":"0123456789abcdef0123456789abcdef01234567"}"#,
+        )
+        .unwrap();
         match skill_from_folder(home.path(), "commit", Some("MIT")) {
             Err(ShareError::Refused { reason, .. }) => assert_eq!(reason, "catalog_skill"),
             other => panic!("expected catalog_skill, got {other:?}"),
@@ -681,14 +1156,23 @@ mod tests {
         let base = TempDir::new().unwrap();
         let mut p = payload();
         p.files.insert("scripts/other.sh".into(), "#!/bin/sh\n".into());
-        p.files.insert("tool".into(), "#!/bin/sh\nstill not executable\n".into());
+        p.files
+            .insert("tool".into(), "#!/bin/sh\nstill not executable\n".into());
         let (path, updated) = install_shared(base.path(), "release-notes", SHARE, 1, &p).unwrap();
         assert!(!updated);
         assert_eq!(path, base.path().join(".claude/skills/release-notes"));
         assert_eq!(fs::read_to_string(path.join("docs/notes.md")).unwrap(), "details");
         assert_eq!(mode_of(&path.join("scripts/run.sh")), 0o755, "listed as executable");
-        assert_eq!(mode_of(&path.join("scripts/other.sh")), 0o644, "under scripts but not listed");
-        assert_eq!(mode_of(&path.join("tool")), 0o644, "a shebang alone does not make it executable");
+        assert_eq!(
+            mode_of(&path.join("scripts/other.sh")),
+            0o644,
+            "under scripts but not listed"
+        );
+        assert_eq!(
+            mode_of(&path.join("tool")),
+            0o644,
+            "a shebang alone does not make it executable"
+        );
         assert_eq!(mode_of(&path.join("SKILL.md")), 0o644);
         assert_eq!(mode_of(&path.join(MARKER_NAME)), 0o644);
         let marker = marker_of(&path);
