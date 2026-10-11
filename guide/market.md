@@ -385,7 +385,7 @@ A link to a shared bot or skill (bandito.dev/s/...) opens this sheet: what it is
 ## My shares
 
 <!-- id: market-my-shares; covers: sheet:myShares -->
-My shares (Мои публикации) lists what your account published, with the version, the number of installs and whether the platform hid it after reports. Visibility switches between Public (Публично) and Only by link (Только по ссылке). Update to current version (Обновить до текущей версии) publishes the bot or skill again from the place it was shared from on this Mac, as the next version; a share from another Mac has no update button. Delete (Удалить) asks first, and the link stops working. The copies people already installed stay with them.
+My shares (Мои публикации) lists what your account published, with the version, the number of installs and whether the platform hid it after reports. Visibility switches between Public (Публично) and Only by link (Только по ссылке). Update to current version (Обновить до текущей версии) publishes the bot or skill again from the place it was shared from on this Mac, as the next version; a share from another Mac has no update button. After an update the row shows the new version and a line says which one it is. Copy link (Скопировать ссылку) copies the page's address for a share. Delete (Удалить) asks first, and the link stops working. The copies people already installed stay with them.
 Где: Marketplace → My shares (Мои публикации) beside the page switch
 1. Change the visibility with the switch in a row.
 2. Click Update to current version (Обновить до текущей версии) after you change the bot or skill.

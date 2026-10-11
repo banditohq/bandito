@@ -2087,6 +2087,7 @@
 "share.mine.signIn" = "共有したボットとスキルを見るにはサインインしてください。";
 "share.mine.title" = "自分の公開";
 "share.mine.update" = "現在のバージョンに更新";
+"share.mine.updated" = "バージョン %1$@ に更新しました。";
 "share.own.sharedBadge" = "リンク経由";
 "share.own.title" = "自分のスキル";
 "share.preview.collapse" = "折りたたむ";

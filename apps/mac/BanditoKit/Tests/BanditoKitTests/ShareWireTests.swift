@@ -60,15 +60,36 @@ private struct OwnSkillsWire: Decodable {
     @Test func aShareSummaryReadsItsSnakeCaseDates() throws {
         let json = """
             {"id":"k3HqT9vZ2Lm8pXcR4wBn7e","kind":"skill","visibility":"public","title":"pdf","summary":"",\
-            "version":1,"installs":0,"created_at":10,"updated_at":20}
+            "version":1,"installs":0,"created_at":"2026-10-11T08:12:34.567Z","updated_at":"2026-10-11T08:12:34Z",\
+            "url":"https://bandito.dev/s/k3HqT9vZ2Lm8pXcR4wBn7e"}
             """
         let summary = try JSONDecoder().decode(ShareSummary.self, from: Data(json.utf8))
         #expect(summary.kind == .skill)
         #expect(summary.visibility == .everyone)
-        #expect(summary.createdAt == 10)
-        #expect(summary.updatedAt == 20)
+        #expect(abs((summary.createdAt?.timeIntervalSince1970 ?? 0) - 1_791_706_354.567) < 0.001)
+        #expect(summary.updatedAt?.timeIntervalSince1970 == 1_791_706_354)
+        #expect(summary.url == "https://bandito.dev/s/k3HqT9vZ2Lm8pXcR4wBn7e")
         #expect(summary.hidden == false)
         #expect(summary.lang == nil)
+    }
+
+    @Test func theDatesOfThePlatformParseWithAndWithoutFractionalSeconds() {
+        let fractional = ShareDate.parse("2026-10-11T08:12:34.567Z")
+        let plain = ShareDate.parse("2026-10-11T08:12:34Z")
+        #expect(abs((fractional?.timeIntervalSince1970 ?? 0) - 1_791_706_354.567) < 0.001)
+        #expect(plain?.timeIntervalSince1970 == 1_791_706_354)
+        #expect(ShareDate.parse("11.10.2026") == nil)
+        #expect(ShareDate.parse("") == nil)
+    }
+
+    @Test func aBadDateDoesNotFailTheWholeSummary() throws {
+        let json = """
+            {"id":"k3HqT9vZ2Lm8pXcR4wBn7e","kind":"bot","visibility":"link","title":"t","version":1,\
+            "created_at":"yesterday","updated_at":null}
+            """
+        let summary = try JSONDecoder().decode(ShareSummary.self, from: Data(json.utf8))
+        #expect(summary.createdAt == nil)
+        #expect(summary.updatedAt == nil)
     }
 
     @Test func aBotCreationFromTheDaemonReadsItsSnakeCaseLists() throws {

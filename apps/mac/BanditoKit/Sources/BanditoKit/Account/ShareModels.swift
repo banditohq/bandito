@@ -24,6 +24,25 @@ public enum ShareReportReason: String, Codable, Sendable, Hashable, CaseIterable
     case other
 }
 
+/// The dates of the platform: ISO 8601 text, with fractional seconds (`2026-10-11T08:12:34.567Z`) or without
+/// (`2026-10-11T08:12:34Z`). Anything else is no date.
+public enum ShareDate {
+    public static func parse(_ text: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: text) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: text)
+    }
+
+    /// A date field of the answer. Missing or not a date gives nil: one odd field does not fail the whole list.
+    static func field<Key: CodingKey>(_ container: KeyedDecodingContainer<Key>, _ key: Key) -> Date? {
+        guard let text = try? container.decodeIfPresent(String.self, forKey: key) else { return nil }
+        return parse(text)
+    }
+}
+
 /// A shared item as the owner sees it in "My shares" (`GET /shares/mine`): every field but the payload.
 public struct ShareSummary: Codable, Sendable, Hashable, Identifiable {
     public var id: String
@@ -36,12 +55,14 @@ public struct ShareSummary: Codable, Sendable, Hashable, Identifiable {
     public var installs: Int
     /// True when the platform hid the item after reports; the owner sees it, nobody else does.
     public var hidden: Bool
-    public var createdAt: Int64
-    public var updatedAt: Int64
+    public var createdAt: Date?
+    public var updatedAt: Date?
+    /// The page's address (`https://bandito.dev/s/<id>`), as the platform lists it.
+    public var url: String?
 
     public init(
         id: String, kind: ShareKind, visibility: ShareVisibility, title: String, summary: String, lang: String?,
-        version: Int, installs: Int, hidden: Bool, createdAt: Int64, updatedAt: Int64
+        version: Int, installs: Int, hidden: Bool, createdAt: Date?, updatedAt: Date?, url: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -54,10 +75,11 @@ public struct ShareSummary: Codable, Sendable, Hashable, Identifiable {
         self.hidden = hidden
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.url = url
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, visibility, title, summary, lang, version, installs, hidden
+        case id, kind, visibility, title, summary, lang, version, installs, hidden, url
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -73,8 +95,9 @@ public struct ShareSummary: Codable, Sendable, Hashable, Identifiable {
         version = try c.decode(Int.self, forKey: .version)
         installs = try c.decodeIfPresent(Int.self, forKey: .installs) ?? 0
         hidden = try c.decodeIfPresent(Bool.self, forKey: .hidden) ?? false
-        createdAt = try c.decodeIfPresent(Int64.self, forKey: .createdAt) ?? 0
-        updatedAt = try c.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? 0
+        createdAt = ShareDate.field(c, .createdAt)
+        updatedAt = ShareDate.field(c, .updatedAt)
+        url = try c.decodeIfPresent(String.self, forKey: .url)
     }
 }
 
@@ -100,14 +123,14 @@ public struct SharedItem: Codable, Sendable, Hashable, Identifiable {
     public var author: ShareAuthor
     public var version: Int
     public var installs: Int
-    public var createdAt: Int64
-    public var updatedAt: Int64
+    public var createdAt: Date?
+    public var updatedAt: Date?
     /// The bot or skill itself (see `SharePayload`). Kept as JSON so it is installed exactly as it was published.
     public var payload: JSONValue
 
     public init(
         id: String, kind: ShareKind, visibility: ShareVisibility, title: String, summary: String, lang: String?,
-        author: ShareAuthor, version: Int, installs: Int, createdAt: Int64, updatedAt: Int64, payload: JSONValue
+        author: ShareAuthor, version: Int, installs: Int, createdAt: Date?, updatedAt: Date?, payload: JSONValue
     ) {
         self.id = id
         self.kind = kind
@@ -140,8 +163,8 @@ public struct SharedItem: Codable, Sendable, Hashable, Identifiable {
         author = try c.decodeIfPresent(ShareAuthor.self, forKey: .author) ?? ShareAuthor(login: nil, name: nil)
         version = try c.decode(Int.self, forKey: .version)
         installs = try c.decodeIfPresent(Int.self, forKey: .installs) ?? 0
-        createdAt = try c.decodeIfPresent(Int64.self, forKey: .createdAt) ?? 0
-        updatedAt = try c.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? 0
+        createdAt = ShareDate.field(c, .createdAt)
+        updatedAt = ShareDate.field(c, .updatedAt)
         payload = try c.decode(JSONValue.self, forKey: .payload)
     }
 }

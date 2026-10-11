@@ -1,3 +1,4 @@
+import AppKit
 import BanditoDesign
 import BanditoKit
 import BanditoL10n
@@ -21,6 +22,8 @@ final class MySharesModel {
     /// The shares with a request running: their rows show it and take no second action.
     private(set) var busy: Set<String> = []
     private(set) var problem: String?
+    /// What the last update did, for the owner: the version it is now.
+    private(set) var notice: String?
 
     init(phase: Phase = .loading, items: [ShareSummary] = []) {
         self.phase = phase
@@ -47,21 +50,24 @@ final class MySharesModel {
     func setVisibility(_ item: ShareSummary, _ visibility: ShareVisibility, client: () async throws -> AccountClient) async {
         guard item.visibility != visibility, !busy.contains(item.id) else { return }
         await run(item.id) {
-            try await client().updateShare(id: item.id, ShareUpdate(visibility: visibility))
+            _ = try await client().updateShare(id: item.id, ShareUpdate(visibility: visibility))
         }
         reloadedItem(item.id, visibility: visibility)
     }
 
-    /// Exports the bot or skill again from the place it was shared from, and saves that as the next version.
-    /// Sets `problem` when the update does not go through; nothing changes on the platform then.
+    /// Exports the bot or skill again from the place it was shared from, and saves that as the next version. The list
+    /// then shows the new version, and `notice` says which one it is. On a failure `problem` says why, and nothing
+    /// changes on the platform.
     func updateToCurrent(_ item: ShareSummary, servers: [ServerModel], client: () async throws -> AccountClient) async {
         guard !busy.contains(item.id) else { return }
+        notice = nil
         guard let source = ShareSourceStore.load()[item.id],
             let server = servers.first(where: { $0.id.uuidString == source.serverID })
         else {
             problem = L10n.Share.Mine.noSource
             return
         }
+        var newVersion: Int?
         await run(item.id) {
             let payload: JSONValue
             switch item.kind {
@@ -76,8 +82,11 @@ final class MySharesModel {
                     ?? ShareLogic.defaultLicense
                 payload = try await server.exportSkill(name: name, license: license).payload
             }
-            try await client().updateShare(id: item.id, ShareUpdate(payload: payload))
+            newVersion = try await client().updateShare(id: item.id, ShareUpdate(payload: payload))
         }
+        guard problem == nil, let newVersion, let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+        items[index].version = newVersion
+        notice = L10n.Share.Mine.updated(number: String(newVersion))
     }
 
     func delete(_ item: ShareSummary, client: () async throws -> AccountClient) async {
@@ -91,7 +100,7 @@ final class MySharesModel {
         }
     }
 
-    /// Runs one change of a share. A failure becomes the problem text; the list is read again after a change.
+    /// Runs one change of a share. A failure becomes the problem text.
     private func run(_ id: String, _ work: () async throws -> Void) async {
         busy.insert(id)
         problem = nil
@@ -120,6 +129,8 @@ struct MySharesView: View {
     @Environment(Router.self) private var router
     @State private var model: MySharesModel
     @State private var deleting: ShareSummary?
+    /// The row whose link was copied last: its button says Copied until another copy.
+    @State private var copiedID: String?
 
     init(servers: [ServerModel], model: MySharesModel = MySharesModel()) {
         self.servers = servers
@@ -132,6 +143,12 @@ struct MySharesView: View {
                 .font(BanditoFont.display(size: 18.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             content
+            if let notice = model.notice {
+                Text(notice)
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let problem = model.problem {
                 Text(problem)
                     .font(BanditoFont.text(size: 12.5, weight: 400))
@@ -232,6 +249,13 @@ struct MySharesView: View {
                 .fixedSize()
                 .disabled(busy)
                 Spacer(minLength: 8)
+                Button(copiedID == item.id ? L10n.Share.Done.copied : L10n.Share.Done.copy) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(item.url ?? ShareLogic.pageURL(id: item.id), forType: .string)
+                    copiedID = item.id
+                }
+                .banditoButton(.quiet())
+                .fixedSize()
                 if ShareLogic.canUpdate(item, sources: ShareSourceStore.load()) {
                     Button(L10n.Share.Mine.update) {
                         Task {

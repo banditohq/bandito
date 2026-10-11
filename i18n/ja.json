@@ -2636,5 +2636,6 @@
   "share.mine.noSource": "更新は、このMacで共有元になったボットまたはスキルから行えます。",
   "share.own.title": "自分のスキル",
   "share.own.sharedBadge": "リンク経由",
-  "share.skipped": "次のファイルは送信されません: {files}"
+  "share.skipped": "次のファイルは送信されません: {files}",
+  "share.mine.updated": "バージョン {number} に更新しました。"
 }

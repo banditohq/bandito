@@ -2087,6 +2087,7 @@
 "share.mine.signIn" = "登录后即可查看已分享的内容。";
 "share.mine.title" = "我的分享";
 "share.mine.update" = "更新到当前版本";
+"share.mine.updated" = "已更新到版本 %1$@。";
 "share.own.sharedBadge" = "通过链接";
 "share.own.title" = "我的技能";
 "share.preview.collapse" = "收起";

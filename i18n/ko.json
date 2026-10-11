@@ -2636,5 +2636,6 @@
   "share.mine.noSource": "업데이트는 이 Mac에서 공유한 봇이나 스킬에서만 할 수 있습니다.",
   "share.own.title": "내 스킬",
   "share.own.sharedBadge": "링크로",
-  "share.skipped": "다음 파일은 전송되지 않습니다: {files}"
+  "share.skipped": "다음 파일은 전송되지 않습니다: {files}",
+  "share.mine.updated": "버전 {number}(으)로 업데이트했습니다."
 }

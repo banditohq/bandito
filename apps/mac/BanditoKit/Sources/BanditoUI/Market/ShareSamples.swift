@@ -38,13 +38,13 @@ enum ShareSamples {
         id: shareID, kind: .bot, visibility: .everyone, title: "Release notes",
         summary: "Turns the week's commits into short release notes", lang: "en",
         author: ShareAuthor(login: "maria", name: "Maria"), version: 2, installs: 14,
-        createdAt: 1_760_000_000_000, updatedAt: 1_760_500_000_000, payload: botPayload)
+        createdAt: Date(timeIntervalSince1970: 1_760_000_000), updatedAt: Date(timeIntervalSince1970: 1_760_500_000), payload: botPayload)
 
     static let skill = SharedItem(
         id: shareID, kind: .skill, visibility: .link, title: "pdf-tools",
         summary: "Read, split and merge PDF files from the terminal.", lang: "en",
         author: ShareAuthor(login: nil, name: nil), version: 1, installs: 0,
-        createdAt: 1_760_000_000_000, updatedAt: 1_760_000_000_000, payload: skillPayload)
+        createdAt: Date(timeIntervalSince1970: 1_760_000_000), updatedAt: Date(timeIntervalSince1970: 1_760_000_000), payload: skillPayload)
 
     static var publishDraft: ShareModel {
         ShareModel(subject: .bot(agentID: "agent-1"), phase: .editing, payload: botPayload)
@@ -60,13 +60,13 @@ enum ShareSamples {
     static let mine: [ShareSummary] = [
         ShareSummary(
             id: shareID, kind: .bot, visibility: .everyone, title: "Release notes", summary: "", lang: "en",
-            version: 2, installs: 14, hidden: false, createdAt: 0, updatedAt: 0),
+            version: 2, installs: 14, hidden: false, createdAt: nil, updatedAt: nil),
         ShareSummary(
             id: "a1B2c3D4e5F6g7H8i9J0k1", kind: .skill, visibility: .link, title: "pdf-tools", summary: "",
-            lang: "en", version: 1, installs: 0, hidden: false, createdAt: 0, updatedAt: 0),
+            lang: "en", version: 1, installs: 0, hidden: false, createdAt: nil, updatedAt: nil),
         ShareSummary(
             id: "Z9y8X7w6V5u4T3s2R1q0P9", kind: .bot, visibility: .everyone, title: "Inbox triage", summary: "",
-            lang: "en", version: 4, installs: 3, hidden: true, createdAt: 0, updatedAt: 0),
+            lang: "en", version: 4, installs: 3, hidden: true, createdAt: nil, updatedAt: nil),
     ]
 }
 #endif

@@ -2087,6 +2087,7 @@
 "share.mine.signIn" = "Войдите, чтобы увидеть, чем вы делились.";
 "share.mine.title" = "Мои публикации";
 "share.mine.update" = "Обновить до текущей версии";
+"share.mine.updated" = "Обновлено до версии %1$@.";
 "share.own.sharedBadge" = "по ссылке";
 "share.own.title" = "Мои скиллы";
 "share.preview.collapse" = "Свернуть";

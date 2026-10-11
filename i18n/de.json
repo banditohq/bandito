@@ -2667,5 +2667,6 @@
   "share.mine.noSource": "Aktualisieren geht nur aus dem Bot oder Skill, von dem geteilt wurde, auf diesem Mac.",
   "share.own.title": "Meine Skills",
   "share.own.sharedBadge": "über Link",
-  "share.skipped": "Diese Dateien werden nicht gesendet: {files}"
+  "share.skipped": "Diese Dateien werden nicht gesendet: {files}",
+  "share.mine.updated": "Auf Version {number} aktualisiert."
 }

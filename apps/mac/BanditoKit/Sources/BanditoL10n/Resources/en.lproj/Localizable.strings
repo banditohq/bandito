@@ -2087,6 +2087,7 @@
 "share.mine.signIn" = "Sign in to see the bots and skills you shared.";
 "share.mine.title" = "My shares";
 "share.mine.update" = "Update to current version";
+"share.mine.updated" = "Updated to version %1$@.";
 "share.own.sharedBadge" = "by link";
 "share.own.title" = "My skills";
 "share.preview.collapse" = "Collapse";

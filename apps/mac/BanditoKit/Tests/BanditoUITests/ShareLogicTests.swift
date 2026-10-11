@@ -315,7 +315,7 @@ import Testing
     @Test func onlyAShareWithAKnownSourceCanBeUpdated() {
         let item = ShareSummary(
             id: Self.id, kind: .skill, visibility: .link, title: "pdf", summary: "", lang: nil, version: 1,
-            installs: 0, hidden: false, createdAt: 0, updatedAt: 0)
+            installs: 0, hidden: false, createdAt: nil, updatedAt: nil)
         #expect(!ShareLogic.canUpdate(item, sources: [:]))
         #expect(ShareLogic.canUpdate(item, sources: [Self.id: ShareSource(kind: .skill, serverID: "s", skillName: "pdf")]))
     }

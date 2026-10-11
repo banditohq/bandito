@@ -2636,5 +2636,6 @@
   "share.mine.noSource": "更新需要在这台 Mac 上通过分享来源的机器人或技能进行。",
   "share.own.title": "我的技能",
   "share.own.sharedBadge": "通过链接",
-  "share.skipped": "以下文件不会被发送：{files}"
+  "share.skipped": "以下文件不会被发送：{files}",
+  "share.mine.updated": "已更新到版本 {number}。"
 }
