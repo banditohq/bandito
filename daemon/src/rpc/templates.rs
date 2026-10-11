@@ -4,13 +4,15 @@
 //! and docs/ARCHITECTURE.md#agent-bundles.
 
 use super::schedules;
+use super::skills::share_error;
 use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, RpcError, RpcResult, SERVER_ERROR, create_agent, ok, params};
 use crate::agent_bundles;
 use crate::agent_templates::{self, AgentTemplate, Effort as TemplateEffort, TemplateSchedule};
 use crate::runtime::RuntimeKind;
 use crate::schedule_text;
+use crate::shared::{self, ShareError};
 use crate::skills;
-use crate::store::{Capability, Effort, NewAgent, NewSchedule, validate_name};
+use crate::store::{Agent, Capability, Effort, NewAgent, NewSchedule, Store, validate_name};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -73,6 +75,30 @@ pub(super) async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
                 .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no template {}", req.template_id)))?;
             let _creating = CREATE_LOCK.lock().await;
             create_from(app, &template, req).await
+        }
+        "agents.export" => {
+            let req: ExportAgent = params(p)?;
+            export_agent(app, &req.agent_id)
+        }
+        "agents.create_from_shared" => {
+            let req: CreateFromShared = params(p)?;
+            shared::check_share_id(&req.share_id).map_err(share_error)?;
+            shared::check_version(req.version).map_err(share_error)?;
+            let bot = shared::parse_bot(req.payload).map_err(share_error)?;
+            if req.language.as_deref().is_some_and(|l| l.trim().is_empty()) {
+                return Err(share_error(ShareError::invalid("language")));
+            }
+            if let Some(list) = &req.capabilities {
+                // Each name must be one the payload has, and none may repeat: the list only narrows the payload's.
+                let mut seen = HashSet::new();
+                for c in list {
+                    if !bot.capabilities.contains(c) || !seen.insert(c.as_str()) {
+                        return Err(share_error(ShareError::invalid("capabilities")));
+                    }
+                }
+            }
+            let _creating = CREATE_LOCK.lock().await;
+            create_shared(app, &req.share_id, bot, req.capabilities).await
         }
         "agents.bundles" => {
             // As with the templates: the file is checked by the tests.
@@ -339,6 +365,197 @@ async fn create_from(app: &App, t: &AgentTemplate, req: CreateFromTemplate) -> R
     }))
 }
 
+/// `agents.export`: the bot as it is shared (see docs/ARCHITECTURE.md#sharing). Its services are the catalog
+/// integrations it may use, and its schedules the enabled ones with their cron. Never a secret, a memory, a folder or an
+/// integration's account: none of them is read here.
+fn export_agent(app: &App, id: &str) -> RpcResult {
+    let store = &app.sup.hub().store;
+    let agent = store
+        .agent_get(id)?
+        .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no agent {id}")))?;
+    let services = shared_services(store, &agent)?;
+    let schedules: Vec<shared::BotSchedule> = store
+        .schedule_list(Some(id))?
+        .into_iter()
+        .filter(|s| s.enabled)
+        .map(|s| shared::BotSchedule {
+            cron: s.cron,
+            prompt: s.prompt,
+        })
+        .collect();
+    if schedules.len() > shared::BOT_SCHEDULES_MAX {
+        return Err(share_error(ShareError::invalid("schedules")));
+    }
+    let payload = shared::bot_from_agent(&agent, services, schedules).map_err(share_error)?;
+    ok(json!({ "payload": payload }))
+}
+
+/// The catalog ids of the integrations the agent may use: every enabled one when its list is null, else the enabled ones
+/// it lists. A custom integration (not a catalog service) is left out.
+fn shared_services(store: &Store, agent: &Agent) -> Result<Vec<String>, RpcError> {
+    let mut out: Vec<String> = Vec::new();
+    for integration in store.integration_list()? {
+        if !integration.enabled {
+            continue;
+        }
+        if agent
+            .integrations
+            .as_ref()
+            .is_some_and(|list| !list.contains(&integration.id))
+        {
+            continue;
+        }
+        let Some(service) = shared::catalog_service(&integration.name, integration.url.as_deref()) else {
+            continue;
+        };
+        if !out.contains(&service) {
+            out.push(service);
+        }
+    }
+    Ok(out)
+}
+
+/// `agents.create_from_shared`: the bot of a share, made as `create_from` makes a template's bot, without a template:
+/// no skills, the payload's schedules (off, with the payload's `cron`), and `template_id` = `shared:<share_id>`. Its
+/// integrations are the connected ones the payload names, and its capabilities the payload's or the `capabilities` narrowing.
+/// Every check runs before the agent exists. A service the catalog does not have is dropped and listed in
+/// `unknown_services`; a catalog service no enabled integration connects is listed in `missing_services`. The name is
+/// taken as `free_name` takes a bundle's: `<name> 2` when another agent has it.
+async fn create_shared(app: &App, share_id: &str, bot: shared::BotPayload, narrowed: Option<Vec<String>>) -> RpcResult {
+    validate_name(bot.name.trim()).map_err(|_| share_error(ShareError::invalid("name")))?;
+    let starter = bot.starter.clone();
+    let tz = schedule_text::local_zone();
+    for (index, s) in bot.schedules.iter().enumerate() {
+        schedules::check_agent_interval(&s.cron, &tz)
+            .map_err(|_| share_error(ShareError::invalid(format!("schedules[{index}].cron"))))?;
+    }
+    let name = free_name(app, bot.name.trim())?;
+    validate_name(&name).map_err(|_| share_error(ShareError::invalid("name")))?;
+    let wanted = narrowed.unwrap_or_else(|| bot.capabilities.clone());
+    let capabilities = wanted
+        .iter()
+        .map(|c| Capability::parse(c).ok_or_else(|| share_error(ShareError::invalid("capabilities"))))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut known: Vec<String> = Vec::new();
+    let mut unknown: Vec<String> = Vec::new();
+    for service in &bot.services {
+        let list = if shared::is_catalog_service(service) {
+            &mut known
+        } else {
+            &mut unknown
+        };
+        if !list.contains(service) {
+            list.push(service.clone());
+        }
+    }
+
+    // The defaults of `agents.create` (the serde defaults of NewAgent), then the payload's fields.
+    let mut new_agent: NewAgent = serde_json::from_value(json!({ "name": name, "runtime": RuntimeKind::Claude }))
+        .map_err(|e| RpcError::new(SERVER_ERROR, format!("agent defaults: {e}")))?;
+    new_agent.role = bot.role.clone();
+    new_agent.system_prompt = Some(bot.system_prompt.clone());
+    new_agent.capabilities = Some(capabilities);
+    // The agent may use the enabled integrations whose catalog id the payload names, and no other. Without a match
+    // it may use none.
+    let store = &app.sup.hub().store;
+    let mut granted: Vec<String> = Vec::new();
+    for integration in store.integration_list()? {
+        if !integration.enabled {
+            continue;
+        }
+        let Some(service) = shared::catalog_service(&integration.name, integration.url.as_deref()) else {
+            continue;
+        };
+        if known.contains(&service) && !granted.contains(&integration.id) {
+            granted.push(integration.id);
+        }
+    }
+    new_agent.integrations = Some(granted);
+    let id = create_agent(app, new_agent, None)?;
+
+    let mut errors: Vec<Value> = Vec::new();
+    // The mark comes first, so the reply's agent carries it. A failure is listed; the agent stays.
+    if let Err(e) = store.agent_set_template(&id, &format!("shared:{share_id}")) {
+        errors.push(
+            json!({ "step": "agent", "message": format!("agent {id} was created but its share is not saved: {e:#}") }),
+        );
+    }
+    let agent = match store.agent_view(&id) {
+        Ok(Some(agent)) => Some(agent),
+        Ok(None) => {
+            errors.push(json!({ "step": "agent", "message": format!("agent {id} was created but is not found") }));
+            None
+        }
+        Err(e) => {
+            errors.push(
+                json!({ "step": "agent", "message": format!("agent {id} was created but cannot be read: {e:#}") }),
+            );
+            None
+        }
+    };
+
+    let mut schedule_ids = Vec::new();
+    for (index, s) in bot.schedules.into_iter().enumerate() {
+        let new = NewSchedule {
+            agent_id: id.clone(),
+            cron: s.cron,
+            tz: tz.clone(),
+            prompt: s.prompt,
+            // Off until the owner turns them on: a shared bot's schedules never run unasked.
+            enabled: false,
+            title: None,
+        };
+        match schedules::create(app, new) {
+            Ok(view) => schedule_ids.push(view["id"].clone()),
+            Err(e) => errors.push(json!({ "step": "schedule", "index": index, "message": e.message })),
+        }
+    }
+
+    let mut missing_services = Vec::new();
+    match store.integration_list() {
+        Ok(connected) => {
+            for service in &known {
+                let url = catalog_url(service);
+                let present = connected
+                    .iter()
+                    .any(|i| i.enabled && (i.name == *service || (url.is_some() && i.url == url)));
+                if !present {
+                    missing_services.push(service.clone());
+                }
+            }
+        }
+        Err(e) => errors.push(json!({ "step": "integrations", "message": format!("{e:#}") })),
+    }
+
+    ok(json!({
+        "agent": agent,
+        "schedule_ids": schedule_ids,
+        "unknown_services": unknown,
+        "missing_services": missing_services,
+        "starter": starter,
+        "errors": errors,
+    }))
+}
+
+/// What `agents.export` takes.
+#[derive(Deserialize)]
+struct ExportAgent {
+    agent_id: String,
+}
+
+/// What `agents.create_from_shared` takes. `language` is checked when given; the payload's text is in its own language,
+/// so nothing else reads it. `capabilities`, when given, narrows the payload's list (never widens it).
+#[derive(Deserialize)]
+struct CreateFromShared {
+    share_id: String,
+    version: u32,
+    payload: Value,
+    #[serde(default)]
+    language: Option<String>,
+    #[serde(default)]
+    capabilities: Option<Vec<String>>,
+}
+
 /// Every index must name one of the template's schedules, and none may be listed twice.
 fn check_schedule_indexes(t: &AgentTemplate, indexes: &[usize]) -> Result<(), RpcError> {
     let mut seen = HashSet::new();
@@ -421,6 +638,429 @@ fn catalog_url(id: &str) -> Option<String> {
         .find(|e| e["id"].as_str() == Some(id))
         .and_then(|e| e["url"].as_str())
         .map(str::to_string)
+}
+
+/// `agents.export` and `agents.create_from_shared` (see docs/ARCHITECTURE.md#sharing). The payload rules are tested in
+/// `crate::shared`; these tests cover the methods: what is read, what is made, and what is refused.
+#[cfg(test)]
+mod share_tests {
+    use super::*;
+    use crate::hub::Hub;
+    use crate::rpc::{Peer, UNAUTHORIZED, dispatch};
+    use crate::shared::{self, BotPayload};
+    use crate::store::{ApprovalMode, Integration, IntegrationKind, MemoryMode, NewIntegration, NewSchedule, Store};
+    use crate::supervisor::{Runtimes, Supervisor};
+    use serde_json::json;
+    use std::path::Path;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    const SHARE: &str = "AbCdEfGhIjKlMnOpQrStUv";
+
+    fn app(root: &Path) -> (Arc<App>, Arc<Store>) {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let sup = Supervisor::new(Hub::new(store.clone()), Runtimes::default(), None);
+        (App::new(sup, root.join("agents")), store)
+    }
+
+    async fn call(app: &App, method: &str, p: Value) -> RpcResult {
+        dispatch(app, &Peer::Local, method, p).await
+    }
+
+    fn bot() -> Value {
+        json!({
+            "schema": 1,
+            "name": "Scout",
+            "role": "Finds sources",
+            "system_prompt": "You find sources.",
+            "capabilities": ["browser", "files"],
+            "services": ["notion"],
+            "schedules": [{"cron": "0 9 * * *", "prompt": "Morning digest"}],
+        })
+    }
+
+    fn new_agent(name: &str, cwd: &Path, integrations: Option<Vec<String>>) -> NewAgent {
+        NewAgent {
+            use_personal_settings: false,
+            avatar: None,
+            capabilities: None,
+            integrations,
+            name: name.into(),
+            role: "Scout role".into(),
+            runtime: RuntimeKind::Claude,
+            model: None,
+            cwd: cwd.display().to_string(),
+            approval_mode: ApprovalMode::Risky,
+            system_prompt: Some("Find sources.".into()),
+            effort: None,
+            memory_mode: MemoryMode::Smart,
+            context_budget: None,
+            fallback_runtime: None,
+            fallback_model: None,
+        }
+    }
+
+    fn agent(store: &Store, name: &str, cwd: &Path, integrations: Option<Vec<String>>) -> String {
+        store.agent_create(new_agent(name, cwd, integrations)).unwrap().id
+    }
+
+    fn connect(store: &Store, name: &str, url: Option<&str>, enabled: bool) -> Integration {
+        store
+            .integration_create(NewIntegration {
+                name: name.into(),
+                kind: if url.is_some() {
+                    IntegrationKind::Http
+                } else {
+                    IntegrationKind::Stdio
+                },
+                command: url.is_none().then(|| "true".to_string()),
+                args: vec![],
+                url: url.map(str::to_string),
+                env: Default::default(),
+                headers: Default::default(),
+                enabled,
+                auth: Default::default(),
+            })
+            .unwrap()
+    }
+
+    // ---- agents.export ----
+
+    #[tokio::test]
+    async fn agents_export_holds_the_bot_and_no_secret_path_or_account() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let cwd = TempDir::new().unwrap();
+        let id = agent(&store, "Scout", cwd.path(), None);
+        connect(&store, "notion", None, true);
+        store
+            .secret_set(
+                "SHARE_TEST_TOKEN",
+                "tok-live-SECRETVALUE-0123456789",
+                std::slice::from_ref(&id),
+            )
+            .unwrap();
+        store
+            .schedule_create(
+                NewSchedule {
+                    agent_id: id.clone(),
+                    cron: "0 9 * * *".into(),
+                    tz: "UTC".into(),
+                    prompt: "Morning digest".into(),
+                    enabled: true,
+                    title: None,
+                },
+                None,
+            )
+            .unwrap();
+
+        let reply = call(&app, "agents.export", json!({"agent_id": id})).await.unwrap();
+        let text = reply.to_string();
+        assert!(!text.contains("SECRETVALUE"), "no secret value");
+        assert!(!text.contains("SHARE_TEST_TOKEN"), "no secret name");
+        assert!(!text.contains(&cwd.path().display().to_string()), "no folder path");
+        assert!(!text.contains(&id), "no id of the agent");
+        let p: BotPayload = serde_json::from_value(reply["payload"].clone()).unwrap();
+        assert_eq!(p.name, "Scout");
+        assert_eq!(p.role, "Scout role");
+        assert_eq!(p.system_prompt, "Find sources.");
+        assert_eq!(
+            p.capabilities,
+            vec!["terminal", "files", "browser", "team", "screen"],
+            "null means all"
+        );
+        assert_eq!(p.services, vec!["notion".to_string()]);
+        assert_eq!(p.schedules.len(), 1);
+        assert_eq!(p.schedules[0].cron, "0 9 * * *");
+        assert_eq!(p.schedules[0].prompt, "Morning digest");
+        assert_eq!(p.starter, None, "an agent has no starter of its own");
+    }
+
+    #[tokio::test]
+    async fn agents_export_lists_only_enabled_catalog_services_of_the_agent() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let cwd = TempDir::new().unwrap();
+        connect(&store, "notion", None, true);
+        let github = connect(&store, "github", None, false);
+        connect(&store, "my-own-tool", Some("https://example.invalid/mcp"), true);
+        let every = agent(&store, "Every", cwd.path(), None);
+        let only_github = agent(&store, "Github", cwd.path(), Some(vec![github.id.clone()]));
+        for (id, expected) in [(every, vec!["notion".to_string()]), (only_github, vec![])] {
+            let reply = call(&app, "agents.export", json!({"agent_id": id})).await.unwrap();
+            let p: BotPayload = serde_json::from_value(reply["payload"].clone()).unwrap();
+            assert_eq!(
+                p.services, expected,
+                "custom and disabled integrations are not exported"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn agents_export_refuses_an_unknown_agent_and_a_bot_over_the_limits() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let err = call(&app, "agents.export", json!({"agent_id": "nobody"}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+
+        let cwd = TempDir::new().unwrap();
+        let id = agent(&store, "Scout", cwd.path(), None);
+        store
+            .agent_update(
+                &id,
+                crate::store::AgentPatch {
+                    role: Some("r".repeat(shared::BOT_ROLE_MAX + 1)),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let err = call(&app, "agents.export", json!({"agent_id": id})).await.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert_eq!(err.message, "invalid: role");
+    }
+
+    // ---- agents.create_from_shared ----
+
+    #[tokio::test]
+    async fn create_from_shared_makes_the_agent_and_marks_it_with_its_share() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let reply = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 3, "payload": bot(), "language": "ru"}),
+        )
+        .await
+        .unwrap();
+        let a = &reply["agent"];
+        assert_eq!(a["name"], "Scout");
+        assert_eq!(a["role"], "Finds sources");
+        assert_eq!(a["system_prompt"], "You find sources.");
+        assert_eq!(a["template_id"], format!("shared:{SHARE}"));
+        assert_eq!(reply["unknown_services"], json!([]));
+        assert_eq!(reply["missing_services"], json!(["notion"]), "not connected yet");
+        let id = a["id"].as_str().unwrap();
+        let schedules = store.schedule_list(Some(id)).unwrap();
+        assert_eq!(schedules.len(), 1);
+        assert_eq!(schedules[0].cron, "0 9 * * *");
+        assert_eq!(schedules[0].prompt, "Morning digest");
+        assert!(
+            !schedules[0].enabled,
+            "a shared bot's schedules start off: the owner turns them on"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_from_shared_drops_unknown_services_and_lists_them() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        connect(&store, "notion", None, true);
+        let mut p = bot();
+        p["services"] = json!(["notion", "not-in-catalog", "also-missing"]);
+        let reply = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": p}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reply["unknown_services"], json!(["not-in-catalog", "also-missing"]));
+        assert_eq!(reply["missing_services"], json!([]), "notion is connected");
+        assert_eq!(store.agent_list().unwrap().len(), 1, "the bot is made");
+    }
+
+    #[tokio::test]
+    async fn create_from_shared_refuses_a_bad_request_before_anything_is_created() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let mut extra = bot();
+        extra["memory"] = json!("x");
+        let mut bad_cron = bot();
+        bad_cron["schedules"] = json!([{"cron": "nonsense", "prompt": "p"}]);
+        let mut long_name = bot();
+        long_name["name"] = json!("n".repeat(33));
+        let cases = [
+            json!({"share_id": "short", "version": 1, "payload": bot()}),
+            json!({"share_id": SHARE, "version": 0, "payload": bot()}),
+            json!({"share_id": SHARE, "version": 1, "payload": extra}),
+            json!({"share_id": SHARE, "version": 1, "payload": bad_cron}),
+            json!({"share_id": SHARE, "version": 1, "payload": long_name}),
+        ];
+        for p in cases {
+            let err = call(&app, "agents.create_from_shared", p.clone()).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{p}");
+        }
+        assert!(store.agent_list().unwrap().is_empty(), "nothing is created");
+    }
+
+    #[tokio::test]
+    async fn create_from_shared_takes_a_free_name_as_a_bundle_does() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let cwd = TempDir::new().unwrap();
+        agent(&store, "Scout", cwd.path(), None);
+        let reply = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot()}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reply["agent"]["name"], "Scout 2");
+    }
+
+    #[tokio::test]
+    async fn an_exported_bot_creates_the_same_bot_elsewhere() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let cwd = TempDir::new().unwrap();
+        connect(&store, "notion", None, true);
+        let id = agent(&store, "Scout", cwd.path(), None);
+        let exported = call(&app, "agents.export", json!({"agent_id": id})).await.unwrap();
+        let made = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": exported["payload"]}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(made["agent"]["role"], "Scout role");
+        assert_eq!(made["agent"]["system_prompt"], "Find sources.");
+        assert_eq!(made["unknown_services"], json!([]));
+        assert_eq!(made["missing_services"], json!([]));
+    }
+
+    #[tokio::test]
+    async fn create_from_shared_hands_the_starter_back_as_the_templates_do_not() {
+        let root = TempDir::new().unwrap();
+        let (app, _store) = app(root.path());
+        let mut with_starter = bot();
+        with_starter["starter"] = json!("Start here");
+        let made = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": with_starter}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            made["starter"], "Start here",
+            "the app puts it in the input field, unsent"
+        );
+        let plain = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot()}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(plain["starter"], Value::Null);
+    }
+
+    #[tokio::test]
+    async fn the_agent_gets_only_the_connected_services_the_payload_names() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let notion = connect(&store, "notion", None, true);
+        connect(&store, "github", None, true);
+        let made = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot()}),
+        )
+        .await
+        .unwrap();
+        let id = made["agent"]["id"].as_str().unwrap();
+        let agent = store.agent_get(id).unwrap().unwrap();
+        assert_eq!(
+            agent.integrations,
+            Some(vec![notion.id.clone()]),
+            "notion only, not every integration"
+        );
+
+        let mut no_services = bot();
+        no_services["services"] = json!([]);
+        let none = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": no_services}),
+        )
+        .await
+        .unwrap();
+        let id = none["agent"]["id"].as_str().unwrap();
+        assert_eq!(
+            store.agent_get(id).unwrap().unwrap().integrations,
+            Some(vec![]),
+            "no integration at all"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_capabilities_may_only_narrow_the_payloads() {
+        let root = TempDir::new().unwrap();
+        let (app, store) = app(root.path());
+        let narrowed = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot(), "capabilities": ["files"]}),
+        )
+        .await
+        .unwrap();
+        let id = narrowed["agent"]["id"].as_str().unwrap();
+        assert_eq!(
+            store.agent_get(id).unwrap().unwrap().capabilities,
+            Some(vec![Capability::Files])
+        );
+
+        let as_is = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot()}),
+        )
+        .await
+        .unwrap();
+        let id = as_is["agent"]["id"].as_str().unwrap();
+        assert_eq!(
+            store.agent_get(id).unwrap().unwrap().capabilities,
+            Some(vec![Capability::Browser, Capability::Files]),
+            "without the parameter, the payload's own list"
+        );
+
+        for wanted in [json!(["terminal"]), json!(["files", "files"])] {
+            let err = call(
+                &app,
+                "agents.create_from_shared",
+                json!({"share_id": SHARE, "version": 1, "payload": bot(), "capabilities": wanted}),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{wanted}");
+            assert_eq!(err.message, "invalid: capabilities", "{wanted}");
+        }
+        assert_eq!(store.agent_list().unwrap().len(), 2, "a refused request makes no agent");
+    }
+
+    #[tokio::test]
+    async fn agents_cannot_export_or_create_from_shared() {
+        let root = TempDir::new().unwrap();
+        let (app, _store) = app(root.path());
+        let agent_peer = Peer::Agent("agent-a".into());
+        let export = dispatch(&app, &agent_peer, "agents.export", json!({"agent_id": "x"}))
+            .await
+            .unwrap_err();
+        assert_eq!(export.code, UNAUTHORIZED);
+        let create = dispatch(
+            &app,
+            &agent_peer,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot()}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(create.code, UNAUTHORIZED);
+    }
 }
 
 #[cfg(test)]

@@ -563,7 +563,16 @@ pub fn install(
             let (_, bytes) = &decoded[0];
             write_file(&target, bytes)?;
         }
-        InstallKind::Skill => replace_skill_folder(&target, &decoded)?,
+        InstallKind::Skill => {
+            let modes: Vec<(PathBuf, Vec<u8>, u32)> = decoded
+                .into_iter()
+                .map(|(rel, bytes)| {
+                    let mode = skill_file_mode(&rel, &bytes);
+                    (rel, bytes, mode)
+                })
+                .collect();
+            replace_skill_folder(&target, &modes)?;
+        }
     }
     Ok(target)
 }
@@ -605,10 +614,19 @@ pub fn checked_skill_folder(base: &Path, name: &str) -> Result<PathBuf, InstallE
     Ok(target)
 }
 
+/// Writes a skill folder of `files` (path, bytes, file mode) under `base`, as `install` writes a skill: the same folder
+/// checks, the same atomic replace. The caller has checked the files and chooses the modes (a shared skill's executables
+/// are its `executable` list, see `shared::install_shared`).
+pub fn write_skill(base: &Path, name: &str, files: &[(PathBuf, Vec<u8>, u32)]) -> Result<PathBuf, InstallError> {
+    let target = checked_skill_folder(base, name)?;
+    replace_skill_folder(&target, files)?;
+    Ok(target)
+}
+
 /// Writes a skill folder in place of `target`. The files go to a new folder beside it first; then the old folder (if
 /// any) is moved aside, the new one takes its name, and the old one is removed. A failed write leaves the old folder
 /// as it was, and no temporary folder is left behind.
-fn replace_skill_folder(target: &Path, files: &[(PathBuf, Vec<u8>)]) -> Result<(), InstallError> {
+fn replace_skill_folder(target: &Path, files: &[(PathBuf, Vec<u8>, u32)]) -> Result<(), InstallError> {
     let (Some(parent), Some(name)) = (target.parent(), target.file_name().and_then(|n| n.to_str())) else {
         return fail("invalid_name", format!("bad folder {}", target.display()));
     };
@@ -640,12 +658,12 @@ fn replace_skill_folder(target: &Path, files: &[(PathBuf, Vec<u8>)]) -> Result<(
     Ok(())
 }
 
-fn write_tree(dir: &Path, files: &[(PathBuf, Vec<u8>)]) -> Result<(), InstallError> {
+fn write_tree(dir: &Path, files: &[(PathBuf, Vec<u8>, u32)]) -> Result<(), InstallError> {
     fs::create_dir(dir).map_err(|e| io_error(dir, &e))?;
-    for (rel, bytes) in files {
+    for (rel, bytes, mode) in files {
         let path = dir.join(rel);
         write_file(&path, bytes)?;
-        set_mode(&path, skill_file_mode(rel, bytes))?;
+        set_mode(&path, *mode)?;
     }
     Ok(())
 }
