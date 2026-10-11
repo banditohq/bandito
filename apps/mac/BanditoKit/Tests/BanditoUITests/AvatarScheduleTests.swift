@@ -48,23 +48,40 @@ struct AvatarScheduleTests {
         #expect(Array(schedule.entries(from: Date(), mode: .normal)).count == 1)
     }
 
-    @Test func sleepingIsDrawnAtMostTenTimesASecond() {
-        // The "z" of a sleeping raccoon rises all the time. Frames (= redraws of the avatar) in ten seconds: it used to
-        // be 200 (20 per second), now 80 (8 per second).
+    @Test func sleepingIsDrawnAtMostTwelveTimesASecond() {
+        // The "z" of a sleeping raccoon rises all the time, slowly: it gets fewer frames than a mood that moves fast.
         let count = frames(.sleeping, seconds: 10).count
-        #expect(count <= 10 * 10 + 1)
-        #expect(count >= 10 * 6)
-        #expect(AvatarSchedule.interval(for: .sleeping) >= 0.1)
+        #expect(count <= 10 * 12 + 1)
+        #expect(count >= 10 * 8)
+        #expect(AvatarSchedule.interval(for: .sleeping) >= 1.0 / 12 - 0.0001)
         #expect(AvatarSchedule.interval(for: .working) == AvatarSchedule.frameInterval)
     }
 
-    @Test func aSleepingAvatarInAListOrInAnInactiveWindowDoesNotAnimate() {
-        #expect(AvatarSleepPolicy.rests(mood: .sleeping, listed: true))
-        #expect(!AvatarSleepPolicy.rests(mood: .sleeping, listed: false))
-        #expect(!AvatarSleepPolicy.rests(mood: .working, listed: true))
-        #expect(AvatarSleepPolicy.pausesWhenInactive(mood: .sleeping, active: false))
-        #expect(!AvatarSleepPolicy.pausesWhenInactive(mood: .sleeping, active: true))
-        #expect(!AvatarSleepPolicy.pausesWhenInactive(mood: .idle, active: false))
+    @Test func aMovingMoodGetsThirtyFramesASecond() {
+        #expect(abs(AvatarSchedule.frameInterval - 1.0 / 30) < 0.0001)
+        let count = frames(.working, seconds: 10).count
+        #expect(count >= 10 * 29)
+        #expect(count <= 10 * 31 + 1)
+    }
+
+    @Test func anAvatarAsksForNoFramesOnlyWhenNobodySeesIt() {
+        // A sleeper in a list now animates like any other; it rests only out of view, or in a window that is not active.
+        #expect(!AvatarSleepPolicy.paused(mood: .sleeping, still: false, onScreen: true, windowActive: true))
+        #expect(AvatarSleepPolicy.paused(mood: .sleeping, still: false, onScreen: false, windowActive: true))
+        #expect(AvatarSleepPolicy.paused(mood: .working, still: false, onScreen: false, windowActive: true))
+        #expect(AvatarSleepPolicy.paused(mood: .sleeping, still: false, onScreen: true, windowActive: false))
+        #expect(!AvatarSleepPolicy.paused(mood: .working, still: false, onScreen: true, windowActive: false))
+        #expect(AvatarSleepPolicy.paused(mood: .idle, still: true, onScreen: true, windowActive: true))
+    }
+
+    @Test func aPictureTileMovesWithTheMoodAndRestsWithoutMotion() {
+        let working = AvatarPose.make(mood: .working, time: 0.6, phase: 0)
+        #expect(TileMotion.scale(working) != 1)
+        #expect(abs(TileMotion.scale(working) - 1) <= 0.03 + 0.0001)
+        let rest = AvatarPose.make(mood: .working, time: 0.6, phase: 0, reduceMotion: true)
+        #expect(TileMotion.scale(rest) == 1)
+        let hop = AvatarPose.make(mood: .needsYou, time: 1.4, phase: 0)
+        #expect(hop.bodyOffsetY < 0)
     }
 
     @Test func aRestingSleeperDrawsOnceAndShowsNoZ() {

@@ -16,7 +16,6 @@ import AppKit
 /// folder, open browser tabs. A pick leaves `@Label` in the text and a chip above the field; Backspace at the end of
 /// the text takes a whole chip away. A service that is not connected asks "Connect X?" before the message goes.
 struct Composer: View {
-    @Binding var draft: String
     var agentName: String
     var running: Bool
     /// Share of the context window in use, 0 to 1.
@@ -46,6 +45,18 @@ struct Composer: View {
 
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
+
+    /// The text of this agent's draft, kept by the Router (see `Router.drafts`). The composer reads and writes it itself:
+    /// it was once passed in as a binding made by the thread, and a binding made there was read while the thread was
+    /// built, so every typed letter built the whole thread (hundreds of rows) again.
+    private var draft: String {
+        get { router.drafts[agentID] ?? "" }
+        nonmutating set { router.drafts[agentID] = newValue }
+    }
+
+    private var draftBinding: Binding<String> {
+        Binding(get: { draft }, set: { draft = $0 })
+    }
     @FocusState private var focused: Bool
     @State private var slash = SlashMenuModel()
     @State private var mention = MentionMenuModel()
@@ -118,6 +129,7 @@ struct Composer: View {
     }
 
     var body: some View {
+        let _ = PerfCounters.hit("Composer")
         @Bindable var model = slash
         @Bindable var mentionModel = mention
         VStack(spacing: 8) {
@@ -184,7 +196,7 @@ struct Composer: View {
                         dictationButton
                     }
 
-                    TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
+                    TextField(L10n.Thread.placeholder, text: draftBinding, axis: .vertical)
                         .textFieldStyle(.plain)
                         .font(BanditoFont.text(size: 14.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
@@ -606,7 +618,7 @@ struct Composer: View {
         guard agent != nil else { return }
         // The caret is taken only from the field itself; with the focus elsewhere the text goes to the end.
         let caret = focused ? FieldCaret.location : nil
-        dictation.toggle(text: $draft, caret: caret, placeCaret: FieldCaret.place)
+        dictation.toggle(text: draftBinding, caret: caret, placeCaret: FieldCaret.place)
         focused = true
     }
 

@@ -90,6 +90,15 @@ public struct ToolRow: Sendable, Hashable {
     public var output: String?
     /// Unix milliseconds when the call started; `nil` when the event did not say.
     public var startedAt: Int64? = nil
+
+    public init(callId: String, tool: String, title: String, ok: Bool? = nil, output: String? = nil, startedAt: Int64? = nil) {
+        self.callId = callId
+        self.tool = tool
+        self.title = title
+        self.ok = ok
+        self.output = output
+        self.startedAt = startedAt
+    }
 }
 
 public enum ApprovalState: Sendable, Hashable {

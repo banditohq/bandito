@@ -102,6 +102,12 @@ enum ThreadScroll {
         return best?.id
     }
 
+    /// The row on top of what shows, from the ids the scroll view reports as visible (top to bottom): the first one that is
+    /// a row of the thread (the typing indicator and the bottom marker are not).
+    static func topVisibleRow(visible: [String], valid: Set<String>) -> String? {
+        visible.first { valid.contains($0) }
+    }
+
     /// The first row drawn: `startID` if it is among `ids`, else the last `windowSize` of them.
     static func windowStart(ids: [String], startID: String?) -> Int {
         if let startID, let index = ids.firstIndex(of: startID) { return index }

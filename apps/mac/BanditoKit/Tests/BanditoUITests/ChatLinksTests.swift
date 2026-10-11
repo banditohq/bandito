@@ -137,4 +137,18 @@ import Testing
         #expect(ChatLinkText.filePath(of: url!) == "/Users/me/my file.png")
         #expect(ChatLinkText.filePath(of: URL(string: "https://example.com")!) == nil)
     }
+
+    @Test func lineSuffixStartFindsTheLineAndColumn() {
+        func cut(_ word: String) -> String? {
+            ChatLinks.lineSuffixStart(in: word).map { String(word[..<$0]) }
+        }
+        #expect(cut("a.rs:42") == "a.rs")
+        #expect(cut("a.rs:42:7") == "a.rs")
+        #expect(cut("a.rs") == nil)
+        #expect(cut("a.rs:") == nil)
+        #expect(cut("a.rs:x") == nil)
+        #expect(cut(":42") == "")
+        #expect(cut("a:1:2:3") == "a:1")
+        #expect(cut("12") == nil)
+    }
 }

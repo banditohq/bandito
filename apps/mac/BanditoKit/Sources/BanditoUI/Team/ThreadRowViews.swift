@@ -106,6 +106,7 @@ struct EquatableThreadRow: View, Equatable {
     }
 
     var body: some View {
+        let _ = PerfCounters.hit("ThreadRow")
         ThreadRowView(
             row: key.row, agentName: key.agentName, primaryRuntime: key.primaryRuntime, server: server, chat: chat,
             agentID: key.agentID, folder: key.folder, onError: onError)
@@ -139,6 +140,7 @@ private struct ItemView: View {
     @Environment(Router.self) private var router: Router?
 
     var body: some View {
+        let _ = PerfCounters.hit("ItemView")
         content
             // Links in a message (file paths, web addresses) open here, in the workbench beside the chat.
             .environment(\.openURL, OpenURLAction { url in

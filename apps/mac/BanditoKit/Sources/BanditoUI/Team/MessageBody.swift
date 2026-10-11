@@ -13,6 +13,7 @@ struct MessageBodyView: View {
     var streaming = false
 
     var body: some View {
+        let _ = PerfCounters.hit("MessageBody")
         let message = MessageRenderCache.shared.message(for: text, markdown: markdown, cached: !streaming)
         // A message with a web link shows the link hint on hover; the others are drawn without any hover tracking.
         // The first web link was found when the message was parsed, not on every draw.

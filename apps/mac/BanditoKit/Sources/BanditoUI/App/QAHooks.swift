@@ -2,6 +2,7 @@
 import AppKit
 import BanditoKit
 import Foundation
+import os
 
 // QA hooks for the QA copies of the app (`dev.bandito.mac.debug.qa<n>`, driven by `scripts/qa`). Debug builds only:
 // the whole file and its call sites are compiled out of a release build.
@@ -43,6 +44,8 @@ enum QACommand: Equatable {
     case workbench(String)
     /// The double-click of a title strip (`TitleBarZoom.doubleClick`), without a mouse: zooms or restores the window.
     case zoom
+    /// A performance scenario (`perf thread|inspector|market|switch|typing [result path]`, see `PerfScenarios`).
+    case perf(PerfScenario, path: String?)
 
     static func parse(_ text: String) -> QACommand? {
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -72,6 +75,11 @@ enum QACommand: Equatable {
             return .workbench(action)
         case ("zoom", nil):
             return .zoom
+        case ("perf", let rest?):
+            let words = rest.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard let name = words.first, let scenario = PerfScenario(rawValue: String(name)) else { return nil }
+            let path = words.count > 1 ? String(words[1]).trimmingCharacters(in: .whitespaces) : nil
+            return .perf(scenario, path: path?.isEmpty == false ? path : nil)
         default:
             return nil
         }
@@ -132,10 +140,13 @@ enum QAHooks {
 
     /// One command line, from the notification. Unknown commands are logged and ignored.
     static func handle(_ text: String) {
+        let log = Logger(subsystem: "dev.bandito", category: "qa")
         guard let command = QACommand.parse(text) else {
             NSLog("QA unknown command \(text)")
+            log.notice("unknown command: \(text, privacy: .public)")
             return
         }
+        log.notice("command: \(text, privacy: .public)")
         guard let router, let onboarding else { return }
         switch command {
         case .mode(let mode):
@@ -162,6 +173,8 @@ enum QAHooks {
             runWorkbench(action, router: router)
         case .zoom:
             TitleBarZoom.doubleClick()
+        case .perf(let scenario, let path):
+            PerfScenarios.start(scenario, path: path, router: router, app: app)
         }
     }
 

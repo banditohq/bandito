@@ -100,6 +100,7 @@ struct MessageContainer<Bubble: View>: View {
     }
 
     var body: some View {
+        let _ = PerfCounters.hit("MessageContainer")
         HStack(spacing: 0) {
             if fromUser { Spacer(minLength: 120) }
             VStack(alignment: fromUser ? .trailing : .leading, spacing: 5) {
@@ -117,7 +118,9 @@ struct MessageContainer<Bubble: View>: View {
                     .accessibilityActions {
                         Button(L10n.Thread.copy, action: copyRaw)
                         if canReply { Button(L10n.Thread.reply, action: reply) }
-                        if canReact, let seq {
+                        // Sixteen buttons for the reactions in every message of a thread were built whether or not anyone
+                        // listens: they are built when VoiceOver (or Voice Control) is on, and the context menu has them.
+                        if canReact, let seq, AccessibilityState.assistiveToolOn {
                             ForEach(ReactionRules.common, id: \.self) { emoji in
                                 Button("\(L10n.Message.react) \(emoji)") {
                                     chat.onReact(seq, emoji == mine ? nil : emoji)
