@@ -18,6 +18,8 @@ struct NewAgentSheet: View {
     @State private var error: UserFacingMessage?
     /// The agent made by a create that then failed on its picture; the next press only saves the picture.
     @State private var createdAgent: Agent?
+    /// The draft started from a template (counted as `agent.create.template`, see `Telemetry`).
+    @State private var startedFromTemplate = false
     /// The draft's picture, decoded for the header and the editor.
     @State private var previewPicture: CGImage?
     @State private var editingAvatar = false
@@ -90,6 +92,7 @@ struct NewAgentSheet: View {
             }
             if let template = router.takePendingTemplate() {
                 template.apply(to: &draft)
+                startedFromTemplate = true
             }
         }
         // A server that takes an agent without a folder lets the agent work in its own folder. Follows `server.info`,
@@ -197,6 +200,7 @@ struct NewAgentSheet: View {
                         var next = draft
                         template.apply(to: &next)
                         draft = next
+                        startedFromTemplate = true
                     }
                 }
             } label: {
@@ -829,6 +833,7 @@ struct NewAgentSheet: View {
                         draft.makeNewAgent(
                             workspaceID: workspaceID, existingNames: agentNames, lists: server.runtimeModels))
                     createdAgent = agent
+                    Telemetry.count(.agentCreate(startedFromTemplate ? .template : .plain))
                     // Only a folder the person chose is a recent project folder; an agent's own folder is not.
                     if !draft.cwd.isEmpty {
                         var recent = RecentFolders.load(serverID: server.id.uuidString)

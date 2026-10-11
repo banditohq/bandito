@@ -403,6 +403,7 @@ struct BundlePanel: View {
                         return
                     }
                     made = try await server.createBundle(request)
+                    Telemetry.count(.agentCreate(.bundle))
                 }
                 let answer = retrying ? BundleLogic.combined(members: members, earlier: earlier, made: made) : made
                 for row in BundleLogic.rows(of: answer, templates: members, languageCode: languageCode) {

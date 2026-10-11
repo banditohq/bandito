@@ -13,6 +13,7 @@ struct BanditoApp: App {
     @State private var focusMode = FocusModeTracker()
     @State private var onboarding: OnboardingModel
     @State private var accountHub = AccountHub()
+    @State private var telemetry = TelemetryCenter()
     // Starts Sparkle at launch: the first scheduled check runs a few seconds after it.
     private let updater = AppUpdater()
 
@@ -36,10 +37,16 @@ struct BanditoApp: App {
                 .environment(demo)
                 .environment(onboarding)
                 .environment(accountHub)
+                .environment(telemetry)
                 .environment(\.focusMode, focusMode)
                 .task {
                     // Tab and arrow keys show the focus ring; a click hides it.
                     focusMode.start()
+                }
+                .task {
+                    // Anonymous statistics: the account's token joins the pulse when someone is signed in.
+                    telemetry.attach(accountHub: accountHub)
+                    await telemetry.run(app: model)
                 }
                 .task {
                     // Actions aimed at the server that was in front are dropped when another one is chosen.
@@ -82,6 +89,7 @@ struct BanditoApp: App {
                 .environment(gestures)
                 .environment(demo)
                 .environment(accountHub)
+                .environment(telemetry)
                 .focusEffectDisabled()
         }
 

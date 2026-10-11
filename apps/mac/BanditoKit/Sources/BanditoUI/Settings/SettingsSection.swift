@@ -4,7 +4,7 @@ import SwiftUI
 /// The sections of the Settings window, in the order of the left navigation. The interface language lives in General.
 public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Sendable {
     case general, account, servers, approvals, usage, terminalFiles, browserScreen
-    case keysGestures, notifications, telegram, sounds, appearance, updates
+    case keysGestures, notifications, telegram, sounds, appearance, updates, privacy
 
     public var id: String { rawValue }
 
@@ -23,6 +23,7 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .sounds: L10n.Settings.Nav.sounds
         case .appearance: L10n.Settings.Nav.appearance
         case .updates: L10n.Settings.Nav.updates
+        case .privacy: L10n.Settings.Nav.privacy
         }
     }
 
@@ -42,6 +43,7 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .sounds: "speaker.wave.2"
         case .appearance: "paintbrush"
         case .updates: "arrow.triangle.2.circlepath"
+        case .privacy: "hand.raised"
         }
     }
 
@@ -61,6 +63,8 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .sounds: BanditoPalette.badgeBrown
         case .appearance: BanditoPalette.badgeIndigo
         case .updates: BanditoPalette.badgeSlate
+        // Every badge colour is taken by another section; the privacy badge shares the darkest grey of Terminal & Files.
+        case .privacy: BanditoPalette.badgeDarkGray
         }
     }
 }

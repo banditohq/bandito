@@ -2645,6 +2645,7 @@ public enum L10n {
             public static var general: String { L10n.tr("settings.nav.general") }
             public static var keysGestures: String { L10n.tr("settings.nav.keysGestures") }
             public static var notifications: String { L10n.tr("settings.nav.notifications") }
+            public static var privacy: String { L10n.tr("settings.nav.privacy") }
             public static var servers: String { L10n.tr("settings.nav.servers") }
             public static var sounds: String { L10n.tr("settings.nav.sounds") }
             public static var telegram: String { L10n.tr("settings.nav.telegram") }
@@ -2667,6 +2668,19 @@ public enum L10n {
             public static var statusAsk: String { L10n.tr("settings.notifications.statusAsk") }
             public static var statusDenied: String { L10n.tr("settings.notifications.statusDenied") }
             public static var system: String { L10n.tr("settings.notifications.system") }
+        }
+
+        public enum Privacy {
+            public static var crashes: String { L10n.tr("settings.privacy.crashes") }
+            public static var crashesHint: String { L10n.tr("settings.privacy.crashesHint") }
+            public static var delete: String { L10n.tr("settings.privacy.delete") }
+            public static var deleteBody: String { L10n.tr("settings.privacy.deleteBody") }
+            public static var deleteFailed: String { L10n.tr("settings.privacy.deleteFailed") }
+            public static var deleteHint: String { L10n.tr("settings.privacy.deleteHint") }
+            public static var deleteTitle: String { L10n.tr("settings.privacy.deleteTitle") }
+            public static var intro: String { L10n.tr("settings.privacy.intro") }
+            public static var stats: String { L10n.tr("settings.privacy.stats") }
+            public static var statsHint: String { L10n.tr("settings.privacy.statsHint") }
         }
 
         public enum Servers {
@@ -3093,6 +3107,44 @@ public enum L10n {
             public static var subtitle: String { L10n.tr("team.home.subtitle") }
             public static var templates: String { L10n.tr("team.home.templates") }
             public static var title: String { L10n.tr("team.home.title") }
+        }
+    }
+
+    public enum Telemetry {
+
+        public enum Banner {
+            public static var aria: String { L10n.tr("telemetry.banner.aria") }
+        }
+
+        public enum Crash {
+            public static var body: String { L10n.tr("telemetry.crash.body") }
+            public static var send: String { L10n.tr("telemetry.crash.send") }
+            public static var title: String { L10n.tr("telemetry.crash.title") }
+        }
+
+        public enum Notice {
+            public static var accept: String { L10n.tr("telemetry.notice.accept") }
+            public static var collectHeading: String { L10n.tr("telemetry.notice.collectHeading") }
+            public static var decline: String { L10n.tr("telemetry.notice.decline") }
+            public static var intro: String { L10n.tr("telemetry.notice.intro") }
+            public static var neverHeading: String { L10n.tr("telemetry.notice.neverHeading") }
+            public static var note: String { L10n.tr("telemetry.notice.note") }
+            public static var policy: String { L10n.tr("telemetry.notice.policy") }
+            public static var title: String { L10n.tr("telemetry.notice.title") }
+
+            public enum Collect {
+                public static var app: String { L10n.tr("telemetry.notice.collect.app") }
+                public static var counts: String { L10n.tr("telemetry.notice.collect.counts") }
+                public static var language: String { L10n.tr("telemetry.notice.collect.language") }
+                public static var servers: String { L10n.tr("telemetry.notice.collect.servers") }
+            }
+
+            public enum Never {
+                public static var addresses: String { L10n.tr("telemetry.notice.never.addresses") }
+                public static var code: String { L10n.tr("telemetry.notice.never.code") }
+                public static var content: String { L10n.tr("telemetry.notice.never.content") }
+                public static var secrets: String { L10n.tr("telemetry.notice.never.secrets") }
+            }
         }
     }
 

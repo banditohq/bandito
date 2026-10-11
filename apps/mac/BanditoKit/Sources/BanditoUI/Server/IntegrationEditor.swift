@@ -272,6 +272,9 @@ struct IntegrationEditor: View {
         defer { checking = false }
         do {
             let result = try await server.testIntegration(id)
+            if let catalogID = draft.catalogID, let counter = CatalogCounterID(catalogID) {
+                Telemetry.count(.integration(counter, ok: result.ok))
+            }
             test = result
             onChecked(id, result)
         } catch {

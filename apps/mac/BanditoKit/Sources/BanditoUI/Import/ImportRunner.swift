@@ -45,6 +45,7 @@ final class ImportRunner {
     /// Starts the import. A second call while it runs, or after it ran, does nothing.
     func start(plan: ImportPlan, scanSkips: [ImportSkip], server: ServerModel, runtime: RuntimeKind) {
         guard !running, !finished else { return }
+        Telemetry.count(.importRun)
         running = true
         let steps = plan.steps
         var report: [ImportLine] = plan.skippedByYou.map {
