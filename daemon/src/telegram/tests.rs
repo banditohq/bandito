@@ -1549,7 +1549,7 @@ fn every_string_the_code_asks_for_exists_and_none_is_unused() {
 
 #[tokio::test]
 async fn messages_to_one_chat_are_spaced() {
-    let send_gap = Duration::from_millis(150);
+    let send_gap = Duration::from_millis(300);
     let rig = rig_with(Timing { send_gap, ..fast() }).await;
     rig.link(OWNER);
     rig.link(2);
@@ -1561,8 +1561,9 @@ async fn messages_to_one_chat_are_spaced() {
     let mine: Vec<_> = calls.iter().filter(|c| c.body["chat_id"] == OWNER).collect();
     assert_eq!(mine.len(), 3);
     // The fake stamps each request when it arrives, and a request leaves a little after the bot decided to send it
-    // (curl starts), so the arrivals may come closer than the gap; 0.8 of the gap still shows the spacing.
-    let least = send_gap.mul_f64(0.8);
+    // (curl starts, which a loaded machine delays by tens of milliseconds), so the arrivals may come closer than the
+    // gap; half of it still tells spaced sends from unspaced ones, which arrive within milliseconds.
+    let least = send_gap.mul_f64(0.5);
     for pair in mine.windows(2) {
         let gap = pair[1].at - pair[0].at;
         assert!(gap >= least, "{gap:?} < {least:?}");
