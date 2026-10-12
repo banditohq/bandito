@@ -332,3 +332,18 @@ import Testing
         #expect(!epoch.isCurrent(ticket))
     }
 }
+
+@Suite struct SubscriptionHintTests {
+    @Test func anHttpsAddressIsAGuideLink() {
+        #expect(SubscriptionHint.guideURL("https://x.ai/cli") == URL(string: "https://x.ai/cli"))
+        #expect(SubscriptionHint.guideURL("  https://x.ai/cli\n") == URL(string: "https://x.ai/cli"))
+    }
+
+    @Test func aReasonInWordsOrAnUnsafeAddressIsNotALink() {
+        #expect(SubscriptionHint.guideURL("no built-in installer for this OS and CPU") == nil)
+        #expect(SubscriptionHint.guideURL("http://x.ai/cli") == nil)
+        #expect(SubscriptionHint.guideURL("file:///etc/passwd") == nil)
+        #expect(SubscriptionHint.guideURL("see https://x.ai/cli") == nil)
+        #expect(SubscriptionHint.guideURL("") == nil)
+    }
+}

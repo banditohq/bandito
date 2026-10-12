@@ -260,7 +260,7 @@ struct SubscriptionsStep: View {
     /// One status per row. A CLI Bandito cannot install shows the daemon's hint (a link or a reason) under it.
     private func statusLine(_ kind: RuntimeKind, _ action: SubscriptionRowAction) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(statusText(action))
+            Text(action == .checking && model.statusError != nil ? L10n.AgentSheet.statusUnknown : statusText(action))
                 .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(action == .ready ? AvatarColor.sage.color : Color.Bandito.text3)
             if action == .installing, let line = InstallLog.lastLine(model.setup.log) {
@@ -270,12 +270,21 @@ struct SubscriptionsStep: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
-            if action == .installByHand, let hint = model.component(kind)?.hint {
-                Text(hint)
-                    .font(BanditoFont.text(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+            if action == .installByHand {
+                let hint = model.component(kind)?.hint ?? ""
+                // The daemon's hint is a guide's address for Grok: a link to open, not a line of text to copy.
+                if let url = SubscriptionHint.guideURL(hint) {
+                    Button(L10n.AgentSheet.installGuide) { SystemActions.open(url) }
+                        .font(BanditoFont.text(size: 12, weight: 500))
+                        .banditoButton(.link)
+                } else {
+                    // The daemon's reason is English: the screen says the same in the person's language.
+                    Text(L10n.Onboarding.Subs.noInstaller)
+                        .font(BanditoFont.text(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -284,7 +293,8 @@ struct SubscriptionsStep: View {
     private func actions(_ kind: RuntimeKind, _ action: SubscriptionRowAction) -> some View {
         switch action {
         case .checking:
-            ProgressView().controlSize(.small)
+            // The read failed (the error and "Try again" are below): a spinner that never ends would say "wait".
+            if model.statusError == nil { ProgressView().controlSize(.small) }
         case .install:
             Button(L10n.Setup.install) { Task { await model.install(kind) } }
                 .banditoButton(.quiet(size: .regular))
