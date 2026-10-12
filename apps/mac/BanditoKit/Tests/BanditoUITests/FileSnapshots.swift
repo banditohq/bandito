@@ -62,5 +62,7 @@ import Testing
             onToggleDetails: {}
         )
         .background(Color.Bandito.bg)
+        // Measured in one pass: the toolbar chooses for the width offered, not from widths another test left.
+        .environment(\.firstFitRememberedFirst, false)
     }
 }

@@ -84,6 +84,8 @@ final class AuditEnvironment {
             .environment(telemetry)
             .environment(updates)
             .environment(onboarding)
+            // One pass, no second frame: a remembered `FirstFit` choice for another width would stand.
+            .environment(\.firstFitRememberedFirst, false)
     }
 }
 
