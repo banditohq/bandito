@@ -786,7 +786,7 @@ fn export_inner(input: &ExportInput<'_>, archive: &Path, events_tmp: &Path, limi
         let mut header = tar_header(events_size, 0o644, 0);
         builder
             .append_data(&mut header, "events.jsonl", &mut file)
-            .map_err(&fail)?;
+            .map_err(fail)?;
         entries.push(FileEntry {
             path: "events.jsonl".into(),
             size: events_size,
@@ -799,7 +799,7 @@ fn export_inner(input: &ExportInput<'_>, archive: &Path, events_tmp: &Path, limi
         let mut header = tar_header(bytes.len() as u64, 0o644, 0);
         builder
             .append_data(&mut header, &path, bytes.as_slice())
-            .map_err(&fail)?;
+            .map_err(fail)?;
         entries.push(FileEntry {
             path,
             size: bytes.len() as u64,
@@ -845,7 +845,7 @@ fn export_inner(input: &ExportInput<'_>, archive: &Path, events_tmp: &Path, limi
             let mut header = tar_header(size, 0o644, 0);
             builder
                 .append_data(&mut header, &archive_path, bytes.as_slice())
-                .map_err(&fail)?;
+                .map_err(fail)?;
             entries.push(FileEntry {
                 path: archive_path,
                 size,
@@ -861,7 +861,7 @@ fn export_inner(input: &ExportInput<'_>, archive: &Path, events_tmp: &Path, limi
             let mut header = tar_header(size, 0o644, 0);
             builder
                 .append_data(&mut header, &archive_path, &mut reader)
-                .map_err(&fail)?;
+                .map_err(fail)?;
             if reader.short {
                 return Err(MigrateError::new(
                     "io",
@@ -889,11 +889,11 @@ fn export_inner(input: &ExportInput<'_>, archive: &Path, events_tmp: &Path, limi
     let mut header = tar_header(json.len() as u64, 0o644, 0);
     builder
         .append_data(&mut header, "manifest.json", json.as_slice())
-        .map_err(&fail)?;
-    let encoder = builder.into_inner().map_err(&fail)?;
-    let mut out = encoder.finish().map_err(&fail)?;
-    out.flush().map_err(&fail)?;
-    out.inner.sync_all().map_err(&fail)?;
+        .map_err(fail)?;
+    let encoder = builder.into_inner().map_err(fail)?;
+    let mut out = encoder.finish().map_err(fail)?;
+    out.flush().map_err(fail)?;
+    out.inner.sync_all().map_err(fail)?;
     Ok(Exported {
         size: out.written,
         sha256: hex::encode(out.hasher.finalize()),

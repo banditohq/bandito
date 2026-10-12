@@ -472,15 +472,14 @@ public actor DemoDaemonTransport: RPCTransport {
     }
 
     private var processes: [String: Any] {
-        var owners: [[String: Any]] = setup.agentIDs.prefix(12).enumerated().map { index, id in
-            [
-                "owner": ["kind": "agent", "id": id], "cpu_percent": Double(index % 5) * 1.7 + 0.2,
-                "rss_bytes": Int64(80 + index * 23) * 1_048_576,
-                "processes": [
-                    ["pid": 6000 + index * 3, "name": "claude", "cmd": "claude"],
-                    ["pid": 6001 + index * 3, "name": "node", "cmd": "node mcp-server.js"],
-                ],
-            ]
+        // Typed parts: one literal of mixed values took the CI compiler too long to type-check.
+        var owners: [[String: Any]] = setup.agentIDs.prefix(12).enumerated().map { (index: Int, id: String) -> [String: Any] in
+            let owner: [String: Any] = ["kind": "agent", "id": id]
+            let cpu: Double = Double(index % 5) * 1.7 + 0.2
+            let rss: Int64 = Int64(80 + index * 23) * 1_048_576
+            let claude: [String: Any] = ["pid": 6000 + index * 3, "name": "claude", "cmd": "claude"]
+            let node: [String: Any] = ["pid": 6001 + index * 3, "name": "node", "cmd": "node mcp-server.js"]
+            return ["owner": owner, "cpu_percent": cpu, "rss_bytes": rss, "processes": [claude, node]]
         }
         owners.append([
             "owner": ["kind": "terminal", "id": DemoDaemonFiles.terminalID], "cpu_percent": 0.4,
