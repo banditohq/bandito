@@ -1360,6 +1360,24 @@ public enum L10n {
             public static func wantsToRun(name: String, command: String) -> String { L10n.tr("ios.crew.wantsToRun", name, command) }
         }
 
+        public enum Inbox {
+            public static var command: String { L10n.tr("ios.inbox.command") }
+            public static func connect(name: String, service: String) -> String { L10n.tr("ios.inbox.connect", name, service) }
+            public static var connectOnMac: String { L10n.tr("ios.inbox.connectOnMac") }
+            public static var empty: String { L10n.tr("ios.inbox.empty") }
+            public static var emptyMessage: String { L10n.tr("ios.inbox.emptyMessage") }
+            public static var faceIDHint: String { L10n.tr("ios.inbox.faceIDHint") }
+            public static var faceIDReason: String { L10n.tr("ios.inbox.faceIDReason") }
+            public static var failed: String { L10n.tr("ios.inbox.failed") }
+            public static func form(name: String) -> String { L10n.tr("ios.inbox.form", name) }
+            public static var invalidForm: String { L10n.tr("ios.inbox.invalidForm") }
+            public static var openHint: String { L10n.tr("ios.inbox.openHint") }
+            public static var reason: String { L10n.tr("ios.inbox.reason") }
+            public static var risky: String { L10n.tr("ios.inbox.risky") }
+            public static var send: String { L10n.tr("ios.inbox.send") }
+            public static var service: String { L10n.tr("ios.inbox.service") }
+        }
+
         public enum Settings {
             public static var openSettings: String { L10n.tr("ios.settings.openSettings") }
 

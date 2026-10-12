@@ -136,6 +136,23 @@ public struct ApprovalRow: Sendable, Hashable {
     public var state: ApprovalState
     /// What the answer is about, for a question the daemon asks itself (`agent.create`); nil for the rest.
     public var input: JSONValue? = nil
+    /// When the daemon asked (Unix ms); nil when the request came without a time (a thread loaded from an older daemon).
+    public var ts: Int64? = nil
+
+    public init(
+        approvalId: String, tool: String, title: String, command: String?, diff: String?, reason: String,
+        state: ApprovalState, input: JSONValue? = nil, ts: Int64? = nil
+    ) {
+        self.approvalId = approvalId
+        self.tool = tool
+        self.title = title
+        self.command = command
+        self.diff = diff
+        self.reason = reason
+        self.state = state
+        self.input = input
+        self.ts = ts
+    }
 
     /// True for a request that is allowed only on its own card, after the person has read all of it: a request to
     /// create an agent. A shortcut, the menu bar, a notification or a message from another client never allows it.
@@ -395,7 +412,7 @@ public struct AgentThread: Sendable, Hashable {
                 .approval(
                     ApprovalRow(
                         approvalId: id, tool: tool, title: title, command: command, diff: diff, reason: reason,
-                        state: .pending, input: input)))
+                        state: .pending, input: input, ts: e.ts)))
         case .approvalResolved(let id, let decision, let by, let remember):
             if let i = items.firstIndex(where: { $0.id == "approval-\(id)" }), case .approval(var row) = items[i] {
                 row.state = decision == .allow ? .approved(by: by, remember: remember) : .denied(by: by)

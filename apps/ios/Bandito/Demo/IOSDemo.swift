@@ -80,7 +80,7 @@ enum IOSDemo {
     static func start(withTeam: Bool = true) async -> ServerModel {
         let members = withTeam ? team : []
         let ids = members.indices.map { "ios-demo-\($0 + 1)" }
-        let (server, _) = DemoDaemon.server(
+        let (server, transport) = DemoDaemon.server(
             id: serverID, name: "Demo", setup: DemoDaemonSetup(agentIDs: ids, hostname: "demo"))
         await server.connect()
         let now = Int64(Date().timeIntervalSince1970 * 1000)
@@ -103,20 +103,58 @@ enum IOSDemo {
         for id in ids {
             server.threadSummary(for: id).markRead()
         }
-        if let forge = ids.first {
-            server.apply(
-                Event(
-                    seq: server.thread(for: forge).lastSeq + 1, agentId: forge, ts: now,
-                    body: .approvalRequested(
-                        approvalId: "ios-demo-approval-1", callId: "ios-demo-call-1", tool: "bash",
-                        title: "git push origin feat/ios-crew", command: "git push origin feat/ios-crew", diff: nil,
-                        reason: "Publishes the branch")))
+        // What waits for the person, one of each kind the Inbox lists. Each request is linked to its agent, so the demo
+        // daemon names the agent when the person answers it (the answer then leaves the Inbox).
+        func agent(named name: String) -> String? {
+            zip(members, ids).first { $0.0.name == name }?.1
         }
-        if ids.count > 1 {
-            server.apply(
-                Event(
-                    seq: server.thread(for: ids[1]).lastSeq + 1, agentId: ids[1], ts: now,
-                    body: .messageAssistant(text: unreadReply)))
+        func deliver(_ body: EventBody, to agentID: String) {
+            server.apply(Event(seq: server.thread(for: agentID).lastSeq + 1, agentId: agentID, ts: now, body: body))
+        }
+        if let forge = agent(named: "Forge") {
+            // A risky approval (the push), and an ordinary one (the tests), both of Forge.
+            deliver(
+                .approvalRequested(
+                    approvalId: "ios-demo-approval-1", callId: "ios-demo-call-1", tool: "bash",
+                    title: "git push origin feat/ios-crew", command: "git push origin feat/ios-crew", diff: nil,
+                    reason: "risky: git push"),
+                to: forge)
+            deliver(
+                .approvalRequested(
+                    approvalId: "ios-demo-approval-2", callId: "ios-demo-call-2", tool: "bash",
+                    title: "swift test -q", command: "swift test -q", diff: nil,
+                    reason: "approval required for every action"),
+                to: forge)
+            await transport.link("ios-demo-approval-1", toAgent: forge)
+            await transport.link("ios-demo-approval-2", toAgent: forge)
+        }
+        if let quill = agent(named: "Quill") {
+            let form = FormSpec(
+                title: "Changelog date", intro: "Which day goes on the changelog?", kind: .question,
+                fields: [
+                    FormField(id: "day", label: "Release day", type: .date, isRequired: true, placeholder: "2026-10-13"),
+                    FormField(
+                        id: "channel", label: "Channel", type: .choice, options: ["stable", "beta"],
+                        defaultValue: .string("stable")),
+                    FormField(id: "notes", label: "Mention in the notes", type: .boolean, defaultValue: .bool(true)),
+                ],
+                submitLabel: "Send", rejectLabel: "Not now")
+            deliver(.formRequested(formId: "ios-demo-form-1", spec: form), to: quill)
+            await transport.link("ios-demo-form-1", toAgent: quill)
+        }
+        if let watch = agent(named: "Watch") {
+            // A question with the buttons the agent offers under it.
+            deliver(
+                .agentQuickReplies(
+                    buttons: [
+                        QuickReplyButton(label: "Clear the cache", reply: "Yes, clear the cache."),
+                        QuickReplyButton(label: "Not now", reply: "Not now, leave it."),
+                    ],
+                    link: nil, progress: nil),
+                to: watch)
+        }
+        if let scout = agent(named: "Scout") {
+            deliver(.messageAssistant(text: unreadReply), to: scout)
         }
         return server
     }

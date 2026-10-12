@@ -3126,5 +3126,20 @@
   "ios.settings.about.terms": "利用規約",
   "ios.settings.security.minutes": {
     "other": "{count} 分"
-  }
+  },
+  "ios.inbox.empty": "あなたの対応待ちはありません",
+  "ios.inbox.emptyMessage": "エージェントからの承認、質問、フォームがここに表示されます。",
+  "ios.inbox.risky": "リスクあり",
+  "ios.inbox.form": "{name} がフォームへの入力を求めています",
+  "ios.inbox.connect": "{name} が {service} の接続を求めています",
+  "ios.inbox.faceIDReason": "Bandito でリスクのある操作を承認",
+  "ios.inbox.faceIDHint": "許可には Face ID が必要です。",
+  "ios.inbox.failed": "回答を送信できませんでした。接続を確認して、もう一度お試しください。",
+  "ios.inbox.invalidForm": "赤く表示された項目を確認してください。",
+  "ios.inbox.reason": "確認の理由",
+  "ios.inbox.command": "実行される内容",
+  "ios.inbox.service": "サービス",
+  "ios.inbox.connectOnMac": "サービスの接続は、今のところ Mac で行います。",
+  "ios.inbox.send": "送信",
+  "ios.inbox.openHint": "詳細を開きます"
 }

@@ -3126,5 +3126,20 @@
   "ios.settings.about.terms": "条款",
   "ios.settings.security.minutes": {
     "other": "{count} 分钟"
-  }
+  },
+  "ios.inbox.empty": "没有需要你处理的事",
+  "ios.inbox.emptyMessage": "智能体的审批、问题和表单会显示在这里。",
+  "ios.inbox.risky": "有风险",
+  "ios.inbox.form": "{name} 请你填写一份表单",
+  "ios.inbox.connect": "{name} 想连接 {service}",
+  "ios.inbox.faceIDReason": "在 Bandito 中批准有风险的操作",
+  "ios.inbox.faceIDHint": "允许前需要通过面容 ID 验证。",
+  "ios.inbox.failed": "无法发送你的回复。请检查连接后重试。",
+  "ios.inbox.invalidForm": "请检查标红的字段。",
+  "ios.inbox.reason": "询问原因",
+  "ios.inbox.command": "将要执行的内容",
+  "ios.inbox.service": "服务",
+  "ios.inbox.connectOnMac": "目前请在 Mac 上连接服务。",
+  "ios.inbox.send": "发送",
+  "ios.inbox.openHint": "打开详情"
 }

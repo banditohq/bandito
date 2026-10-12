@@ -3166,5 +3166,20 @@
   "ios.settings.security.minutes": {
     "one": "{count} minuto",
     "other": "{count} minutos"
-  }
+  },
+  "ios.inbox.empty": "Ninguém está esperando por você",
+  "ios.inbox.emptyMessage": "Aprovações, perguntas e formulários dos seus agentes aparecem aqui.",
+  "ios.inbox.risky": "Arriscado",
+  "ios.inbox.form": "{name} pede que você preencha um formulário",
+  "ios.inbox.connect": "{name} quer conectar {service}",
+  "ios.inbox.faceIDReason": "Aprovar uma ação arriscada no Bandito",
+  "ios.inbox.faceIDHint": "Permitir pede o Face ID.",
+  "ios.inbox.failed": "Não foi possível enviar sua resposta. Verifique a conexão e tente de novo.",
+  "ios.inbox.invalidForm": "Confira os campos marcados em vermelho.",
+  "ios.inbox.reason": "Por que pergunta",
+  "ios.inbox.command": "O que vai executar",
+  "ios.inbox.service": "Serviço",
+  "ios.inbox.connectOnMac": "Por enquanto, a conexão de serviços é feita no Mac.",
+  "ios.inbox.send": "Enviar",
+  "ios.inbox.openHint": "Abre os detalhes"
 }

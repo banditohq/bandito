@@ -3166,5 +3166,20 @@
   "ios.settings.security.minutes": {
     "one": "{count} minute",
     "other": "{count} minutes"
-  }
+  },
+  "ios.inbox.empty": "Nothing needs you",
+  "ios.inbox.emptyMessage": "Approvals, questions and forms from your agents wait here.",
+  "ios.inbox.risky": "Risky",
+  "ios.inbox.form": "{name} asks you to fill in a form",
+  "ios.inbox.connect": "{name} wants to connect {service}",
+  "ios.inbox.faceIDReason": "Approve a risky action in Bandito",
+  "ios.inbox.faceIDHint": "Allowing this asks for Face ID.",
+  "ios.inbox.failed": "Could not send your answer. Check the connection and try again.",
+  "ios.inbox.invalidForm": "Check the fields marked in red.",
+  "ios.inbox.reason": "Why it asks",
+  "ios.inbox.command": "What it runs",
+  "ios.inbox.service": "Service",
+  "ios.inbox.connectOnMac": "Connecting a service is done on your Mac for now.",
+  "ios.inbox.send": "Send",
+  "ios.inbox.openHint": "Opens the details"
 }

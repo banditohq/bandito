@@ -3126,5 +3126,20 @@
   "ios.settings.about.terms": "이용약관",
   "ios.settings.security.minutes": {
     "other": "{count}분"
-  }
+  },
+  "ios.inbox.empty": "지금 기다리는 항목이 없어요",
+  "ios.inbox.emptyMessage": "에이전트의 승인 요청, 질문, 양식이 여기에 나타나요.",
+  "ios.inbox.risky": "위험",
+  "ios.inbox.form": "{name}이(가) 양식 작성을 요청했어요",
+  "ios.inbox.connect": "{name}이(가) {service} 연결을 요청했어요",
+  "ios.inbox.faceIDReason": "Bandito에서 위험한 작업 승인",
+  "ios.inbox.faceIDHint": "허용하려면 Face ID가 필요해요.",
+  "ios.inbox.failed": "답변을 보내지 못했어요. 연결을 확인하고 다시 시도하세요.",
+  "ios.inbox.invalidForm": "빨간색으로 표시된 항목을 확인하세요.",
+  "ios.inbox.reason": "확인이 필요한 이유",
+  "ios.inbox.command": "실행될 내용",
+  "ios.inbox.service": "서비스",
+  "ios.inbox.connectOnMac": "서비스 연결은 당분간 Mac에서 해요.",
+  "ios.inbox.send": "보내기",
+  "ios.inbox.openHint": "자세히 엽니다"
 }

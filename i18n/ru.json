@@ -3249,5 +3249,20 @@
     "few": "{count} минуты",
     "many": "{count} минут",
     "other": "{count} минуты"
-  }
+  },
+  "ios.inbox.empty": "Никто не ждёт",
+  "ios.inbox.emptyMessage": "Одобрения, вопросы и формы от агентов появятся здесь.",
+  "ios.inbox.risky": "Рискованно",
+  "ios.inbox.form": "{name} просит заполнить форму",
+  "ios.inbox.connect": "{name} хочет подключить {service}",
+  "ios.inbox.faceIDReason": "Одобрить рискованное действие в Bandito",
+  "ios.inbox.faceIDHint": "Разрешить можно после Face ID.",
+  "ios.inbox.failed": "Не удалось отправить ответ. Проверьте соединение и попробуйте снова.",
+  "ios.inbox.invalidForm": "Проверьте поля, отмеченные красным.",
+  "ios.inbox.reason": "Почему спрашивает",
+  "ios.inbox.command": "Что будет выполнено",
+  "ios.inbox.service": "Сервис",
+  "ios.inbox.connectOnMac": "Пока подключать сервисы можно на Mac.",
+  "ios.inbox.send": "Отправить",
+  "ios.inbox.openHint": "Открывает подробности"
 }
