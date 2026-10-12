@@ -11,13 +11,18 @@ struct CrewScreen: View {
 
     /// The server shown; nil means the first one (the list of servers can change under the screen).
     @State private var chosenServerID: UUID?
+    /// The chats opened from the list (a waiting card pushes its chat by hand, so it has no disclosure chevron).
+    @State private var path: [CrewRoute] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if let server = currentServer {
-                    CrewList(server: server, servers: servers, onChoose: { chosenServerID = $0 })
-                        .id(server.id)
+                    CrewList(
+                        server: server, servers: servers, onChoose: { chosenServerID = $0 },
+                        open: { path.append($0) }
+                    )
+                    .id(server.id)
                 } else {
                     WelcomeView(onConnect: onConnect)
                 }
@@ -25,12 +30,22 @@ struct CrewScreen: View {
             .navigationTitle(L10n.Ios.Tab.crew)
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.hidden, for: .navigationBar)
+            .navigationDestination(for: CrewRoute.self) { route in
+                AgentChatStub(name: route.name)
+            }
         }
+        .onChange(of: chosenServerID) { _, _ in path = [] }
     }
 
     private var currentServer: ServerModel? {
         servers.first { $0.id == chosenServerID } ?? servers.first
     }
+}
+
+/// A chat opened from the Crew list: the agent and its name, for the chat's title.
+struct CrewRoute: Hashable {
+    let agentID: String
+    let name: String
 }
 
 /// The list of one server's crew. Reads the server's agents and their thread summaries; each row is an `Equatable`
@@ -39,6 +54,8 @@ struct CrewList: View {
     let server: ServerModel
     let servers: [ServerModel]
     let onChoose: (UUID) -> Void
+    /// Opens an agent's chat (the screen's navigation path).
+    let open: (CrewRoute) -> Void
 
     @State private var pinned: [String] = []
     @State private var showsCreateNote = false
@@ -55,13 +72,15 @@ struct CrewList: View {
             if !waiting.isEmpty {
                 Section {
                     ForEach(waiting) { facts in
-                        NavigationLink {
-                            AgentChatStub(name: facts.name)
+                        // A button, not a link: the card is full width, with no disclosure chevron of the list.
+                        Button {
+                            open(CrewRoute(agentID: facts.id, name: facts.name))
                         } label: {
                             NeedsYouCard(facts: facts)
+                                .padding(.vertical, BanditoSpace.s1)
                         }
+                        .buttonStyle(.plain)
                         .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: BanditoSpace.s1, leading: BanditoSpace.s4, bottom: BanditoSpace.s1, trailing: BanditoSpace.s4))
                         .listRowSeparator(.hidden)
                     }
                 } header: {
@@ -78,9 +97,7 @@ struct CrewList: View {
             } else {
                 Section {
                     ForEach(rows) { facts in
-                        NavigationLink {
-                            AgentChatStub(name: facts.name)
-                        } label: {
+                        NavigationLink(value: CrewRoute(agentID: facts.id, name: facts.name)) {
                             CrewAgentRow(facts: facts).equatable()
                         }
                         .listRowBackground(Color.Bandito.surface1)

@@ -8,8 +8,8 @@ import UIKit
 @testable import Bandito
 
 /// Work budgets of the Crew screen, counted rather than timed (like the Mac's `WorkBudgetTests`): how many times a row
-/// is evaluated while a reply streams. A streamed token changes no row's facts except the preview, which is written at
-/// most once per 300 ms, so a reply of 100 pieces makes its row once or twice, never once per piece.
+/// is evaluated while a reply streams. A streamed token changes no row's facts except the preview, and the preview is
+/// written at most once per interval, so a reply of 100 pieces makes its row once or twice, never once per piece.
 @MainActor
 @Suite struct CrewSpeedTests {
     /// Waits until the window has laid out and the streams have landed.
@@ -19,6 +19,15 @@ import UIKit
 
     @Test func aStreamedReplyMakesItsRowAtMostTwice() async {
         let server = await IOSDemo.start()
+        // An agent with no message yet: its first streamed piece is written at once, the rest wait for the interval.
+        let streamer = "ios-speed-stream"
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        server.installSyntheticAgent(
+            Agent(
+                id: streamer, name: "Stream", role: "Speed", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: now, updatedAt: now, status: .working),
+            items: [])
+
         let before = CrewCounters.rowBodies
         // In the app's own scene, so that the list is laid out and its rows are built (a window outside a scene is not).
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
@@ -29,19 +38,17 @@ import UIKit
         window.layoutIfNeeded()
         await settle()
         // The counter works: the rows were evaluated when the screen was built.
-        #expect(CrewCounters.rowBodies - before >= IOSDemo.team.count, "the screen built \(CrewCounters.rowBodies - before) rows")
+        #expect(CrewCounters.rowBodies - before >= IOSDemo.team.count + 1, "the screen built \(CrewCounters.rowBodies - before) rows")
 
-        // As the Mac's WorkBudgetTests: the streamed preview is written at most once per interval, and the interval is
-        // widened for the stream, so the count does not depend on how fast a debug build applies 100 pieces.
+        // As the Mac's WorkBudgetTests: the streamed preview's interval is widened for the stream, so the count does not
+        // depend on how fast a debug build applies 100 pieces.
         let interval = AgentThreadState.streamPreviewInterval
         AgentThreadState.streamPreviewInterval = .seconds(60)
         defer { AgentThreadState.streamPreviewInterval = interval }
 
-        let forge = "ios-demo-1"
         let streamStart = CrewCounters.rowBodies
-        let now = Int64(Date().timeIntervalSince1970 * 1000)
         for piece in 0..<100 {
-            server.apply(Event(seq: 0, agentId: forge, ts: now, body: .messageDelta(text: "word\(piece) ")))
+            server.apply(Event(seq: 0, agentId: streamer, ts: now, body: .messageDelta(text: "word\(piece) ")))
         }
         await settle()
         let made = CrewCounters.rowBodies - streamStart

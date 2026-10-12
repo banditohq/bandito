@@ -105,8 +105,23 @@ import Testing
         let server = await IOSDemo.start()
         let scout = server.sortedAgents.first { $0.name == "Scout" }!.id
         let rows = CrewFacts.build(server: server, pinned: [scout])
-        #expect(rows.first?.id == scout)
-        #expect(rows.first?.isPinned == true)
+        // The lead stays first; the pinned agent comes right after it.
+        #expect(rows.first?.isLead == true)
+        #expect(rows.dropFirst().first?.id == scout)
+        #expect(rows.dropFirst().first?.isPinned == true)
+        await server.disconnect()
+    }
+
+    @Test func theDemoTeamHasHistoryALeadAndOneUnreadReply() async {
+        let server = await IOSDemo.start()
+        let rows = CrewFacts.build(server: server, pinned: [])
+        #expect(rows.first { $0.name == "Forge" }?.isLead == true)
+        #expect(rows.filter(\.isLead).count == 1)
+        #expect(rows.first { $0.name == "Scout" }?.unread == 1)
+        #expect(rows.first { $0.name == "Forge" }?.unread == 0)
+        #expect(rows.first { $0.name == "Scout" }?.preview == IOSDemo.unreadReply)
+        #expect(rows.first { $0.name == "Watch" }?.preview == "The server disk is 81% full. Should I clear the cache?")
+        #expect(rows.allSatisfy { $0.preview != nil })
         await server.disconnect()
     }
 

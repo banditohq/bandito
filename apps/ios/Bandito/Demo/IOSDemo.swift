@@ -11,19 +11,50 @@ enum IOSDemo {
     static let serverID = UUID(uuidString: "6F0B2C1E-8D7A-4C3B-9A51-0B1D2E3F4A5B")!
     static let officeServerID = UUID(uuidString: "2A7D9E40-5B1C-4F8E-8C33-7E0A1B2C3D4E")!
 
+    /// One message of a demo agent's history: the person's (or the agent's), how long ago it was.
+    struct Turn: Sendable {
+        let fromPerson: Bool
+        let text: String
+        let minutesAgo: Int64
+    }
+
     struct Member: Sendable {
         let name: String
         let role: String
         let runtime: RuntimeKind
         let status: AgentStatus
+        var lead = false
+        /// The history the agent starts with, oldest first. The newest agent message is its last line.
+        var history: [Turn] = []
     }
 
     static let team: [Member] = [
-        Member(name: "Forge", role: "Builder", runtime: .claude, status: .working),
-        Member(name: "Scout", role: "Researcher", runtime: .codex, status: .idle),
-        Member(name: "Watch", role: "On call", runtime: .grok, status: .needsYou),
-        Member(name: "Quill", role: "Docs", runtime: .claude, status: .error),
+        Member(
+            name: "Forge", role: "Builder", runtime: .claude, status: .working, lead: true,
+            history: [
+                Turn(fromPerson: true, text: "Look at the build and push the branch.", minutesAgo: 9),
+                Turn(fromPerson: false, text: "Build is green. Pushing feat/ios-crew next.", minutesAgo: 4),
+            ]),
+        Member(
+            name: "Scout", role: "Researcher", runtime: .codex, status: .idle,
+            history: [
+                Turn(fromPerson: true, text: "What do the sources say about the release?", minutesAgo: 75),
+                Turn(fromPerson: false, text: "Two of the three sources agree on the date.", minutesAgo: 70),
+            ]),
+        Member(
+            name: "Watch", role: "On call", runtime: .grok, status: .needsYou,
+            history: [
+                Turn(fromPerson: false, text: "The server disk is 81% full. Should I clear the cache?", minutesAgo: 38),
+            ]),
+        Member(
+            name: "Quill", role: "Docs", runtime: .claude, status: .error,
+            history: [
+                Turn(fromPerson: false, text: "The changelog build failed on a missing date.", minutesAgo: 26 * 60),
+            ]),
     ]
+
+    /// The reply Scout writes after the first look: it arrives unread, so Scout shows the unread badge.
+    static let unreadReply = "I can summarize the third source too."
 
     /// Whether the launch arguments ask for the demo world.
     static func isRequested(in arguments: [String]) -> Bool {
@@ -43,8 +74,9 @@ enum IOSDemo {
         return [main, office]
     }
 
-    /// Makes the demo server, connects it, and installs the team. The team goes in after the connect: the connect
-    /// reads the agents of the daemon, which has none of its own. Forge asks for an approval, so the Crew shows a card.
+    /// Makes the demo server, connects it, and installs the team with its history. The team goes in after the connect:
+    /// the connect reads the agents of the daemon, which has none of its own. Forge asks for an approval, so the Crew
+    /// shows a card; Scout gets one reply after the first look, so it shows an unread badge.
     static func start(withTeam: Bool = true) async -> ServerModel {
         let members = withTeam ? team : []
         let ids = members.indices.map { "ios-demo-\($0 + 1)" }
@@ -53,10 +85,23 @@ enum IOSDemo {
         await server.connect()
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         for (index, member) in members.enumerated() {
-            let agent = Agent(
+            var agent = Agent(
                 id: ids[index], name: member.name, role: member.role, runtime: member.runtime,
                 cwd: DemoDaemonFiles.projects, createdAt: now, updatedAt: now, status: member.status)
-            server.installSyntheticAgent(agent, items: [])
+            agent.lead = member.lead
+            // Message n has seq n: the reply ids (`s<seq>`) are what counts a chat's unread replies.
+            let items: [ThreadItem] = member.history.enumerated().map { offset, turn in
+                let ts = now - turn.minutesAgo * 60_000
+                let id = "s\(offset + 1)"
+                return turn.fromPerson
+                    ? .user(id: id, text: turn.text, source: .user, from: nil, ts: ts)
+                    : .assistant(id: id, text: turn.text, ts: ts)
+            }
+            server.installSyntheticAgent(agent, items: items)
+        }
+        // What the team has read so far: every chat is read to its last message.
+        for id in ids {
+            server.threadSummary(for: id).markRead()
         }
         if let forge = ids.first {
             server.apply(
@@ -66,6 +111,12 @@ enum IOSDemo {
                         approvalId: "ios-demo-approval-1", callId: "ios-demo-call-1", tool: "bash",
                         title: "git push origin feat/ios-crew", command: "git push origin feat/ios-crew", diff: nil,
                         reason: "Publishes the branch")))
+        }
+        if ids.count > 1 {
+            server.apply(
+                Event(
+                    seq: server.thread(for: ids[1]).lastSeq + 1, agentId: ids[1], ts: now,
+                    body: .messageAssistant(text: unreadReply)))
         }
         return server
     }
