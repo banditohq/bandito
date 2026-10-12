@@ -6,12 +6,52 @@ public actor WebSocketTransport: RPCTransport {
     private let url: URL
     private let token: String?
     private let session: URLSession
+    private let pin: PinDelegate?
     private var task: URLSessionWebSocketTask?
 
     public init(url: URL, token: String?) {
         self.url = url
         self.token = token
+        self.pin = nil
         self.session = URLSession(configuration: .ephemeral)
+    }
+
+    /// A connection that accepts one certificate only: the one whose SHA-256 (of the DER bytes) is `pinnedFingerprint`.
+    /// The system's trust store is not asked, so a self-signed certificate works and no other one does.
+    public init(url: URL, token: String?, pinnedFingerprint: String) {
+        self.url = url
+        self.token = token
+        let delegate = PinDelegate(expected: pinnedFingerprint)
+        self.pin = delegate
+        self.session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
+    }
+
+    /// Waits until the handshake is done (TLS with the pin, then the upgrade), or fails: a certificate that is not the
+    /// pinned one is `fingerprintMismatch`, a refused token is `keyRejected`, no answer within `timeout` is `timedOut`.
+    public func awaitOpen(timeout: Duration) async throws {
+        guard let task else { throw RPCError(code: RPCError.disconnected, message: "not connected") }
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    try await withCheckedThrowingContinuation { (k: CheckedContinuation<Void, Error>) in
+                        task.sendPing { error in
+                            if let error { k.resume(throwing: error) } else { k.resume() }
+                        }
+                    }
+                }
+                group.addTask {
+                    try await Task.sleep(for: timeout)
+                    // Ends the ping above too: the group waits for both children.
+                    task.cancel(with: .goingAway, reason: nil)
+                    throw RPCError(code: RPCError.timedOut, message: "no answer within the time limit")
+                }
+                defer { group.cancelAll() }
+                try await group.next()
+            }
+        } catch {
+            if pin?.mismatched == true { throw RPCError.fingerprintMismatch }
+            throw mapped(error, of: task)
+        }
     }
 
     /// The device token may only travel over TLS or to this Mac's own loopback address.
@@ -42,11 +82,20 @@ public actor WebSocketTransport: RPCTransport {
         return RPCError(code: RPCError.keyRejected, message: "the server rejected the device key (HTTP \(status))")
     }
 
+    /// `rejection(forStatus:)`, and 429 (the phone listener's limit on anonymous tries) as `rateLimited`.
+    static func httpFailure(forStatus status: Int?) -> RPCError? {
+        if status == 429 {
+            return RPCError(code: RPCError.rateLimited, message: "too many attempts, try again in a few minutes")
+        }
+        return rejection(forStatus: status)
+    }
+
     /// A failed handshake shows up as `NSURLErrorBadServerResponse` (-1011) on the first send or receive. The HTTP
     /// answer is on the task: a 401/403 there means the server answered and refused the key, which is not "no answer".
     private func mapped(_ error: Error, of task: URLSessionWebSocketTask) -> Error {
+        if pin?.mismatched == true { return RPCError.fingerprintMismatch }
         let status = (task.response as? HTTPURLResponse)?.statusCode
-        return Self.rejection(forStatus: status) ?? error
+        return Self.httpFailure(forStatus: status) ?? error
     }
 
     public func send(_ text: String) async throws {

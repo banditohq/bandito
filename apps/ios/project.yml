@@ -73,12 +73,27 @@ targets:
         # Hosted in the app, so the tests run the app's own code (the demo world) on the simulator.
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Bandito.app/Bandito"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  BanditoIOSPairing:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - BanditoIOSPairing
+    dependencies:
+      - target: BanditoIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.ios.pairing
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        TEST_TARGET_NAME: BanditoIOS
 schemes:
   BanditoIOS:
     build:
       targets:
         BanditoIOS: all
         BanditoIOSTests: [test]
+        BanditoIOSPairing: [test]
     test:
       targets:
         - BanditoIOSTests
+        - BanditoIOSPairing

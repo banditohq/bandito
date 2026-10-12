@@ -18,6 +18,15 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
   Interaction with the simulator is through XCUITest; screenshots through `xcrun simctl io`. Close Simulator.app when done.
 - After a Swift build: `git checkout -- apps/mac/BanditoKit/Package.resolved` (the build rewrites it).
 
+## Connecting a server (what to keep true)
+
+- The device token only ever goes to a server whose certificate matches the pinned SHA-256 (`DirectTransport`); the
+  system trust store is never used for these servers. A link that arrives from outside (paste, `bandito://`) is shown
+  and confirmed before anything is sent; an address typed without a fingerprint shows what the server presents first.
+- The token lives in the Keychain (`ServerSession`, one item per server); the saved list (`servers.v1`) never holds it.
+  A token that cannot be saved is revoked on the daemon at once.
+- UI tests of the flow: target `BanditoIOSPairing` (fake TLS daemon on the Simulator's loopback, `-resetServers`).
+
 ## Rules
 
 - Every string goes through i18n (`i18n/*.json`, 9 languages, `python3 i18n/build.py`), used as `L10n.*`. Reuse
@@ -32,7 +41,8 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
 
 - `AppIcon` is `brand/png/icon-1024.png` with an alpha channel; App Store Connect rejects an icon with alpha: flatten it
   before the first upload.
-- The pairing flow (QR, link, address) is a placeholder sheet. The `bandito://` URL scheme is registered, but no link
-  handler exists yet.
+- Pairing (`Connect/`): the QR scanner, paste, a typed address and the `bandito://pair` handler work against a daemon's
+  phone listener (docs/ARCHITECTURE.md#phone-access). `Crew/TeamViews.swift` still holds the old `ConnectPlaceholderSheet`,
+  which nothing opens any more: its owner removes it. Notifications are not asked after the first server yet.
 - The button styles (`.signal`, `.quiet`) exist only in `BanditoUI`; `SignalButtonStyle` in `Crew/TeamViews.swift` is a
   copy for this target until they move to `BanditoDesign`.

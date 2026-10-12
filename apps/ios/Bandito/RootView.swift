@@ -9,10 +9,14 @@ struct RootView: View {
     /// The demo server of the `-demo` launch argument; nil without it.
     @State private var demoServer: ServerModel?
     @State private var showsConnect = false
+    /// The servers this iPhone is connected to (saved list and Keychain tokens); loaded once at launch.
+    @State private var session = ServerSession()
+    /// A `bandito://pair` link opened from outside, until the connect sheet takes it.
+    @State private var incomingLink: String?
 
     var body: some View {
         TabView {
-            CrewTab(server: demoServer, onConnect: { showsConnect = true })
+            CrewTab(server: demoServer ?? session.active, onConnect: { showsConnect = true })
                 .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
             ComingSoonTab(title: L10n.Ios.Tab.inbox)
                 .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
@@ -22,11 +26,17 @@ struct RootView: View {
                 .tabItem { Label(L10n.Settings.title, systemImage: "gearshape") }
         }
         .task {
+            session.loadIfNeeded()
             guard demoServer == nil, IOSDemo.isRequested(in: ProcessInfo.processInfo.arguments) else { return }
             demoServer = await IOSDemo.start()
         }
         .sheet(isPresented: $showsConnect) {
-            ConnectPlaceholderSheet()
+            ConnectServerView(session: session, incomingLink: $incomingLink, onClose: { showsConnect = false })
+        }
+        .onOpenURL { url in
+            guard url.scheme?.lowercased() == "bandito" else { return }
+            incomingLink = url.absoluteString
+            showsConnect = true
         }
     }
 }

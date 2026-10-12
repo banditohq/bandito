@@ -67,6 +67,11 @@ public struct RPCError: Error, Sendable, Equatable, LocalizedError {
     /// Client-side: the server answered the WebSocket handshake with 401 or 403 — it is there, and does not accept
     /// this device's key (the daemon lost its data, was reinstalled, or the device was revoked).
     public static let keyRejected = -5
+    /// Client-side: the server's certificate is not the one pinned for it (`DirectTransport`). Someone else answers at
+    /// that address, or the server's certificate was replaced. The message starts with `fingerprint_mismatch:`, so
+    /// `FailureKind` reads it as the reason `fingerprint_mismatch`.
+    public static let fingerprintMismatch = RPCError(
+        code: -6, message: "fingerprint_mismatch: the server's certificate is not the one this device trusts")
 }
 
 /// A JSON-RPC notification other than `event` (for example `term.output`), with its raw params.

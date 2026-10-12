@@ -11,6 +11,10 @@ public enum ServerEndpoint: Sendable, Hashable, Codable {
     /// The daemon on a server reached over ssh: the server's address (host, user, port, key file), and `remotePort`,
     /// the daemon's listen port on the server's loopback. See `SSHTransport`.
     case ssh(server: SSHServerAddress, remotePort: Int)
+    /// A daemon's TLS phone listener (docs/ARCHITECTURE.md#phone-access): `hosts` are `host:port` addresses tried in
+    /// order, and `fingerprint` is the SHA-256 of the daemon's certificate (64 lower-case hex digits). The certificate is
+    /// checked against it and against nothing else: the system's trust store plays no part (`DirectTransport`).
+    case direct(hosts: [String], fingerprint: String)
 
     public static var defaultLocal: ServerEndpoint {
         .local(socketPath: URL(fileURLWithPath: NSHomeDirectory()).appending(path: ".bandito/bandito.sock").path)
@@ -23,7 +27,11 @@ public enum ServerEndpoint: Sendable, Hashable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case local, webSocket, ssh
+        case local, webSocket, ssh, direct
+    }
+
+    private enum DirectKeys: String, CodingKey {
+        case hosts, fingerprint
     }
 
     private enum LocalKeys: String, CodingKey {
@@ -59,6 +67,17 @@ public enum ServerEndpoint: Sendable, Hashable, Codable {
             } else {
                 self = .ssh(target: try nested.decode(String.self, forKey: .target), remotePort: remotePort)
             }
+        } else if container.contains(.direct) {
+            let nested = try container.nestedContainer(keyedBy: DirectKeys.self, forKey: .direct)
+            let hosts = try nested.decode([String].self, forKey: .hosts)
+            let fingerprint = try nested.decode(String.self, forKey: .fingerprint)
+            // A record that was edited by hand or damaged is refused here, not trusted: a pin that is not a
+            // fingerprint would pin nothing.
+            guard PinnedFingerprint.normalize(fingerprint) != nil, !hosts.isEmpty else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "bad direct endpoint"))
+            }
+            self = .direct(hosts: hosts, fingerprint: PinnedFingerprint.normalize(fingerprint) ?? fingerprint)
         } else {
             throw DecodingError.dataCorrupted(
                 DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "unknown server endpoint"))
@@ -81,6 +100,10 @@ public enum ServerEndpoint: Sendable, Hashable, Codable {
             // The one-text form too, so an app that predates the fields (0.1.10) reads the same server after a
             // downgrade. It has no key file, which that app never had.
             try nested.encode(server.targetText, forKey: .target)
+        case .direct(let hosts, let fingerprint):
+            var nested = container.nestedContainer(keyedBy: DirectKeys.self, forKey: .direct)
+            try nested.encode(hosts, forKey: .hosts)
+            try nested.encode(fingerprint, forKey: .fingerprint)
         }
     }
 }
@@ -155,6 +178,7 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
         case .local: "local"
         case .webSocket: "WebSocket"
         case .ssh: "ssh"
+        case .direct: "direct"
         }
         return "ServerConfig(name: \(name), connection: \(kind))"
     }
@@ -324,6 +348,8 @@ public final class ServerModel: Identifiable {
                     #else
                     return UnavailableTransport(reason: "ssh servers are not available on this platform yet")
                     #endif
+                case .direct(let hosts, let fingerprint):
+                    return DirectTransport(hosts: hosts, fingerprint: fingerprint, token: cfg.token)
                 }
             }
         self.reconnectDelay = reconnectDelay ?? { ServerModel.backoff(attempt: $0) }

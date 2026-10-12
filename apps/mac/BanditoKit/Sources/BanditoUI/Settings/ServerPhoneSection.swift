@@ -86,6 +86,30 @@ struct ServerPhoneSection: View {
                 PhoneAccessRules.risk(for: settings.phoneAccess),
                 color: PhoneAccessRules.isWarning(settings.phoneAccess) ? Color.Bandito.text : Color.Bandito.text3)
             statusLine(settings)
+            fingerprintRow
+        }
+    }
+
+    /// The certificate's fingerprint, to compare with what an iPhone shows when it is paired by a typed address.
+    @ViewBuilder private var fingerprintRow: some View {
+        if let fingerprint = model.snapshot?.phone?.tlsFingerprint {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(L10n.ServerSettings.Phone.Fingerprint.title)
+                    .font(BanditoFont.text(size: 12, weight: 500))
+                    .foregroundStyle(Color.Bandito.text2)
+                Text(PinnedFingerprint.display(fingerprint))
+                    .font(BanditoFont.mono(size: 10.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(L10n.ServerSettings.Phone.Fingerprint.hint)
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
         }
     }
 

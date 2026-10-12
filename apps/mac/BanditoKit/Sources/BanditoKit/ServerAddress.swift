@@ -13,6 +13,9 @@ public enum ServerAddress: Equatable, Sendable {
             self = .thisMac
         case .ssh(let server, _):
             self = .remote(server.user.map { "\($0)@\(server.host)" } ?? server.host)
+        case .direct(let hosts, _):
+            // The address the app reached last is not known here: the first one is the best the server gave.
+            self = .remote(hosts.first ?? "—")
         case .webSocket(let url):
             var host = url.host() ?? ""
             if host.contains(":"), !host.hasPrefix("[") {

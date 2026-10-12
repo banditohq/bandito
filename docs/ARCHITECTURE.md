@@ -359,6 +359,8 @@ bandito://pair?v=1&code=<six words joined by '-'>&fp=<64 hex>&name=<server name>
 - `name` is the server's host name, at most 64 characters, percent-encoded.
 - `host` repeats; the order is the preference: Tailscale addresses first, then the addresses of the local network. IPv6 is in square brackets (`[fd7a:115c:a1e0::1]:7879`). Every value is percent-encoded (the brackets too: decode before use).
 
+**How an app uses it.** The app (`DirectTransport` in BanditoKit) connects to `wss://<host>/v1/rpc`, trying the `host` values in order with a time limit each and the last one that worked first, and accepts the TLS certificate only if its SHA-256 equals `fp`. An address typed by hand without `fp` shows the fingerprint the server presents and asks the person to compare it with the Mac's (Settings → Servers → iPhone shows it) before the one-time code is sent. A certificate that differs is a hard failure; the code is never sent to it.
+
 `pair.create` (owner and apps) replies `{code, expires_in_ms, link, qr, hosts, fingerprint}`. `link` and `qr` (the same string, the text of the QR code) are `null` while the phone listener is not up; `hosts` is then `[]`. A new app checks the link with the rules above before it draws a QR code.
 
 Ways the Mac app reaches a server, all ending in the same WebSocket:

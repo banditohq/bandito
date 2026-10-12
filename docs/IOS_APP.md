@@ -40,6 +40,21 @@ and Activity) opens the composer with an agent picker (last used first).
 - **A long task**: Live Activity on the lock screen and Dynamic Island while a turn runs > 30 s: agent avatar, what it is
   doing now ("Running tests"), elapsed time, Stop. Ends with "Done" or "Needs you".
 
+### Connecting a server (built)
+
+- Three ways in, one sheet: the camera (framed viewfinder, haptic on read, the permission asked in place with its reason),
+  the paste button (the system's, so no clipboard prompt), and a typed address (`host[:port]`, default 7879) with the six
+  words and, if the person has it, the certificate fingerprint. `bandito://pair` links opened from outside use the same
+  code and are confirmed before anything is sent.
+- The app connects to the daemon's TLS listener, trying the addresses of the link in order (the last one that worked
+  first, six seconds each) and trusting exactly the pinned SHA-256 of the certificate. An address typed with no
+  fingerprint shows the one the server presents and waits for "They match" (trust on first use, confirmed by a person).
+- Errors say what to do: code expired or used, too many tries, server unreachable (Tailscale? same Wi-Fi? phone access
+  on?), and, loudly, a certificate that is not the pinned one ("This is not the server you paired", nothing was sent).
+- The token goes to the Keychain (after first unlock, this device only); if it cannot be kept the device is revoked on
+  the server again. Pairing a server whose certificate is already known replaces its record. Code: `apps/ios/Bandito/Connect`,
+  `BanditoKit/Connect/DirectTransport.swift`, `DevicePairing.swift`.
+
 ## iOS-native extras (phase order)
 
 1. Actionable notifications (local now, push later), Face ID lock (optional, off by default), haptics on approve/send.

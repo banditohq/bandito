@@ -311,6 +311,9 @@ async fn pair(sock: &Path, json: bool, phone: bool) -> Result<()> {
     if let Some(link) = link.filter(|_| phone) {
         println!("{}", qr_text(link)?);
         println!("{link}\n");
+        if let Some(fingerprint) = r["fingerprint"].as_str() {
+            println!("Certificate fingerprint (SHA-256):\n    {fingerprint}\n");
+        }
         println!("On the iPhone: open Bandito → Connect a server → Scan.");
     } else {
         println!("Enter it in the Bandito app: Settings → Servers → Add server.");

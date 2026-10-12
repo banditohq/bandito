@@ -859,6 +859,7 @@ public enum L10n {
             public static var conflict: String { L10n.tr("failure.reason.conflict") }
             public static var decodeFailed: String { L10n.tr("failure.reason.decodeFailed") }
             public static var exists: String { L10n.tr("failure.reason.exists") }
+            public static var fingerprintMismatch: String { L10n.tr("failure.reason.fingerprintMismatch") }
             public static var forbidden: String { L10n.tr("failure.reason.forbidden") }
             public static var io: String { L10n.tr("failure.reason.io") }
             public static var notEmpty: String { L10n.tr("failure.reason.notEmpty") }
@@ -1340,7 +1341,73 @@ public enum L10n {
     public enum Ios {
 
         public enum Connect {
+            public static var fingerprint: String { L10n.tr("ios.connect.fingerprint") }
             public static var placeholder: String { L10n.tr("ios.connect.placeholder") }
+            public static var working: String { L10n.tr("ios.connect.working") }
+
+            public enum Camera {
+                public static var allow: String { L10n.tr("ios.connect.camera.allow") }
+                public static var denied: String { L10n.tr("ios.connect.camera.denied") }
+                public static var openSettings: String { L10n.tr("ios.connect.camera.openSettings") }
+                public static var reason: String { L10n.tr("ios.connect.camera.reason") }
+            }
+
+            public enum Confirm {
+                public static var action: String { L10n.tr("ios.connect.confirm.action") }
+                public static func body(address: String) -> String { L10n.tr("ios.connect.confirm.body", address) }
+                public static func title(name: String) -> String { L10n.tr("ios.connect.confirm.title", name) }
+            }
+
+            public enum Done {
+                public static var action: String { L10n.tr("ios.connect.done.action") }
+                public static var nameLabel: String { L10n.tr("ios.connect.done.nameLabel") }
+                public static var title: String { L10n.tr("ios.connect.done.title") }
+            }
+
+            public enum Error {
+                public static var badAddress: String { L10n.tr("ios.connect.error.badAddress") }
+                public static var badCode: String { L10n.tr("ios.connect.error.badCode") }
+                public static var badFingerprint: String { L10n.tr("ios.connect.error.badFingerprint") }
+                public static var codeRejected: String { L10n.tr("ios.connect.error.codeRejected") }
+                public static var generic: String { L10n.tr("ios.connect.error.generic") }
+                public static var mismatch: String { L10n.tr("ios.connect.error.mismatch") }
+                public static var mismatchTitle: String { L10n.tr("ios.connect.error.mismatchTitle") }
+                public static var noAddress: String { L10n.tr("ios.connect.error.noAddress") }
+                public static var notALink: String { L10n.tr("ios.connect.error.notALink") }
+                public static var saveKey: String { L10n.tr("ios.connect.error.saveKey") }
+                public static var tooMany: String { L10n.tr("ios.connect.error.tooMany") }
+                public static var tryAgain: String { L10n.tr("ios.connect.error.tryAgain") }
+                public static var unreachable: String { L10n.tr("ios.connect.error.unreachable") }
+                public static var updateApp: String { L10n.tr("ios.connect.error.updateApp") }
+            }
+
+            public enum Manual {
+                public static var address: String { L10n.tr("ios.connect.manual.address") }
+                public static var addressHint: String { L10n.tr("ios.connect.manual.addressHint") }
+                public static var button: String { L10n.tr("ios.connect.manual.button") }
+                public static var code: String { L10n.tr("ios.connect.manual.code") }
+                public static var codeHint: String { L10n.tr("ios.connect.manual.codeHint") }
+                public static var fingerprint: String { L10n.tr("ios.connect.manual.fingerprint") }
+                public static var fingerprintHint: String { L10n.tr("ios.connect.manual.fingerprintHint") }
+                public static var submit: String { L10n.tr("ios.connect.manual.submit") }
+                public static var title: String { L10n.tr("ios.connect.manual.title") }
+            }
+
+            public enum Paste {
+                public static var hint: String { L10n.tr("ios.connect.paste.hint") }
+            }
+
+            public enum Scan {
+                public static var hint: String { L10n.tr("ios.connect.scan.hint") }
+                public static var noCamera: String { L10n.tr("ios.connect.scan.noCamera") }
+                public static var title: String { L10n.tr("ios.connect.scan.title") }
+            }
+
+            public enum Trust {
+                public static var action: String { L10n.tr("ios.connect.trust.action") }
+                public static var body: String { L10n.tr("ios.connect.trust.body") }
+                public static var title: String { L10n.tr("ios.connect.trust.title") }
+            }
         }
 
         public enum Tab {
@@ -3055,6 +3122,11 @@ public enum L10n {
                 public static var empty: String { L10n.tr("serverSettings.phone.devices.empty") }
                 public static var loadFailed: String { L10n.tr("serverSettings.phone.devices.loadFailed") }
                 public static var title: String { L10n.tr("serverSettings.phone.devices.title") }
+            }
+
+            public enum Fingerprint {
+                public static var hint: String { L10n.tr("serverSettings.phone.fingerprint.hint") }
+                public static var title: String { L10n.tr("serverSettings.phone.fingerprint.title") }
             }
 
             public enum Mode {

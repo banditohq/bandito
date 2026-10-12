@@ -208,6 +208,8 @@ struct PairSheet: View {
         case .ssh(let server, _):
             // The new device reaches the server over SSH too: the target is what it needs.
             return server.targetText
+        case .direct(let hosts, _):
+            return hosts.first ?? ""
         }
     }
 }

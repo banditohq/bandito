@@ -23,6 +23,8 @@ public enum ServerEndpointRules {
         switch endpoint {
         case .local: false
         case .webSocket, .ssh: true
+        // The pin and the addresses come from a pairing link, not from a typed address.
+        case .direct: false
         }
     }
 }
