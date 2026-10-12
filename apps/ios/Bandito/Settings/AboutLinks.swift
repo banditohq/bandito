@@ -10,14 +10,17 @@ enum AboutLinks {
     static let docs = URL(string: "https://bandito.dev/docs")!
     static let reportProblem = URL(string: "https://github.com/banditohq/bandito/issues/new/choose")!
     static let privacy = URL(string: "https://bandito.dev/privacy")!
-    /// The languages the site has terms pages for, by the codes of `i18n/languages.json`, besides English.
-    private static let termsLanguages: Set<String> = ["ru", "ja", "zh-Hans", "ko", "es", "pt-BR", "de", "fr"]
+    /// The site's language folder for each app language (codes of `i18n/languages.json`) besides English: the site
+    /// names Chinese and Portuguese `zh` and `pt`.
+    private static let siteFolders: [String: String] = [
+        "ru": "ru", "ja": "ja", "zh-Hans": "zh", "ko": "ko", "es": "es", "pt-BR": "pt", "de": "de", "fr": "fr",
+    ]
 
-    /// The terms page in the language of the app's strings: `/terms/` for English, `/<code>/terms/` for the others.
+    /// The terms page in the language of the app's strings: `/terms/` for English, `/<site folder>/terms/` for the others.
     /// Any other code gets English.
     static func terms(forLanguage code: String) -> URL {
-        guard code != "en", termsLanguages.contains(code) else { return URL(string: "https://bandito.dev/terms/")! }
-        return URL(string: "https://bandito.dev/\(code)/terms/")!
+        guard let folder = siteFolders[code] else { return URL(string: "https://bandito.dev/terms/")! }
+        return URL(string: "https://bandito.dev/\(folder)/terms/")!
     }
 
     /// The terms page for the language the app is showing now.

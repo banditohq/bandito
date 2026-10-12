@@ -12,8 +12,8 @@ import Testing
 
     @Test func otherLanguagesGoToTheirOwnTermsPage() {
         #expect(AboutLinks.terms(forLanguage: "ru").absoluteString == "https://bandito.dev/ru/terms/")
-        #expect(AboutLinks.terms(forLanguage: "pt-BR").absoluteString == "https://bandito.dev/pt-BR/terms/")
-        #expect(AboutLinks.terms(forLanguage: "zh-Hans").absoluteString == "https://bandito.dev/zh-Hans/terms/")
+        #expect(AboutLinks.terms(forLanguage: "pt-BR").absoluteString == "https://bandito.dev/pt/terms/")
+        #expect(AboutLinks.terms(forLanguage: "zh-Hans").absoluteString == "https://bandito.dev/zh/terms/")
     }
 
     @Test func anUnknownLanguageGoesToEnglish() {
