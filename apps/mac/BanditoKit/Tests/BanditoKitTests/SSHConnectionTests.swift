@@ -158,6 +158,7 @@ import Testing
             "[2001:db8::1", "2001:db8::1]", "[2001:db8::1];id", "[-oProxyCommand=id]", "[2001:db8::g]", "2001:db8:::1",
             "[2001:db8::1]:99999", "[2001:db8::1]:22x", "[2001:db8::1] x", "2001:db8::1 -oX", "fe80::1%-oX", "fe80::1%a b",
             "[]", "[::1]x", "a:b", ":", "::1;id", "-o:1",
+            "[::1]:22@evil", "user@[::1]@x", "[::1]@x", "::1\nevil", "::1\r", "[::1]\n",
         ]
         for text in bad {
             #expect(SSHServerAddress.validated(host: text, user: "", port: "", identityFile: nil) == .failure(.host), "\(text)")
