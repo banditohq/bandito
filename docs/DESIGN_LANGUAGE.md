@@ -133,7 +133,10 @@ shows a state, it is not a motion. The dot is hidden from VoiceOver; the button'
 
 ## Motion
 
-- Use `.banditoAnimation(_:value:)`, never `.animation(_:value:)`, and `.banditoRise` for list rows. They honour Reduce Motion and the app's Motion level (Full, Less at half duration, Off).
+- Use `.banditoAnimation(_:value:)`, never `.animation(_:value:)`, and `.banditoRise` for list rows. They honour Reduce Motion and the app's Motion level (Full, Less at half duration, Off). An action that animates a change (a button, a drop) uses `withBanditoAnimation`, never `withAnimation`.
+- The set (`BanditoMotion`, `brand/tokens/tokens.json`): the curve `ease` (0.2, 0.8, 0.2, 1) at `fast` 0.12 s (hover, a tab's content, ⌘K, a hint), `base` 0.2 s (a mode, the sidebar, a section that opens) or `slow` 0.32 s (a flash, an empty state); `slide`, a spring (response 0.36, damping 0.9), for a surface that moves in and out (the workbench panel). The update banner (0.42, 0.86) and the jump capsule (0.34, 0.86) keep their own springs.
+- Everything that comes also goes: a panel, a toast, a capsule, ⌘K, a hint, a tab's content leave the way they came (a slide out, a fade), on the same curve. A view that leaves a `ZStack` keeps its place in the order (`zIndex`), or it slides out under its neighbour and seems to vanish. Only transform and opacity move; a width or a height is set at once.
+- Tabs and sections (the agent's panel, Settings, the Marketplace's pages) fade into each other in `fast`, both in one place.
 - **Workbench panel**: it slides in from the right on a spring (0.36, 0.9) at a fixed width, only its position moves, no fade. The chat beside it changes its width once, at the first frame, never frame by frame: each bubble re-wraps its text on a width change, so an animated width re-laid out the whole thread on every frame.
 - Repeating motion (pulse, float, blink, sparkline) runs only at Full and only in the active window.
 - Durations are fast, base or slow. No new curves.

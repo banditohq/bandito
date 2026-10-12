@@ -13,7 +13,8 @@ struct ServerUpdateActions: View {
     var openInTerminal: (() -> Void)?
 
     @Environment(AppModel.self) private var app
-    @State private var daemonUpdate = DaemonUpdateModel()
+    /// The app's one daemon update (see `AppModel.daemonUpdate`): the sidebar banner shows the same progress.
+    private var daemonUpdate: DaemonUpdateModel { app.daemonUpdate }
     @State private var release = ReleaseStatus()
     @State private var confirming = false
     @State private var manualOpen = false
@@ -186,18 +187,9 @@ struct ServerUpdateActions: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .confirmationDialog(
-            L10n.Server.DaemonUpdate.confirmTitle(version: offer.latest),
-            isPresented: $confirming,
-            titleVisibility: .visible
-        ) {
-            Button(L10n.Server.DaemonUpdate.confirm) {
-                Task { await daemonUpdate.run(server, offer: offer) }
-            }
-            Button(L10n.Common.cancel, role: .cancel) {}
-        } message: {
-            Text(L10n.Server.DaemonUpdate.confirmMessage)
-        }
+        .modifier(DaemonUpdateConfirmation(isPresented: $confirming, version: offer.latest) {
+            Task { await daemonUpdate.run(server, offer: offer) }
+        })
     }
 
     /// Only the GitHub line: the server's daemon reports no release of its own, so the newest one is known from GitHub.

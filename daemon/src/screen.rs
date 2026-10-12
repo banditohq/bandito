@@ -1013,7 +1013,9 @@ async fn stop_vnc(task: VncTask) {
 #[cfg(target_os = "linux")]
 async fn wait_for_socket(child: &mut TrackedChild, display: u32) -> Result<(), ScreenError> {
     let socket = PathBuf::from(format!("/tmp/.X11-unix/X{display}"));
-    if wait_until(START_TIMEOUT, || socket.exists()).await {
+    // Under WSLg `/tmp/.X11-unix` is a read-only mount: Xvfb then listens only on its abstract socket.
+    let ready = || socket.exists() || abstract_x_displays(&unix_table()).contains(&display);
+    if wait_until(START_TIMEOUT, ready).await {
         return Ok(());
     }
     let exited = matches!(child.try_wait(), Ok(Some(_)));
@@ -1273,10 +1275,31 @@ fn vnc_clients(port: u16) -> usize {
     count_established(&tcp_tables(), port)
 }
 
-/// Display numbers in use: sockets in `/tmp/.X11-unix` and `/tmp/.X<n>-lock` files.
+/// The kernel's table of Unix sockets (`/proc/net/unix`); empty when it cannot be read.
+#[cfg(target_os = "linux")]
+fn unix_table() -> String {
+    std::fs::read_to_string("/proc/net/unix").unwrap_or_default()
+}
+
+/// Displays with an X server listening on the abstract socket `@/tmp/.X11-unix/X<n>`, from a `/proc/net/unix` table.
+#[cfg(any(target_os = "linux", test))]
+fn abstract_x_displays(table: &str) -> Vec<u32> {
+    let mut displays: Vec<u32> = table
+        .lines()
+        .filter_map(|line| line.split_whitespace().last())
+        .filter_map(|path| path.strip_prefix("@/tmp/.X11-unix/X"))
+        .filter_map(|n| n.parse::<u32>().ok())
+        .collect();
+    displays.sort_unstable();
+    displays.dedup();
+    displays
+}
+
+/// Display numbers in use: sockets in `/tmp/.X11-unix` (files, or abstract ones when the folder is read-only, as
+/// under WSLg) and `/tmp/.X<n>-lock` files.
 #[cfg(target_os = "linux")]
 fn busy_displays() -> Vec<u32> {
-    let mut busy = Vec::new();
+    let mut busy = abstract_x_displays(&unix_table());
     if let Ok(entries) = std::fs::read_dir("/tmp/.X11-unix") {
         for entry in entries.flatten() {
             let name = entry.file_name();
@@ -1598,6 +1621,19 @@ mod tests {
         assert_eq!(png_size(&png_header(1, 1)), Some((1, 1)));
         assert_eq!(png_size(b"GIF89a\x01\x00\x01\x00"), None);
         assert_eq!(png_size(&[0x89, b'P', b'N']), None);
+    }
+
+    #[test]
+    fn abstract_x_sockets_name_their_displays() {
+        let table = "Num       RefCount Protocol Flags    Type St Inode Path\n\
+            0000000000000000: 00000003 00000000 00000000 0001 03 1683941 @/tmp/.X11-unix/X99\n\
+            0000000000000000: 00000003 00000000 00000000 0001 03 1683907 @/tmp/.X11-unix/X99\n\
+            0000000000000000: 00000002 00000000 00010000 0001 01 1721711 @/tmp/.X11-unix/X90\n\
+            0000000000000000: 00000002 00000000 00010000 0001 01 1721712 /tmp/.X11-unix/X0\n\
+            0000000000000000: 00000002 00000000 00010000 0001 01 1721713 @/tmp/.X11-unix/Xbad\n\
+            0000000000000000: 00000002 00000000 00010000 0001 01 1721714\n";
+        assert_eq!(abstract_x_displays(table), vec![90, 99]);
+        assert!(abstract_x_displays("").is_empty());
     }
 
     #[test]

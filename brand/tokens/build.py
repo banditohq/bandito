@@ -44,6 +44,7 @@ def build_css():
     m = T["motion"]
     lines += [f"  --motion-fast: {m['fast']}ms;", f"  --motion-base: {m['base']}ms;", f"  --motion-slow: {m['slow']}ms;",
               f"  --motion-ease: cubic-bezier({', '.join(str(x) for x in m['ease'])});",
+              f"  --motion-spring-response: {m['spring'][0]}s;", f"  --motion-spring-damping: {m['spring'][1]};",
               "  --signal-fill: linear-gradient(180deg, var(--color-signal-fill), var(--color-signal-fill-end));",
               "  color-scheme: dark;", "}",
               "@media (prefers-color-scheme: light) {", "  :root:not([data-theme='dark']) {", block("light").replace("\n  ", "\n    ").replace("  --", "    --", 1),
@@ -87,7 +88,10 @@ def build_swift():
     s += ["}", "", "public enum BanditoMotion {",
           f"    public static let fast = {m['fast'] / 1000}", f"    public static let base = {m['base'] / 1000}",
           f"    public static let slow = {m['slow'] / 1000}",
-          f"    public static let ease = Animation.timingCurve({', '.join(str(x) for x in m['ease'])}, duration: base)", "}", ""]
+          f"    public static let ease = Animation.timingCurve({', '.join(str(x) for x in m['ease'])}, duration: base)",
+          "    /// The spring of a surface that moves in and out (a panel, a toast).",
+          f"    public static let slide = Animation.spring(response: {m['spring'][0]}, dampingFraction: {m['spring'][1]})",
+          "}", ""]
     open(os.path.join(OUT, "BanditoTokens.swift"), "w").write("\n".join(s))
 
 

@@ -54,3 +54,26 @@ public extension View {
         modifier(BanditoAnimationModifier(animation: animation, value: value))
     }
 }
+
+#if os(macOS)
+import AppKit
+#endif
+
+/// `withAnimation` for actions (a button, a drop): the change runs at once under Reduce Motion or Motion "Off", at half
+/// the duration under "Less", as `.banditoAnimation` does for views.
+@MainActor
+@discardableResult
+public func withBanditoAnimation<Result>(_ animation: Animation, _ body: () throws -> Result) rethrows -> Result {
+    let level = MotionLevel(stored: UserDefaults.standard.string(forKey: MotionLevel.storageKey))
+    #if os(macOS)
+    let system = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    #else
+    let system = false
+    #endif
+    if level.reducesMotion(systemReduceMotion: system) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        return try withTransaction(transaction, body)
+    }
+    return try withAnimation(level == .less ? animation.speed(1 / level.durationScale) : animation, body)
+}

@@ -3,25 +3,52 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// The place above the sidebar footer where the app's own update shows up. Empty (and zero high) while there is
-/// nothing to say; otherwise the banner slides up from the bottom and fades in, or only fades with Reduce Motion.
+/// The place above the sidebar footer where one update shows up: the app's own, or a server's daemon update (see
+/// `UpdateBannerRule`, one at a time). Empty (and zero high) while there is nothing to say; otherwise the banner slides
+/// up from the bottom and fades in, or only fades with Reduce Motion.
 struct UpdateBannerSlot: View {
     @Environment(AppUpdateCenter.self) private var center: AppUpdateCenter?
+    @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The × of the server banner, kept in state so that a dismiss redraws the slot.
+    @State private var dismissals = ServerUpdateDismissals.load()
 
     var body: some View {
         let phase = center?.phase ?? .idle
-        let visible = AppUpdateRules.isVisible(phase)
+        let choice = UpdateBannerRule.choose(
+            appVisible: AppUpdateRules.isVisible(phase),
+            servers: app.serverUpdateCandidates, selected: app.currentServer?.id,
+            isDismissed: { dismissals.isDismissed(server: $0, version: $1) })
         VStack(spacing: 0) {
-            if visible, let center {
-                UpdateBanner(phase: phase, center: center)
+            if choice != .none {
+                card(choice, phase: phase)
                     .padding(.horizontal, 14)
                     .padding(.top, 6)
                     .padding(.bottom, 12)
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .banditoAnimation(.spring(response: 0.42, dampingFraction: 0.86), value: visible)
+        .banditoAnimation(.spring(response: 0.42, dampingFraction: 0.86), value: choice)
+    }
+
+    @ViewBuilder
+    private func card(_ choice: UpdateBannerChoice, phase: AppUpdateCenter.Phase) -> some View {
+        switch choice {
+        case .none:
+            EmptyView()
+        case .app:
+            if let center {
+                UpdateBanner(phase: phase, center: center)
+            }
+        case .server(let id, _):
+            if let server = app.servers.first(where: { $0.id == id }), let shown = app.daemonOffer(for: server) {
+                ServerUpdateBanner(
+                    serverName: ServerPicker.name(server), offer: shown.offer, isLive: shown.isLive,
+                    phase: app.daemonUpdate.phase,
+                    onInstall: { app.askDaemonUpdate(server, offer: shown.offer) },
+                    onDismiss: { dismissals.dismiss(server: id, version: shown.offer.latest) })
+            }
+        }
     }
 }
 

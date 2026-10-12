@@ -188,6 +188,16 @@ struct ServerPicker: View {
     private func serverFooter(close: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Divider().padding(.vertical, 4)
+            if let update = menuUpdate {
+                // The "Update available" line of a server is the offer; this item installs it, through the same confirmation.
+                Button {
+                    close()
+                    afterSelectPanelCloses { app.askDaemonUpdate(update.server, offer: update.offer) }
+                } label: {
+                    footerLabel(L10n.Server.DaemonUpdate.button, icon: "arrow.up")
+                }
+                .banditoButton(.row(cornerRadius: 9))
+            }
             Button {
                 close()
                 afterSelectPanelCloses { router.sheet = .addServer }
@@ -206,6 +216,18 @@ struct ServerPicker: View {
             }
             .banditoButton(.row(cornerRadius: 9))
         }
+    }
+
+    /// The server whose live update the menu installs: the selected one first, else the first one that offers it.
+    /// Nothing while an update runs.
+    private var menuUpdate: (server: ServerModel, offer: DaemonUpdate)? {
+        guard !app.daemonUpdate.isBusy,
+            let pick = UpdateBannerRule.serverOffer(
+                servers: app.serverUpdateCandidates, selected: app.currentServer?.id, liveOnly: true),
+            let server = app.servers.first(where: { $0.id == pick.id }),
+            let offer = server.daemonUpdateOffer
+        else { return nil }
+        return (server, offer)
     }
 
     static func statusColor(_ server: ServerModel) -> Color {

@@ -122,12 +122,23 @@ final class NativeActionsHost: NSHostingView<NativeActionsBar> {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    /// The bar's size for the message and the look it was last measured for: placing it again at each step of a
+    /// scroll or a layout measured the SwiftUI bar every time.
+    private var sized: (spec: NativeMessageSpec, full: Bool, size: CGSize)?
+
     /// Puts the bar under `bubble` (in the table's coordinates): on its left edge for the agent, its right for the person.
     func place(under bubble: CGRect, fromUser: Bool) {
-        layoutSubtreeIfNeeded()
-        let size = fittingSize
+        let size: CGSize
+        if let sized, let spec = model.spec, sized.full == model.full, sized.spec == spec {
+            size = sized.size
+        } else {
+            layoutSubtreeIfNeeded()
+            size = fittingSize
+            sized = model.spec.map { ($0, model.full, size) }
+        }
         let x = fromUser ? bubble.maxX - size.width : bubble.minX
-        frame = CGRect(x: x, y: bubble.maxY, width: size.width, height: MessageActionsPlacement.rowHeight)
+        let frame = CGRect(x: x, y: bubble.maxY, width: size.width, height: MessageActionsPlacement.rowHeight)
+        if self.frame != frame { self.frame = frame }
     }
 }
 #endif

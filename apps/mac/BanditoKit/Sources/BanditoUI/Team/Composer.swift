@@ -301,7 +301,7 @@ struct Composer: View {
                 .foregroundStyle(Color.Bandito.text3.opacity(0.7))
             }
         }
-        .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: reply)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingForm?.formId)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingConnect?.requestId)

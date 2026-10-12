@@ -2987,6 +2987,13 @@ public enum L10n {
         }
     }
 
+    public enum ServerUpdate {
+
+        public enum Banner {
+            public static func title(name: String, version: String) -> String { L10n.tr("serverUpdate.banner.title", name, version) }
+        }
+    }
+
     public enum Settings {
         public static var approvals: String { L10n.tr("settings.approvals") }
         public static var approvalsIntro: String { L10n.tr("settings.approvalsIntro") }

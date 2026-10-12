@@ -43,6 +43,14 @@ public final class AgentThreadState {
 
     /// How much of the newest message `lastMessageHead` keeps.
     public static let previewLength = 240
+    /// While a reply streams, `lastMessageHead` follows it at most this often (the team list's rows read it: they were
+    /// rebuilt at every token of the first 240 characters). The settled message is written at once.
+    public nonisolated(unsafe) static var streamPreviewInterval: Duration = .milliseconds(300)
+
+    /// This box's own interval (tests); nil: `streamPreviewInterval`.
+    @ObservationIgnored var previewInterval: Duration?
+    @ObservationIgnored private var headWrittenAt: ContinuousClock.Instant?
+    @ObservationIgnored private var headTask: Task<Void, Never>?
 
     nonisolated init() {}
 
@@ -53,8 +61,7 @@ public final class AgentThreadState {
         if turnRunning != thread.turnRunning { turnRunning = thread.turnRunning }
         if turnStartedAt != thread.turnStartedAt { turnStartedAt = thread.turnStartedAt }
         if isEmpty != thread.items.isEmpty { isEmpty = thread.items.isEmpty }
-        let head = thread.lastMessageText.map { String($0.prefix(Self.previewLength)) }
-        if lastMessageHead != head { lastMessageHead = head }
+        updateHead()
         let stamp = thread.items.reversed().lazy.compactMap(\.timestamp).first
         if lastItemTimestamp != stamp { lastItemTimestamp = stamp }
         // One pass over the items for the rest.
@@ -83,6 +90,41 @@ public final class AgentThreadState {
         if pendingConnects != connects { pendingConnects = connects }
         if connectCardCount != connectCards { connectCardCount = connectCards }
         if unfinishedTools != tools { unfinishedTools = tools }
+    }
+
+    /// Writes the preview's head: at once for a settled message, at most once per `streamPreviewInterval` for a stream
+    /// (the latest text after the wait).
+    private func updateHead() {
+        let head = thread.lastMessageText.map { String($0.prefix(Self.previewLength)) }
+        guard lastMessageHead != head else { return }
+        let now = ContinuousClock.now
+        if thread.lastMessageIsStreaming, let written = headWrittenAt,
+            let wait = StreamPreviewThrottle.wait(since: written, now: now, interval: previewInterval ?? Self.streamPreviewInterval)
+        {
+            guard headTask == nil else { return }
+            headTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: wait)
+                guard let self, !Task.isCancelled else { return }
+                self.headTask = nil
+                self.updateHead()
+            }
+            return
+        }
+        headTask?.cancel()
+        headTask = nil
+        lastMessageHead = head
+        headWrittenAt = now
+    }
+}
+
+/// When a streamed preview may be written again. Pure, for the tests.
+public enum StreamPreviewThrottle {
+    /// Nil: now. Else how long to wait.
+    public static func wait(
+        since written: ContinuousClock.Instant, now: ContinuousClock.Instant, interval: Duration
+    ) -> Duration? {
+        let elapsed = now - written
+        return elapsed >= interval ? nil : interval - elapsed
     }
 }
 

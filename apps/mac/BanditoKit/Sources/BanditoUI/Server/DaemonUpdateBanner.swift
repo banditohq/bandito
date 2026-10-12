@@ -117,18 +117,9 @@ struct DaemonUpdateBanner: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(Color.Bandito.signal.opacity(0.28), lineWidth: 1))
-            .confirmationDialog(
-                L10n.Server.DaemonUpdate.confirmTitle(version: offer.latest),
-                isPresented: $confirming,
-                titleVisibility: .visible
-            ) {
-                Button(L10n.Server.DaemonUpdate.confirm) {
-                    Task { await model.run(server, offer: offer) }
-                }
-                Button(L10n.Common.cancel, role: .cancel) {}
-            } message: {
-                Text(L10n.Server.DaemonUpdate.confirmMessage)
-            }
+            .modifier(DaemonUpdateConfirmation(isPresented: $confirming, version: offer.latest) {
+                Task { await model.run(server, offer: offer) }
+            })
         }
     }
 }

@@ -17,7 +17,7 @@ struct ToolGroupCard: View {
     var body: some View {
         VStack(spacing: 0) {
             Button {
-                withAnimation(BanditoMotion.ease) { ThreadDisclosure.shared.toggle(key) }
+                withBanditoAnimation(BanditoMotion.ease) { ThreadDisclosure.shared.toggle(key) }
             } label: {
                 HStack(spacing: 8) {
                     statusIcon

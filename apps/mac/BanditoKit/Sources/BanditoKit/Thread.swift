@@ -220,6 +220,18 @@ public struct AgentThread: Sendable, Hashable {
 
     /// Text of the newest message in the thread: a user or assistant message, or the reply still streaming.
     /// Approvals and notes are not messages.
+    /// The newest message is a reply still streaming.
+    public var lastMessageIsStreaming: Bool {
+        for item in items.reversed() {
+            switch item {
+            case .streaming: return true
+            case .assistant, .user: return false
+            default: continue
+            }
+        }
+        return false
+    }
+
     public var lastMessageText: String? {
         for item in items.reversed() {
             switch item {

@@ -2124,6 +2124,7 @@
 "serverSettings.support.hint" = "版本和系统信息。不包含地址、令牌或路径。";
 "serverSettings.support.title" = "支持报告";
 "serverSettings.unsupported" = "此服务器版本过旧，不支持这些设置。请更新服务器后再修改。";
+"serverUpdate.banner.title" = "服务器 %1$@ 有可用的新版本 %2$@";
 "settings.account.intro" = "登录后可在设备之间同步服务器、快捷键和提示词。";
 "settings.account.openProfile" = "打开个人资料";
 "settings.account.openProfileHint" = "昵称、颜色、本机代码、设备和同步。";

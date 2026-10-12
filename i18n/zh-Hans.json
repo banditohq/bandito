@@ -740,6 +740,7 @@
   "server.daemonUpdate.manualRestart": "已安装 {version}。请在服务器上重启守护进程以使其生效。",
   "server.daemonUpdate.timedOut": "服务器在两分钟内没有以 {version} 恢复运行。请在终端中检查。",
   "server.daemonUpdate.failed": "更新失败：{error}",
+  "serverUpdate.banner.title": "服务器 {name} 有可用的新版本 {version}",
   "onboarding.welcome.serverTitle": "整台服务器尽在手边",
   "onboarding.welcome.serverText": "文件、终端、浏览器和服务器屏幕都在一个窗口里。比 SSH 方便，代理看到的画面与此相同。",
   "onboarding.welcome.hasAccount": "我已有账户",

@@ -27,13 +27,19 @@ struct InspectorView: View {
             .padding(.bottom, 16)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    switch tab {
-                    case .details: DetailsTab(server: server, agent: agent)
-                    case .memory: MemoryTab(server: server, agent: agent)
-                    case .whereRuns: WhereTab(server: server, agent: agent)
+                // One tab fades into the next (both in one place: a stack would put them one under the other).
+                ZStack(alignment: .topLeading) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        switch tab {
+                        case .details: DetailsTab(server: server, agent: agent)
+                        case .memory: MemoryTab(server: server, agent: agent)
+                        case .whereRuns: WhereTab(server: server, agent: agent)
+                        }
                     }
+                    .id(tab)
+                    .transition(.opacity)
                 }
+                .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: tab)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
                 .frame(maxWidth: .infinity, alignment: .leading)

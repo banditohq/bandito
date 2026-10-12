@@ -2124,6 +2124,7 @@
 "serverSettings.support.hint" = "Версии и система. Без адресов, токенов и путей.";
 "serverSettings.support.title" = "Отчёт для поддержки";
 "serverSettings.unsupported" = "Этот сервер слишком старый для этих настроек. Обновите сервер, чтобы их менять.";
+"serverUpdate.banner.title" = "На сервере %1$@ доступна версия %2$@";
 "settings.account.intro" = "Войдите, чтобы синхронизировать серверы, сочетания клавиш и промпты между устройствами.";
 "settings.account.openProfile" = "Открыть профиль";
 "settings.account.openProfileHint" = "Имя, цвет, код этого Mac, устройства и синхронизация.";

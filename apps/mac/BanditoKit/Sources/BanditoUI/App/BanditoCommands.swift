@@ -89,7 +89,9 @@ public struct BanditoCommands: Commands {
             item("team.workbench.split") {
                 if let id = selectedAgentID { router.toggleWorkbenchSplit(agentID: id) }
             }
+            // ⌘W closes the panel's tab only while the panel is open and has one; otherwise the key does nothing here.
             item("team.workbench.closeTab") { router.closeFocusedWorkbenchTab() }
+                .disabled(!router.hasShortcutCloseTab)
             ForEach(1...9, id: \.self) { number in
                 item("team.workbench.tab\(number)") { router.selectFocusedWorkbenchTab(at: number - 1) }
             }

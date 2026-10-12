@@ -35,6 +35,7 @@ struct MarketHeader: View, Equatable {
     }
 
     var body: some View {
+        let _ = PerfCounters.hit("MarketHeader")
         VStack(alignment: .leading, spacing: 14) {
             content
         }

@@ -107,6 +107,42 @@ private func parsed(_ text: String) throws -> [String: Any] {
     #expect(params["maxHeight"] as? Int == 800)
 }
 
+@Test func cdpCaptureScreenshotAsksForAJpegOfTheSurface() throws {
+    let command = CDPCommand.captureScreenshot(quality: 70)
+    #expect(command.method == "Page.captureScreenshot")
+    let object = try parsed(CDP.encode(id: 9, command: command))
+    #expect(object["method"] as? String == "Page.captureScreenshot")
+    let params = try #require(object["params"] as? [String: Any])
+    #expect(params["format"] as? String == "jpeg")
+    #expect(params["quality"] as? Int == 70)
+    #expect(params["fromSurface"] as? Bool == true)
+}
+
+@Test func cdpScreenshotIsDecodedFromItsResult() throws {
+    let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0, 0x02])
+    let text = #"{"id":9,"result":{"data":"\#(jpeg.base64EncodedString())"}}"#
+    guard case .response(let id, let result) = try CDP.parse(text) else {
+        Issue.record("expected a response")
+        return
+    }
+    #expect(id == 9)
+    #expect(CDP.screenshot(from: result) == jpeg)
+}
+
+@Test func cdpScreenshotWithoutValidDataIsNil() throws {
+    // A missing field, and a field that is not base64, both give no picture.
+    guard case .response(_, let missing) = try CDP.parse(#"{"id":10,"result":{}}"#) else {
+        Issue.record("expected a response")
+        return
+    }
+    #expect(CDP.screenshot(from: missing) == nil)
+    guard case .response(_, let broken) = try CDP.parse(#"{"id":11,"result":{"data":"%%%"}}"#) else {
+        Issue.record("expected a response")
+        return
+    }
+    #expect(CDP.screenshot(from: broken) == nil)
+}
+
 @Test func screencastAckNamesTheSession() throws {
     let object = try parsed(CDP.encode(id: 2, command: .ackScreencastFrame(sessionId: 41)))
     #expect(object["method"] as? String == "Page.screencastFrameAck")

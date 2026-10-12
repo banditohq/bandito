@@ -45,7 +45,9 @@ list or animation is done:
    table for long lists, `FirstFit` instead of `ViewThatFits` in headers and toolbars, `LayerMotion` for repeating
    motion, `Equatable` rows
    keyed by the facts they show, state written only on change, heavy work (parsing, sizing, images) off the main thread.
-2. Add a scenario (or a part) for it to the smoothness check (`Perf/PerfScenarios.swift`) on the demo daemons.
+2. Add a scenario (or a part) for it to the smoothness check (`Perf/PerfScenarios.swift`) on the demo daemons, and a
+   work budget to `WorkBudgetTests`: a new screen gets its counters (`PerfCounters.hit` in its bodies and AppKit
+   cells) and a step with budgets, so a change that makes it rebuild more fails `swift test` before it is merged.
 3. Run it in a speed build (`-O`) in the QA VM and compare with the page next to it; a page under the bar is not done.
 4. A new lag you find and fix becomes a rule below, with the number it cost.
 
@@ -57,7 +59,7 @@ list or animation is done:
   reactions and VoiceOver are the SwiftUI ones. A row is measured once per width (`ThreadListCell.height`), guessed
   (`ThreadHeightGuess`, once per line) until then; rows above the screen that change height move the offset with them.
   The lines are kept between updates (`ThreadListMemo`, handed over in a versioned box): a token makes and reconfigures
-  the streamed line only. A thread just opened makes only the rows that show (`ThreadTableView.prepareOnlyVisible`). The lists of the last four agents are kept (`ThreadListHost`): going back to one shows it at once, where it was.
+  the streamed line only. A thread just opened makes only the rows that show (`ThreadTableView.prepareOnlyVisible`). The lists of the last four agents are kept (`ThreadListHost`): going back to one shows it at once, where it was. Only the list on screen follows the width; a kept one takes it when it comes back (each of the four measured its rows again at a panel toggle).
   Message bodies are parsed once (`MessageRenderCache`).
 - The frequent rows are AppKit, not SwiftUI (`NativeRow`: a plain message of the person or the agent, a stream, a
   day, a note, a folded finished tool group): text views over a layer of the bubble's own SwiftUI shape, measured off
@@ -79,6 +81,7 @@ list or animation is done:
 - A window's content root is `.windowRoot(minWidth:minHeight:)`, never `.frame(minWidth:minHeight:)`: the hosting view asks the content for its smallest and largest size at every layout, and a frame passed that down every row of every list (30 % of the main thread while scrolling the Services page).
 - No gradient strokes or fills on repeated elements (message bubbles, cards, rows): SwiftUI paints them with the processor over the whole element, which doubled what a message cost. Solid hairlines; a gradient only on a single surface. A full-window gradient is a `CAGradientLayer` (the main area's backdrop).
 - Each agent's thread is observed on its own (`ServerModel.threads`, one `AgentThreadState` per agent). Views that show status, a running turn, waiting approvals, forms or the preview read `threadSummary(for:)`, whose fields change only with their values; only the rows (`ThreadRowsScope`) and `ThreadWatch` read the thread. A token used to rebuild the sidebar, the chat's header and the composer, for every agent's stream.
+- The preview of a streaming reply (`AgentThreadState.lastMessageHead`) is written at most once per `streamPreviewInterval` (300 ms), the settled message at once: the team list's rows were rebuilt at every token of a reply's first 240 characters (36 times in 100 pieces).
 - A row that shows a few facts of a changing model is built from an `Equatable` key (`Memo`, `SidebarThreadFacts`): the reader may run at every change, the row only when what it shows changed.
 - The composer's text is read only by its field (`ComposerTextField`); the composer reads `DraftFacts` (has text, command, `/word`, `@word`), written on change. Each letter used to rebuild the whole composer. Clipboard checks in a body are cached by `changeCount` and check types, not data.
 - A streaming message parses only its last paragraph (`MessageRenderCache.streamingMessage`), and a stream replaces only its own row (`ThreadRows.replacingLast`): re-parsing the whole reply at every token grew with every word.
@@ -111,6 +114,13 @@ list or animation is done:
 - A symbol drawn tinted in an AppKit row is made once (`NativeSymbols`), not tinted at each draw.
 - An agent switch needs the chosen agent only: `TeamSelection.shownAgentID` does not sort the team when the chosen one
   is there (the sort read every agent's state).
+- `WorkBudgetTests` (in `swift test`, so in CI) counts work, never time: bodies evaluated, the thread's cells made,
+  reconfigured and measured, width changes, for one step of the main screens (scroll the thread, type 20 letters,
+  stream 100 pieces, switch agents and back, open and close the agent's panel, open Marketplace categories) on the demo
+  world in a window nobody sees (`WorkBudgetHarness`). A budget is today's count with a little room; a failure names
+  the counter, the step and where to look, and `WORK_BUDGET_PRINT=1` prints every count. A step starts when the window is at rest and ends when its own late work is done (`WorkBudgetHarness.quiet`/`rest`: steps with nothing counted, twice around a 0.4 s wait), so a slow runner does not move one step's work into the next. Counts that depend on frames
+  (rows reconfigured during an animation) are left out. Tests that draw thread rows or the main window sit in
+  `ScreenWorkSuites` (run one after the other: the counters are global).
 - Measure with the smoothness check: Help → ⌥ Smoothness check… (release builds too) runs every page on demo daemons (`DemoDaemonTransport`, `PerfDemoWorld`) in a window of its own and shows the table. In a QA copy, `perf <scenario>` runs one page in that window and `perf check` all of them (`PerfScenarios.swift`; JSON in `~/.cache/bandito-qa/`: frames, the main thread's work and processor time per frame, stretches over 100 ms, `bodies` in debug builds, a verdict per page and part). A build for speed: `BANDITO_XCODE_EXTRA="SWIFT_OPTIMIZATION_LEVEL=-O" scripts/build.sh`. On anyone's Mac without touching their Bandito: `scripts/perf-build.sh` makes "Bandito Perf" (Release, its own id `dev.bandito.mac.perf`, ad hoc, no daemon), and `"Bandito Perf.app/Contents/MacOS/Bandito" --perf-check` runs only the check (`PerfStandalone`: no saved servers, pairing, Keychain, account, statistics or updates) and saves the JSON in `~/Library/Application Support/dev.bandito.mac.perf/`. A build setting on the `xcodebuild` command line reaches every target: never pass the bundle id there (resource bundles with the app's id lose their colours). Hangs of the main thread of 250 ms or more are logged by `HangMonitor` (`dev.bandito` / `perf`) and counted as `perf.hang.<screen>`. An AppKit sheet slides in a run loop of its own that no observer sees: in a stretch where a sheet came or went, only the main thread's processor time counts as work (`SheetSlideRule`), and the slide's gap is counted apart (`sheetSlides`), not as a late frame. A frame can come right after the slide, before the stretch ends: the stretch in progress already counts as a slide then (`SheetSlideRule.part`); the sheets' 345–395 ms "frames" were that. Each part of the JSON lists its frames over 50 ms (`longFrames`: gap, work, processor time, slide).
 
 ## Decoding replies

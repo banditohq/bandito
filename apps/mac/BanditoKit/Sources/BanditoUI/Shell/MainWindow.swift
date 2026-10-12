@@ -56,6 +56,7 @@ struct MainWindow: View {
                     .transition(.opacity)
             }
         }
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: router.paletteOpen)
         .overlay {
             if let viewer = router.imageViewer {
                 ImageViewer(request: viewer)
@@ -107,6 +108,8 @@ struct MainWindow: View {
                 Task { await hub.refreshPending() }
             }
         }
+        // The confirmation of a server update asked from the sidebar or the server menu (see `DaemonUpdateRequests`).
+        .modifier(PendingDaemonUpdateDialog())
     }
 
     // MARK: swipes
