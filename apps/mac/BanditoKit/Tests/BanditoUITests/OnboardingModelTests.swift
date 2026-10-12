@@ -20,6 +20,15 @@ import Testing
         #expect(!model.isDone)
     }
 
+    @Test func haveServerSkipsTheAccountStep() {
+        let model = OnboardingModel(defaults: makeDefaults())
+        model.advance()
+        model.haveServer()
+        #expect(model.step == .server)
+        #expect(!model.needsApproval)
+        #expect(model.isActive)
+    }
+
     @Test func accountWithApprovedDeviceGoesToServer() {
         let model = OnboardingModel(defaults: makeDefaults())
         model.advance()

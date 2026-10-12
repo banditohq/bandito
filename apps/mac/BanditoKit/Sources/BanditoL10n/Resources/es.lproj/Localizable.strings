@@ -1826,15 +1826,11 @@
 "onboarding.welcome.askTitle" = "Preguntan antes de lo arriesgado";
 "onboarding.welcome.footer" = "Código abierto · tu código y tus claves nunca salen de tus servidores";
 "onboarding.welcome.hasAccount" = "Ya tengo una cuenta";
-"onboarding.welcome.haveAccount" = "¿Ya tienes una cuenta?";
-"onboarding.welcome.headline" = "Tu equipo de IA.";
-"onboarding.welcome.headlineAccent" = "En tu servidor.";
 "onboarding.welcome.serverText" = "Archivos, terminales, navegador y pantalla del servidor en una sola ventana. Más fácil que SSH, y los agentes ven lo que tú ves.";
 "onboarding.welcome.serverTitle" = "Todo el servidor a mano";
 "onboarding.welcome.signIn" = "Iniciar sesión";
 "onboarding.welcome.sleepText" = "Los agentes viven en tu servidor. Cierra el Mac y siguen con la tarea; por la mañana te envían el resultado.";
 "onboarding.welcome.sleepTitle" = "Trabajan mientras duermes";
-"onboarding.welcome.start" = "Empezar: tarda 3 minutos";
 "onboarding.welcome.subsText" = "Claude, ChatGPT (Codex) o Grok: Bandito ejecuta sus programas oficiales. Sin cuentas nuevas.";
 "onboarding.welcome.subsTitle" = "Con las suscripciones que ya tienes";
 "onboarding.welcome.subtitle" = "Agentes con Claude Code, Codex y Grok, con roles y horarios. Siguen trabajando aunque cierres el portátil y preguntan antes de cualquier acción arriesgada.";

@@ -2608,15 +2608,11 @@ public enum L10n {
             public static var askTitle: String { L10n.tr("onboarding.welcome.askTitle") }
             public static var footer: String { L10n.tr("onboarding.welcome.footer") }
             public static var hasAccount: String { L10n.tr("onboarding.welcome.hasAccount") }
-            public static var haveAccount: String { L10n.tr("onboarding.welcome.haveAccount") }
-            public static var headline: String { L10n.tr("onboarding.welcome.headline") }
-            public static var headlineAccent: String { L10n.tr("onboarding.welcome.headlineAccent") }
             public static var serverText: String { L10n.tr("onboarding.welcome.serverText") }
             public static var serverTitle: String { L10n.tr("onboarding.welcome.serverTitle") }
             public static var signIn: String { L10n.tr("onboarding.welcome.signIn") }
             public static var sleepText: String { L10n.tr("onboarding.welcome.sleepText") }
             public static var sleepTitle: String { L10n.tr("onboarding.welcome.sleepTitle") }
-            public static var start: String { L10n.tr("onboarding.welcome.start") }
             public static var subsText: String { L10n.tr("onboarding.welcome.subsText") }
             public static var subsTitle: String { L10n.tr("onboarding.welcome.subsTitle") }
             public static var subtitle: String { L10n.tr("onboarding.welcome.subtitle") }

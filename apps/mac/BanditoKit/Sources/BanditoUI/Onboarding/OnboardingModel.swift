@@ -63,6 +63,12 @@ public final class OnboardingModel {
         if step == .done { finish() }
     }
 
+    /// "I already have a server" on Welcome: the account step is skipped, the server step comes next (as on iPhone).
+    public func haveServer() {
+        needsApproval = false
+        set(.server)
+    }
+
     /// The account step ended with a signed-in session. An unapproved device goes to the approval step.
     public func signedIn(deviceApproved: Bool) {
         needsApproval = !deviceApproved

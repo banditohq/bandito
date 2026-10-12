@@ -1826,15 +1826,11 @@
 "onboarding.welcome.askTitle" = "Sie fragen, bevor es riskant wird";
 "onboarding.welcome.footer" = "Open Source · Ihr Code und Ihre Schlüssel verlassen nie Ihre Server";
 "onboarding.welcome.hasAccount" = "Ich habe bereits ein Konto";
-"onboarding.welcome.haveAccount" = "Schon ein Konto?";
-"onboarding.welcome.headline" = "Ihr KI-Team.";
-"onboarding.welcome.headlineAccent" = "Auf Ihrem Server.";
 "onboarding.welcome.serverText" = "Dateien, Terminals, Browser und Serverbildschirm in einem Fenster. Einfacher als SSH, und Agenten sehen, was Sie sehen.";
 "onboarding.welcome.serverTitle" = "Der ganze Server griffbereit";
 "onboarding.welcome.signIn" = "Anmelden";
 "onboarding.welcome.sleepText" = "Agenten laufen auf Ihrem Server. Schließen Sie den Mac, arbeiten sie weiter und schicken Ihnen morgens das Ergebnis.";
 "onboarding.welcome.sleepTitle" = "Arbeiten, während Sie schlafen";
-"onboarding.welcome.start" = "Loslegen — dauert 3 Minuten";
 "onboarding.welcome.subsText" = "Claude, ChatGPT (Codex) oder Grok: Bandito startet deren offizielle Programme. Keine neuen Konten nötig.";
 "onboarding.welcome.subsTitle" = "Mit Abos, die Sie schon haben";
 "onboarding.welcome.subtitle" = "Agenten auf Basis von Claude Code, Codex und Grok, mit Rollen und Zeitplänen. Sie arbeiten weiter, wenn Sie den Laptop zuklappen, und fragen vor allem bei Riskantem nach.";

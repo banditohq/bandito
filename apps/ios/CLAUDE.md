@@ -47,7 +47,10 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
 ## The raccoon and the Crew
 
 - The raccoon's geometry and mood timing are shared: `BanditoDesign/RaccoonShape.swift` (`RaccoonFace`, masks, eyes,
-  `AvatarTile` colors) and `BanditoDesign/AvatarPose.swift` (`AvatarMood`, `AvatarPose`, `MotionKeyframes`). The iPhone
+  `AvatarTile` colors) and `BanditoDesign/AvatarPose.swift` (`AvatarMood`, `AvatarPose`, `MotionKeyframes`). The head of
+  the logo and the onboarding's lights are shared too: `BanditoDesign/RaccoonHead.swift` (the head's path and grid),
+  `RaccoonLights.swift` (the figure as values) and `RaccoonLightsLayer.swift` (the Core Animation layer; the iPhone's
+  `RaccoonLightsView` in `Onboarding/RaccoonLights.swift` only hosts it). The iPhone
   moves them with Core Animation layers (`Crew/CrewAvatar.swift`, `RaccoonMotionView`), never a SwiftUI repeating
   animation; Reduce Motion draws the rest pose.
 - Crew (`Crew/`): facts per agent in `CrewFacts.swift` (`Equatable`), rows in `CrewRows.swift`. The screen counts row
