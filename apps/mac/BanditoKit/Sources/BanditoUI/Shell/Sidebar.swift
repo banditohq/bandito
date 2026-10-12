@@ -76,12 +76,21 @@ private struct SidebarTopRow: View {
 /// The list under the mode bar. Switching modes cross-fades the lists.
 private struct ModeSidebarContent: View {
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
 
     var body: some View {
         ZStack {
-            sidebar(for: router.mode)
-                .id(router.mode)
-                .transition(.opacity)
+            let front = app.currentServer?.id.uuidString
+            ForEach(TeamKeeping.built(kept: router.teamServers, front: front, teamShown: router.mode == .team), id: \.self) {
+                serverID in
+                TeamSidebar(serverID: serverID)
+                    .keptMode(hidden: router.mode != .team || serverID != front)
+            }
+            if router.mode != .team {
+                sidebar(for: router.mode)
+                    .id(router.mode)
+                    .transition(.opacity)
+            }
         }
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: router.mode)
     }
@@ -89,7 +98,7 @@ private struct ModeSidebarContent: View {
     @ViewBuilder
     private func sidebar(for mode: AppMode) -> some View {
         switch mode {
-        case .team: TeamSidebar()
+        case .team: TeamSidebar(serverID: app.currentServer?.id.uuidString)
         case .files: FilesSidebar()
         case .terminals: TerminalsSidebar()
         case .browser: BrowserSidebar()

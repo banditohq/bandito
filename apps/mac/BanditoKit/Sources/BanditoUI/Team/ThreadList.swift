@@ -124,6 +124,9 @@ struct ThreadList: NSViewRepresentable {
     var version: Int
     var context: ThreadListContext
     var controller: ThreadListController
+    /// Under another mode (`KeptMode`): the views are hidden, so their text sets no pointer shape and their rows track
+    /// no hover over the mode in front (a fade to nothing leaves AppKit views live).
+    var hidden = false
 
     func makeNSView(context: Context) -> ThreadListHost {
         let host = ThreadListHost()
@@ -132,6 +135,7 @@ struct ThreadList: NSViewRepresentable {
     }
 
     func updateNSView(_ host: ThreadListHost, context: Context) {
+        if host.isHidden != hidden { host.isHidden = hidden }
         let list = host.show(agentID: self.context.agentID, controller: controller)
         controller.list = list
         list.update(lines: lines.lines, change: lines.change, version: version, context: self.context)

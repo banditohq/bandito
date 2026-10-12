@@ -19,6 +19,8 @@ struct ThreadView: View {
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Kept built under another mode (`KeptMode`): the list's views are hidden (no pointer shapes, no hover).
+    @Environment(\.modeHidden) private var hidden
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
     /// Files are dragged over the chat.
     @State private var dropTargeted = false
@@ -153,7 +155,7 @@ struct ThreadView: View {
                     ChatLinkText.open(url, agentID: agent.id, folder: agent.cwd, server: server, router: router)
                 },
                 agentID: agent.id, chat: rowChat, onError: { actionError = $0 }),
-            controller: list)
+            controller: list, hidden: hidden)
     }
 
     /// The top of the thread came near: older history is read.

@@ -208,12 +208,23 @@ private struct TourOverlay: ViewModifier {
 /// The main area: the view of the current mode, cross-fading when the mode changes.
 private struct ModeArea: View {
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
 
     var body: some View {
         ZStack {
-            modeView(for: router.mode)
-                .id(router.mode)
-                .transition(.opacity)
+            // Team mode stays built under the other modes, for the last two servers (`KeptMode`,
+            // `Router.teamServers`): coming back to it builds nothing (it cost 70–130 ms at each return).
+            let front = app.currentServer?.id.uuidString
+            ForEach(TeamKeeping.built(kept: router.teamServers, front: front, teamShown: router.mode == .team), id: \.self) {
+                serverID in
+                TeamMode(serverID: serverID)
+                    .keptMode(hidden: router.mode != .team || serverID != front)
+            }
+            if router.mode != .team {
+                modeView(for: router.mode)
+                    .id(router.mode)
+                    .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // The backdrop takes no clicks: the title strip behind the main column gets the empty space.
@@ -224,7 +235,7 @@ private struct ModeArea: View {
     @ViewBuilder
     private func modeView(for mode: AppMode) -> some View {
         switch mode {
-        case .team: TeamMode()
+        case .team: TeamMode(serverID: app.currentServer?.id.uuidString)
         case .files: FilesMode()
         case .terminals: TerminalsMode()
         case .browser: BrowserMode()

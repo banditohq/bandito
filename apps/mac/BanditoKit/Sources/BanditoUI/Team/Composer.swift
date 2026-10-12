@@ -62,6 +62,9 @@ struct Composer: View {
     /// (`ComposerTextField`) does, so a typed letter redraws the field, not the whole composer.
     @State private var draftFacts = DraftFacts()
     @FocusState private var focused: Bool
+    /// Kept built under another mode (`KeptMode`): it gives up the focus and takes it again when it shows, as it did
+    /// when it was made anew.
+    @Environment(\.modeHidden) private var hidden
     @State private var slash = SlashMenuModel()
     @State private var mention = MentionMenuModel()
     /// The context popover is open (the ring is a button).
@@ -307,12 +310,23 @@ struct Composer: View {
             dictation.cancel()
             router.dictationRecording = false
         }
+        .onChange(of: hidden) { _, hidden in
+            if hidden {
+                focused = false
+                dictation.cancel()
+                router.dictationRecording = false
+            } else if let agentID = agent?.id, router.takeComposerFocus(agentID: agentID) {
+                takeFocus(.requested)
+            } else {
+                takeFocus(.agentOpened)
+            }
+        }
         .onChange(of: dictation.phase) { _, _ in syncEscape() }
         .onChange(of: focused) { _, _ in syncEscape() }
         .onChange(of: router.dictationRequest) { _, _ in toggleDictation() }
         .tourAnchor(.composer)
         .onChange(of: router.composerFocusAgentID, initial: true) { _, _ in
-            guard let agentID = agent?.id else { return }
+            guard !hidden, let agentID = agent?.id else { return }
             if router.takeComposerFocus(agentID: agentID) { takeFocus(.requested) }
         }
         .onChange(of: mentionMatch?.query) { old, new in

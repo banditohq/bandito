@@ -5,18 +5,30 @@ import SwiftUI
 
 /// Team sidebar: pinned agents, the agents waiting for you, then the rest of the team.
 struct TeamSidebar: View {
+    /// The server listed (one sidebar is kept built per server, as Team mode is); nil: none.
+    let serverID: String?
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @State private var pins = PinnedAgents()
     @State private var pendingDelete: Agent?
     @State private var actionError: UserFacingMessage?
+    @Environment(\.modeHidden) private var hidden
+    @State private var lastShown = TeamModeShown()
 
     var body: some View {
-        if let server = app.currentServer {
+        if let server = serverID.flatMap({ id in app.servers.first { $0.id.uuidString == id } }) {
             content(server)
         } else {
             SidebarPlaceholder(mode: .team)
         }
+    }
+
+    private func markedAgent(_ server: ServerModel) -> String? {
+        let id = router.showsTeamHome
+            ? nil
+            : TeamSelection.shownAgentID(server: server, selected: router.selectedAgentID, pinned: Set(pins.ids))
+        lastShown.agentID = id
+        return id
     }
 
     @ViewBuilder
@@ -25,10 +37,9 @@ struct TeamSidebar: View {
         // The main agent goes first in the whole list, before the list is split into its groups.
         let lead = server.leadAgentID
         let agents = LeadAgent.leadFirst(server.sortedAgents, id: \.id, lead: lead)
-        // On the team home no chat is on screen, so no row is marked.
-        let shown = router.showsTeamHome
-            ? nil
-            : TeamSelection.shownAgentID(server: server, selected: router.selectedAgentID, pinned: Set(pins.ids))
+        // On the team home no chat is on screen, so no row is marked. Out of sight (another mode or server) the row
+        // marked last stays: the router's choices are not read, so they rebuild nothing unseen.
+        let shown = hidden ? lastShown.agentID : markedAgent(server)
         let waiting = agents.filter { server.needsPerson($0.id) }
         let waitingIDs = Set(waiting.map(\.id))
         let others = agents.filter { !waitingIDs.contains($0.id) }

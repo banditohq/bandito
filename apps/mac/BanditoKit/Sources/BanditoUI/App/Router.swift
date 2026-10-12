@@ -192,6 +192,7 @@ public final class Router {
                 HangMonitor.note(screen: mode)
                 HangMonitor.note(action: "mode.switch")
             }
+            if mode == .team { keepTeam(of: frontServerID) }
         }
     }
 
@@ -274,7 +275,18 @@ public final class Router {
     /// The agent whose chat is on screen (set by Team mode). ⌘I, ⌘J and the workbench shortcuts act on it.
     var shownAgentID: String?
     /// The server in front (set by the main window). Workbench state belongs to an agent of this server.
-    var frontServerID: String?
+    var frontServerID: String? {
+        didSet { if mode == .team { keepTeam(of: frontServerID) } }
+    }
+    /// The servers whose Team mode stays built (`KeptMode`), the last shown last: the two last shown in Team mode. A
+    /// return to Team mode, or to one of them, builds nothing (it cost 70–130 ms each time).
+    private(set) var teamServers: [String] = []
+    static let keptTeams = 2
+
+    private func keepTeam(of serverID: String?) {
+        guard let serverID, teamServers.last != serverID else { return }
+        teamServers = TeamKeeping.kept(teamServers, adding: serverID, limit: Self.keptTeams)
+    }
 
     /// The workbench panel of each agent, by `workbenchKey`: its tabs and panes (see `WorkbenchRules`).
     var workbench: [String: WorkbenchState] = [:]
