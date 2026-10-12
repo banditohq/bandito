@@ -21,7 +21,7 @@ import Testing
 
     static var cases: [AuditCase] {
         settings + sheets + dataSheets + serverScreens + marketScreens + marketShelfScreens + onboardingScreens
-            + flowSheets + browserScreens + approvalViews + messageTimeRows + perfCheckViews + scheduleRunViews
+            + flowSheets + runtimeInstallRows + browserScreens + approvalViews + messageTimeRows + perfCheckViews + scheduleRunViews
     }
 
     /// The results of the smoothness check (Help → ⌥ Smoothness check…) in the narrowest window.

@@ -54,6 +54,7 @@ public final class AppModel {
     let daemonUpdate = DaemonUpdateModel()
     /// The update the person is asked to confirm from the sidebar or the server menu (the main window shows the dialog).
     var daemonUpdateAsk: DaemonUpdateAsk?
+    @ObservationIgnored private var notificationSink: SystemNotificationSink?
     /// System notifications for agent events; nil until `startNotifications` runs.
     public private(set) var notifications: NotificationService?
 
@@ -110,9 +111,14 @@ public final class AppModel {
 
     /// Starts system notifications for live agent events (see `NotificationService`). Call once at launch.
     /// `selectedAgentID` and `windowActive` tell the rules what the user is looking at.
-    public func startNotifications(selectedAgentID: @escaping () -> String?, windowActive: @escaping () -> Bool) {
+    /// `askPermission` is false while the first-run introduction is on screen: the system's question waits for
+    /// `askNotificationPermission`, which the main window calls once the introduction is over.
+    public func startNotifications(
+        askPermission: Bool, selectedAgentID: @escaping () -> String?, windowActive: @escaping () -> Bool
+    ) {
         guard notifications == nil else { return }
         let sink = SystemNotificationSink()
+        notificationSink = sink
         let service = NotificationService(
             sink: sink,
             settings: { NotificationSettings(defaults: .standard) },
@@ -129,7 +135,13 @@ public final class AppModel {
             })
         sink.service = service
         sink.start()
+        if askPermission { sink.requestPermission() }
         notifications = service
+    }
+
+    /// The system's permission question for notifications, asked once the first-run introduction is over.
+    public func askNotificationPermission() {
+        notificationSink?.requestPermission()
     }
 
     /// Feeds one server's live events to the notifications. Servers added later are attached as they come.

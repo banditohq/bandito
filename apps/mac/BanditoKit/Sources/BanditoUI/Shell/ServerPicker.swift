@@ -24,38 +24,7 @@ struct ServerPicker: View {
                 hint: Self.hasUpdate(server) ? L10n.Updates.available : nil)
             .fixedSize(horizontal: false, vertical: true)
         } else {
-            // No server yet: the place of the picker is a card of the same height, with one way to connect one.
-            HStack(spacing: 10) {
-                Image(systemName: "server.rack")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .frame(width: 28, height: 28)
-                    .background(Color.Bandito.text.opacity(0.06), in: Circle())
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(L10n.Sidebar.NoServer.title)
-                        .font(BanditoFont.text(size: 13, weight: 600))
-                        .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(1)
-                    Text(L10n.Sidebar.NoServer.hint)
-                        .font(BanditoFont.text(size: 11.5, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                Button(L10n.Sidebar.NoServer.connect) {
-                    router.sheet = .addServer
-                }
-                .banditoButton(.lightPill())
-                .fixedSize()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.Bandito.text.opacity(0.035)))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.Bandito.text.opacity(0.08)))
+            NoServerCard { router.sheet = .addServer }
         }
     }
 
@@ -241,5 +210,45 @@ struct ServerPicker: View {
     /// "This Mac · 1 agent" or "Server · 1 agent", under the name in the field.
     static func summary(_ server: ServerModel) -> String {
         "\(kindName(server)) · \(L10n.Common.agentCount(count: server.agents.count))"
+    }
+}
+
+/// The place of the picker while there is no server: what to do, and the one way to do it. The button sits under the
+/// text, not beside it: next to a button a sidebar's width left the words about 60 pt, one letter a line in German.
+struct NoServerCard: View {
+    let connect: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .frame(width: 28, height: 28)
+                    .background(Color.Bandito.text.opacity(0.06), in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.Sidebar.NoServer.title)
+                        .font(BanditoFont.text(size: 13, weight: 600))
+                        .foregroundStyle(Color.Bandito.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(L10n.Sidebar.NoServer.hint)
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            Button(L10n.Sidebar.NoServer.connect, action: connect)
+                .banditoButton(.lightPill())
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.Bandito.text.opacity(0.035)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.Bandito.text.opacity(0.08)))
     }
 }
