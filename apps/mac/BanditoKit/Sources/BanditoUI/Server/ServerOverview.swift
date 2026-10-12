@@ -17,9 +17,6 @@ struct ServerOverview: View {
     @State private var secrets: [SecretInfo] = []
     @State private var stopping: ProcessRow?
     @State private var actionError: UserFacingMessage?
-    /// The metric whose detail is open, if any.
-    @State private var detail: OverviewMetric?
-    @Environment(\.scenarioRequests) private var scenario
     /// Two columns of cards or one. Starts narrow; changes only when the measured page width crosses the threshold.
     @State private var isWide = false
 
@@ -102,9 +99,6 @@ struct ServerOverview: View {
         .onPreferenceChange(PageWidthKey.self) { width in
             let wide = Self.isTwoColumns(width: width)
             if wide != isWide { isWide = wide }
-        }
-        .onChange(of: scenario?.overviewMetric) { _, metric in
-            if detail != metric { detail = metric }
         }
         .task(id: server?.id) {
             guard let server else { return }
@@ -237,23 +231,9 @@ struct ServerOverview: View {
 
     /// A metric card that opens its detail: the chart for the chosen period, with averages and the top processes.
     private func openable<Tile: View>(_ metric: OverviewMetric, @ViewBuilder tile: () -> Tile) -> some View {
-        Button {
-            detail = metric
-        } label: {
-            tile()
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
-        .banditoButton(.row(cornerRadius: 16))
-        .popover(
-            isPresented: Binding(get: { detail == metric }, set: { if !$0 { detail = nil } }),
-            arrowEdge: .bottom
-        ) {
-            if let server {
-                MetricDetailView(
-                    metric: metric, monitor: monitor, server: server,
-                    ownerName: { ownerName($0, server: server) })
-            }
-        }
+        OpenableMetricTile(
+            metric: metric, monitor: monitor, server: server,
+            ownerName: { [app] owner, server in Self.ownerName(owner, server: server, app: app) }, tile: tile())
     }
 
     // MARK: - Who uses the most
@@ -363,6 +343,10 @@ struct ServerOverview: View {
     }
 
     private func ownerName(_ owner: ProcessOwnerRef, server: ServerModel) -> String {
+        Self.ownerName(owner, server: server, app: app)
+    }
+
+    static func ownerName(_ owner: ProcessOwnerRef, server: ServerModel, app: AppModel) -> String {
         switch owner.kind {
         case .agent: server.agents.first { $0.id == owner.id }?.name ?? L10n.Server.Owner.agent
         case .terminal:
@@ -515,6 +499,39 @@ struct ServerOverview: View {
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color.Bandito.signal.opacity(0.28), lineWidth: 1))
+    }
+}
+
+/// A metric card that opens its detail in a popover. Whether it is open is the card's own state: opening one used to
+/// rebuild the whole overview (passport, banners, every card) in the frame the popover appears.
+private struct OpenableMetricTile<Tile: View>: View {
+    let metric: OverviewMetric
+    let monitor: HostMonitor
+    let server: ServerModel?
+    let ownerName: (ProcessOwnerRef, ServerModel) -> String
+    let tile: Tile
+    @State private var open = false
+    @Environment(\.scenarioRequests) private var scenario
+
+    var body: some View {
+        Button {
+            open = true
+        } label: {
+            tile
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .banditoButton(.row(cornerRadius: 16))
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            if let server {
+                MetricDetailView(
+                    metric: metric, monitor: monitor, server: server,
+                    ownerName: { ownerName($0, server) })
+            }
+        }
+        .onChange(of: scenario?.overviewMetric) { _, wanted in
+            let shown = wanted == metric
+            if open != shown { open = shown }
+        }
     }
 }
 

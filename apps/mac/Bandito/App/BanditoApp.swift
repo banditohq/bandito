@@ -47,6 +47,10 @@ struct BanditoApp: App {
                     focusMode.start()
                 }
                 .task {
+                    // First-use costs (the first chart) are paid offscreen while nobody uses the app.
+                    IdleWarmup.start()
+                }
+                .task {
                     // Anonymous statistics: the account's token joins the pulse when someone is signed in.
                     telemetry.attach(accountHub: accountHub)
                     await telemetry.run(app: model)
