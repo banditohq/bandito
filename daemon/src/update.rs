@@ -1682,6 +1682,11 @@ mod tests {
             false,
         )
         .unwrap();
+        // A child forked by another test may still hold a copy of the lock's descriptor until it execs: wait a moment.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while lock_updates(&home).is_err() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
         assert!(lock_updates(&home).is_ok());
     }
 

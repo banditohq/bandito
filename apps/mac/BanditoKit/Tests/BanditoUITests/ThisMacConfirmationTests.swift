@@ -77,9 +77,10 @@ extension LocalServerMigrationTests {
         let app = AppModel(defaults: defaults)
         let start = ContinuousClock.now
         await app.confirmThisMacServers(
-            binary: binary, runner: RunningDaemon(delay: .milliseconds(300)), timeout: .seconds(2))
-        // Two checks of 300 ms each: one after the other they would take 600 ms.
-        #expect(start.duration(to: .now) < .milliseconds(550))
+            binary: binary, runner: RunningDaemon(delay: .milliseconds(800)), timeout: .seconds(3))
+        // Two checks of 800 ms each: one after the other they would take 1.6 s; together about 0.8 s, with room for a
+        // loaded CI runner.
+        #expect(start.duration(to: .now) < .milliseconds(1_400))
         #expect(app.servers.allSatisfy { $0.config.isThisMac })
     }
 
