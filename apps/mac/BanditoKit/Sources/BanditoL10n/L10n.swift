@@ -1395,6 +1395,61 @@ public enum L10n {
             public static var service: String { L10n.tr("ios.inbox.service") }
         }
 
+        public enum Onboarding {
+            public static func progress(current: String, total: String) -> String { L10n.tr("ios.onboarding.progress", current, total) }
+            public static var skip: String { L10n.tr("ios.onboarding.skip") }
+
+            public enum Connect {
+                public static var hint: String { L10n.tr("ios.onboarding.connect.hint") }
+                public static var paste: String { L10n.tr("ios.onboarding.connect.paste") }
+                public static var scan: String { L10n.tr("ios.onboarding.connect.scan") }
+                public static var title: String { L10n.tr("ios.onboarding.connect.title") }
+                public static var type: String { L10n.tr("ios.onboarding.connect.type") }
+            }
+
+            public enum Features {
+
+                public enum Approval {
+                    public static var allowed: String { L10n.tr("ios.onboarding.features.approval.allowed") }
+                    public static var text: String { L10n.tr("ios.onboarding.features.approval.text") }
+                    public static var title: String { L10n.tr("ios.onboarding.features.approval.title") }
+                }
+
+                public enum Crew {
+                    public static var text: String { L10n.tr("ios.onboarding.features.crew.text") }
+                    public static var title: String { L10n.tr("ios.onboarding.features.crew.title") }
+                }
+
+                public enum Night {
+                    public static var event1: String { L10n.tr("ios.onboarding.features.night.event1") }
+                    public static var event2: String { L10n.tr("ios.onboarding.features.night.event2") }
+                    public static var event3: String { L10n.tr("ios.onboarding.features.night.event3") }
+                    public static var event4: String { L10n.tr("ios.onboarding.features.night.event4") }
+                    public static var from: String { L10n.tr("ios.onboarding.features.night.from") }
+                    public static var morning: String { L10n.tr("ios.onboarding.features.night.morning") }
+                    public static var start: String { L10n.tr("ios.onboarding.features.night.start") }
+                    public static var text: String { L10n.tr("ios.onboarding.features.night.text") }
+                    public static var title: String { L10n.tr("ios.onboarding.features.night.title") }
+                    public static var to: String { L10n.tr("ios.onboarding.features.night.to") }
+                }
+            }
+
+            public enum Role {
+                public static var builder: String { L10n.tr("ios.onboarding.role.builder") }
+                public static var docs: String { L10n.tr("ios.onboarding.role.docs") }
+                public static var onCall: String { L10n.tr("ios.onboarding.role.onCall") }
+                public static var researcher: String { L10n.tr("ios.onboarding.role.researcher") }
+            }
+
+            public enum Welcome {
+                public static var assembly: String { L10n.tr("ios.onboarding.welcome.assembly") }
+                public static var haveServer: String { L10n.tr("ios.onboarding.welcome.haveServer") }
+                public static var start: String { L10n.tr("ios.onboarding.welcome.start") }
+                public static var subtitle: String { L10n.tr("ios.onboarding.welcome.subtitle") }
+                public static var title: String { L10n.tr("ios.onboarding.welcome.title") }
+            }
+        }
+
         public enum Settings {
             public static var openSettings: String { L10n.tr("ios.settings.openSettings") }
 
