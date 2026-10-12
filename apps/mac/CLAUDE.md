@@ -14,6 +14,7 @@ SwiftUI, macOS, dark theme. The app is a thin shell (`apps/mac/Bandito`); all co
 - `cd apps/mac/BanditoKit && swift test` — both suites. In a worktree on a nearly full disk pass
   `--scratch-path <a folder outside the repo>` and delete it after.
 - The app bundle: `apps/mac/scripts/build.sh` (xcodegen + xcodebuild, Debug). Release: `apps/mac/scripts/release-app.sh`.
+  The release is universal (arm64 + x86_64, macOS 14+): `release-app.sh` checks every Mach-O file for both slices; locally, `rustup target add x86_64-apple-darwin`, then `ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO` on the xcodebuild line, and `lipo -archs` on `Contents/MacOS/Bandito` and `Contents/Helpers/bandito`.
 - After building: `git checkout -- apps/mac/BanditoKit/Package.resolved`.
 - Tests never show a window on the screen of whoever runs them (the person's Mac): no `orderFront`,
   `makeKeyAndOrderFront`, `showWindow` or `activate`. A test that needs a window makes it borderless, off every screen

@@ -108,8 +108,10 @@ jobs:
           python3 -m pip install --user -r apps/mac/scripts/dmg-requirements.txt
           python3 -c 'import dmgbuild; print("dmgbuild", dmgbuild.__version__)'
 
-      - name: Install Rust (the app bundles the bandito daemon)
+      - name: Install Rust (the app bundles the bandito daemon, for Apple Silicon and Intel)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Install Sparkle 2.10.0 (sign_update)
         env:

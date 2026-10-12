@@ -142,6 +142,7 @@ xcodebuild -project "$here/Bandito.xcodeproj" -scheme Bandito -configuration Rel
     "BUILD_DIR=$derived/Build/Products" "OBJROOT=$derived/Build/Intermediates.noindex" \
     CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$IDENTITY" DEVELOPMENT_TEAM="$TEAM_ID" ENABLE_HARDENED_RUNTIME=YES \
     CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+    ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
     OTHER_CODE_SIGN_FLAGS=--timestamp -quiet build > "$work/xcodebuild.log" 2>&1 || {
     echo "error: xcodebuild failed, the tail of $work/xcodebuild.log:" >&2
     tail -n 40 "$work/xcodebuild.log" >&2
@@ -152,6 +153,36 @@ built="$derived/Build/Products/Release/$app_name"
 rm -rf "${release:?}/$app_name"
 ditto "$built" "$release/$app_name"
 app="$release/$app_name"
+
+# The release is universal (Apple Silicon and Intel). Every Mach-O file of the bundle must carry both architectures:
+# the app, the daemon in Helpers, and the nested code such as Sparkle's framework and its XPC services.
+step "Check that every binary of the app is universal (arm64 and x86_64)"
+universal_failures=0
+checked=0
+while IFS= read -r -d '' file; do
+    kind="$(file -b "$file")"
+    case "$kind" in *Mach-O*) ;; *) continue ;; esac
+    checked=$((checked + 1))
+    archs="$(lipo -archs "$file" 2>/dev/null || true)"
+    archs=" $archs "
+    for arch in arm64 x86_64; do
+        case "$archs" in
+            *" $arch "*) ;;
+            *) echo "error: ${file#"$app"/} has no $arch slice (has:${archs% })" >&2; universal_failures=$((universal_failures + 1)) ;;
+        esac
+    done
+done < <(find "$app" -type f -print0)
+[ "$checked" -gt 0 ] || { echo "error: no Mach-O binaries found in $app" >&2; exit 1; }
+[ "$universal_failures" -eq 0 ] || {
+    echo "error: $universal_failures architecture slice(s) missing; the release must be arm64 and x86_64 (check ARCHS and the daemon build phase in apps/mac/project.yml)" >&2
+    exit 1
+}
+for named in "Contents/MacOS/Bandito" "Contents/Helpers/bandito" \
+    "Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle"; do
+    [ -f "$app/$named" ] || { echo "error: expected binary missing: $named" >&2; exit 1; }
+    echo "$named: $(lipo -archs "$app/$named")"
+done
+echo "checked $checked Mach-O files: all universal"
 
 # Signs one nested code item with the release identity, keeping its own entitlements. get-task-allow is a debug
 # entitlement: notarization refuses it, so it is dropped if a build still carries it. No --deep: each item is signed
