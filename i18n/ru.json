@@ -3210,6 +3210,8 @@
   "ios.newAgent.tabTeams": "Готовые команды",
   "ios.newAgent.tabOne": "Один агент",
   "ios.newAgent.teamsEmpty": "На этом сервере пока нет готовых команд.",
+  "ios.demo.schedule.nightly": "Проверь диск и сообщи, только если он заполнен больше чем на 80%.",
+  "ios.demo.schedule.weekly": "Подведи итоги использования диска за неделю.",
   "ios.newAgent.installTimedOut": "Установка всё ещё идёт. Попробуйте позже.",
   "ios.settings.header.servers": "Серверы",
   "ios.settings.header.notifications": "Уведомления",

@@ -953,6 +953,8 @@
 "ios.crew.waitingAnswer" = "%1$@ ждёт вас";
 "ios.crew.waitingForm" = "%1$@ ждёт заполненную форму";
 "ios.crew.wantsToRun" = "%1$@ хочет выполнить %2$@";
+"ios.demo.schedule.nightly" = "Проверь диск и сообщи, только если он заполнен больше чем на 80%%.";
+"ios.demo.schedule.weekly" = "Подведи итоги использования диска за неделю.";
 "ios.inbox.command" = "Что будет выполнено";
 "ios.inbox.connect" = "%1$@ хочет подключить %2$@";
 "ios.inbox.connectOnMac" = "Пока подключать сервисы можно на Mac.";

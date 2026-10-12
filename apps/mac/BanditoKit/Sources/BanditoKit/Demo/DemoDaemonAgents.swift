@@ -83,7 +83,7 @@ extension DemoDaemonTransport {
             demoSchedules.removeAll { ($0["id"] as? String) == id }
             return .success(DemoJSON.text(["deleted": true]))
         case "schedules.run_now":
-            return .success("null")
+            return .success("{}")
         default:
             return nil
         }

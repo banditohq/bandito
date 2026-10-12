@@ -1385,6 +1385,14 @@ public enum L10n {
             public static func wantsToRun(name: String, command: String) -> String { L10n.tr("ios.crew.wantsToRun", name, command) }
         }
 
+        public enum Demo {
+
+            public enum Schedule {
+                public static var nightly: String { L10n.tr("ios.demo.schedule.nightly") }
+                public static var weekly: String { L10n.tr("ios.demo.schedule.weekly") }
+            }
+        }
+
         public enum Inbox {
             public static var command: String { L10n.tr("ios.inbox.command") }
             public static func connect(name: String, service: String) -> String { L10n.tr("ios.inbox.connect", name, service) }

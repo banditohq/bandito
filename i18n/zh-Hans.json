@@ -3090,6 +3090,8 @@
   "ios.newAgent.tabTeams": "现成团队",
   "ios.newAgent.tabOne": "单个智能体",
   "ios.newAgent.teamsEmpty": "此服务器暂无现成团队。",
+  "ios.demo.schedule.nightly": "检查磁盘，只有超过 80% 时才告诉我。",
+  "ios.demo.schedule.weekly": "汇总本周的磁盘使用情况。",
   "ios.newAgent.installTimedOut": "安装仍在进行，请稍后再试。",
   "ios.settings.header.servers": "服务器",
   "ios.settings.header.notifications": "通知",

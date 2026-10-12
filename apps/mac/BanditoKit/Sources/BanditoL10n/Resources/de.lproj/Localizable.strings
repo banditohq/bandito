@@ -953,6 +953,8 @@
 "ios.crew.waitingAnswer" = "%1$@ wartet auf Sie";
 "ios.crew.waitingForm" = "%1$@ wartet auf ein Formular";
 "ios.crew.wantsToRun" = "%1$@ möchte %2$@ ausführen";
+"ios.demo.schedule.nightly" = "Prüfe die Festplatte und melde dich nur, wenn sie zu mehr als 80 %% voll ist.";
+"ios.demo.schedule.weekly" = "Fasse die Festplattennutzung der Woche zusammen.";
 "ios.inbox.command" = "Was ausgeführt wird";
 "ios.inbox.connect" = "%1$@ möchte %2$@ verbinden";
 "ios.inbox.connectOnMac" = "Dienste verbinden Sie vorerst auf dem Mac.";

@@ -953,6 +953,8 @@
 "ios.crew.waitingAnswer" = "%1$@ 在等你";
 "ios.crew.waitingForm" = "%1$@ 在等待表单填写";
 "ios.crew.wantsToRun" = "%1$@ 想要执行 %2$@";
+"ios.demo.schedule.nightly" = "检查磁盘，只有超过 80%% 时才告诉我。";
+"ios.demo.schedule.weekly" = "汇总本周的磁盘使用情况。";
 "ios.inbox.command" = "将要执行的内容";
 "ios.inbox.connect" = "%1$@ 想连接 %2$@";
 "ios.inbox.connectOnMac" = "目前请在 Mac 上连接服务。";

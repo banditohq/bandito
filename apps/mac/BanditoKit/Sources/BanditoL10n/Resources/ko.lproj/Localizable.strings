@@ -953,6 +953,8 @@
 "ios.crew.waitingAnswer" = "%1$@이(가) 사용자를 기다리는 중이에요";
 "ios.crew.waitingForm" = "%1$@이(가) 양식을 기다리는 중이에요";
 "ios.crew.wantsToRun" = "%1$@이(가) %2$@을(를) 실행하려고 해요";
+"ios.demo.schedule.nightly" = "디스크를 확인하고 80%%를 넘을 때만 알려 줘.";
+"ios.demo.schedule.weekly" = "이번 주 디스크 사용량을 요약해 줘.";
 "ios.inbox.command" = "실행될 내용";
 "ios.inbox.connect" = "%1$@이(가) %2$@ 연결을 요청했어요";
 "ios.inbox.connectOnMac" = "서비스 연결은 당분간 Mac에서 해요.";

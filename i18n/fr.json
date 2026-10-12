@@ -3129,6 +3129,8 @@
   "ios.newAgent.tabTeams": "Équipes prêtes",
   "ios.newAgent.tabOne": "Un agent",
   "ios.newAgent.teamsEmpty": "Ce serveur n'a pas encore d'équipes prêtes.",
+  "ios.demo.schedule.nightly": "Vérifie le disque et préviens-moi seulement s'il dépasse 80 %.",
+  "ios.demo.schedule.weekly": "Résume l'usage du disque de la semaine.",
   "ios.newAgent.installTimedOut": "L'installation est toujours en cours. Réessayez plus tard.",
   "ios.settings.header.servers": "Serveurs",
   "ios.settings.header.notifications": "Notifications",

@@ -3234,5 +3234,7 @@
   "ios.agent.noSchedules": "아직 예약된 실행이 없습니다.",
   "ios.newAgent.tabTeams": "바로 쓸 수 있는 팀",
   "ios.newAgent.tabOne": "에이전트 하나",
-  "ios.newAgent.teamsEmpty": "이 서버에는 아직 준비된 팀이 없습니다."
+  "ios.newAgent.teamsEmpty": "이 서버에는 아직 준비된 팀이 없습니다.",
+  "ios.demo.schedule.nightly": "디스크를 확인하고 80%를 넘을 때만 알려 줘.",
+  "ios.demo.schedule.weekly": "이번 주 디스크 사용량을 요약해 줘."
 }

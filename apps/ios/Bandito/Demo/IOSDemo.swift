@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import Foundation
 
 /// The demo world of the `-demo` launch argument: BanditoKit's demo daemons, with a small team on the first and an empty
@@ -123,10 +124,10 @@ enum IOSDemo {
             if member.name == "Watch" {
                 await transport.rememberSchedule(
                     id: "ios-demo-schedule-1", agentID: ids[index], cron: "0 22 * * *", tz: "Asia/Vladivostok",
-                    prompt: member.history.first?.text ?? "", title: nil, enabled: true)
+                    prompt: L10n.Ios.Demo.Schedule.nightly, title: nil, enabled: true)
                 await transport.rememberSchedule(
                     id: "ios-demo-schedule-2", agentID: ids[index], cron: "0 9 * * 1", tz: "Asia/Vladivostok",
-                    prompt: "Summarize the week's disk usage.", title: nil, enabled: false)
+                    prompt: L10n.Ios.Demo.Schedule.weekly, title: nil, enabled: false)
             }
         }
         // What the team has read so far: every chat is read to its last message.

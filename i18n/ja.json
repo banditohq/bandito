@@ -3090,6 +3090,8 @@
   "ios.newAgent.tabTeams": "すぐに使えるチーム",
   "ios.newAgent.tabOne": "エージェント1つ",
   "ios.newAgent.teamsEmpty": "このサーバーにはまだ用意済みのチームがありません。",
+  "ios.demo.schedule.nightly": "ディスクを確認し、80%を超えた時だけ知らせて。",
+  "ios.demo.schedule.weekly": "今週のディスク使用量をまとめて。",
   "ios.newAgent.installTimedOut": "インストールがまだ続いています。しばらくしてからもう一度お試しください。",
   "ios.settings.header.servers": "サーバー",
   "ios.settings.header.notifications": "通知",
