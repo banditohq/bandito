@@ -34,7 +34,7 @@ pub struct AgentBundle {
     pub icon: String,
     /// `#RRGGBB`, muted enough to read on the dark background.
     pub accent: String,
-    /// Template ids from `agent_templates.json`: three to five, none listed twice.
+    /// Template ids from `agent_templates.json`: one to five, none listed twice.
     pub templates: Vec<String>,
     /// The same categories as the templates, so the Marketplace can filter both alike.
     pub category: Category,
@@ -73,7 +73,7 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_has_the_six_bundles_of_the_plan() {
+    fn the_catalog_has_the_bundles_of_the_plan() {
         let ids: Vec<String> = bundles().into_iter().map(|b| b.id).collect();
         assert_eq!(
             ids,
@@ -84,6 +84,10 @@ mod tests {
                 "customer-support",
                 "personal-assistant",
                 "devops",
+                "web-project",
+                "server-duty",
+                "morning-summary",
+                "docs-upkeep",
             ]
         );
     }
@@ -98,10 +102,10 @@ mod tests {
     }
 
     #[test]
-    fn every_bundle_lists_three_to_five_existing_templates_once() {
+    fn every_bundle_lists_one_to_five_existing_templates_once() {
         for b in bundles() {
             assert!(
-                (3..=5).contains(&b.templates.len()),
+                (1..=5).contains(&b.templates.len()),
                 "{}: {} templates",
                 b.id,
                 b.templates.len()

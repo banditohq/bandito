@@ -112,6 +112,7 @@ pub fn features() -> Vec<&'static str> {
         "mentions",
         "agent_templates",
         "agent_bundles",
+        "bundle_schedules",
         "sharing",
         "telegram",
         "agent_connect",
