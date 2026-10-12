@@ -89,6 +89,11 @@ extension ScreenWorkSuites {
             await harness.settle(rounds: 20)
             let transport = world.primaryTransport
             let id = PerfFixtures.threadAgentID
+            // The preview's interval is long here, so the count does not depend on how fast the machine runs: the
+            // first piece writes it, the rest wait (StreamPreviewThrottle is tested on its own).
+            let interval = AgentThreadState.streamPreviewInterval
+            AgentThreadState.streamPreviewInterval = .seconds(60)
+            defer { AgentThreadState.streamPreviewInterval = interval }
             let streamed = await harness.count {
                 await transport.emitEvent(
                     agentID: id, kind: "turn.started", payload: ["turn_id": "budget-turn", "source": "user"],
@@ -106,7 +111,9 @@ extension ScreenWorkSuites {
                 Self.budget("ItemView", 2, Self.rows), Self.budget("ThreadView", 1, Self.frame),
                 Self.budget("Composer", 1, Self.frame), Self.budget("ThreadHeader", 1, Self.frame),
                 Self.budget("TeamSidebar", 0, Self.sidebar),
-                Self.budget("AgentRow", 45, "the sidebar's agent rows: what SidebarThreadFacts take from the thread"),
+                Self.budget(
+                    "AgentRow", 1,
+                    "the sidebar's agent rows: what SidebarThreadFacts take from the thread; the streamed preview is written at most once per AgentThreadState.streamPreviewInterval"),
             ], "stream 100 pieces")
             await transport.emitEvent(
                 agentID: id, kind: "message.assistant", payload: ["text": "done"], persisted: true)
@@ -161,7 +168,7 @@ extension ScreenWorkSuites {
             check(panel, [
                 Self.budget("ThreadList.viewFor", 12, Self.list), Self.budget("ThreadList.measure", 8, Self.list),
                 // (The rows reconfigured during the move depend on its frames: not counted here.)
-                Self.budget("ThreadList.widthChange", 28, Self.list),
+                Self.budget("ThreadList.widthChange", 7, "only the list on screen follows the width (ThreadListHost.show)"),
                 Self.budget("ThreadView", 8, Self.frame), Self.budget("Composer", 8, Self.frame),
                 Self.budget("ThreadHeader", 8, Self.frame), Self.budget("TeamSidebar", 0, Self.sidebar),
             ], "open and close the agent's panel 3 times")

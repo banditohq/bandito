@@ -168,6 +168,11 @@ final class ThreadListHost: NSView {
             let shown = entry.view === current
             if entry.view.isHidden == shown { entry.view.isHidden = !shown }
             entry.view.controller = shown ? controller : nil
+            // Only the list on screen follows the width: a kept one measured its rows again at every width change
+            // (a panel opened, the window resized). It takes the width when it comes back.
+            let resizing: NSView.AutoresizingMask = shown ? [.width, .height] : []
+            if entry.view.autoresizingMask != resizing { entry.view.autoresizingMask = resizing }
+            if shown, entry.view.frame != bounds { entry.view.frame = bounds }
         }
         return current
     }
