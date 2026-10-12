@@ -1343,6 +1343,73 @@ public enum L10n {
             public static var placeholder: String { L10n.tr("ios.connect.placeholder") }
         }
 
+        public enum Settings {
+            public static var openSettings: String { L10n.tr("ios.settings.openSettings") }
+
+            public enum About {
+                public static var docs: String { L10n.tr("ios.settings.about.docs") }
+                public static var privacy: String { L10n.tr("ios.settings.about.privacy") }
+                public static var report: String { L10n.tr("ios.settings.about.report") }
+                public static var terms: String { L10n.tr("ios.settings.about.terms") }
+                public static var version: String { L10n.tr("ios.settings.about.version") }
+                public static var website: String { L10n.tr("ios.settings.about.website") }
+            }
+
+            public enum Appearance {
+                public static var languageHint: String { L10n.tr("ios.settings.appearance.languageHint") }
+                public static var motionHint: String { L10n.tr("ios.settings.appearance.motionHint") }
+                public static var reduceMotion: String { L10n.tr("ios.settings.appearance.reduceMotion") }
+
+                public enum Motion {
+                    public static var always: String { L10n.tr("ios.settings.appearance.motion.always") }
+                    public static var system: String { L10n.tr("ios.settings.appearance.motion.system") }
+                }
+            }
+
+            public enum Header {
+                public static var about: String { L10n.tr("ios.settings.header.about") }
+                public static var appearance: String { L10n.tr("ios.settings.header.appearance") }
+                public static var notifications: String { L10n.tr("ios.settings.header.notifications") }
+                public static var security: String { L10n.tr("ios.settings.header.security") }
+                public static var servers: String { L10n.tr("ios.settings.header.servers") }
+            }
+
+            public enum Notifications {
+                public static var allow: String { L10n.tr("ios.settings.notifications.allow") }
+                public static var answers: String { L10n.tr("ios.settings.notifications.answers") }
+                public static var approvals: String { L10n.tr("ios.settings.notifications.approvals") }
+                public static var denied: String { L10n.tr("ios.settings.notifications.denied") }
+                public static var errors: String { L10n.tr("ios.settings.notifications.errors") }
+            }
+
+            public enum Security {
+                public static var enableReason: String { L10n.tr("ios.settings.security.enableReason") }
+                public static var faceIDLock: String { L10n.tr("ios.settings.security.faceIDLock") }
+                public static var faceIDLockHint: String { L10n.tr("ios.settings.security.faceIDLockHint") }
+                public static var failed: String { L10n.tr("ios.settings.security.failed") }
+                public static var lockAfter: String { L10n.tr("ios.settings.security.lockAfter") }
+                public static var lockedTitle: String { L10n.tr("ios.settings.security.lockedTitle") }
+                public static func minutes(count: Int) -> String { L10n.tr("ios.settings.security.minutes", count) }
+                public static var riskyFaceID: String { L10n.tr("ios.settings.security.riskyFaceID") }
+                public static var riskyFaceIDHint: String { L10n.tr("ios.settings.security.riskyFaceIDHint") }
+                public static var unavailable: String { L10n.tr("ios.settings.security.unavailable") }
+                public static var unlock: String { L10n.tr("ios.settings.security.unlock") }
+                public static var unlockReason: String { L10n.tr("ios.settings.security.unlockReason") }
+            }
+
+            public enum Servers {
+                public static var disconnect: String { L10n.tr("ios.settings.servers.disconnect") }
+                public static func disconnectMessage(name: String) -> String { L10n.tr("ios.settings.servers.disconnectMessage", name) }
+                public static func disconnectTitle(name: String) -> String { L10n.tr("ios.settings.servers.disconnectTitle", name) }
+                public static var removeFailed: String { L10n.tr("ios.settings.servers.removeFailed") }
+
+                public enum Via {
+                    public static var lan: String { L10n.tr("ios.settings.servers.via.lan") }
+                    public static var tailscale: String { L10n.tr("ios.settings.servers.via.tailscale") }
+                }
+            }
+        }
+
         public enum Tab {
             public static var activity: String { L10n.tr("ios.tab.activity") }
             public static var comingSoon: String { L10n.tr("ios.tab.comingSoon") }

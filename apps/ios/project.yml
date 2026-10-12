@@ -36,6 +36,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
         NSCameraUsageDescription: Bandito uses the camera only to scan a server's pairing QR code.
+        NSFaceIDUsageDescription: Bandito uses Face ID to lock the app and to confirm risky actions.
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -73,12 +74,27 @@ targets:
         # Hosted in the app, so the tests run the app's own code (the demo world) on the simulator.
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Bandito.app/Bandito"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  BanditoIOSScreenshots:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - BanditoIOSScreenshots
+    dependencies:
+      - target: BanditoIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.ios.screenshots
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        TEST_TARGET_NAME: BanditoIOS
 schemes:
   BanditoIOS:
     build:
       targets:
         BanditoIOS: all
         BanditoIOSTests: [test]
+        BanditoIOSScreenshots: [test]
     test:
       targets:
         - BanditoIOSTests
+        - BanditoIOSScreenshots
