@@ -49,6 +49,8 @@ struct MarketView: View {
     @State private var journalLoading: Set<String> = []
     @State private var journalError: UserFacingMessage?
 
+    /// The Bots and Skills pages that stay built under the page in front (`keptPage`): shown once, or built ahead.
+    @State private var keptTabs: Set<MarketTab> = []
     /// How many cards a row of a grid holds, from the width of the scroll view; written only when it changes.
     @State private var columns = 3
     /// The entries and the page for the last inputs, so the body does not rebuild them on every pass.
@@ -71,6 +73,7 @@ struct MarketView: View {
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: panel)
         .task(id: loadKey) {
             await loadForCurrentServer()
+            await buildPagesAhead()
         }
         .task(id: "\(loadKey)|\(tab.rawValue)") {
             await loadTab()
@@ -88,9 +91,10 @@ struct MarketView: View {
         .task(id: toolsKey) {
             await loadOpenJournal()
         }
-        .onChange(of: tab) { _, _ in
+        .onChange(of: tab) { _, tab in
             search.text = ""
             panel = nil
+            if tab != .services { keptTabs.insert(tab) }
         }
         // A pasted `https://bandito.dev/s/<id>` opens the install sheet of that bot or skill, not a search.
         .onChange(of: search.text) { _, text in
@@ -354,16 +358,18 @@ struct MarketView: View {
     /// the page or its filter changes, so a category's page opens at its top.
     private func scrollArea(supported: Bool, entries: [MarketEntry]) -> some View {
         let services = tab == .services && supported
-        let recommendation = services ? recommendationContext : nil
+        // The shelves stay built under Bots and Skills too: their suggestions are the same whatever page is in front.
+        let recommendation = supported ? recommendationContext : nil
         let recommended = recommendation?.items.count ?? 0
         let content: MarketContent? =
             services
             ? memo.content(entries, filter: router.marketFilter, query: search.text, recommended: recommended) : nil
         let onShelves = if case .shelves? = content { true } else { false }
         return ZStack(alignment: .top) {
-            if services {
-                // The shelves stay built under a category's page or a search: going back shows them at once, where they
-                // were left (building them again was 100 ms and more). Out of sight they take no height and no clicks.
+            if supported {
+                // The shelves stay built under a category's page, a search, Bots and Skills: going back shows them at
+                // once, where they were left (building them again was 100 ms and more). Out of sight they take no height
+                // and no clicks.
                 ScrollView {
                     servicesContent(
                         shelvesMemo.content(entries, filter: .all, query: "", recommended: recommended),
@@ -377,23 +383,20 @@ struct MarketView: View {
                 // Shown or put away at once: an animated height would lay the shelves out at every frame.
                 .transaction { $0.animation = nil }
             }
-            if !onShelves {
+            if tab == .bots || keptTabs.contains(.bots) {
+                keptPage(.bots)
+            }
+            if tab == .skills || keptTabs.contains(.skills) {
+                keptPage(.skills)
+            }
+            if tab == .services && !onShelves {
                 ScrollView {
                     if let content {
                         servicesContent(content, recommendation: recommendation)
                     } else {
-                        VStack(alignment: .leading, spacing: 18) {
-                            if tab == .bots {
-                                botsContent
-                            } else if tab == .skills {
-                                skillsContent
-                            } else {
-                                ServerUnavailable(server: server)
-                            }
-                        }
-                        .padding(.top, MarketShelfMetrics.topInset)
-                        .padding(.bottom, 24)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        ServerUnavailable(server: server)
+                            .padding(.top, MarketShelfMetrics.topInset)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
                 .id(pageKey)
@@ -411,7 +414,9 @@ struct MarketView: View {
     }
 
     /// The page in front and its filter: when it changes the scroll view starts again at the top.
-    private var pageKey: String {
+    private var pageKey: String { pageKey(for: tab) }
+
+    private func pageKey(for tab: MarketTab) -> String {
         let filter =
             switch tab {
             case .services: router.marketFilter
@@ -419,6 +424,55 @@ struct MarketView: View {
             case .skills: router.marketSkillFilter
             }
         return "\(tab.rawValue)|\(filter.id)"
+    }
+
+    /// The Bots or the Skills page. Built the first time it is shown, or ahead a moment after the Marketplace opens
+    /// (`buildPagesAhead`), and kept under the page in front: going to it shows it at once (building the Bots page in
+    /// the frame of the click was 140 ms on an owner's Mac). Out of sight it is see-through, takes no clicks and reads
+    /// no search; a new filter of its own still makes its scroll view again, so a category opens at its top. Built
+    /// ahead, its shelves come one a frame (`marketShelvesAhead`). It is rebuilt only when what it shows changes
+    /// (`KeptMarketPage`), not with every change of the Marketplace (a category opened on Services).
+    private func keptPage(_ page: MarketTab) -> some View {
+        let shown = tab == page
+        let query = shown ? search.text : ""
+        let inputs =
+            page == .bots
+            ? KeptMarketPageInputs(
+                query: query, languageCode: languageCode, catalog: catalog, integrations: integrations,
+                agents: server?.agents ?? [], canShare: sharingSupported, error: error)
+            : KeptMarketPageInputs(
+                query: query, languageCode: languageCode, catalog: [], integrations: [],
+                agents: server?.agents ?? [], canShare: false, error: error)
+        return KeptMarketPage(shown: shown, key: pageKey(for: page), inputs: inputs) {
+            if page == .bots {
+                botsContent(query: query)
+            } else {
+                skillsContent(query: query)
+            }
+        }
+        .equatable()
+        .opacity(shown ? 1 : 0)
+        .allowsHitTesting(shown)
+        .accessibilityHidden(!shown)
+    }
+
+    /// Builds the Bots and Skills pages out of sight a moment after the Marketplace opened, so the first switch to them
+    /// is as quick as the next ones. Their lists are read first (the same reads a switch makes).
+    private func buildPagesAhead() async {
+        guard let server, server.info != nil else { return }
+        try? await Task.sleep(for: .milliseconds(400))
+        for page in [MarketTab.bots, .skills] where availableTabs.contains(page) && !keptTabs.contains(page) {
+            guard !Task.isCancelled else { return }
+            switch page {
+            case .bots: await bots.load(from: server)
+            case .skills: if !skills.loaded { await skills.load(from: server) }
+            case .services: break
+            }
+            guard !Task.isCancelled else { return }
+            keptTabs.insert(page)
+            // The page's shelves come one a frame; the next page waits for them.
+            try? await Task.sleep(for: .milliseconds(300))
+        }
     }
 
     /// Opens the page that "All" on a shelf stands for.
@@ -636,9 +690,9 @@ struct MarketView: View {
     private var languageCode: String { ModelDescription.currentLanguageCode }
 
     @ViewBuilder
-    private var botsContent: some View {
+    private func botsContent(query: String) -> some View {
         BotsPage(
-            model: bots, catalog: catalog, integrations: integrations, query: search.text, languageCode: languageCode,
+            model: bots, catalog: catalog, integrations: integrations, query: query, languageCode: languageCode,
             agents: server?.agents ?? [], canShare: sharingSupported,
             onView: { panel = .botDetail($0.id) },
             onCreate: { panel = .botCreate($0.id) },
@@ -656,9 +710,9 @@ struct MarketView: View {
     }
 
     @ViewBuilder
-    private var skillsContent: some View {
+    private func skillsContent(query: String) -> some View {
         SkillsPage(
-            model: skills, query: search.text, languageCode: languageCode, agents: server?.agents ?? [],
+            model: skills, query: query, languageCode: languageCode, agents: server?.agents ?? [],
             onView: { panel = .skillDetail($0.id) },
             onInstall: { panel = .skillInstall($0.id) },
             onRemoveEverywhere: { removingSkill = SkillRemoval(skill: $0, target: .everyone, place: "") },
@@ -781,7 +835,8 @@ struct MarketView: View {
             break
         case .bots:
             await bots.load(from: server)
-            if server.supports("skills") { await skills.load(from: server) }
+            // The skills only name a bot's skills here: read once; the Skills page reads them again when it opens.
+            if server.supports("skills"), !skills.loaded { await skills.load(from: server) }
             let categories = BotLogic.categories(in: bots.templates)
             if router.marketBotCategories != categories { router.marketBotCategories = categories }
             if case .category(let name) = router.marketBotFilter, !categories.contains(name) {
@@ -814,6 +869,7 @@ struct MarketView: View {
             router.marketSkillFilter = .all
             bots.reset()
             skills.reset()
+            keptTabs = []
             recommendations = []
             updating = []
             toolLists = [:]
@@ -1447,5 +1503,47 @@ enum IntegrationSymbol {
         case "clock": "clock"
         default: kind == .http ? "network" : "puzzlepiece.extension"
         }
+    }
+}
+
+/// What a kept Bots or Skills page shows besides its own model and filter, which it reads itself
+/// (`MarketView.keptPage`).
+struct KeptMarketPageInputs: Equatable {
+    var query: String
+    var languageCode: String
+    var catalog: [IntegrationCatalogEntry]
+    var integrations: [Integration]
+    var agents: [Agent]
+    var canShare: Bool
+    var error: UserFacingMessage?
+}
+
+/// A Bots or Skills page kept under the page in front: its scroll view, made again for a new filter of its own (a
+/// category opens at its top). Equatable on its inputs: a change elsewhere in the Marketplace (a category opened on
+/// Services, a letter of its search) rebuilt both kept pages and all their shelves.
+struct KeptMarketPage<Content: View>: View, Equatable {
+    let shown: Bool
+    /// The page and its filter (`MarketView.pageKey(for:)`).
+    let key: String
+    let inputs: KeptMarketPageInputs
+    @ViewBuilder let content: () -> Content
+
+    nonisolated static func == (lhs: KeptMarketPage, rhs: KeptMarketPage) -> Bool {
+        lhs.shown == rhs.shown && lhs.key == rhs.key && lhs.inputs == rhs.inputs
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                content()
+            }
+            .padding(.top, MarketShelfMetrics.topInset)
+            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .id(key)
+        .scrollIndicators(.automatic)
+        .transition(.opacity)
+        .environment(\.marketShelvesAhead, !shown)
     }
 }
