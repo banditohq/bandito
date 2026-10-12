@@ -22,11 +22,12 @@ final class AgentCreateUITests: XCTestCase {
         XCTAssertTrue(name.waitForExistence(timeout: 10))
         name.tap()
         name.typeText("Ledger")
-        // The keyboard is put away before the form is scrolled to Create: the first swipe of the form does it, and the
-        // wait below ends as soon as the field has lost it (no fixed pause).
-        app.swipeUp()
-        let keyboardGone = NSPredicate(format: "exists == false")
-        expectation(for: keyboardGone, evaluatedWith: app.keyboards.firstMatch)
+        // The keyboard is put away before the form is scrolled to Create: the Done key of the role field does it, and the
+        // wait ends as soon as the keyboard is gone (no fixed pause).
+        let role = app.textFields["oneAgent.role"]
+        role.tap()
+        role.typeText("\n")
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
         waitForExpectations(timeout: 10)
 
         // Create sits at the foot of the form: scroll to it. It waits for the server's agents folder to be known.
