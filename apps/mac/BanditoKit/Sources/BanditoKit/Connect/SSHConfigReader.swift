@@ -196,11 +196,12 @@ public enum SSHConfigReader {
             let host = String(pattern[pattern.index(after: pattern.startIndex)..<close])
             let rest = pattern[pattern.index(after: close)...]
             guard rest.hasPrefix(":"), let port = Int(rest.dropFirst()), (1...65_535).contains(port),
-                SSHTarget.isSafeName(host)
+                SSHTarget.isSafeHost(host)
             else { return nil }
-            return "\(host):\(port)"
+            // An IPv6 address keeps its brackets before a port (`SSHTarget.parse` reads it back).
+            return SSHTarget.isIPv6Literal(host) ? "[\(host)]:\(port)" : "\(host):\(port)"
         }
-        guard SSHTarget.isSafeName(pattern) else { return nil }
+        guard SSHTarget.isSafeHost(pattern) else { return nil }
         return pattern
     }
 }

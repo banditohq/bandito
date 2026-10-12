@@ -110,6 +110,62 @@ import Testing
                 == .failure(.identityFile))
     }
 
+    @Test func anIPv4AHostNameAndAnIPv6AddressAreAccepted() {
+        for host in ["192.168.1.10", "box.example.com", "my-box_2"] {
+            #expect(
+                SSHServerAddress.validated(host: host, user: "ana", port: "2222", identityFile: nil)
+                    == .success(SSHServerAddress(host: host, user: "ana", port: 2222)))
+        }
+        // IPv6: bare or in brackets, kept without them.
+        for text in ["2001:db8::1", "[2001:db8::1]", " [2001:db8::1] "] {
+            #expect(
+                SSHServerAddress.validated(host: text, user: "", port: "22", identityFile: nil)
+                    == .success(SSHServerAddress(host: "2001:db8::1", port: 22)))
+        }
+        #expect(SSHServerAddress.validated(host: "::1", user: "", port: "", identityFile: nil) == .success(SSHServerAddress(host: "::1")))
+        #expect(
+            SSHServerAddress.validated(host: "fe80::1%en0", user: "", port: "", identityFile: nil)
+                == .success(SSHServerAddress(host: "fe80::1%en0")))
+        #expect(
+            SSHServerAddress.validated(host: "::ffff:192.0.2.1", user: "", port: "", identityFile: nil)
+                == .success(SSHServerAddress(host: "::ffff:192.0.2.1")))
+    }
+
+    @Test func anIPv6TextParsesWithAndWithoutBracketsAndAPort() {
+        #expect(SSHTarget.parse("[2001:db8::1]:2222") == SSHTarget(user: nil, host: "2001:db8::1", port: 2222))
+        #expect(SSHTarget.parse("ana@[2001:db8::1]") == SSHTarget(user: "ana", host: "2001:db8::1", port: nil))
+        #expect(SSHTarget.parse("ana@2001:db8::1") == SSHTarget(user: "ana", host: "2001:db8::1", port: nil))
+        #expect(SSHTarget.parse("192.168.1.10:22") == SSHTarget(user: nil, host: "192.168.1.10", port: 22))
+        // The text an IPv6 address is kept as reads back the same.
+        let target = SSHTarget(user: "ana", host: "2001:db8::1", port: 2222)
+        #expect(target.description == "ana@[2001:db8::1]:2222")
+        #expect(SSHTarget.parse(target.description) == target)
+        #expect(SSHServerAddress(host: "2001:db8::1").targetText == "[2001:db8::1]")
+    }
+
+    @Test func sshTakesTheIPv6AddressBareAndScpInBrackets() {
+        let target = SSHTarget(user: "ana", host: "2001:db8::1", port: 2222)
+        #expect(target.sshArguments == ["-p", "2222", "--", "ana@2001:db8::1"])
+        #expect(
+            target.scpArguments(local: "a.pkg", remotePath: "/tmp/a.pkg")
+                == ["-P", "2222", "--", "a.pkg", "ana@[2001:db8::1]:/tmp/a.pkg"])
+        let args = SSHTunnel.arguments(target: target, localPort: 5000, remotePort: 7878)
+        #expect(args.suffix(2) == ["--", "ana@2001:db8::1"])
+    }
+
+    @Test func notAnAddressIsRefusedWithColonsToo() {
+        let bad = [
+            "[2001:db8::1", "2001:db8::1]", "[2001:db8::1];id", "[-oProxyCommand=id]", "[2001:db8::g]", "2001:db8:::1",
+            "[2001:db8::1]:99999", "[2001:db8::1]:22x", "[2001:db8::1] x", "2001:db8::1 -oX", "fe80::1%-oX", "fe80::1%a b",
+            "[]", "[::1]x", "a:b", ":", "::1;id", "-o:1",
+        ]
+        for text in bad {
+            #expect(SSHServerAddress.validated(host: text, user: "", port: "", identityFile: nil) == .failure(.host), "\(text)")
+            #expect(SSHTarget.parse(text) == nil, "\(text)")
+        }
+        #expect(SSHServerAddress.validated(host: "box", user: "a:b", port: "", identityFile: nil) == .failure(.user))
+    }
+
     /// A record that already holds such a host (edited by hand, or written by something else) still cannot become an
     /// option: the `--` before the destination ends the options.
     @Test func theDestinationComesAfterTheDoubleDashSoItIsNeverAnOption() {
