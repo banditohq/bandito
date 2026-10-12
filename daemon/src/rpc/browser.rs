@@ -431,9 +431,7 @@ mod route_tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         store.device_add("test", TOKEN).unwrap();
         let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
-        let mut app = App::new(sup, dir.to_path_buf());
-        Arc::get_mut(&mut app).expect("the app is not shared yet").browser = BrowserManager::new(dir.to_path_buf());
-        app
+        App::new_with_browser(sup, dir.to_path_buf(), BrowserManager::new(dir.to_path_buf()))
     }
 
     #[test]

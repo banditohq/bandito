@@ -156,6 +156,15 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    /// Whether a device with this id is still paired.
+    pub fn device_exists(&self, id: &str) -> Result<bool> {
+        Ok(self
+            .conn()
+            .query_row("SELECT 1 FROM devices WHERE id = ?1", [id], |_| Ok(()))
+            .optional()?
+            .is_some())
+    }
+
     pub fn device_revoke(&self, id: &str) -> Result<bool> {
         let n = self.conn().execute("DELETE FROM devices WHERE id = ?1", [id])?;
         Ok(n > 0)

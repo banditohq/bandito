@@ -11,6 +11,7 @@ use super::browser;
 use super::tunnel;
 use super::{App, Peer, preview, serve};
 use crate::files::{EntryKind, FsError};
+use crate::phone::{ATTEMPT_WINDOW_MS, AttemptLimiter};
 use crate::store::Device;
 use axum::Router;
 use axum::body::Body;
@@ -41,7 +42,23 @@ pub fn router(app: Arc<App>) -> Router {
 /// The router for a daemon that listens on `listen`. `allowed_hosts` are extra `Host` names from the
 /// config, honoured on loopback listeners only (see [`HostGuard`]).
 pub fn router_listening(app: Arc<App>, listen: IpAddr, allowed_hosts: Vec<String>) -> Router {
-    Router::new()
+    build_router(app, listen, allowed_hosts, None)
+}
+
+/// The router of a phone listener (see `phone.rs`): the same routes, on a non-loopback address, where the `Host`
+/// is not checked (the device token and the refused `Origin` protect it). An upgrade of `/v1/rpc` without a token,
+/// the only way to pair, is counted per client address; over the limit it gets 429.
+pub fn router_phone(app: Arc<App>, listen: IpAddr, limiter: Arc<AttemptLimiter>) -> Router {
+    build_router(app, listen, Vec::new(), Some(limiter))
+}
+
+fn build_router(
+    app: Arc<App>,
+    listen: IpAddr,
+    allowed_hosts: Vec<String>,
+    limiter: Option<Arc<AttemptLimiter>>,
+) -> Router {
+    let router = Router::new()
         .route("/v1/health", get(|| async { "ok" }))
         .route("/v1/rpc", get(rpc))
         .route("/v1/files/raw", get(files_raw))
@@ -50,11 +67,31 @@ pub fn router_listening(app: Arc<App>, listen: IpAddr, allowed_hosts: Vec<String
         .route("/v1/browser/cdp", get(browser::cdp_browser))
         .route("/v1/browser/cdp/page/{target_id}", get(browser::cdp_page))
         .route("/v1/proxy/{*rest}", any(preview_proxy))
-        .layer(axum::middleware::from_fn_with_state(
-            HostGuard::new(listen, allowed_hosts),
-            check_host,
-        ))
-        .with_state(app)
+        .with_state(app);
+    // Layers added last run first: the host check (which records the client address) comes before the limit.
+    let router = match limiter {
+        Some(limiter) => router.layer(axum::middleware::from_fn_with_state(limiter, limit_anonymous)),
+        None => router,
+    };
+    router.layer(axum::middleware::from_fn_with_state(
+        HostGuard::new(listen, allowed_hosts),
+        check_host,
+    ))
+}
+
+/// On a phone listener: counts the upgrades of `/v1/rpc` that carry no token, per client address.
+async fn limit_anonymous(State(limiter): State<Arc<AttemptLimiter>>, req: Request, next: Next) -> Response {
+    if req.uri().path() == "/v1/rpc" && !req.headers().contains_key(header::AUTHORIZATION) {
+        let source = req.extensions().get::<ClientAddr>().map_or("unknown", |c| c.0.as_str());
+        if !limiter.attempt(source, crate::store::now_ms()) {
+            return Response::builder()
+                .status(StatusCode::TOO_MANY_REQUESTS)
+                .header(header::RETRY_AFTER, (ATTEMPT_WINDOW_MS / 1000).to_string())
+                .body(Body::from("too many pairing attempts, try again in a few minutes"))
+                .unwrap_or_else(|_| StatusCode::TOO_MANY_REQUESTS.into_response());
+        }
+    }
+    next.run(req).await
 }
 
 /// DNS rebinding defence for a loopback listener: a web page on another name is pointed at the daemon
@@ -120,7 +157,7 @@ async fn check_host(State(guard): State<HostGuard>, mut req: Request, next: Next
     let addr = req
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
-        .map_or_else(|| "unknown".to_string(), |c| c.0.ip().to_string());
+        .map_or_else(|| "unknown".to_string(), |c| c.0.ip().to_canonical().to_string());
     req.extensions_mut().insert(ClientAddr(addr));
     next.run(req).await
 }
@@ -494,6 +531,42 @@ mod tests {
         store.device_add("test", TOKEN).unwrap();
         let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
         App::new_with_files(sup, dir.join("agents"), FileService::new(dir.to_path_buf(), None))
+    }
+
+    #[tokio::test]
+    async fn a_phone_router_does_not_check_the_host_but_still_needs_the_token() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let app = served(dir.path());
+        let phone = |host: &str, auth: Option<&str>| {
+            let mut req = Request::builder()
+                .uri("/v1/files/raw?path=/nothing")
+                .header(header::HOST, host.to_string());
+            if let Some(auth) = auth {
+                req = req.header(header::AUTHORIZATION, auth.to_string());
+            }
+            let router = router_phone(app.clone(), "192.168.1.5".parse().unwrap(), Arc::default());
+            async move { router.oneshot(req.body(Body::empty()).unwrap()).await.unwrap().status() }
+        };
+        assert_eq!(phone("mac.local:7879", None).await, StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            phone("203.0.113.9:7879", Some("Bearer nope")).await,
+            StatusCode::UNAUTHORIZED
+        );
+        // With the token the request gets past the checks (the path itself is missing).
+        assert_eq!(
+            phone("mac.local:7879", Some(&format!("Bearer {TOKEN}"))).await,
+            StatusCode::NOT_FOUND
+        );
+        // The loopback router keeps its Host check.
+        let local = Request::builder()
+            .uri("/v1/health")
+            .header(header::HOST, "evil.test")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            router(app.clone()).oneshot(local).await.unwrap().status(),
+            StatusCode::MISDIRECTED_REQUEST
+        );
     }
 
     async fn send(app: &Arc<App>, method: Method, uri: &str, headers: &[(&str, &str)]) -> Response {

@@ -121,6 +121,7 @@ pub fn features() -> Vec<&'static str> {
         "quiet_schedules",
         "agent_migrate",
         "server_settings",
+        "phone_access",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -175,6 +176,10 @@ pub struct App {
     pub creations: team_create::Creations,
     /// The agent archives waiting to be read and the uploads being received (see docs/ARCHITECTURE.md#agent-migration).
     pub migrate: crate::migrate::Registry,
+    /// The TLS listener for phones (see docs/ARCHITECTURE.md#phone-access). Off until the owner switches it on.
+    pub phone: Arc<crate::phone::PhoneAccess>,
+    /// The ids of revoked devices: a connection of a revoked device ends at once (see [`serve`]).
+    revoked: broadcast::Sender<String>,
 }
 
 impl App {
@@ -199,8 +204,30 @@ impl App {
         files: FileService,
         data_home: PathBuf,
     ) -> Arc<Self> {
+        Self::build(sup, agents_root, files, data_home, BrowserManager::system())
+    }
+
+    /// An app whose browser manager is `browser` (tests that start no real browser).
+    #[cfg(test)]
+    pub fn new_with_browser(sup: Arc<Supervisor>, agents_root: PathBuf, browser: Arc<BrowserManager>) -> Arc<Self> {
+        Self::build(
+            sup,
+            agents_root,
+            Self::default_files(),
+            crate::setup::default_home(),
+            browser,
+        )
+    }
+
+    fn build(
+        sup: Arc<Supervisor>,
+        agents_root: PathBuf,
+        files: FileService,
+        data_home: PathBuf,
+        browser: Arc<BrowserManager>,
+    ) -> Arc<Self> {
         let telegram = crate::telegram::Telegram::new(sup.clone());
-        Arc::new(Self {
+        Arc::new_cyclic(|me| Self {
             sup,
             started_at: crate::store::now_ms(),
             hostname: hostname(),
@@ -211,9 +238,8 @@ impl App {
             tunnels: Arc::new(tunnel::TunnelSlots::default()),
             host: Sampler::new(),
             setup: Setup::system(),
-            browser: BrowserManager::system(),
+            browser,
             screens: Arc::new(crate::screen::ScreenManager::new(screens_dir())),
-            data_home,
             models: crate::runtime::models::ModelCache::default(),
             safe_mode: std::sync::OnceLock::new(),
             oauth: crate::mcp_oauth::Flows::default(),
@@ -222,6 +248,9 @@ impl App {
             connects: connect::Requests::default(),
             creations: team_create::Creations::default(),
             migrate: crate::migrate::Registry::default(),
+            phone: Arc::new(crate::phone::PhoneAccess::new(data_home.clone(), me.clone())),
+            revoked: broadcast::channel(64).0,
+            data_home,
         })
     }
 
@@ -1246,6 +1275,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "last_restore": crate::backup::read_last_restore(&app.data_home),
             "safe_mode": app.safe_mode().is_some(),
             "safe_mode_error": app.safe_mode(),
+            "tls_fingerprint": app.phone.fingerprint(),
+            "phone_access": app.phone.status().mode.as_str(),
         })),
         "runtimes.status" => {
             let mut out: Vec<(&'static str, Value)> = Vec::new();
@@ -1753,7 +1784,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         }
         "devices.revoke" => {
             let Id { id } = params(p)?;
-            ok(json!({ "revoked": store.device_revoke(&id)? }))
+            let revoked = store.device_revoke(&id)?;
+            if revoked {
+                // Its open connections end now, not when the app next reconnects.
+                let _ = app.revoked.send(id);
+            }
+            ok(json!({ "revoked": revoked }))
         }
 
         "usage.limits" => ok(store.usage_list()?),
@@ -1800,7 +1836,16 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "pair.create" => {
             let code = pairing::new_code();
             store.pairing_add(&code, pairing::CODE_TTL_MS)?;
-            ok(json!({ "code": code, "expires_in_ms": pairing::CODE_TTL_MS }))
+            // For a phone: the link (and the QR text, the same string) when the phone listener is up.
+            let phone = app.phone.pair_info(&code, &app.hostname);
+            ok(json!({
+                "code": code,
+                "expires_in_ms": pairing::CODE_TTL_MS,
+                "link": phone.link,
+                "qr": phone.link,
+                "hosts": phone.hosts,
+                "fingerprint": phone.fingerprint,
+            }))
         }
         "pair.redeem" => {
             let r: RedeemParams = params(p)?;
@@ -2997,6 +3042,14 @@ async fn recv_event(rx: &mut Option<broadcast::Receiver<Event>>) -> Result<Event
     }
 }
 
+/// The next revoked device id, or never for a connection that is no device's.
+async fn recv_revoked(rx: &mut Option<broadcast::Receiver<String>>) -> Result<String, broadcast::error::RecvError> {
+    match rx {
+        Some(r) => r.recv().await,
+        None => std::future::pending().await,
+    }
+}
+
 /// Whether a call of an agent may last long, so that `serve` must watch the connection while it runs: a form waits
 /// for the person, and `team.assign` with `wait` for the other agent's turn.
 fn waits_long(method: &str, params: &Value) -> bool {
@@ -3012,8 +3065,31 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
     let mut events: Option<broadcast::Receiver<Event>> = None;
     let mut last: i64 = 0;
     let mut terms = term::Stream::default();
+    // A paired device whose pairing is revoked while it is connected is cut off (also if it is revoked right now).
+    let device_id = match &peer {
+        Peer::Device(device) => Some(device.id.clone()),
+        _ => None,
+    };
+    let mut revoked = device_id.as_ref().map(|_| app.revoked.subscribe());
+    if let Some(id) = &device_id
+        && !app.sup.hub().store.device_exists(id).unwrap_or(true)
+    {
+        return;
+    }
     loop {
         tokio::select! {
+            gone = recv_revoked(&mut revoked) => {
+                let ends = match gone {
+                    Ok(id) => device_id.as_deref() == Some(id.as_str()),
+                    // Missed some: look the device up.
+                    Err(_) => device_id
+                        .as_ref()
+                        .is_some_and(|id| !app.sup.hub().store.device_exists(id).unwrap_or(true)),
+                };
+                if ends {
+                    break;
+                }
+            }
             msg = inbox.recv() => {
                 let Some(msg) = msg else { break };
                 let req: Request = match serde_json::from_str::<Value>(&msg) {

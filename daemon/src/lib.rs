@@ -31,6 +31,7 @@ pub mod mcp_oauth;
 pub mod mentions;
 pub mod migrate;
 pub mod pairing;
+pub mod phone;
 pub mod policy;
 pub mod recommend;
 pub mod redact;
