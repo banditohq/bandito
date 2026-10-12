@@ -83,6 +83,8 @@ enum ThreadListDiff: Equatable {
 /// What every row needs besides its key: the server and the actions, which do not decide how a row looks.
 struct ThreadListContext {
     var server: ServerModel
+    /// Opens a link of a message (a file path or a web address) as the chat does.
+    var openLink: (URL) -> Void = { _ in }
     /// The agent whose rows these are: another one is another thread (row ids repeat between agents).
     var agentID: String
     var chat: ThreadChat
@@ -246,6 +248,7 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
         guard next != version else { return }
         version = next
         let old = lines
+        if change != .last { NativeSizeCache.shared.prefetch(new, width: table.bounds.width) }
         if old.isEmpty { table.prepareOnlyVisible() }
         if change == .last, new.count == old.count, !new.isEmpty {
             // A stream: only the last row is given its new content.
@@ -311,19 +314,31 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
         scheduleHeights()
     }
 
-    /// Gives the visible rows of `indexes` their new content; the others are made when they come into view.
+    /// Gives the visible rows of `indexes` their new content; the others are made when they come into view. A row that
+    /// turns from a native one into a SwiftUI one (or back) gets the other kind of cell.
     private func reconfigure(_ indexes: IndexSet) {
         guard !indexes.isEmpty else { return }
+        var remake = IndexSet()
         for index in indexes {
             let line = lines[index]
             guesses[line.id] = nil
-            if let cell = table.view(atColumn: 0, row: index, makeIfNecessary: false) as? ThreadListCell {
+            let shown = table.view(atColumn: 0, row: index, makeIfNecessary: false)
+            let native = NativeRow.of(line)
+            if let cell = shown as? NativeRowCell, let native, let context {
+                cell.show(native, context: context)
+                measure(cell, line: line, row: index)
+                placeBars()
+            } else if let cell = shown as? ThreadListCell, native == nil {
                 configure(cell, with: line)
                 measure(cell, line: line, row: index)
+            } else if shown != nil {
+                heights[line.id] = nil
+                remake.insert(index)
             } else {
                 heights[line.id] = nil
             }
         }
+        if !remake.isEmpty { table.reloadData(forRowIndexes: remake, columnIndexes: IndexSet(integer: 0)) }
     }
 
     private func configure(_ cell: ThreadListCell, with line: ThreadListLine) {
@@ -332,7 +347,7 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
     }
 
     /// The height a row has at the table's width, as its content says; told to the table when it is not the one in use.
-    private func measure(_ cell: ThreadListCell, line: ThreadListLine, row: Int) {
+    private func measure(_ cell: any ThreadListRowCell, line: ThreadListLine, row: Int) {
         let width = table.bounds.width
         guard width > 0 else { return }
         let measured = cell.height(forWidth: width)
@@ -374,6 +389,7 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
             if abs(after - shift) > 0.5 { scrollTo(y: top + after - shift) }
         }
         reportMetrics()
+        placeBars()
     }
 
     private func height(ofRow row: Int) -> CGFloat {
@@ -399,12 +415,116 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard lines.indices.contains(row) else { return nil }
         let line = lines[row]
+        if let native = NativeRow.of(line), let context {
+            let cell = (tableView.makeView(withIdentifier: NativeRowCell.identifier, owner: nil) as? NativeRowCell)
+                ?? NativeRowCell()
+            if cell === hovered { hideHover(now: true) }
+            cell.list = self
+            cell.show(native, context: context)
+            if heights[line.id] == nil { measure(cell, line: line, row: row) }
+            DispatchQueue.main.async { [weak self] in self?.placeBars() }
+            return cell
+        }
         let cell = (tableView.makeView(withIdentifier: ThreadListCell.identifier, owner: nil) as? ThreadListCell)
             ?? ThreadListCell()
         cell.list = self
         configure(cell, with: line)
         if heights[line.id] == nil { measure(cell, line: line, row: row) }
         return cell
+    }
+
+    /// A native row asks to be made again (a folded group was opened: it becomes the SwiftUI card).
+    func reload(_ cell: NSView) {
+        let row = table.row(for: cell)
+        guard row >= 0, lines.indices.contains(row) else { return }
+        heights[lines[row].id] = nil
+        table.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integer: 0))
+    }
+
+    // MARK: actions under native messages
+
+    private let hoverBar = NativeActionsHost(full: true)
+    private let faintBar = NativeActionsHost(full: false)
+    private weak var hovered: NativeRowCell?
+    private var hideWork: DispatchWorkItem?
+
+    /// The pointer came onto a native message, or left it: its bar of actions shows, and goes a moment after the pointer
+    /// left (so that it can be reached across the gap), unless the pointer is on the bar or a popover of it is open.
+    func nativeHover(_ cell: NativeRowCell, inside: Bool) {
+        if inside {
+            hideWork?.cancel()
+            guard let spec = cell.messageSpec, !spec.streaming else { return }
+            if hovered !== cell || hoverBar.model.spec != spec {
+                hovered = cell
+                hoverBar.model.reactOpen = false
+                hoverBar.model.copied = false
+                hoverBar.model.spec = spec
+                hoverBar.model.context = context
+                hoverBar.model.onSelectText = { [weak cell] in cell?.selectText() }
+            }
+            hoverBar.isHidden = false
+            placeBars()
+        } else {
+            scheduleHide()
+        }
+    }
+
+    private func scheduleHide() {
+        hideWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if hoverBar.model.hovering || hoverBar.model.reactOpen {
+                scheduleHide()
+                return
+            }
+            hideHover(now: true)
+        }
+        hideWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+    }
+
+    private func hideHover(now: Bool) {
+        hideWork?.cancel()
+        hovered = nil
+        hoverBar.isHidden = true
+        hoverBar.model.spec = nil
+        placeBars()
+    }
+
+    /// Puts the bars under their messages: the hovered one, and the faint one under the agent's last message (hidden
+    /// while that message is the hovered one).
+    func placeBars() {
+        if hoverBar.superview !== table {
+            table.addSubview(hoverBar)
+            table.addSubview(faintBar)
+        }
+        if let hovered, let bubble = hovered.bubbleFrame, let spec = hovered.messageSpec, hovered.superview != nil {
+            hoverBar.place(under: table.convert(bubble, from: hovered), fromUser: spec.fromUser)
+        } else if !hoverBar.isHidden {
+            hoverBar.isHidden = true
+        }
+        let visible = table.rows(in: contentView.bounds)
+        var last: NativeRowCell?
+        if visible.location != NSNotFound {
+            for row in visible.location..<min(lines.count, visible.location + visible.length) {
+                if let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? NativeRowCell,
+                    cell.messageSpec?.isLastAgent == true
+                {
+                    last = cell
+                }
+            }
+        }
+        if let last, last !== hovered, let bubble = last.bubbleFrame, let spec = last.messageSpec {
+            if faintBar.model.spec != spec {
+                faintBar.model.spec = spec
+                faintBar.model.context = context
+                faintBar.model.onSelectText = { [weak last] in last?.selectText() }
+            }
+            faintBar.isHidden = false
+            faintBar.place(under: table.convert(bubble, from: last), fromUser: false)
+        } else if !faintBar.isHidden {
+            faintBar.isHidden = true
+        }
     }
 
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { false }
@@ -432,13 +552,14 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
                 let visible = table.rows(in: contentView.bounds)
                 if visible.location != NSNotFound {
                     for row in visible.location..<min(lines.count, visible.location + visible.length) {
-                        guard let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? ThreadListCell
+                        guard let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? any ThreadListRowCell
                         else { continue }
                         kept[lines[row].id] = cell.height(forWidth: width)
                     }
                 }
             }
             heights = kept
+            NativeSizeCache.shared.prefetch(lines, width: width)
             if !lines.isEmpty {
                 NSAnimationContext.beginGrouping()
                 NSAnimationContext.current.duration = 0
@@ -575,6 +696,15 @@ final class ThreadListRowView: NSTableRowView {
         set {}
     }
 }
+
+/// A cell of the list: it tells its height for a width.
+@MainActor
+protocol ThreadListRowCell: NSView {
+    func height(forWidth width: CGFloat) -> CGFloat
+}
+
+extension ThreadListCell: ThreadListRowCell {}
+extension NativeRowCell: ThreadListRowCell {}
 
 /// A cell: one hosting controller, given each row it shows in turn.
 final class ThreadListCell: NSTableCellView {

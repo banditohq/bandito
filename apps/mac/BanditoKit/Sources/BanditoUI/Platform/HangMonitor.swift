@@ -94,8 +94,9 @@ public enum HangMonitor {
         var cpuAtWake: UInt64 = 0
         /// When a sheet last began or ended (see `SheetSlideRule`).
         var sheetMovedAt: UInt64?
-        /// How many sheets were on windows when the stretch in progress began.
-        var sheetsAtWake = 0
+        /// How many sheets were on windows at the end of the last long stretch (a sheet comes and goes only in one:
+        /// its slide).
+        var sheetsKnown = 0
         /// Sheet slides since the last `takeSlides`: not freezes, counted apart.
         var slides = 0
     }
@@ -144,25 +145,32 @@ public enum HangMonitor {
             // Always the main thread, inside its run loop.
             if activity == .afterWaiting {
                 let cpu = threadCPU()
-                let sheets = attachedSheets()
                 state.withLock { shared in
                     let at = now()
                     if shared.tracker.busySince == nil {
                         shared.meterFrom = at
                         shared.cpuAtWake = cpu
-                        shared.sheetsAtWake = sheets
                     }
                     shared.tracker.wake(at: at)
                 }
             } else {
-                let cpu = threadCPU()
-                let sheets = attachedSheets()
+                // The windows and the processor time are looked at only after a long stretch: a slide is one, and
+                // neither look is free at every turn of the run loop.
+                let long: Bool = state.withLock { shared in
+                    guard let since = shared.tracker.busySince else { return false }
+                    return now() - since >= 50_000_000
+                }
+                let sheets = long ? attachedSheets() : nil
+                let cpu = long ? threadCPU() : 0
                 let result: (UInt64, TelemetryEvent.HangScreen, StaticString, UInt64)? = state.withLock { shared in
                     let at = now()
                     let start = shared.tracker.busySince
                     let used = cpu &- shared.cpuAtWake
                     // A sheet came or went in this stretch: it slid (the notifications of the end can come later).
-                    if sheets != shared.sheetsAtWake { shared.sheetMovedAt = at }
+                    if let sheets {
+                        if sheets != shared.sheetsKnown { shared.sheetMovedAt = at }
+                        shared.sheetsKnown = sheets
+                    }
                     let wall = start.map { at - $0 } ?? 0
                     let busy = start.map {
                         SheetSlideRule.busy(start: $0, end: at, cpu: used, sheetMovedAt: shared.sheetMovedAt)

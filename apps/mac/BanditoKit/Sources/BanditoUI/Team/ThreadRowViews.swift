@@ -519,12 +519,7 @@ private struct DayDivider: View {
             .padding(.vertical, 6)
     }
 
-    private var caption: String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return L10n.Thread.today }
-        if calendar.isDateInYesterday(date) { return L10n.Thread.yesterday }
-        return date.formatted(.dateTime.day().month(.wide).year())
-    }
+    private var caption: String { DayCaption.text(date) }
 }
 
 private struct Rule: View {

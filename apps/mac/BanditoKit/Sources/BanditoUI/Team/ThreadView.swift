@@ -148,7 +148,11 @@ struct ThreadView: View {
         return ThreadList(
             lines: scroll.listMemo.box, version: version,
             context: ThreadListContext(
-                server: server, agentID: agent.id, chat: rowChat, onError: { actionError = $0 }),
+                server: server,
+                openLink: { [router, agent, server] url in
+                    ChatLinkText.open(url, agentID: agent.id, folder: agent.cwd, server: server, router: router)
+                },
+                agentID: agent.id, chat: rowChat, onError: { actionError = $0 }),
             controller: list)
     }
 

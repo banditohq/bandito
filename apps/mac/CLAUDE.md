@@ -44,6 +44,12 @@ SwiftUI, macOS, dark theme. The app is a thin shell (`apps/mac/Bandito`); all co
   The lines are kept between updates (`ThreadListMemo`, handed over in a versioned box): a token makes and reconfigures
   the streamed line only. A thread just opened makes only the rows that show (`ThreadTableView.prepareOnlyVisible`). The lists of the last four agents are kept (`ThreadListHost`): going back to one shows it at once, where it was.
   Message bodies are parsed once (`MessageRenderCache`).
+- The frequent rows are AppKit, not SwiftUI (`NativeRow`: a plain message of the person or the agent, a stream, a
+  day, a note, a folded finished tool group): text views over a layer of the bubble's own SwiftUI shape, measured off
+  the main thread (`NativeSizeCache.prefetch`), one shared bar of actions for the hovered message and a faint one for
+  the agent's last (`NativeActionsBar`). A SwiftUI row in its own hosting view cost 5–8 ms to make without a GPU.
+  They must look as the SwiftUI rows do: `NativeRowLookTests` draws both and compares the pixels. Rows with more than a
+  bubble (a quote, files, mentions, reactions, a web link, a running or opened tool group, a row rising in) stay SwiftUI.
 - Live pictures (browser screencast) go to a `CALayer` (`BrowserFrameLayer`), never through `@Observable` per frame.
   Decode images off the main thread.
 - No shadows, blurs or materials on every row of a long list; use them on hover or on single surfaces.
