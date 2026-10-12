@@ -427,11 +427,16 @@ private struct PerfCheckRoot: View {
     }
 
     @ViewBuilder private var demo: some View {
-        Group {
+        ZStack {
+            // The main window stays under Settings, as it does in the app (Settings is a window of its own there):
+            // coming back from Settings must not count building the whole main window again.
+            MainWindow()
+                .opacity(state.showsSettings ? 0 : 1)
+                .allowsHitTesting(!state.showsSettings)
+                .accessibilityHidden(state.showsSettings)
             if state.showsSettings {
                 SettingsWindow()
-            } else {
-                MainWindow()
+                    .background(Color.Bandito.bg)
             }
         }
         .font(BanditoFont.text(size: 13))

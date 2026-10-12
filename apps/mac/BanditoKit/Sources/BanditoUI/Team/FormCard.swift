@@ -216,18 +216,15 @@ private struct PendingFormCard: View {
     }
 
     private var buttons: some View {
-        FirstFit(count: 2) { index, _ in
-            if index == 0 {
-                HStack(spacing: 10) {
-                    submitButton
-                    rejectButton
-                    Spacer(minLength: 0)
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    submitButton
-                    rejectButton
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                submitButton
+                rejectButton
+                Spacer(minLength: 0)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                submitButton
+                rejectButton
             }
         }
     }

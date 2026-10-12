@@ -402,17 +402,14 @@ struct ChangesContent: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 keepButton(fillsWidth: true)
-                FirstFit(count: 2) { index, _ in
-                    if index == 0 {
-                        HStack(spacing: 8) {
-                            rollbackButton
-                            askButton(agent)
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 8) {
-                            rollbackButton
-                            askButton(agent)
-                        }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        rollbackButton
+                        askButton(agent)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        rollbackButton
+                        askButton(agent)
                     }
                 }
             } else {

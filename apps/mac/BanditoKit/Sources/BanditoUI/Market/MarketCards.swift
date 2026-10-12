@@ -71,22 +71,19 @@ struct MarketCatalogCard: View, Equatable {
     @ViewBuilder
     private var foot: some View {
         if let integration = entry.integration {
-            FirstFit(count: 2) { index, _ in
-                if index == 0 {
-                    HStack(spacing: 10) {
-                        connectedLabel
-                        if !integration.auth.isDaemonSignIn {
-                            Button(L10n.Market.configure) { actions.configure(integration) }
-                                .banditoButton(.link)
-                                .fixedSize()
-                        }
-                        Spacer(minLength: 0)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    connectedLabel
+                    if !integration.auth.isDaemonSignIn {
+                        Button(L10n.Market.configure) { actions.configure(integration) }
+                            .banditoButton(.link)
+                            .fixedSize()
                     }
-                } else {
-                    HStack(spacing: 0) {
-                        connectedLabel
-                        Spacer(minLength: 0)
-                    }
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 0) {
+                    connectedLabel
+                    Spacer(minLength: 0)
                 }
             }
             .frame(height: 38)

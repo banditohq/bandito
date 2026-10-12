@@ -11,28 +11,16 @@ struct ActionRow<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        if hugging {
-            // Only as wide as its buttons: the choice needs the width on offer, which only `ViewThatFits` knows here.
-            ViewThatFits(in: .horizontal) {
-                row
-                column
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                content
             }
-            // ViewThatFits takes all the height on offer; the row is only as tall as its buttons.
-            .fixedSize(horizontal: false, vertical: true)
-        } else {
-            // Measured once, not at every layout of the sheet (each letter typed in it).
-            FirstFit(count: 2, alignment: .trailing) { index, _ in
-                if index == 0 { row } else { column }
+            VStack(alignment: .trailing, spacing: 8) {
+                content
             }
-            .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    private var row: some View {
-        HStack(spacing: 10) { content }
-    }
-
-    private var column: some View {
-        VStack(alignment: .trailing, spacing: 8) { content }
+        // ViewThatFits takes all the height on offer; the row is only as tall as its buttons.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: hugging ? nil : .infinity, alignment: .trailing)
     }
 }

@@ -96,20 +96,17 @@ struct SettingsRow<Control: View>: View {
                     control.fixedSize()
                 }
             } else {
-                FirstFit(count: 2) { index, _ in
-                    if index == 0 {
-                        HStack(alignment: .center, spacing: 16) {
-                            leading
-                            Spacer(minLength: 12)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: 16) {
+                        leading
+                        Spacer(minLength: 12)
+                        control
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        leading
+                        HStack(spacing: 8) {
                             control
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 10) {
-                            leading
-                            HStack(spacing: 8) {
-                                control
-                                Spacer(minLength: 0)
-                            }
+                            Spacer(minLength: 0)
                         }
                     }
                 }
