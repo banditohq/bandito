@@ -25,7 +25,14 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
   and confirmed before anything is sent; an address typed without a fingerprint shows what the server presents first.
 - The token lives in the Keychain (`ServerSession`, one item per server); the saved list (`servers.v1`) never holds it.
   A token that cannot be saved is revoked on the daemon at once.
-- UI tests of the flow: target `BanditoIOSPairing` (fake TLS daemon on the Simulator's loopback, `-resetServers`).
+- `ServerSession.shared` is the one list of servers (paired ones, or the `-demo` world): Crew, Inbox, Activity, Settings,
+  notifications, the background check, widgets, App Intents and Spotlight all read `session.current`. The saved list is a
+  file in Application Support, left out of backups (`ServerStore`). A server name is cleaned (`ServerNameRules`) wherever
+  it comes from or is typed. Notifications are asked once, after the first server, with the reason (`NotificationAsk`).
+- A `.sheet(isPresented:)` that reads other state sees the old value of it: open the connect sheet with `.sheet(item:)`
+  (`ConnectRequest`).
+- UI tests of the flow: target `BanditoIOSPairing` (fake TLS daemon on the Simulator's loopback, `-resetServers`);
+  `PairingS4ScreenshotTests` makes the pictures.
 
 ## Rules
 
@@ -52,7 +59,7 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
 
 - `AppIcon` is `brand/png/icon-1024.png` with an alpha channel; App Store Connect rejects an icon with alpha: flatten it
   before the first upload.
-- The pairing flow (QR, link, address) is a placeholder sheet. The `bandito://` links (`inbox`, `crew`, `agent/<server>/<agent>`) are read by `BanditoLink` (`Shared/WidgetSnapshot.swift`) and opened in `RootView`: the tab switches, and an agent opens its row in the Crew (the chat is still a stub).
-- The chat, the agent's creation and the server's pairing are stubs (Crew shows them as "coming soon").
+- `bandito://pair…` opens the connect sheet (shown and confirmed before anything is sent); the other `bandito://` links (`inbox`, `crew`, `agent/<server>/<agent>`) are read by `BanditoLink` (`Shared/WidgetSnapshot.swift`) and opened in `RootView`: the tab switches, and an agent opens its row in the Crew (the chat is still a stub).
+- The chat and the agent's creation are stubs (Crew shows them as "coming soon").
 - The button styles (`.signal`, `.quiet`) exist only in `BanditoUI`; `SignalButtonStyle` in `Crew/TeamViews.swift` is a
   copy for this target until they move to `BanditoDesign`.
