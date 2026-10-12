@@ -41,7 +41,7 @@ import Testing
         let e = try decode(
             #"{"seq":3,"agent_id":"a1","ts":1,"kind":"message.user","payload":{"text":"ask @Scout","source":"user","mentions":[{"kind":"agent","id":"a2","label":"Scout"},{"kind":"browser_tab","id":"T9","label":"Docs"}]}}"#
         )
-        guard case .messageUser(let text, _, _, _, _, _, let mentions, _) = e.body else {
+        guard case .messageUser(let text, _, _, _, _, _, let mentions, _, _) = e.body else {
             Issue.record("wrong body \(e.body)")
             return
         }
@@ -54,7 +54,7 @@ import Testing
 
     @Test func messageUserWithoutMentionsStillDecodes() throws {
         let e = try decode(#"{"seq":4,"agent_id":"a1","ts":1,"kind":"message.user","payload":{"text":"hi","source":"user"}}"#)
-        guard case .messageUser(_, _, _, _, _, _, let mentions, _) = e.body else {
+        guard case .messageUser(_, _, _, _, _, _, let mentions, _, _) = e.body else {
             Issue.record("wrong body \(e.body)")
             return
         }

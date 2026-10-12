@@ -713,7 +713,8 @@ public final class ServerModel: Identifiable {
             default:
                 break
             }
-            if let message = LastMessage(event: e) {
+            // A quiet turn leaves the preview as it was (docs/ARCHITECTURE.md#quiet-turns).
+            if threads[e.agentId]?.quietTurn != true, let message = LastMessage(event: e) {
                 agents[i].lastMessage = message
             }
         }

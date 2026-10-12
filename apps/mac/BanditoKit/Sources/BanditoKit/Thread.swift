@@ -141,6 +141,10 @@ public struct AgentThread: Sendable, Hashable {
     /// Last persisted event applied (deltas don't count).
     public var lastSeq: Int64 = 0
     public var turnRunning = false
+    /// The running turn ended quietly (`turn.quiet`, see docs/ARCHITECTURE.md#quiet-turns): its messages are hidden and
+    /// it counts as no unread reply. Set by `turn.quiet`, cleared by the next `turn.started`; it stays through the
+    /// turn's `turn.completed`, so the notifications of that event can read it.
+    public private(set) var quietTurn = false
     /// When the running turn began (Unix ms, the time of its `turn.started`); nil when no turn runs or its start is
     /// not in the loaded history. The "Thinking · N min" counter counts from here, not from the last message.
     public internal(set) var turnStartedAt: Int64?
@@ -274,11 +278,14 @@ public struct AgentThread: Sendable, Hashable {
             // The conversation moved on: buttons of an earlier turn are not an answer to anything now.
             quickReplies = nil
             turnRunning = true
+            quietTurn = false
             turnStartedAt = e.ts
             if let messageSeq { startedAt[messageSeq] = e.seq }
         case .messageDropped(let seq, _):
             droppedAt[seq] = e.seq
-        case .messageUser(let text, let source, let from, let replyTo, let files, let queued, let mentioned, let pressed):
+        case .turnQuiet:
+            quietTurn = true
+        case .messageUser(let text, let source, let from, let replyTo, let files, let queued, let mentioned, let pressed, _):
             if queued, source != .system, e.seq > 0 { queuedSeqs.insert(e.seq) }
             if source != .system {
                 if let replyTo { replies[e.seq] = replyTo }
@@ -308,6 +315,8 @@ public struct AgentThread: Sendable, Hashable {
                 items.append(.note(id: e.id, text: L10n.Thread.savingMemory, kind: .info, ts: e.ts))
             }
         case .messageDelta(let text):
+            // A quiet turn's text is not shown, streamed or final.
+            if quietTurn { break }
             if case .streaming(let t)? = items.last {
                 items[items.count - 1] = .streaming(text: t + text)
             } else {
@@ -315,7 +324,7 @@ public struct AgentThread: Sendable, Hashable {
             }
         case .messageAssistant(let text):
             dropStreaming()
-            items.append(.assistant(id: e.id, text: text, ts: e.ts))
+            if !quietTurn { items.append(.assistant(id: e.id, text: text, ts: e.ts)) }
         case .toolCall(let callId, let tool, let title, _):
             finalizeStreaming(e)
             if let i = toolIndex(callId) {
