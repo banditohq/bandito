@@ -13,7 +13,7 @@ public enum ServerEndpoint: Sendable, Hashable, Codable {
     case ssh(server: SSHServerAddress, remotePort: Int)
 
     public static var defaultLocal: ServerEndpoint {
-        .local(socketPath: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".bandito/bandito.sock").path)
+        .local(socketPath: URL(fileURLWithPath: NSHomeDirectory()).appending(path: ".bandito/bandito.sock").path)
     }
 
     /// An ssh endpoint from one text, `[user@]host[:port]` or an alias, as the add-server sheet takes it. Text that

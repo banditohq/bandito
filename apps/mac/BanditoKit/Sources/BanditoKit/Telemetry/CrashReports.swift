@@ -60,7 +60,7 @@ public struct CrashReportFile: Equatable, Sendable {
 public enum CrashReportScanner {
     /// `~/Library/Logs/DiagnosticReports` of the person who runs the app.
     public static var defaultDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser
+        URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent("Library/Logs/DiagnosticReports", isDirectory: true)
     }
 

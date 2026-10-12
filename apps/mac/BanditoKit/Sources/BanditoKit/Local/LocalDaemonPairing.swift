@@ -39,10 +39,12 @@ public struct LocalDaemonPairing: Sendable {
         }
     }
 
+    #if os(macOS)
     /// This user's installed daemon: `~/.local/bin/bandito`, the default home, and the real redeem.
     public static func installed(home: URL = URL(fileURLWithPath: NSHomeDirectory())) -> LocalDaemonPairing {
         LocalDaemonPairing(runner: ProcessCommandRunner(), binary: home.appending(path: ".local/bin/bandito"))
     }
+    #endif
 
     /// The server config for this Mac's daemon: a WebSocket to its listen port on loopback, with a new device token.
     /// `id` keeps an existing server's identity (its selection and its Keychain item).
