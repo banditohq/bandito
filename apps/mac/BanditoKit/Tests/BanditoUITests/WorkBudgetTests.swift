@@ -84,32 +84,36 @@ extension ScreenWorkSuites {
                 Self.budget("ThreadList.nativeRowShown", 0, Self.list),
             ], "type 20 letters")
 
-            // 3. A reply streamed in 100 pieces into the chat on screen, at its newest message.
-            PerfScroller.scroll(scroll, to: .greatestFiniteMagnitude)
-            await harness.settle(rounds: 20)
+            // 3. A reply streamed in 100 pieces into a chat on screen at its newest message. A chat just opened is at its
+            // bottom by rule; the thread scrolled away above is not, and whether a scroll back down counts as "at the
+            // bottom" depended on when its rows were measured (on a slow runner the new rows then counted as unseen
+            // and redrew the frame). The turn starts and ends outside the step: its status changes are not the stream.
             let transport = world.primaryTransport
-            let id = PerfFixtures.threadAgentID
+            let id = world.agentIDs[10]
+            router.selectedAgentID = id
+            await harness.settle(rounds: 30)
+            await transport.emitEvent(
+                agentID: id, kind: "turn.started", payload: ["turn_id": "budget-turn", "source": "user"],
+                persisted: true)
             // The preview's interval is long here, so the count does not depend on how fast the machine runs: the
             // first piece writes it, the rest wait (StreamPreviewThrottle is tested on its own).
             let interval = AgentThreadState.streamPreviewInterval
             AgentThreadState.streamPreviewInterval = .seconds(60)
             defer { AgentThreadState.streamPreviewInterval = interval }
             let streamed = await harness.count {
-                await transport.emitEvent(
-                    agentID: id, kind: "turn.started", payload: ["turn_id": "budget-turn", "source": "user"],
-                    persisted: true)
                 for index in 0..<100 {
                     await transport.emitEvent(
                         agentID: id, kind: "message.delta", payload: ["text": "word\(index) "], persisted: false)
                     await harness.settle(rounds: 1)
                 }
             }
-            // Only the streamed line is reconfigured and measured, once a piece; the chat's frame stays.
+            // Only the streamed line is reconfigured and measured, once a piece or less (pieces that come together are
+            // one); the chat's frame and the team list do not move.
             check(streamed, [
-                Self.budget("ThreadList.nativeRowShown", 110, Self.list), Self.budget("ThreadList.measure", 110, Self.list),
-                Self.budget("ThreadList.viewFor", 3, Self.list), Self.budget("ThreadList.swiftUIRowShown", 2, Self.list),
-                Self.budget("ItemView", 2, Self.rows), Self.budget("ThreadView", 1, Self.frame),
-                Self.budget("Composer", 1, Self.frame), Self.budget("ThreadHeader", 1, Self.frame),
+                Self.budget("ThreadList.nativeRowShown", 101, Self.list), Self.budget("ThreadList.measure", 101, Self.list),
+                Self.budget("ThreadList.viewFor", 2, Self.list), Self.budget("ThreadList.swiftUIRowShown", 1, Self.list),
+                Self.budget("ItemView", 1, Self.rows), Self.budget("ThreadView", 0, Self.frame),
+                Self.budget("Composer", 0, Self.frame), Self.budget("ThreadHeader", 0, Self.frame),
                 Self.budget("TeamSidebar", 0, Self.sidebar),
                 Self.budget(
                     "AgentRow", 1,

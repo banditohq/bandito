@@ -81,8 +81,9 @@ final class CallCounter: @unchecked Sendable {
     }
 }
 
-/// The result of `task`, or nil if it did not finish within `timeout`.
-func finished<T: Sendable>(_ task: Task<T, Error>, within timeout: Duration = .seconds(3)) async -> Result<T, Error>? {
+/// The result of `task`, or nil if it did not finish within `timeout`. A task that finishes returns at once; the wait
+/// only bounds a hang, and is long: on a loaded CI runner a listener's cancel came after more than 3 s.
+func finished<T: Sendable>(_ task: Task<T, Error>, within timeout: Duration = .seconds(15)) async -> Result<T, Error>? {
     await withTaskGroup(of: Result<T, Error>?.self) { group in
         group.addTask { await task.result }
         group.addTask {
