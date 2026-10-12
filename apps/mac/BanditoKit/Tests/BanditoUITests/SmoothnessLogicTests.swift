@@ -169,6 +169,15 @@ import Testing
         #expect(FrameStats.compute(intervals: [0.0167], work: [0.002], frameDuration: 1.0 / 60).longFrames == nil)
     }
 
+    @Test func aNewWidthRemeasuresOnlyTheMeasuredRows() {
+        let ids = ["a", "b", "c", "d"]
+        // b was measured and is measured again at the same height; c was measured and is not any more (back to its
+        // guess); d is measured now. a was never measured: it stands at its guess.
+        let changed = ThreadListWidthChange.rows(ids, old: ["b": 40, "c": 60], new: ["b": 40, "d": 30])
+        #expect(changed == IndexSet([2, 3]))
+        #expect(ThreadListWidthChange.rows(ids, old: [:], new: [:]).isEmpty)
+    }
+
     @Test func aSheetSlideIsNotAFreeze() {
         let ms: UInt64 = 1_000_000
         // 380 ms in AppKit's loop while a sheet moved, 40 ms of it on the processor: 40 ms of work.

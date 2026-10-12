@@ -562,12 +562,16 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
                     }
                 }
             }
+            // Only the rows that were measured change their height: the others stand at their guess, which does not
+            // depend on the width. Telling the table about every row made it ask 1500 heights at each panel toggle.
+            let old = heights
             heights = kept
             NativeSizeCache.shared.prefetch(lines, width: width)
-            if !lines.isEmpty {
+            let changed = ThreadListWidthChange.rows(lines.map(\.id), old: old, new: kept)
+            if !changed.isEmpty {
                 NSAnimationContext.beginGrouping()
                 NSAnimationContext.current.duration = 0
-                table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<lines.count))
+                table.noteHeightOfRows(withIndexesChanged: changed)
                 NSAnimationContext.endGrouping()
             }
         }
@@ -942,6 +946,22 @@ struct ThreadItemsView: View {
         }
         .padding(.top, ThreadListView.topInset)
         .padding(.bottom, ThreadListView.bottomInset)
+    }
+}
+
+/// The rows whose height a new width changes: those measured before or after it (the rest stand at a guess that does not
+/// depend on the width), when the two heights differ.
+enum ThreadListWidthChange {
+    static func rows(_ ids: [String], old: [String: CGFloat], new: [String: CGFloat]) -> IndexSet {
+        var changed = IndexSet()
+        guard !old.isEmpty || !new.isEmpty else { return changed }
+        for (index, id) in ids.enumerated() {
+            let before = old[id]
+            let after = new[id]
+            if before == nil && after == nil { continue }
+            if before != after { changed.insert(index) }
+        }
+        return changed
     }
 }
 #endif
