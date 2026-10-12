@@ -153,15 +153,25 @@ public struct NewBundle: Encodable, Sendable, Equatable {
     public var runtime: String?
     public var workspaceId: String?
     public var templates: [String]?
+    /// The model every bot of the set starts on (feature `bundle_schedules`); nil keeps the runtime's default.
+    public var model: String?
+    /// The one project folder the bots work in (feature `bundle_schedules`); nil gives each bot its own folder.
+    public var cwd: String?
+    /// `<template id>:<index>` of the schedules that start switched on (feature `bundle_schedules`). Given, even empty,
+    /// every schedule of every bot is made and the rest are off; nil keeps each template's own defaults.
+    public var schedules: [String]?
 
     public init(
         bundleId: String, language: String, runtime: String? = nil, workspaceId: String? = nil,
-        templates: [String]? = nil
+        templates: [String]? = nil, model: String? = nil, cwd: String? = nil, schedules: [String]? = nil
     ) {
         self.bundleId = bundleId
         self.language = language
         self.runtime = runtime
         self.workspaceId = workspaceId
         self.templates = templates
+        self.model = model
+        self.cwd = cwd
+        self.schedules = schedules
     }
 }

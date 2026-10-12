@@ -7,6 +7,9 @@ import SwiftUI
 /// starting templates. A template opens the new agent sheet with its runtime, effort and instructions filled in.
 struct TeamWelcome: View {
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
+    /// The ready teams of the server in front (the bundles of the Marketplace's Bots page).
+    @State private var bots = BotsMarketModel()
 
     /// The starting points offered on the empty team.
     static let templates: [AgentTemplate] = [.builder, .reviewer, .oncall]
@@ -36,6 +39,16 @@ struct TeamWelcome: View {
                     VStack(spacing: 12) { templateCards }
                 }
                 .frame(maxWidth: 640)
+                if let server = app.currentServer, ReadyTeamsLogic.supported(server.supports),
+                    !ReadyTeamsLogic.teams(from: bots.bundles).isEmpty
+                {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionLabel(L10n.Team.Home.readyTeams)
+                        ReadyTeamsSection(
+                            bundles: bots.bundles, templates: bots.templates, languageCode: ModelDescription.currentLanguageCode)
+                    }
+                    .frame(maxWidth: 640, alignment: .leading)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 32)
@@ -43,6 +56,11 @@ struct TeamWelcome: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.bg)
+        .task(id: app.currentServer?.id) {
+            guard let server = app.currentServer else { return }
+            bots.reset()
+            await bots.load(from: server)
+        }
     }
 
     @ViewBuilder

@@ -148,6 +148,10 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     case myShares
     /// Move an agent of this server to another connected server (see `MoveAgentSheet`).
     case moveAgent(agentID: String, serverID: UUID)
+    /// Report a problem: what happened, the diagnostics with the secrets hidden, and a link that opens the issue on GitHub.
+    case reportProblem
+    /// A ready team (a bundle of agents) to look at before it is made: its agents, what they may do, their schedules.
+    case readyTeam(bundleID: String)
 
     public var id: String {
         switch self {
@@ -161,6 +165,8 @@ public enum Sheet: Identifiable, Hashable, Sendable {
         case .installShared(let shareID): "install-\(shareID)"
         case .myShares: "myShares"
         case .moveAgent(let agentID, let serverID): "moveAgent-\(agentID)-\(serverID.uuidString)"
+        case .reportProblem: "reportProblem"
+        case .readyTeam(let bundleID): "readyTeam-\(bundleID)"
         }
     }
 }

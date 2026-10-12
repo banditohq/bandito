@@ -99,13 +99,15 @@ public struct BotTemplate: Decodable, Sendable, Identifiable, Hashable {
     /// Ids of the skills catalog.
     public var skills: [String]
     public var schedules: [BotSchedule]
+    /// What the bot may use (`terminal`, `files`, `browser`, `team`, `screen`): the wire names.
+    public var capabilities: [String]
 
     public init(
         id: String, nameEn: String, nameRu: String, descriptionEn: String = "", descriptionRu: String = "",
         longEn: String = "", longRu: String = "", starterEn: String = "", starterRu: String = "",
         l10n: [String: BotTemplateTranslation] = [:], category: String = "personal", icon: String = "sparkles",
         accent: String? = nil, roleEn: String = "", runtime: String = "claude", integrations: [BotIntegration] = [],
-        skills: [String] = [], schedules: [BotSchedule] = []
+        skills: [String] = [], schedules: [BotSchedule] = [], capabilities: [String] = []
     ) {
         self.id = id
         self.nameEn = nameEn
@@ -125,6 +127,7 @@ public struct BotTemplate: Decodable, Sendable, Identifiable, Hashable {
         self.integrations = integrations
         self.skills = skills
         self.schedules = schedules
+        self.capabilities = capabilities
     }
 
     public init(from decoder: Decoder) throws {
@@ -148,11 +151,12 @@ public struct BotTemplate: Decodable, Sendable, Identifiable, Hashable {
         integrations = try c.decodeIfPresent([BotIntegration].self, forKey: .integrations) ?? []
         skills = try c.decodeIfPresent([String].self, forKey: .skills) ?? []
         schedules = try c.decodeIfPresent([BotSchedule].self, forKey: .schedules) ?? []
+        capabilities = try c.decodeIfPresent([String].self, forKey: .capabilities) ?? []
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, nameEn, nameRu, descriptionEn, descriptionRu, longEn, longRu, starterEn, starterRu, l10n
-        case category, icon, accent, roleEn, runtime, integrations, skills, schedules
+        case category, icon, accent, roleEn, runtime, integrations, skills, schedules, capabilities
     }
 
     private func translation(_ languageCode: String) -> BotTemplateTranslation? {

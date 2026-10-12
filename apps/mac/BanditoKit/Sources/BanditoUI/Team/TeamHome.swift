@@ -91,6 +91,11 @@ struct TeamHome: View {
                         }
                     }
                 }
+                if ReadyTeamsLogic.supported(server.supports), !ReadyTeamsLogic.teams(from: bots.bundles).isEmpty {
+                    section(L10n.Team.Home.readyTeams) {
+                        ReadyTeamsSection(bundles: bots.bundles, templates: bots.templates, languageCode: languageCode)
+                    }
+                }
                 section(L10n.Team.Home.templates) {
                     VStack(alignment: .leading, spacing: 12) {
                         LazyVGrid(columns: Self.columns, spacing: 12) {

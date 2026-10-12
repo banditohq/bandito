@@ -127,10 +127,15 @@ enum QACommand: Equatable {
     /// The sheets a QA run can open.
     static func parseSheet(_ name: String) -> Sheet? {
         switch name {
-        case "newAgent": .newAgent
-        case "account": .account
-        case "addServer": .addServer
-        default: nil
+        case "newAgent": return .newAgent
+        case "account": return .account
+        case "addServer": return .addServer
+        case "reportProblem": return .reportProblem
+        default:
+            // `readyTeam:web-project` opens the preview of that ready team.
+            guard name.hasPrefix("readyTeam:") else { return nil }
+            let id = String(name.dropFirst("readyTeam:".count))
+            return id.isEmpty ? nil : .readyTeam(bundleID: id)
         }
     }
 }
