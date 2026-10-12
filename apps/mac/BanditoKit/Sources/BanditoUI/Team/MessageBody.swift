@@ -13,8 +13,32 @@ struct MessageBodyView: View {
     var streaming = false
 
     var body: some View {
-        let blocks = MessageRenderCache.shared.blocks(for: text, markdown: markdown, cached: !streaming)
-        if blocks.contains(where: { if case .code = $0 { return true } else { return false } }) {
+        let _ = PerfCounters.hit("MessageBody")
+        let message =
+            streaming
+            ? MessageRenderCache.shared.streamingMessage(for: text, markdown: markdown)
+            : MessageRenderCache.shared.message(for: text, markdown: markdown)
+        // A message with a web link shows the link hint on hover; the others are drawn without any hover tracking.
+        // The first web link was found when the message was parsed, not on every draw.
+        if let link = message.firstWebLink {
+            ChatLinkHintHost(link: link) { messageBody(message.blocks) }
+        } else {
+            messageBody(message.blocks)
+        }
+    }
+
+    @ViewBuilder
+    private func messageBody(_ blocks: [RenderedBlock]) -> some View {
+        let hasCode = blocks.contains(where: { if case .code = $0 { return true } else { return false } })
+        if !hasCode, blocks.count > 1 {
+            // A stream: the finished paragraphs and the one being written are two texts, so a token redraws the last
+            // paragraph only, not the whole reply. The gap between them is the gap between two lines of one text.
+            VStack(alignment: .leading, spacing: markdown ? 4 : 3) {
+                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                    if case .text(let running) = block { runningText(running) }
+                }
+            }
+        } else if hasCode {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
@@ -45,6 +69,13 @@ enum RenderedBlock {
     case code(language: String?, code: String)
 }
 
+/// A message ready to draw: its blocks, and the first web address among its links (the hover hint needs it). Both are
+/// found once, when the message is parsed.
+struct RenderedMessage {
+    let blocks: [RenderedBlock]
+    let firstWebLink: URL?
+}
+
 /// The parsed bodies of messages, by text. Parsing Markdown and finding links is the costly part of drawing a bubble;
 /// it must not be redone every time a row is built (a scroll builds rows again and again). Bounded by size (8 MB of text), and a
 /// message still streaming is never kept: its text changes at every token.
@@ -52,7 +83,7 @@ final class MessageRenderCache: @unchecked Sendable {
     static let shared = MessageRenderCache()
 
     private struct Entry {
-        let blocks: [RenderedBlock]
+        let message: RenderedMessage
         let cost: Int
         var used: UInt64
     }
@@ -71,26 +102,31 @@ final class MessageRenderCache: @unchecked Sendable {
     var parses: Int { lock.withLock { parsedCount } }
 
     func blocks(for text: String, markdown: Bool, cached: Bool = true) -> [RenderedBlock] {
+        message(for: text, markdown: markdown, cached: cached).blocks
+    }
+
+    /// The parsed message: its blocks and its first web link, parsed once and kept with the blocks.
+    func message(for text: String, markdown: Bool, cached: Bool = true) -> RenderedMessage {
         guard cached else {
             lock.withLock { parsedCount += 1 }
-            return Self.build(text, markdown: markdown)
+            return Self.rendered(text, markdown: markdown)
         }
         let key = (markdown ? "m:" : "p:") + text
-        if let hit = lock.withLock({ () -> [RenderedBlock]? in
+        if let hit = lock.withLock({ () -> RenderedMessage? in
             guard var entry = entries[key] else { return nil }
             tick += 1
             entry.used = tick
             entries[key] = entry
-            return entry.blocks
+            return entry.message
         }) {
             return hit
         }
-        let built = Self.build(text, markdown: markdown)
+        let built = Self.rendered(text, markdown: markdown)
         lock.withLock {
             parsedCount += 1
             tick += 1
             let cost = text.utf8.count
-            if let old = entries.updateValue(Entry(blocks: built, cost: cost, used: tick), forKey: key) {
+            if let old = entries.updateValue(Entry(message: built, cost: cost, used: tick), forKey: key) {
                 totalCost -= old.cost
             }
             totalCost += cost
@@ -103,6 +139,22 @@ final class MessageRenderCache: @unchecked Sendable {
             }
         }
         return built
+    }
+
+    /// A message that is still streaming in. Every token used to parse the whole text again (Markdown, links), so a
+    /// long reply cost more with every word. The finished paragraphs (up to the last blank line outside a code block)
+    /// are parsed once and kept; only the paragraph being written is parsed at each token, and the two are joined.
+    func streamingMessage(for text: String, markdown: Bool) -> RenderedMessage {
+        guard let split = StreamingSplit.stableEnd(of: text) else { return message(for: text, markdown: markdown, cached: false) }
+        // The finished part without its closing blank line: the stack between the two texts stands for it.
+        let head = message(for: String(text[..<split]).trimmingTrailingNewlines, markdown: markdown)
+        let tail = message(for: String(text[split...]), markdown: markdown, cached: false)
+        return RenderedMessage(blocks: head.blocks + tail.blocks, firstWebLink: head.firstWebLink ?? tail.firstWebLink)
+    }
+
+    static func rendered(_ text: String, markdown: Bool) -> RenderedMessage {
+        let blocks = build(text, markdown: markdown)
+        return RenderedMessage(blocks: blocks, firstWebLink: ChatLinkRouting.firstWebLink(in: blocks))
     }
 
     static func build(_ text: String, markdown: Bool) -> [RenderedBlock] {
@@ -119,6 +171,45 @@ final class MessageRenderCache: @unchecked Sendable {
             case .code(let language, let code, _): return .code(language: language, code: code)
             }
         }
+    }
+}
+
+/// Where a streaming message splits into the part that will not change and the part being written. Pure, tested.
+enum StreamingSplit {
+    /// The end of the last blank line (`\n\n`) that is outside a code fence, or nil when there is none (or the text
+    /// is short enough to parse whole).
+    static func stableEnd(of text: String) -> String.Index? {
+        guard text.utf8.count > 400 else { return nil }
+        var fenceOpen = false
+        var lastSplit: String.Index?
+        var index = text.startIndex
+        var lineStart = true
+        while index < text.endIndex {
+            let character = text[index]
+            if lineStart, text[index...].hasPrefix("```") { fenceOpen.toggle() }
+            if character == "\n" {
+                let next = text.index(after: index)
+                if !fenceOpen, next < text.endIndex, text[next] == "\n" {
+                    lastSplit = text.index(after: next)
+                }
+                lineStart = true
+            } else if character != " " {
+                lineStart = false
+            }
+            index = text.index(after: index)
+        }
+        guard let lastSplit, lastSplit < text.endIndex else { return nil }
+        return lastSplit
+    }
+
+}
+
+private extension String {
+    /// The text without the line breaks at its end.
+    var trimmingTrailingNewlines: String {
+        var end = endIndex
+        while end > startIndex, self[index(before: end)] == "\n" { end = index(before: end) }
+        return String(self[..<end])
     }
 }
 
@@ -145,18 +236,30 @@ struct CodeBlockView: View {
             .padding(.trailing, 6)
             .padding(.top, 6)
 
-            ScrollView(.horizontal) {
-                Text(code.isEmpty ? " " : code)
-                    .font(BanditoFont.mono(size: 12.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text)
-                    .lineSpacing(2)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: true, vertical: true)
+            let text = Text(code.isEmpty ? " " : code)
+                .font(BanditoFont.mono(size: 12.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text)
+                .lineSpacing(2)
+                .textSelection(.enabled)
+            // A scroll view of its own only for code with a long line: one per block cost more than the code itself, in
+            // every message drawn. Short lines fit the bubble; in a very narrow chat they wrap rather than hide.
+            if CodeBlockLayout.needsScroll(code) {
+                ScrollView(.horizontal) {
+                    text
+                        .fixedSize(horizontal: true, vertical: true)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)
+                        .padding(.bottom, 12)
+                }
+                .scrollIndicators(.automatic)
+            } else {
+                text
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 12)
                     .padding(.top, 4)
                     .padding(.bottom, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .scrollIndicators(.automatic)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -189,6 +292,17 @@ struct CodeBlockView: View {
         }
         .banditoButton(.row(cornerRadius: 7))
         .help(L10n.Thread.copy)
+    }
+}
+
+/// Whether a code block scrolls sideways. Pure.
+enum CodeBlockLayout {
+    /// The longest line that fits a narrow bubble without a scroll (12.5 pt mono is about 7.5 pt a character; an agent's
+    /// bubble in the narrowest window is about 400 pt).
+    static let fittingLine = 48
+
+    static func needsScroll(_ code: String) -> Bool {
+        code.split(separator: "\n", omittingEmptySubsequences: false).contains { $0.count > fittingLine }
     }
 }
 

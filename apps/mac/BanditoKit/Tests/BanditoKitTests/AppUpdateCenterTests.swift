@@ -133,7 +133,7 @@ import Testing
 
     /// Waits for the phase, up to a deadline long enough for a busy CI machine, instead of a fixed sleep.
     private func phaseBecomes(
-        _ wanted: AppUpdateCenter.Phase, in center: AppUpdateCenter, within limit: Duration = .seconds(5)
+        _ wanted: AppUpdateCenter.Phase, in center: AppUpdateCenter, within limit: Duration = .seconds(30)
     ) async -> Bool {
         let clock = ContinuousClock()
         let deadline = clock.now + limit

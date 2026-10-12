@@ -216,9 +216,12 @@ pub fn screen_error(e: ScreenError) -> RpcError {
     let message = e.to_string();
     let data = match &e {
         ScreenError::InvalidArgs(_) => return RpcError::new(INVALID_PARAMS, message),
-        ScreenError::MissingComponent(component) => {
-            json!({ "reason": "missing_component", "component": component })
-        }
+        // `component` is the first missing one, for clients that predate `components`.
+        ScreenError::MissingComponent(components) => json!({
+            "reason": "missing_component",
+            "component": components.first().copied().unwrap_or_default(),
+            "components": components,
+        }),
         other => json!({ "reason": other.reason() }),
     };
     RpcError::with_data(SCREEN_ERROR, message, data)
@@ -342,12 +345,17 @@ mod tests {
         assert_eq!(e.code, SCREEN_ERROR);
         assert_eq!(e.data, Some(json!({"reason": "unsupported"})));
 
-        let e = screen_error(ScreenError::MissingComponent("xdotool"));
+        let e = screen_error(ScreenError::MissingComponent(vec!["x11vnc", "xdotool"]));
         assert_eq!(e.code, SCREEN_ERROR);
         assert_eq!(
             e.data,
-            Some(json!({"reason": "missing_component", "component": "xdotool"}))
+            Some(json!({
+                "reason": "missing_component",
+                "component": "x11vnc",
+                "components": ["x11vnc", "xdotool"],
+            }))
         );
+        assert!(e.message.contains("x11vnc, xdotool"), "{}", e.message);
 
         let e = screen_error(ScreenError::StartFailed("Xvfb exited".into()));
         assert_eq!(e.code, SCREEN_ERROR);

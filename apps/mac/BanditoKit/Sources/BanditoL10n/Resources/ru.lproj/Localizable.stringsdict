@@ -2,6 +2,46 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>agentCreate.chars</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld символа</string>
+			<key>many</key>
+			<string>%1$lld символов</string>
+			<key>one</key>
+			<string>%1$lld символ</string>
+			<key>other</key>
+			<string>%1$lld символа</string>
+		</dict>
+	</dict>
+	<key>agentCreate.lines</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld строки</string>
+			<key>many</key>
+			<string>%1$lld строк</string>
+			<key>one</key>
+			<string>%1$lld строка</string>
+			<key>other</key>
+			<string>%1$lld строки</string>
+		</dict>
+	</dict>
 	<key>changes.fileCount</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -422,6 +462,26 @@
 			<string>≈ %1$lld минуты</string>
 		</dict>
 	</dict>
+	<key>perfCheck.summary.some</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld страницы не соответствуют цели.</string>
+			<key>many</key>
+			<string>%1$lld страниц не соответствуют цели.</string>
+			<key>one</key>
+			<string>%1$lld страница не соответствует цели.</string>
+			<key>other</key>
+			<string>%1$lld страницы не соответствуют цели.</string>
+		</dict>
+	</dict>
 	<key>schedule.step.hours</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -500,6 +560,46 @@
 			<string>работает %1$lld час</string>
 			<key>other</key>
 			<string>работает %1$lld часов</string>
+		</dict>
+	</dict>
+	<key>serverSettings.copies</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld копии</string>
+			<key>many</key>
+			<string>%1$lld копий</string>
+			<key>one</key>
+			<string>%1$lld копия</string>
+			<key>other</key>
+			<string>%1$lld копий</string>
+		</dict>
+	</dict>
+	<key>serverSettings.info.cores</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld ядра</string>
+			<key>many</key>
+			<string>%1$lld ядер</string>
+			<key>one</key>
+			<string>%1$lld ядро</string>
+			<key>other</key>
+			<string>%1$lld ядра</string>
 		</dict>
 	</dict>
 	<key>setup.showFullLog</key>

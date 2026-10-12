@@ -220,6 +220,7 @@ struct MetricDetailView: View {
         if group.isGroup, !group.members.isEmpty {
             let open = expanded.contains(group.id)
             ProcessRowView(
+                server: server,
                 owner: group.owner, ownerName: ownerName, title: group.appName,
                 subtitle: L10n.Server.Detail.processCount(count: group.processCount),
                 value: groupValue(group), indent: false, trailing: .chevron(open: open), stopName: nil,
@@ -237,6 +238,7 @@ struct MetricDetailView: View {
         } else {
             // The sums of an app whose processes this list does not name: a plain row, nothing to stop or expand.
             ProcessRowView(
+                server: server,
                 owner: group.owner, ownerName: ownerName, title: group.appName,
                 subtitle: group.isGroup ? L10n.Server.Detail.processCount(count: group.processCount) : nil,
                 value: groupValue(group), indent: false, trailing: .none, stopName: nil,
@@ -252,6 +254,7 @@ struct MetricDetailView: View {
         let title = row.owner.map { ownerName($0) } ?? appName
         let subtitle: String? = owned ? appName : (appName != row.name ? row.name : nil)
         return ProcessRowView(
+            server: server,
             owner: row.owner, ownerName: ownerName, title: title, subtitle: subtitle,
             value: processValue(row), indent: indent,
             trailing: row.canStop ? .stop : .none,
@@ -473,6 +476,8 @@ private struct ProcessRowView: View {
         case none, stop, chevron(open: Bool)
     }
 
+    /// The server whose agents own the processes, so an agent shows its own avatar.
+    let server: ServerModel?
     let owner: ProcessOwnerRef?
     let ownerName: (ProcessOwnerRef) -> String
     let title: String
@@ -532,7 +537,7 @@ private struct ProcessRowView: View {
     @ViewBuilder
     private var icon: some View {
         if let owner, owner.kind == .agent {
-            AgentAvatar(name: ownerName(owner), size: 18)
+            OwnerAgentAvatar(owner: owner, server: server, fallbackName: ownerName(owner), size: 18)
                 .help(L10n.Server.Detail.agentMark)
         } else {
             // Only agents carry a picture; the other names line up with them.

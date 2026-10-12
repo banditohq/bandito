@@ -52,7 +52,9 @@ Makes the window of the app take the whole screen. The screen view fills the win
 The side panel shows who is connected to the screen now, and the screens of the agents' workplaces.
 Где: Server screen → side panel → Who is here (Кто здесь), Screens of workplaces (Экраны рабочих мест)
 1. Read the names under Who is here (Кто здесь).
-2. Under Screens of workplaces (Экраны рабочих мест), see the screens that agents use. Click one to open it.
+2. Under Screens of workplaces (Экраны рабочих мест), every workplace has a card: the shared server (Общий сервер) and each container. A card shows a preview of the last picture, the name, and the state: Screen on (Экран включён), Asleep (Спит), or Not available yet (Пока недоступен). A container that is not running also says so.
+3. Click a card to show that workplace's screen in the main area. The choice is kept for the server. Only the chosen screen is connected; the others wake only when you open them.
+4. A card says Not available yet (Пока недоступен) when the server's Bandito is too old to show the screen of a separate workplace. Open Server → Updates and update the server.
 
 ## Shared clipboard (Clipboard)
 
@@ -86,14 +88,22 @@ While the server starts the screen, the button turns into a spinner with the wor
 1. Wait. Do not click again: the spinner means the start is in progress.
 2. When the picture arrives, the screen shows. Nothing else to do.
 
+## Programs the server lacks (Install)
+
+<!-- id: screen-missing-components; covers: -->
+If the server has no programs the screen needs, the page names them in red, such as The screen needs programs that the server does not have: x11vnc, xdotool. Install (Установить) is under it. Click it and Bandito installs the programs on the server, then starts the screen.
+Где: Server screen → page, where the Start screen button was; the button Install (Установить)
+1. Click Install (Установить). The page shows the install's progress with its log: Installing the programs the screen needs… (Устанавливаем программы для экрана…).
+2. If the server needs an administrator password, the page shows a command. Click Open terminal (Открыть терминал), type the password there, and click Install (Установить) again.
+3. When the install is done, the screen starts by itself. If it fails, the page names the program that could not be installed.
+
 ## Start failed (Retry)
 
 <!-- id: screen-start-failed; covers: -->
-If the screen does not start, the page says why under the icon: a sentence in red, such as The server has no Xvfb, or The screen did not start. Try again. (Повторить) is under it.
+If the screen does not start, the page says why under the icon: a sentence in red, Could not start the screen (Не удалось запустить экран). Retry (Повторить) is under it.
 Где: Server screen → page → sentence and Retry (Повторить)
-1. Read the sentence. If the server lacks a program, install it on the server and try again.
-2. Click Retry (Повторить). The app starts the screen again.
-3. The Details (Подробнее) line under the sentence has the technical text, for a report.
+1. Click Retry (Повторить). The app starts the screen again.
+2. Details (Подробнее) is a full-width line under the sentence. Click it to open the technical text; it can be copied, for a report.
 
 ## Screen did not answer (The screen did not answer)
 

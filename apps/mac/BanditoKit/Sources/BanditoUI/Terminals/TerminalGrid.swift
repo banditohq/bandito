@@ -142,6 +142,9 @@ struct PaneHeader: View {
                     .onTapGesture(count: 2) { startRename() }
                     .help(L10n.Terminals.Pane.rename)
             }
+            if let place = controller.workspaceLabel(for: id) {
+                WorkspaceChip(text: place)
+            }
             Text(session.info.cwd)
                 .font(BanditoFont.mono(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
@@ -150,7 +153,10 @@ struct PaneHeader: View {
             Spacer(minLength: 4)
             headerButton("rectangle.split.2x1", help: L10n.Terminals.Pane.split) {
                 controller.workspace.focus(id)
-                Task { await controller.openNew(cwd: session.info.cwd, afterFocused: true) }
+                Task {
+                    await controller.openNew(
+                        cwd: session.info.cwd, afterFocused: true, workspace: session.info.workspace)
+                }
             }
             headerButton("minus", help: L10n.Terminals.Pane.collapse) {
                 controller.collapse(id)

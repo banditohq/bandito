@@ -5,8 +5,10 @@
 
 #[cfg(target_os = "linux")]
 use crate::children::TrackedChild;
+#[cfg(not(target_os = "linux"))]
+use crate::store::Store;
 #[cfg(target_os = "linux")]
-use crate::store::now_ms;
+use crate::store::{Store, now_ms};
 use serde::Serialize;
 use serde_json::Value;
 #[cfg(target_os = "linux")]
@@ -42,13 +44,12 @@ pub const DEFAULT_WIDTH: u32 = 1600;
 pub const DEFAULT_HEIGHT: u32 = 1000;
 /// Screenshots wider than this are scaled down. Coordinates stay in screen pixels.
 pub const SCREENSHOT_MAX_WIDTH: u32 = 1280;
-/// A screen with no VNC client and no agent call for this long is stopped.
-pub const IDLE_STOP_MS: i64 = 30 * 60 * 1000;
-/// How often the idle check runs.
+/// How often the idle check runs. The idle time it stops at is the `screen_idle_minutes` setting, read each time.
 pub const IDLE_CHECK_INTERVAL: Duration = Duration::from_secs(60);
 /// RFB (VNC) uses only the first 8 characters of a password, so the whole password is 8.
 pub const PASSWORD_LEN: usize = 8;
-pub const MAX_WORKSPACE_LEN: usize = 32;
+/// Long enough for a workspace id (a UUID is 36 characters); the browser accepts the same.
+pub const MAX_WORKSPACE_LEN: usize = 64;
 /// Scroll notches when `amount` is not given, and the largest accepted amount.
 pub const DEFAULT_SCROLL: u32 = 3;
 pub const MAX_SCROLL: u32 = 20;
@@ -106,8 +107,9 @@ pub struct ScreenStatus {
 pub enum ScreenError {
     /// Not Linux, so there is no Xvfb or x11vnc.
     Unsupported,
-    /// A program the screen needs is not installed on the server.
-    MissingComponent(&'static str),
+    /// Programs the screen needs that are not installed on the server, in the order of
+    /// `setup::SCREEN_REQUIRED`. A missing program found while starting gives just that one.
+    MissingComponent(Vec<&'static str>),
     StartFailed(String),
     /// The user holds the controls, so agent tools are refused.
     UserControls,
@@ -136,7 +138,11 @@ impl fmt::Display for ScreenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unsupported => write!(f, "the server screen needs Linux (Xvfb and x11vnc)"),
-            Self::MissingComponent(c) => write!(f, "missing component: {c} (install it on the server)"),
+            Self::MissingComponent(list) => write!(
+                f,
+                "missing components: {} (install them on the server)",
+                list.join(", ")
+            ),
             Self::StartFailed(why) => write!(f, "cannot start the screen: {why}"),
             Self::UserControls => write!(
                 f,
@@ -269,7 +275,7 @@ impl ScreenManager {
     pub async fn start(&self, workspace: &str, width: u32, height: u32) -> Result<ScreenStatus, ScreenError> {
         validate_workspace(workspace)?;
         let mut sessions = self.sessions.lock().await;
-        start_locked(&mut sessions, &self.state_dir, workspace, width, height).await?;
+        start_locked(&mut sessions, &self.state_dir, workspace, width, height, &server_path()).await?;
         sessions
             .get(workspace)
             .map(|s| s.status(now_ms()))
@@ -319,7 +325,15 @@ impl ScreenManager {
     pub async fn agent_action(&self, workspace: &str, action: AgentAction) -> Result<Value, ScreenError> {
         validate_workspace(workspace)?;
         let mut sessions = self.sessions.lock().await;
-        start_locked(&mut sessions, &self.state_dir, workspace, DEFAULT_WIDTH, DEFAULT_HEIGHT).await?;
+        start_locked(
+            &mut sessions,
+            &self.state_dir,
+            workspace,
+            DEFAULT_WIDTH,
+            DEFAULT_HEIGHT,
+            &server_path(),
+        )
+        .await?;
         let session = sessions.get_mut(workspace).ok_or(ScreenError::NotRunning)?;
         agent_gate(session.controller)?;
         session.last_agent_ms = now_ms();
@@ -372,7 +386,7 @@ impl ScreenManager {
     }
 
     /// Start the background task that stops idle screens. Call once, from `main`.
-    pub fn spawn_idle_reaper(self: &Arc<Self>) {
+    pub fn spawn_idle_reaper(self: &Arc<Self>, store: Arc<Store>) {
         let manager = Arc::clone(self);
         tokio::spawn(async move {
             let mut tick = tokio::time::interval(IDLE_CHECK_INTERVAL);
@@ -380,19 +394,21 @@ impl ScreenManager {
             tick.tick().await;
             loop {
                 tick.tick().await;
-                manager.stop_idle().await;
+                // Read at every check, so a changed `screen_idle_minutes` applies to running screens too.
+                let stop_after_ms = store.server_settings_or_default().screen_idle_ms();
+                manager.stop_idle(stop_after_ms).await;
             }
         });
     }
 
-    /// Stop the screens with no VNC client and no agent call for `IDLE_STOP_MS`.
-    async fn stop_idle(&self) {
+    /// Stop the screens with no VNC client and no agent call for `stop_after_ms`.
+    async fn stop_idle(&self, stop_after_ms: i64) {
         let now = now_ms();
         let idle: Vec<Session> = {
             let mut sessions = self.sessions.lock().await;
             let names: Vec<String> = sessions
                 .iter()
-                .filter(|(_, s)| should_auto_stop(vnc_clients(s.vnc_port), now - s.last_agent_ms))
+                .filter(|(_, s)| should_auto_stop(vnc_clients(s.vnc_port), now - s.last_agent_ms, stop_after_ms))
                 .map(|(name, _)| name.clone())
                 .collect();
             names.iter().filter_map(|name| sessions.remove(name)).collect()
@@ -455,7 +471,7 @@ impl ScreenManager {
 
     pub async fn shutdown_all(&self) {}
 
-    pub fn spawn_idle_reaper(self: &Arc<Self>) {}
+    pub fn spawn_idle_reaper(self: &Arc<Self>, _store: Arc<Store>) {}
 }
 
 // Pure helpers. Linux code uses them, and the tests run them on every system.
@@ -725,10 +741,11 @@ pub fn validate_workspace(workspace: &str) -> Result<(), ScreenError> {
     }
 }
 
-/// True when the idle check should stop a screen: no VNC client and idle for `IDLE_STOP_MS` or more.
+/// True when the idle check should stop a screen: no VNC client and idle for `stop_after_ms` or more
+/// (the `screen_idle_minutes` setting, see docs/ARCHITECTURE.md#server-settings).
 #[cfg(any(target_os = "linux", test))]
-pub fn should_auto_stop(clients: usize, idle_ms: i64) -> bool {
-    clients == 0 && idle_ms >= IDLE_STOP_MS
+pub fn should_auto_stop(clients: usize, idle_ms: i64, stop_after_ms: i64) -> bool {
+    clients == 0 && idle_ms >= stop_after_ms
 }
 
 // Linux: process handling. Every program of a screen runs in its own process group.
@@ -768,6 +785,14 @@ fn start_failed(e: ScreenError) -> ScreenError {
     }
 }
 
+/// The `PATH` the daemon looks its programs up in (it starts with `<data dir>/tools/bin`).
+#[cfg(target_os = "linux")]
+fn server_path() -> std::ffi::OsString {
+    std::env::var_os("PATH").unwrap_or_default()
+}
+
+/// Starts the screen of `workspace` unless it runs. First checks that every required program is on
+/// `path`, so a server without them gets `MissingComponent` with the full list and nothing is started.
 #[cfg(target_os = "linux")]
 async fn start_locked(
     sessions: &mut HashMap<String, Session>,
@@ -775,9 +800,14 @@ async fn start_locked(
     workspace: &str,
     width: u32,
     height: u32,
+    path: &std::ffi::OsStr,
 ) -> Result<(), ScreenError> {
     if sessions.contains_key(workspace) {
         return Ok(());
+    }
+    let missing = crate::setup::missing_screen_components(path);
+    if !missing.is_empty() {
+        return Err(ScreenError::MissingComponent(missing));
     }
     if width < MIN_SIZE.0 || height < MIN_SIZE.1 || width > MAX_SIZE.0 || height > MAX_SIZE.1 {
         return Err(ScreenError::InvalidArgs(format!(
@@ -820,7 +850,7 @@ fn create_screen_dir(dir: &Path) -> Result<(), ScreenError> {
 }
 
 /// Writes `<dir>/Xauthority` with a new cookie for `:display`, mode 0600. A file left by a crashed
-/// screen is replaced. Missing `xauth` gives `MissingComponent("xauth")`.
+/// screen is replaced. Missing `xauth` gives `MissingComponent(["xauth"])`.
 #[cfg(target_os = "linux")]
 async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenError> {
     create_screen_dir(dir)?;
@@ -1043,7 +1073,7 @@ fn spawn_group(
 #[cfg(target_os = "linux")]
 fn spawn_error(e: &std::io::Error, component: &'static str) -> ScreenError {
     if e.kind() == std::io::ErrorKind::NotFound {
-        ScreenError::MissingComponent(component)
+        ScreenError::MissingComponent(vec![component])
     } else {
         ScreenError::StartFailed(format!("{component}: {e}"))
     }
@@ -1574,6 +1604,9 @@ mod tests {
     fn workspace_names_are_short_and_safe_for_a_folder_name() {
         let long = "x".repeat(MAX_WORKSPACE_LEN);
         let too_long = "x".repeat(MAX_WORKSPACE_LEN + 1);
+        // A workspace id is a UUID (36 characters): a container workspace's screen is named by it.
+        let uuid = crate::store::new_id();
+        assert_eq!(validate_workspace(&uuid), Ok(()), "{uuid}");
         for ok in ["shared", "team-1", "a_b", long.as_str()] {
             assert_eq!(validate_workspace(ok), Ok(()), "{ok}");
         }
@@ -1586,19 +1619,77 @@ mod tests {
     }
 
     #[test]
-    fn idle_screen_without_clients_stops_after_30_minutes() {
-        assert!(should_auto_stop(0, IDLE_STOP_MS));
-        assert!(should_auto_stop(0, IDLE_STOP_MS * 2));
-        assert!(!should_auto_stop(0, IDLE_STOP_MS - 1));
-        assert!(!should_auto_stop(1, IDLE_STOP_MS * 2));
+    fn idle_screen_without_clients_stops_after_the_setting() {
+        let thirty = crate::server_settings::defaults().screen_idle_ms();
+        assert_eq!(thirty, 30 * 60 * 1000);
+        assert!(should_auto_stop(0, thirty, thirty));
+        assert!(should_auto_stop(0, thirty * 2, thirty));
+        assert!(!should_auto_stop(0, thirty - 1, thirty));
+        assert!(!should_auto_stop(1, thirty * 2, thirty));
+    }
+
+    #[test]
+    fn a_changed_idle_setting_decides_the_next_stop() {
+        let five = 5 * 60 * 1000;
+        let four_hours = 240 * 60 * 1000;
+        // Five minutes idle: stopped at a 5-minute setting, kept at 30 minutes or at 4 hours.
+        assert!(should_auto_stop(0, five, five));
+        assert!(!should_auto_stop(0, five, 30 * 60 * 1000));
+        assert!(!should_auto_stop(0, five, four_hours));
+        // A screen used by a VNC client is never stopped for idleness.
+        assert!(!should_auto_stop(2, four_hours * 2, five));
     }
 
     #[test]
     fn screen_error_reasons_are_stable() {
         assert_eq!(ScreenError::Unsupported.reason(), "unsupported");
-        assert_eq!(ScreenError::MissingComponent("xdotool").reason(), "missing_component");
+        assert_eq!(
+            ScreenError::MissingComponent(vec!["xdotool"]).reason(),
+            "missing_component"
+        );
         assert_eq!(ScreenError::StartFailed("x".into()).reason(), "start_failed");
         assert_eq!(ScreenError::UserControls.reason(), "user_controls");
+    }
+
+    /// A `PATH` folder whose stubs leave a `ran-<name>` file when they run, so a test can see
+    /// whether anything was started.
+    #[cfg(target_os = "linux")]
+    fn fake_tools(dir: &Path, names: &[&str]) {
+        use std::os::unix::fs::PermissionsExt;
+        for name in names {
+            let path = dir.join(name);
+            let script = format!("#!/bin/sh\ntouch \"$(dirname \"$0\")/ran-{name}\"\n");
+            std::fs::write(&path, script).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    /// Without x11vnc and xdotool the start stops before anything runs: the error names both, and no
+    /// folder, authority file or program was made.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn start_names_every_missing_component_and_runs_nothing() {
+        let tools = tempfile::tempdir().unwrap();
+        fake_tools(tools.path(), &["Xvfb", "xauth", "import", "openbox"]);
+        let state = tempfile::tempdir().unwrap();
+        let mut sessions = HashMap::new();
+        let err = start_locked(
+            &mut sessions,
+            state.path(),
+            DEFAULT_WORKSPACE,
+            DEFAULT_WIDTH,
+            DEFAULT_HEIGHT,
+            tools.path().as_os_str(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err, ScreenError::MissingComponent(vec!["x11vnc", "xdotool"]));
+        assert_eq!(err.reason(), "missing_component");
+        assert!(sessions.is_empty());
+        assert!(!state.path().join(DEFAULT_WORKSPACE).exists());
+        for name in ["Xvfb", "xauth", "import", "openbox"] {
+            assert!(!tools.path().join(format!("ran-{name}")).exists(), "{name} ran");
+        }
     }
 
     // Off Linux there is no screen: every call says so.

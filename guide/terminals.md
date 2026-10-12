@@ -110,3 +110,13 @@ Shown in the pane when the connection or the server cannot run a terminal.
 1. Terminal error: … (Terminal error: {message}): the message gives a short reason. Click Details (Подробнее) for the technical text, or Retry (Повторить) on the banner.
 2. Update the server to use terminals: the server runs an older Bandito. Update it from Server → Updates (see [server.md](server.md)).
 3. No servers (Нет серверов): click Connect a server (Подключить сервер) in the pane, or see [troubleshooting.md](troubleshooting.md).
+
+## Terminal in a workplace (Workplace)
+
+<!-- id: terminals-workplace; covers: -->
+A new terminal opens in the workplace chosen in the sidebar: on the shared server (Общий сервер), or inside a container. A terminal in a container runs inside it, so it sees the container's files, not the server's. Needs a server that lists the terminals-in-workplaces feature; an older server opens terminals on the server only.
+Где: Terminals → sidebar → Workplace (Рабочее место); the + next to Terminals (tooltip New terminal in … (Новый терминал: …))
+1. When the server has more than one workplace, choose one under Workplace (Рабочее место). The choice is kept for the server.
+2. Press ⌘T or +. A stopped container is started first (the row says Starting… (Запускаем…)), then the terminal opens in its folder /root.
+3. A terminal in a container has a label with the workplace's name, in the sidebar and in the pane's header. A terminal on the shared server has none.
+4. Split and Restart keep the workplace of the pane. A folder sent from Files (Terminal here) always opens on the server.

@@ -60,7 +60,8 @@ final class HostMonitor {
     func run(_ server: ServerModel) async {
         while !Task.isCancelled {
             // Before the server reports the feature (or while not connected) there is nothing to ask for.
-            if server.supports("host") {
+            // While the app is not the active one a tick reads nothing (see `AppActivity`).
+            if server.supports("host"), AppActivity.isActive {
                 await refresh(server)
             }
             try? await Task.sleep(for: Self.interval)

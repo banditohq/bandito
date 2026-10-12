@@ -8,10 +8,10 @@ actions wait for your yes. Read the limits below too: this is a safety net, not 
 
 <!-- id: sec-modes; covers: settings:approvals -->
 Each agent has one mode that decides when it asks you. The mode is set when the agent is created and can be changed later.
-Где: Team → agent → Agent details (⌘I) → Details → Approvals (Одобрения); New agent sheet → Ask me about (Что спрашивать у вас)
-1. Risky only (Только рискованное), the default: routine work goes on by itself; actions in the risky list below are asked about.
-2. Everything (Всё подряд): every tool call that the CLI asks about goes to you.
-3. Nothing (Ничего): the agent runs without asking. Use it only for a sandbox you do not care about.
+Где: Team → agent → Agent details (⌘I) → Details → Ask for permission (Спрашивать разрешение); New agent sheet → Ask for permission (Спрашивать разрешение)
+1. Only the risky ones (Только о рискованном), the default: routine work goes on by itself; actions in the risky list below are asked about.
+2. About everything (Обо всём): every tool call that the CLI asks about goes to you.
+3. About nothing (Ни о чём): the agent runs without asking. Use it only for a sandbox you do not care about.
 
 ## Approval card (Needs you)
 
@@ -22,6 +22,16 @@ When an action is asked about, the agent stops and an approval card appears in i
 2. Click Approve (Разрешить) to allow it, or Deny (Отклонить) to refuse it. A long command asks you to open Bandito and review it.
 3. Tick Always allow this here (Всегда разрешать здесь) to allow this exact command for this agent from now on. Other commands still ask.
 4. You can also answer from the menu bar, from a notification, or from the iPhone app.
+
+## Agents that create agents
+
+<!-- id: sec-agent-create; covers: -->
+Only the main agent of the crew can create agents, and you decide on a card each time (see [team.md](team.md)). The limits do not depend on what it asks: the new agent gets at most the capabilities and services the main agent has itself, never a softer approval mode than its creator's or the server's default, only a runtime installed on the server and a model that runtime offers, and it runs in the same workplace. It never gets a folder inside Bandito's own data folder. The main agent makes at most 10 agents an hour.
+Где: Team → main agent's thread → card "wants to create an agent"
+1. Check Can use and Services on the card: they are what the new agent may touch.
+2. Check Asks you: a new agent never asks less than its creator.
+3. Allowing needs the card in the app: the shortcut, the menu bar and a notification do not allow a creation, and in Telegram only a summary that fits a whole message can be allowed (otherwise it says to open the app). If you say no three times within an hour, that agent's requests are turned away for an hour.
+4. If the main agent's approvals are set to About nothing, it creates agents without a card; the thread says "without asking".
 
 ## Rules: allow, ask, deny (Approvals)
 
@@ -98,9 +108,9 @@ A sandbox is a place where an agent cannot reach your files, network or other ag
 
 <!-- id: sec-limits; covers: -->
 The risky checks read the command line. They stop a mistake. They do not stop an agent that tries to get around them: a script, an interpreter or a link can reach files that the check does not follow. A real boundary is a separate user or a container.
-Где: Team → agent → Agent details → Details → Approvals (Одобрения)
+Где: Team → agent → Agent details → Details → Ask for permission (Спрашивать разрешение)
 1. Keep the agents' rights small: a separate user on the server for each agent, and no keys you do not need.
-2. Keep Risky only (Только рискованное) or Everything (Всё подряд) on for agents that touch production.
+2. Keep Only the risky ones (Только о рискованном) or About everything (Обо всём) on for agents that touch production.
 3. The checks look at the actions the agent asks for: the tool, the command text and the paths. They do not look inside a program the agent wrote and runs (a script, `npm test`, a build script, a git hook). Such a program can read whatever the server user can read. For real isolation use a container.
 ## Touch ID and auto-deny (planned)
 

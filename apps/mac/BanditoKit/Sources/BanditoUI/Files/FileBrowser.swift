@@ -11,6 +11,7 @@ struct FileBrowser: View {
     @Environment(Router.self) private var router
     @Environment(Keymap.self) private var keymap
     @State private var model = FolderModel()
+    @Environment(\.scenarioRequests) private var scenario
     /// The details panel as the user left it. Shown when the window is wide enough to dock it beside the list.
     @State private var previewVisible = true
     /// The details panel opened by its button in a narrow window, where it floats over the list.
@@ -52,6 +53,13 @@ struct FileBrowser: View {
     }
 
     var body: some View {
+        browser
+            .onChange(of: scenario?.filesLayout) { _, layout in
+                if let layout, model.layout != layout { model.layout = layout }
+            }
+    }
+
+    private var browser: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 FilesToolbar(
@@ -99,12 +107,10 @@ struct FileBrowser: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: BrowserWidthKey.self, value: proxy.size.width)
-            }
-        )
-        .onPreferenceChange(BrowserWidthKey.self) { browserWidth = $0 }
+        // The width, written only when it changes (a preference read through the whole list cost at every layout).
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            if browserWidth != width { browserWidth = width }
+        }
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: panelShown)
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: model.upload != nil)
         .task(id: requested) {
@@ -485,15 +491,6 @@ enum NameSheet: Identifiable, Hashable {
     var id: Self { self }
 }
 
-/// Width of the browser, read from the layout so the details panel can follow the window.
-private struct BrowserWidthKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 /// The toolbar of the browser, 52 pt high, items 32 pt high and centred: back and forward, the path trail,
 /// search, the list or icon switch, terminal, details, create, and a menu for the rest.
 ///
@@ -523,9 +520,9 @@ struct FilesToolbar: View {
     @State private var searchPopover = false
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            layout(search: .field)
-            layout(search: .loupe)
+        // The measured copies have no path and no field: the widths are the same in every folder.
+        FirstFit(count: 2, memory: "files.toolbar", persists: true) { index, measuring in
+            layout(search: index == 0 ? .field : .loupe, measuring: measuring)
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
@@ -537,8 +534,10 @@ struct FilesToolbar: View {
 
     enum SearchStyle { case field, loupe }
 
+    /// One form of the toolbar. A copy made to be measured has the field and the loupe as spaces of their width and no
+    /// path in its trail's space: none of them change its width, and a hidden field must not take focus or report.
     @ViewBuilder
-    func layout(search: SearchStyle) -> some View {
+    func layout(search: SearchStyle, measuring: Bool = false) -> some View {
         HStack(spacing: 8) {
             Button(action: onBack) { Image(systemName: "chevron.left") }
                 .banditoButton(.icon(size: 32, label: L10n.Files.back))
@@ -551,15 +550,17 @@ struct FilesToolbar: View {
                 .focusable(false)
                 .disabled(!canGoForward)
 
-            trail
+            trail(measuring: measuring)
 
             switch search {
             case .field:
-                searchField
-                    .frame(minWidth: 200, idealWidth: 260, maxWidth: 360)
-                    .frame(height: 32)
+                Group {
+                    if measuring { Color.clear } else { searchField }
+                }
+                .frame(minWidth: 200, idealWidth: 260, maxWidth: 360)
+                .frame(height: 32)
             case .loupe:
-                loupe
+                if measuring { Color.clear.frame(width: 32, height: 32) } else { loupe }
             }
 
             layoutSwitch
@@ -577,13 +578,15 @@ struct FilesToolbar: View {
     /// The path trail takes the space the other items leave, at least 180 pt. The space is a spacer, and the
     /// trail is an overlay on it, so the trail's content never changes the toolbar's own layout. Its priority
     /// keeps the flexible search field from pushing the row past its measured width.
-    private var trail: some View {
+    private func trail(measuring: Bool) -> some View {
         Spacer(minLength: 180)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .leading) {
+                if !measuring {
                 GeometryReader { proxy in
                     CrumbTrailView(crumbs: crumbs, onCrumb: onCrumb, onCopy: onCopyPath)
                         .frame(width: max(proxy.size.width, 0), height: proxy.size.height, alignment: .leading)
+                }
                 }
             }
             .layoutPriority(1)
@@ -708,12 +711,9 @@ private struct CrumbTrailView: View {
 
     var body: some View {
         let layouts = CrumbTrail.layouts(count: crumbs.count)
-        ViewThatFits(in: .horizontal) {
-            trail(layouts[0])
-            trail(layouts[1])
-            trail(layouts[2])
+        FirstFit(count: layouts.count, memory: "files.trail|" + crumbs.map(\.title).joined(separator: "/")) { index, _ in
+            trail(layouts[index])
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func trail(_ items: [CrumbTrailItem]) -> some View {

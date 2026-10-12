@@ -54,6 +54,8 @@ enum SkillText {
 
 // MARK: - the page
 
+/// The Skills page. Under All with no search: a shelf of the owner's own skills, then one shelf per category. A category:
+/// its own page under a header with Back. A search under All, or the Installed filter: one flat grid.
 struct SkillsPage: View {
     let model: SkillsMarketModel
     let query: String
@@ -69,48 +71,143 @@ struct SkillsPage: View {
 
     @Environment(Router.self) private var router
 
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
     var body: some View {
-        let shown = SkillLogic.visible(
-            model.skills, filter: router.marketSkillFilter, query: query, languageCode: languageCode)
-        VStack(alignment: .leading, spacing: 14) {
-            if OwnSkillsLogic.showsSection(model.own, query: query, filter: router.marketSkillFilter) {
-                SectionLabel(L10n.Share.Own.title)
-                MarketRows(items: OwnSkillsLogic.visible(model.own, query: query)) { skill in
+        let filter = router.marketSkillFilter
+        switch MarketPageMode.of(filter: filter, searching: searching) {
+        case .shelves:
+            shelves
+        case .page:
+            page(filter)
+        case .flat:
+            flatGrid(filter)
+        }
+    }
+
+    // MARK: shelves
+
+    @ViewBuilder
+    private var shelves: some View {
+        let groups = SkillLogic.shelves(model.skills)
+        VStack(alignment: .leading, spacing: 0) {
+            if OwnSkillsLogic.showsSection(model.own, query: "", filter: .all) {
+                MarketShelfView(
+                    title: L10n.Share.Own.title, symbol: MarketShelfSymbol.ownSkills, count: model.own.count,
+                    items: model.own, cardHeight: MarketShelfMetrics.ownSkillCardHeight, onAll: nil
+                ) { skill in
                     OwnSkillCard(skill: skill, onShare: { onShare(skill) })
+                        .equatable()
                 }
+                .padding(.bottom, MarketShelfMetrics.shelfGap)
             }
-            SectionLabel(L10n.Market.Skills.catalog)
-            if !shown.isEmpty {
-                MarketRows(items: shown) { skill in
-                    SkillCard(
-                        skill: skill, languageCode: languageCode,
-                        canInstall: SkillLogic.canInstall(skill, agents: agents),
-                        updating: model.busy.contains { $0.hasPrefix(skill.id + "|") },
-                        onView: { onView(skill) }, onInstall: { onInstall(skill) },
-                        onRemove: { onRemoveEverywhere(skill) }, onUpdate: { onUpdate(skill) })
+            let first = OwnSkillsLogic.showsSection(model.own, query: "", filter: .all) ? 1 : 0
+            ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                MarketShelfView(
+                    title: MarketCategory.title(group.category), symbol: MarketCategory.symbol(group.category),
+                    count: group.items.count, items: group.items, cardHeight: MarketShelfMetrics.skillCardHeight,
+                    onAll: { router.marketSkillFilter = .category(group.category) }
+                ) { skill in
+                    skillCard(skill, compact: true)
                 }
-            } else if let failure = model.failure {
-                UserFacingErrorView(message: failure, onRetry: onRetry)
-            } else if model.loaded {
-                Text(emptyText)
-                    .font(BanditoFont.text(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .padding(.vertical, 6)
+                .padding(.bottom, MarketShelfMetrics.shelfGap)
+                .environment(\.marketShelfOrder, first + index)
+            }
+            if groups.isEmpty {
+                emptyOrFailed.padding(.horizontal, MarketGridLayout.sidePadding)
             }
         }
     }
 
+    private func skillCard(_ skill: SkillEntry, compact: Bool) -> some View {
+        SkillCard(
+            skill: skill, languageCode: languageCode,
+            canInstall: SkillLogic.canInstall(skill, agents: agents),
+            updating: model.busy.contains { $0.hasPrefix(skill.id + "|") },
+            compact: compact,
+            onView: { onView(skill) }, onInstall: { onInstall(skill) },
+            onRemove: { onRemoveEverywhere(skill) }, onUpdate: { onUpdate(skill) }
+        )
+        .equatable()
+    }
+
+    // MARK: a page
+
+    /// The page of a category, narrowed by the search.
+    @ViewBuilder
+    private func page(_ filter: MarketFilter) -> some View {
+        let shown = SkillLogic.visible(model.skills, filter: filter, query: query, languageCode: languageCode)
+        VStack(alignment: .leading, spacing: 22) {
+            MarketPageHeader(
+                title: filter.title, symbol: filter.isCategory ? MarketCategory.symbol(categoryName(filter)) : "tag",
+                count: shown.count, onBack: { router.marketSkillFilter = .all })
+            if shown.isEmpty {
+                emptyOrFailed.padding(.horizontal, MarketGridLayout.sidePadding)
+            } else {
+                skillRows(shown)
+            }
+        }
+    }
+
+    private func categoryName(_ filter: MarketFilter) -> String {
+        if case .category(let name) = filter { return name }
+        return ""
+    }
+
+    // MARK: flat grid
+
+    /// What a search under All found, or the installed skills: the owner's own skills (under All), then a grid.
+    private func flatGrid(_ filter: MarketFilter) -> some View {
+        let shown = SkillLogic.visible(model.skills, filter: filter, query: query, languageCode: languageCode)
+        return VStack(alignment: .leading, spacing: 14) {
+            if OwnSkillsLogic.showsSection(model.own, query: query, filter: filter) {
+                MarketPartLabel(text: L10n.Share.Own.title)
+                MarketRows(items: OwnSkillsLogic.visible(model.own, query: query)) { skill in
+                    OwnSkillCard(skill: skill, onShare: { onShare(skill) })
+                        .equatable()
+                }
+            }
+            MarketPartLabel(text: L10n.Market.Skills.catalog)
+            if !shown.isEmpty {
+                skillRows(shown)
+            } else {
+                emptyOrFailed.padding(.horizontal, MarketGridLayout.sidePadding)
+            }
+        }
+    }
+
+    private func skillRows(_ skills: [SkillEntry]) -> some View {
+        MarketRows(items: skills) { skill in
+            skillCard(skill, compact: false)
+        }
+    }
+
+    /// Why there is nothing to show: the failure, a search that found nothing, or a server without skills.
+    @ViewBuilder
+    private var emptyOrFailed: some View {
+        if let failure = model.failure {
+            UserFacingErrorView(message: failure, onRetry: onRetry)
+        } else if model.loaded {
+            Text(emptyText)
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .padding(.vertical, 6)
+        }
+    }
+
     private var emptyText: String {
-        if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return L10n.Market.noResults }
+        if searching { return L10n.Market.noResults }
         return router.marketSkillFilter == .installed ? L10n.Market.Skills.noneInstalled : L10n.Market.Skills.empty
     }
 }
 
 /// One of the owner's skills. A copy of a shared link carries the badge and no share action; the owner's own skill
-/// has Share..., which opens the publish sheet for it.
-struct OwnSkillCard: View {
+/// has Share..., which opens the publish sheet for it. `Equatable` on the skill.
+struct OwnSkillCard: View, Equatable {
     let skill: OwnSkill
     var onShare: () -> Void
+
+    nonisolated static func == (lhs: OwnSkillCard, rhs: OwnSkillCard) -> Bool { lhs.skill == rhs.skill }
 
     var body: some View {
         MarketCardFrame {
@@ -168,16 +265,25 @@ struct OwnSkillCard: View {
     }
 }
 
-struct SkillCard: View {
+/// A skill of the catalog: its tile, name, two lines, the chips, the warning and the foot. `Equatable` on what it draws
+/// (not on its closures), so a redraw of the page does not rebuild the cards.
+struct SkillCard: View, Equatable {
     let skill: SkillEntry
     let languageCode: String
     let canInstall: Bool
     /// An install or an update of this skill is running.
     var updating = false
+    /// On a shelf, where every card has one height: the warning keeps one line (its page has all of it).
+    var compact = false
     var onView: () -> Void
     var onInstall: () -> Void
     var onRemove: () -> Void
     var onUpdate: () -> Void = {}
+
+    nonisolated static func == (lhs: SkillCard, rhs: SkillCard) -> Bool {
+        lhs.skill == rhs.skill && lhs.languageCode == rhs.languageCode && lhs.canInstall == rhs.canInstall
+            && lhs.updating == rhs.updating && lhs.compact == rhs.compact
+    }
 
     var body: some View {
         let state = SkillLogic.State(skill)
@@ -207,7 +313,7 @@ struct SkillCard: View {
                 if let warning = skill.warning(languageCode: languageCode) {
                     Label {
                         Text(warning)
-                            .lineLimit(3)
+                            .lineLimit(compact ? 1 : 3)
                             .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "exclamationmark.triangle")

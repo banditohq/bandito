@@ -726,6 +726,7 @@ async fn a_card_is_not_sent_for_an_approval_already_decided() {
             command: Some("ls".into()),
             diff: None,
             reason: "always".into(),
+            input: None,
         },
     };
     rig.tg.handle_event(again).await;
@@ -2282,4 +2283,106 @@ fn one_typing_action_per_chat_per_gap() {
         "another chat has its own gap"
     );
     assert!(typing.allow(OWNER, t0 + Duration::from_secs(4), gap));
+}
+
+// ---- creation cards ----
+
+/// A request to create an agent whose summary is `command`, asked by Forge as the daemon asks it.
+async fn creation_card(rig: &mut Rig, command: String) -> String {
+    let sup = rig.sup.clone();
+    let agent = rig.agent.clone();
+    tokio::spawn(async move {
+        let spec = crate::supervisor::ApprovalSpec {
+            tool: "agent.create".into(),
+            title: "Create agent «Mailer»".into(),
+            command: Some(command),
+            reason: "agent: create".into(),
+            input: json!({ "name": "Mailer" }),
+        };
+        let _ = sup.ask_external(&agent, spec, Duration::from_secs(30)).await;
+    });
+    let ev = rig
+        .feed_until(|b| matches!(b, EventBody::ApprovalRequested { tool, .. } if tool == "agent.create"))
+        .await;
+    let EventBody::ApprovalRequested { approval_id, .. } = ev.body else {
+        unreachable!()
+    };
+    approval_id
+}
+
+#[tokio::test]
+async fn a_creation_that_fits_is_shown_whole_with_allow_and_deny() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    let summary = format!(
+        "Mailer · claude\nFolder: new, /agents/mailer\nInstructions (900 characters, 1 lines):\n{}",
+        "word ".repeat(180)
+    );
+    assert!(summary.chars().count() > 600, "longer than an ordinary card shows");
+    let id = creation_card(&mut rig, summary.clone()).await;
+    let cards = rig.cards(OWNER);
+    assert_eq!(cards.len(), 1);
+    let text = text_of(&cards[0]);
+    assert!(
+        text.contains(summary.trim_end()),
+        "the whole summary is on the card: {text}"
+    );
+    assert_eq!(
+        buttons(&cards[0]),
+        vec![
+            (tr("en", "btn_allow", &[]), format!("a:{id}:y")),
+            (tr("en", "btn_deny", &[]), format!("a:{id}:n")),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_creation_that_does_not_fit_has_no_allow_and_is_decided_in_the_app() {
+    let mut rig = rig().await;
+    rig.link(OWNER);
+    let long = format!("Mailer · claude\nInstructions:\n{}", "x".repeat(4000));
+    let id = creation_card(&mut rig, long).await;
+    let cards = rig.cards(OWNER);
+    let card = &cards[0];
+    assert_eq!(
+        buttons(card),
+        vec![(tr("en", "btn_open_app", &[]), format!("a:{id}:o"))],
+        "only the way to the app"
+    );
+    assert!(text_of(card).contains(&tr("en", "approval_full_in_app", &[])));
+    let message = rig.fake.last_message_id();
+
+    // Neither the open button nor a forged Allow or Deny decides anything.
+    for data in [format!("a:{id}:o"), format!("a:{id}:y"), format!("a:{id}:n")] {
+        rig.tg.handle_update(callback(OWNER, OWNER, message, &data)).await;
+    }
+    assert_eq!(
+        rig.store.approval_get(&id).unwrap().unwrap().status,
+        ApprovalStatus::Pending
+    );
+    let answers = rig.fake.calls("answerCallbackQuery");
+    assert_eq!(answers.len(), 3);
+    assert!(
+        answers
+            .iter()
+            .all(|a| a["text"] == tr("en", "approval_full_in_app", &[]))
+    );
+
+    // The app can still answer it.
+    rig.sup.resolve(&id, Decision::Deny, false).await.unwrap();
+    assert_eq!(
+        rig.store.approval_get(&id).unwrap().unwrap().status,
+        ApprovalStatus::Resolved
+    );
+}
+
+#[test]
+fn the_new_texts_exist_in_every_language() {
+    for key in ["btn_open_app", "approval_full_in_app"] {
+        for lang in LANGUAGES {
+            let text = tr(lang, key, &[]);
+            assert!(!text.is_empty() && text != key, "{key} in {lang}");
+            assert!(!text.contains(['<', '>', '&']), "{key} in {lang}");
+        }
+    }
 }

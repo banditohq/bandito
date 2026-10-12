@@ -54,16 +54,35 @@ public struct BrowserStatus: Codable, Sendable, Hashable {
     }
 }
 
-/// One entry of `GET /v1/browser/tabs`: a page (`type == "page"`); the daemon lists only pages.
+/// One entry of `GET /v1/browser/tabs`: a page (`type == "page"`); the daemon lists only pages. `agent` is true for a tab an
+/// agent opened (an older daemon never sends it: false).
 public struct BrowserTab: Decodable, Sendable, Hashable, Identifiable {
     public var id: String
     public var type: String
     public var title: String
     public var url: String
+    public var agent: Bool
+
+    public init(id: String, type: String = "page", title: String, url: String, agent: Bool = false) {
+        self.id = id
+        self.type = type
+        self.title = title
+        self.url = url
+        self.agent = agent
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        type = try container.decode(String.self, forKey: .type)
+        title = try container.decode(String.self, forKey: .title)
+        url = try container.decode(String.self, forKey: .url)
+        agent = try container.decodeIfPresent(Bool.self, forKey: .agent) ?? false
+    }
 
     public var isPage: Bool { type == "page" }
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, title, url
+        case id, type, title, url, agent
     }
 }

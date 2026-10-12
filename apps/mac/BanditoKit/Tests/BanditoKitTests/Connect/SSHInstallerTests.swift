@@ -229,11 +229,11 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
             probe.arguments
                 == [
                     "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
-                    "-p", "2222", "deploy@example.com", DaemonAnswers.probeCommand,
+                    "-p", "2222", "--", "deploy@example.com", DaemonAnswers.probeCommand,
                 ])
         let install = try #require(runner.calls.first { $0.arguments.last?.hasPrefix("env BANDITO_") == true })
         #expect(install.stdin == script)
-        #expect(install.arguments.dropLast() == ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-p", "2222", "deploy@example.com"])
+        #expect(install.arguments.dropLast() == ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-p", "2222", "--", "deploy@example.com"])
     }
 
     @Test func aServerWithTheDaemonAlreadyInstalledSkipsTheDownloadAndTheInstallScript() async throws {
@@ -536,8 +536,8 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
         #expect(remote.contains("chmod 755 ~/.local/bin/bandito"))
         let copy = try #require(runner.calls.first { $0.executable == "/usr/bin/scp" })
         #expect(
-            copy.arguments.suffix(4)
-                == ["-P", "2222", "/Users/dev/build/bandito", "deploy@example.com:.local/bin/bandito"])
+            copy.arguments.suffix(5)
+                == ["-P", "2222", "--", "/Users/dev/build/bandito", "deploy@example.com:.local/bin/bandito"])
     }
 
     @Test func withoutAnInstallScriptOrABundledCopyNothingIsDownloadedOrRunOnTheServer() async throws {

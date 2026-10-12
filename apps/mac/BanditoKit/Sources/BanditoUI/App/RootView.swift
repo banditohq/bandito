@@ -55,9 +55,13 @@ public struct RootView: View {
         #endif
         #if DEBUG && os(macOS)
         // QA copies (scripts/qa): launch arguments and the command channel. Not in release builds.
-        .task { QAHooks.start(router: router, onboarding: onboarding) }
+        .task { QAHooks.start(router: router, onboarding: onboarding, telemetry: telemetry) }
         #endif
         .task { await app.keepUsageFresh() }
+        #if os(macOS)
+        // Help → (⌥) Smoothness check… (see `PerfCheck`).
+        .task { PerfCheckMenu.install() }
+        #endif
         // The browser sends the owner back with `bandito://oauth/callback` after a service's sign-in.
         .onOpenURL { url in
             // `bandito://install?share=<id>`: a shared bot or skill, opened from its page. Any other id is ignored.

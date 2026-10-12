@@ -11,7 +11,7 @@ use crate::supervisor::{ApprovalSpec, Supervisor};
 use anyhow::{Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -76,6 +76,7 @@ impl Status {
 }
 
 /// A page in the browser, as the app lists it (the shape of DevTools' `/json/list` entries).
+/// `agent` is set only for a tab an agent opened; it is left out of the JSON otherwise.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PageInfo {
     pub id: String,
@@ -83,6 +84,8 @@ pub struct PageInfo {
     pub kind: &'static str,
     pub title: String,
     pub url: String,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub agent: bool,
 }
 
 /// Why a browser method failed. The RPC layer maps each one (see rpc/browser.rs).
@@ -114,6 +117,11 @@ struct Running {
     controller: Holder,
     /// The tab the agent tools work in (a DevTools target id).
     target: Option<String>,
+    /// The blank page the daemon keeps open. Chrome exits when its last page closes, so this one keeps the browser
+    /// up while the person closes the tabs they see. It is never listed (see `visible_pages`).
+    placeholder: Option<String>,
+    /// The tabs agents opened (a DevTools target id each), marked in the tab list.
+    agent_tabs: HashSet<String>,
     last_activity: Instant,
 }
 
@@ -219,15 +227,18 @@ impl BrowserManager {
         let pid = child.id().unwrap_or_default();
         let (to_chrome, from_chrome) = pipes.into_parent().map_err(start_failed)?;
         let relay = Relay::spawn(from_chrome, to_chrome, MAX_CHROME_MESSAGE);
-        if let Err(e) = wait_ready(&relay).await {
-            signal_group(pid, libc::SIGKILL);
-            let _ = child.wait().await;
-            child.release();
-            return Err(BrowserError::StartFailed(format!(
-                "{e:#} (log: {})",
-                log_path.display()
-            )));
-        }
+        let placeholder = match prepare(&relay).await {
+            Ok(placeholder) => placeholder,
+            Err(e) => {
+                signal_group(pid, libc::SIGKILL);
+                let _ = child.wait().await;
+                child.release();
+                return Err(BrowserError::StartFailed(format!(
+                    "{e:#} (log: {})",
+                    log_path.display()
+                )));
+            }
+        };
         let entry = Running {
             child,
             pid,
@@ -235,6 +246,8 @@ impl BrowserManager {
             started_at: crate::store::now_ms(),
             controller: Holder::None,
             target: None,
+            placeholder: Some(placeholder),
+            agent_tabs: HashSet::new(),
             last_activity: Instant::now(),
         };
         let status = entry.status();
@@ -320,25 +333,62 @@ impl BrowserManager {
     /// browser client refuses. For a tab that does not answer. `target` is checked by the caller.
     pub async fn close_tab(&self, workspace: &str, target: &str) -> Result<(), BrowserError> {
         let relay = self.app_relay(workspace).await?;
-        // Only a page the browser lists: an id made up by a caller never reaches Chrome.
-        let pages = page_tabs(&relay).await?;
+        // Only a page the browser lists: an id made up by a caller never reaches Chrome, and the daemon's own
+        // page is not listed, so it cannot be closed this way.
+        let pages = self.visible_pages(workspace, &relay).await?;
         ensure_listed(&pages, target)?;
         relay.force_close_tab(target).await.map_err(link_failed)
     }
 
-    /// The pages open in the workspace's browser.
+    /// The pages open in the workspace's browser, as the app lists them. Closing the last of them leaves the list
+    /// empty: nothing opens a new page in its place.
     pub async fn pages(&self, workspace: &str) -> Result<Vec<PageInfo>, BrowserError> {
         let relay = self.app_relay(workspace).await?;
-        Ok(page_tabs(&relay)
+        let agent_tabs = self.agent_tabs_of(workspace).await;
+        Ok(self
+            .visible_pages(workspace, &relay)
             .await?
             .into_iter()
             .map(|tab| PageInfo {
+                agent: agent_tabs.contains(&tab.id),
                 id: tab.id,
                 kind: "page",
                 title: tab.title,
                 url: tab.url,
             })
             .collect())
+    }
+
+    /// The page tabs the app and the agents see: every page of the browser but the daemon's own.
+    async fn visible_pages(&self, workspace: &str, relay: &Relay) -> Result<Vec<Tab>, BrowserError> {
+        let hidden = self
+            .running
+            .lock()
+            .await
+            .get(workspace)
+            .and_then(|r| r.placeholder.clone());
+        Ok(page_tabs(relay)
+            .await?
+            .into_iter()
+            .filter(|tab| Some(&tab.id) != hidden.as_ref())
+            .collect())
+    }
+
+    /// The ids of the tabs agents opened in the workspace's browser.
+    async fn agent_tabs_of(&self, workspace: &str) -> HashSet<String> {
+        self.running
+            .lock()
+            .await
+            .get(workspace)
+            .map(|r| r.agent_tabs.clone())
+            .unwrap_or_default()
+    }
+
+    /// Remembers that an agent opened `target`, so the tab list marks it.
+    async fn note_agent_tab(&self, target: &str) {
+        if let Some(r) = self.running.lock().await.get_mut(DEFAULT_WORKSPACE) {
+            r.agent_tabs.insert(target.to_string());
+        }
     }
 
     /// The relay and current tab of the default workspace, for an agent call. Starts the browser
@@ -366,15 +416,21 @@ impl BrowserManager {
     async fn agent_page(self: &Arc<Self>, new_tab: bool) -> Result<Cdp<PageClient>, BrowserError> {
         let (relay, current) = self.agent_state().await?;
         let target = if new_tab {
-            create_tab(&relay).await?
+            let created = create_tab(&relay).await?;
+            self.note_agent_tab(&created).await;
+            created
         } else {
-            let pages = page_tabs(&relay).await?;
+            let pages = self.visible_pages(DEFAULT_WORKSPACE, &relay).await?;
             match current
                 .filter(|c| pages.iter().any(|p| &p.id == c))
                 .or_else(|| pages.first().map(|p| p.id.clone()))
             {
                 Some(id) => id,
-                None => create_tab(&relay).await?,
+                None => {
+                    let created = create_tab(&relay).await?;
+                    self.note_agent_tab(&created).await;
+                    created
+                }
             }
         };
         self.set_target(&target).await;
@@ -462,7 +518,7 @@ impl BrowserManager {
 
     pub async fn agent_tabs(self: &Arc<Self>) -> Result<String, BrowserError> {
         let (relay, current) = self.agent_state().await?;
-        let tabs = page_tabs(&relay).await?;
+        let tabs = self.visible_pages(DEFAULT_WORKSPACE, &relay).await?;
         if tabs.is_empty() {
             return Ok("No tabs.".to_string());
         }
@@ -484,7 +540,7 @@ impl BrowserManager {
     /// Make tab `index` (as `browser_tabs` lists it) the agent's tab, and bring it to the front.
     pub async fn agent_switch(self: &Arc<Self>, index: usize) -> Result<String, BrowserError> {
         let (relay, _) = self.agent_state().await?;
-        let tabs = page_tabs(&relay).await?;
+        let tabs = self.visible_pages(DEFAULT_WORKSPACE, &relay).await?;
         let tab = tabs
             .get(index)
             .ok_or_else(|| BrowserError::Failed(format!("no tab {index}; browser_tabs lists them")))?;
@@ -725,6 +781,18 @@ async fn wait_ready(relay: &Relay) -> Result<()> {
     }
 }
 
+/// Once Chrome answers, opens the daemon's own blank page and returns its id (see `Running::placeholder`). Chrome
+/// exits when its last page closes, so without this page closing the last visible tab would stop the browser.
+async fn prepare(relay: &Relay) -> Result<String> {
+    wait_ready(relay).await?;
+    let mut cdp = Cdp::new(relay.browser_client().await.map_err(|e| anyhow!(e))?);
+    let created = cdp.call("Target.createTarget", json!({ "url": "about:blank" })).await?;
+    created["targetId"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| anyhow!("the browser created no tab"))
+}
+
 /// Sends a signal to a process group. Pid 0 would mean our own group, so it is refused.
 fn signal_group(pid: u32, signal: i32) {
     let Ok(group) = libc::pid_t::try_from(pid) else {
@@ -922,8 +990,92 @@ mod tests {
             started_at: 0,
             controller: Holder::None,
             target: None,
+            placeholder: None,
+            agent_tabs: HashSet::new(),
             last_activity: activity,
         }
+    }
+
+    /// The page ids a fake Chrome keeps, and how many tabs were made.
+    #[derive(Default)]
+    struct FakeTabs {
+        pages: std::sync::Mutex<Vec<String>>,
+        created: std::sync::atomic::AtomicUsize,
+    }
+
+    impl FakeTabs {
+        fn pages(&self) -> Vec<String> {
+            self.pages.lock().unwrap().clone()
+        }
+        fn created(&self) -> usize {
+            self.created.load(Ordering::SeqCst)
+        }
+    }
+
+    /// A relay over a stand-in for Chrome that answers the `Target.*` commands the manager sends. It starts with
+    /// `initial` pages, as Chrome does when it starts.
+    fn fake_chrome(initial: &[&str]) -> (Relay, Arc<FakeTabs>) {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+        let (relay_reads, chrome_writes) = tokio::io::duplex(1 << 20);
+        let (relay_writes, chrome_reads) = tokio::io::duplex(1 << 20);
+        let relay = Relay::spawn(relay_reads, relay_writes, MAX_CHROME_MESSAGE);
+        let tabs = Arc::new(FakeTabs::default());
+        *tabs.pages.lock().unwrap() = initial.iter().map(|s| s.to_string()).collect();
+        let state = tabs.clone();
+        tokio::spawn(async move {
+            let mut commands = BufReader::new(chrome_reads);
+            let mut events = chrome_writes;
+            loop {
+                let mut raw = Vec::new();
+                if commands.read_until(0, &mut raw).await.unwrap_or(0) == 0 {
+                    return;
+                }
+                raw.pop();
+                let command: Value = serde_json::from_slice(&raw).unwrap();
+                let result = match command["method"].as_str().unwrap_or_default() {
+                    "Browser.getVersion" => json!({ "product": "fake-chrome" }),
+                    "Target.getTargets" => {
+                        let infos: Vec<Value> = state
+                            .pages()
+                            .into_iter()
+                            .map(|id| json!({"targetId": id, "type": "page", "title": "", "url": "about:blank"}))
+                            .collect();
+                        json!({ "targetInfos": infos })
+                    }
+                    "Target.createTarget" => {
+                        let n = state.created.fetch_add(1, Ordering::SeqCst);
+                        let id = format!("NEW{n}");
+                        state.pages.lock().unwrap().push(id.clone());
+                        json!({ "targetId": id })
+                    }
+                    "Target.closeTarget" => {
+                        let id = command["params"]["targetId"].as_str().unwrap_or_default().to_string();
+                        state.pages.lock().unwrap().retain(|p| *p != id);
+                        json!({ "success": true })
+                    }
+                    other => panic!("the fake Chrome has no answer for {other}"),
+                };
+                let mut bytes = json!({ "id": command["id"], "result": result })
+                    .to_string()
+                    .into_bytes();
+                bytes.push(0);
+                if events.write_all(&bytes).await.is_err() {
+                    return;
+                }
+            }
+        });
+        (relay, tabs)
+    }
+
+    /// Polls `check` for up to two seconds, for the state a fake Chrome reaches after a command.
+    async fn eventually(mut check: impl FnMut() -> bool) {
+        for _ in 0..200 {
+            if check() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("the condition did not come true in time");
     }
 
     /// A stand-in for Chrome: a sleeping process in its own group.
@@ -986,6 +1138,59 @@ mod tests {
             },
             page: page.into(),
         }
+    }
+
+    /// A manager with one running browser over `relay`, whose own page is `placeholder`.
+    async fn manager_over(relay: Relay, placeholder: Option<String>) -> Arc<BrowserManager> {
+        let manager = BrowserManager::new(std::env::temp_dir());
+        let (child, pid) = sleeper();
+        let mut running = fake_running(child, pid, Instant::now());
+        running.relay = relay;
+        running.placeholder = placeholder;
+        manager.running.lock().await.insert(DEFAULT_WORKSPACE.into(), running);
+        manager
+    }
+
+    fn listed(pages: &[PageInfo]) -> Vec<&str> {
+        pages.iter().map(|p| p.id.as_str()).collect()
+    }
+
+    #[tokio::test]
+    async fn closing_the_last_visible_tab_leaves_the_list_empty() {
+        // Chrome starts with its own page; the daemon adds its page, which keeps Chrome up.
+        let (relay, chrome) = fake_chrome(&["D"]);
+        let own = prepare(&relay).await.expect("prepare");
+        assert_eq!(chrome.pages(), vec!["D".to_string(), own.clone()]);
+        let manager = manager_over(relay, Some(own.clone())).await;
+
+        // The daemon's own page is not in the list; the one the person sees is.
+        assert_eq!(listed(&manager.pages(DEFAULT_WORKSPACE).await.unwrap()), vec!["D"]);
+
+        manager.close_tab(DEFAULT_WORKSPACE, "D").await.expect("close");
+        eventually(|| chrome.pages() == vec![own.clone()]).await;
+        assert!(manager.pages(DEFAULT_WORKSPACE).await.unwrap().is_empty());
+        // Closing the last visible tab opens nothing: the only page Chrome made is the daemon's own.
+        assert_eq!(chrome.created(), 1);
+        // A tab the list does not show cannot be closed through the app's route.
+        assert!(matches!(
+            manager.close_tab(DEFAULT_WORKSPACE, &own).await,
+            Err(BrowserError::NoSuchTab)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_tab_an_agent_opened_is_marked_in_the_list() {
+        let (relay, _chrome) = fake_chrome(&["own", "person", "agent"]);
+        let manager = manager_over(relay, Some("own".into())).await;
+        manager.note_agent_tab("agent").await;
+        let pages = manager.pages(DEFAULT_WORKSPACE).await.unwrap();
+        assert_eq!(listed(&pages), vec!["person", "agent"]);
+        assert_eq!(pages.iter().map(|p| p.agent).collect::<Vec<_>>(), vec![false, true]);
+        let json = serde_json::to_value(&pages[0]).unwrap();
+        assert!(
+            json.get("agent").is_none(),
+            "a person's tab carries no agent flag: {json}"
+        );
     }
 
     #[tokio::test]
@@ -1298,6 +1503,45 @@ mod tests {
         assert_eq!(title(&now), "Title: paid");
 
         manager.stop(DEFAULT_WORKSPACE).await;
+    }
+
+    /// Real Chrome: closing the last visible tab leaves the list empty and the browser running, and no tab opens in its
+    /// place. Run with: `BANDITO_BROWSER_IT=1 cargo test -- --ignored browser_it_last_tab`.
+    #[tokio::test]
+    #[ignore = "starts a real Chrome; BANDITO_BROWSER_IT=1 cargo test -- --ignored browser_it_last_tab"]
+    async fn browser_it_last_tab_closes_and_the_browser_stays_up() {
+        if std::env::var("BANDITO_BROWSER_IT").as_deref() != Ok("1") {
+            return;
+        }
+        let home = tempfile::tempdir().unwrap();
+        let manager = BrowserManager::new(home.path().to_path_buf());
+        manager.start(DEFAULT_WORKSPACE).await.expect("start");
+        let pages = manager.pages(DEFAULT_WORKSPACE).await.expect("pages");
+        assert_eq!(
+            pages.len(),
+            1,
+            "Chrome's own starting page is the one listed: {pages:?}"
+        );
+        manager
+            .close_tab(DEFAULT_WORKSPACE, &pages[0].id)
+            .await
+            .expect("close the last tab");
+        eventually_empty(&manager).await;
+        // Nothing opened in its place, and the browser is still there to answer.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert!(manager.pages(DEFAULT_WORKSPACE).await.expect("pages").is_empty());
+        assert!(manager.status(DEFAULT_WORKSPACE).await.running);
+        manager.stop(DEFAULT_WORKSPACE).await;
+    }
+
+    async fn eventually_empty(manager: &BrowserManager) {
+        for _ in 0..100 {
+            if manager.pages(DEFAULT_WORKSPACE).await.expect("pages").is_empty() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("the closed tab is still listed");
     }
 
     /// A page client is one tab's view of the browser. It must not list the other tabs, attach to them, or read

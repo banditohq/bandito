@@ -28,6 +28,8 @@ struct ThreadChat {
     var attachments: [Int64: [MessageAttachment]] = [:]
     /// The `@` mentions each message carries, by `seq`: chips under the bubble.
     var mentions: [Int64: [Mention]] = [:]
+    /// Messages the person sent by pressing a quick-reply button, by `seq`: a quiet mark under them.
+    var viaButton: Set<Int64> = []
     /// Messages shown while they wait for their turn, by `seq`: they carry a quiet "Queued" line.
     var waiting: Set<Int64> = []
     /// Messages the daemon gave up on (no turn will take them), by `seq`: a quiet "Not delivered" line, and Send again.
@@ -66,6 +68,8 @@ struct MessageContainer<Bubble: View>: View {
     var files: [AgentAttachment] = []
     var agentID = ""
     var server: ServerModel?
+    /// When the message was sent: a quiet time at the far end of the row of actions (see `MessageTimeStamp`).
+    var sentAt: Date?
     @ViewBuilder var bubble: () -> Bubble
 
     @State private var hovering = false
@@ -88,6 +92,9 @@ struct MessageContainer<Bubble: View>: View {
     /// This message is the one being read aloud: its menu says "Stop reading".
     private var reading: Bool { SpeechOutput.shared.speakingKey == itemID }
     private var readTitle: String { reading ? L10n.Speech.stop : L10n.Speech.read }
+    /// The time shows only while the row is in full (hover, or an open popover or menu), never on the faint row that
+    /// the last agent message keeps.
+    private var showsTime: Bool { rowOpacity == 1 }
     private var rowOpacity: Double {
         MessageActionsPlacement.opacity(
             hovering: hovering, open: reactOpen || selecting || focus != nil, selectingText: dragging, isUser: fromUser,
@@ -95,6 +102,7 @@ struct MessageContainer<Bubble: View>: View {
     }
 
     var body: some View {
+        let _ = PerfCounters.hit("MessageContainer")
         HStack(spacing: 0) {
             if fromUser { Spacer(minLength: 120) }
             VStack(alignment: fromUser ? .trailing : .leading, spacing: 5) {
@@ -112,7 +120,9 @@ struct MessageContainer<Bubble: View>: View {
                     .accessibilityActions {
                         Button(L10n.Thread.copy, action: copyRaw)
                         if canReply { Button(L10n.Thread.reply, action: reply) }
-                        if canReact, let seq {
+                        // Sixteen buttons for the reactions in every message of a thread were built whether or not anyone
+                        // listens: they are built when VoiceOver (or Voice Control) is on, and the context menu has them.
+                        if canReact, let seq, AccessibilityState.assistiveToolOn {
                             ForEach(ReactionRules.common, id: \.self) { emoji in
                                 Button("\(L10n.Message.react) \(emoji)") {
                                     chat.onReact(seq, emoji == mine ? nil : emoji)
@@ -188,10 +198,12 @@ struct MessageContainer<Bubble: View>: View {
 
     // MARK: The row
 
-    /// The icons under the bubble. The agent's: copy, react, reply, more. The person's: copy, reply, react.
+    /// The icons under the bubble. The agent's: copy, react, reply, more. The person's: copy, reply, react. The time
+    /// sits at the far end from the bubble's edge: after the icons for the agent, before them for the person.
     private var actionRow: some View {
         HStack(spacing: 2) {
             if fromUser {
+                if let sentAt, showsTime { MessageTimeStamp(date: sentAt).equatable().transition(.opacity) }
                 copyButton
                 if canReply { replyButton }
                 if canReact { reactButton }
@@ -200,6 +212,7 @@ struct MessageContainer<Bubble: View>: View {
                 if canReact { reactButton }
                 if canReply { replyButton }
                 moreMenu
+                if let sentAt, showsTime { MessageTimeStamp(date: sentAt).equatable().transition(.opacity) }
             }
         }
         .frame(height: MessageActionsPlacement.rowHeight)

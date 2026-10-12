@@ -64,8 +64,16 @@ enum ThreadFollowRules {
         return distance <= deliberateDistance
     }
 
-    /// The animation of the scroll to the person's own message: a soft slide, none while motion is reduced.
-    static func scrollAnimation(reduced: Bool) -> Animation? {
-        reduced ? nil : .timingCurve(0.2, 0.8, 0.2, 1, duration: BanditoMotion.slow)
+    /// The slide to the person's own message: soft, none while motion is reduced.
+    static func scrollAnimation(reduced: Bool) -> ThreadSlide? {
+        reduced ? nil : ThreadSlide(duration: BanditoMotion.slow, curve: [0.2, 0.8, 0.2, 1])
     }
+}
+
+/// How the thread's list slides to a place: how long, along which cubic curve (its two control points).
+struct ThreadSlide: Equatable {
+    var duration: Double
+    var curve: [Float]
+
+    static let easeOut: [Float] = [0, 0, 0.58, 1]
 }

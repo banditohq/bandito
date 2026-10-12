@@ -107,10 +107,10 @@ Where the agent keeps its notes. It is created automatically in the agent's own 
 
 <!-- id: na-approvals; covers: -->
 Sets when the agent asks you before it acts. Pushes, deploys, deletes and writes outside the project folder always wait for your yes. See [security.md](security.md).
-Где: New agent sheet → Ask me about (Что спрашивать у вас)
-1. Pick Risky only (Только рискованное) (default): the routine work goes on by itself, risky steps are asked about.
-2. Pick Everything (Всё подряд): every tool call the CLI asks about goes to you.
-3. Pick Nothing (Ничего): the agent runs without asking. Use it only for sandboxes.
+Где: New agent sheet → Ask for permission (Спрашивать разрешение)
+1. Pick Only the risky ones (Только о рискованном) (default): the routine work goes on by itself, risky steps are asked about.
+2. Pick About everything (Обо всём): every tool call the CLI asks about goes to you.
+3. Pick About nothing (Ни о чём): the agent runs without asking. Use it only for sandboxes.
 4. You can change this later in Agent details → Details → Approvals.
 
 ## What it may do (Что ему можно)

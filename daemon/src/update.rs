@@ -2,10 +2,14 @@
 //! `SHA256SUMS` carries a valid signature from the release key. Nothing installs by itself: the owner
 //! asks (`bandito update`, or the app's `daemon.update_apply`). See docs/ARCHITECTURE.md#self-update.
 
+use crate::server_settings::AutoUpdate;
 use crate::service::{self, Mode, Paths};
+use crate::store::Store;
+use crate::turn_gate::TurnGate;
 use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use chrono::{Local, Timelike};
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -13,10 +17,10 @@ use std::fmt;
 use std::future::Future;
 use std::io::Read;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-use std::os::unix::process::CommandExt;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::{Mutex, OnceLock};
+use std::process::{Command, ExitStatus, Stdio};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 /// Public key of the release signing key: Ed25519, raw 32 bytes, base64. The same key as
@@ -445,8 +449,10 @@ fn replace_exe(new_bin: &Path, exe: &Path) -> Result<()> {
 /// manager runs, is restarted. Anything else is `Manual`, and the user restarts it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Restart {
-    /// systemd user unit: `systemctl --user restart`.
-    Systemd,
+    /// systemd user unit: `systemd-run --user … systemctl --user restart`, for the user `uid`.
+    Systemd {
+        uid: u32,
+    },
     /// launchd agent: `launchctl kickstart -k`.
     Launchd {
         uid: u32,
@@ -461,6 +467,49 @@ pub enum Restart {
     },
     Manual,
 }
+
+impl Restart {
+    /// The service manager the restart goes through, for the log.
+    pub fn manager(&self) -> &'static str {
+        match self {
+            Restart::Manual => "nothing",
+            Restart::Systemd { .. } => "systemd",
+            Restart::Launchd { .. } => "launchd",
+            Restart::Background { .. } => "a background process",
+        }
+    }
+}
+
+/// How a restart command ended. The service manager stops the old daemon, and it may stop the command that
+/// asked for the restart with it. That is a handover, not a failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Handover {
+    /// Exit status 0, or there was nothing to restart.
+    Accepted,
+    /// Stopped by `signal` (see `STOP_SIGNALS`) while the service manager restarted the daemon.
+    Stopped { signal: i32 },
+}
+
+/// Where systemd keeps the user bus of user `uid`: `<base>/<uid>/bus`, under `/run/user` on Linux.
+const RUNTIME_BASE: &str = "/run/user";
+/// Signals a service manager sends to the processes of a unit it stops or restarts.
+const STOP_SIGNALS: [i32; 4] = [libc::SIGTERM, libc::SIGINT, libc::SIGHUP, libc::SIGKILL];
+/// The restart of this unit, run from a transient unit of its own. The daemon runs in the cgroup of
+/// `bandito.service`, and systemd kills that whole cgroup when it stops the unit: a `systemctl` started
+/// inside it would be killed with the daemon, and it could not report the restart. `systemd-run` starts
+/// `systemctl` in a unit of its own, so the restart survives the daemon; `--collect` removes that unit
+/// when it has finished, so no failed unit is left behind.
+const SYSTEMD_RESTART: &[&str] = &[
+    "systemd-run",
+    "--user",
+    "--no-block",
+    "--collect",
+    "--quiet",
+    "systemctl",
+    "--user",
+    "restart",
+    service::UNIT_NAME,
+];
 
 /// The restart for the daemon that reported `daemon_pid` on its socket (`None`: it did not answer).
 /// `mode` is how the service is installed, from its files. `manager_pid` is the pid the service manager
@@ -482,7 +531,7 @@ pub fn restart_plan(
         return Restart::Manual;
     }
     match mode {
-        Mode::Systemd => Restart::Systemd,
+        Mode::Systemd => Restart::Systemd { uid },
         Mode::Launchd => Restart::Launchd { uid },
         Mode::Background => Restart::Background {
             pid,
@@ -494,17 +543,20 @@ pub fn restart_plan(
 }
 
 /// The pid the service manager gives for this service (for a background daemon, its pid file).
-fn manager_pid(paths: &Paths, mode: Mode) -> Option<u32> {
+fn manager_pid(paths: &Paths, mode: Mode, uid: u32) -> Option<u32> {
     match mode {
-        Mode::Systemd => stdout_of(&[
-            "systemctl",
-            "--user",
-            "show",
-            "-p",
-            "MainPID",
-            "--value",
-            service::UNIT_NAME,
-        ])
+        Mode::Systemd => stdout_with_env(
+            &[
+                "systemctl",
+                "--user",
+                "show",
+                "-p",
+                "MainPID",
+                "--value",
+                service::UNIT_NAME,
+            ],
+            &user_manager_env(uid),
+        )
         .and_then(|s| service::parse_main_pid(&s)),
         Mode::Launchd => {
             stdout_of(&["launchctl", "list", service::LABEL]).and_then(|s| service::parse_launchctl_pid(&s))
@@ -517,8 +569,14 @@ fn manager_pid(paths: &Paths, mode: Mode) -> Option<u32> {
 
 /// Trimmed stdout of a command, or `None` when it fails.
 fn stdout_of(argv: &[&str]) -> Option<String> {
+    stdout_with_env(argv, &[])
+}
+
+/// Like `stdout_of`, with `env` added to this process's environment.
+fn stdout_with_env(argv: &[&str], env: &[(&'static str, String)]) -> Option<String> {
     let out = Command::new(argv[0])
         .args(&argv[1..])
+        .envs(env.iter().map(|(k, v)| (*k, v.as_str())))
         .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()
@@ -526,6 +584,41 @@ fn stdout_of(argv: &[&str]) -> Option<String> {
     out.status
         .success()
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// The variables that let `systemctl --user` and `systemd-run --user` reach the user manager of `uid`, from
+/// `<runtime base>/<uid>/bus`. A daemon started from ssh, cron or a sparse unit environment may lack them.
+/// Only the missing ones are returned, and only when the bus socket exists; a variable that is set is kept.
+pub fn user_bus_env(
+    uid: u32,
+    runtime_base: &Path,
+    get: impl Fn(&str) -> Option<String>,
+) -> Vec<(&'static str, String)> {
+    let set = |name: &str| get(name).filter(|v| !v.is_empty());
+    let mut vars = Vec::new();
+    let runtime = match set("XDG_RUNTIME_DIR") {
+        Some(dir) => PathBuf::from(dir),
+        None => {
+            let dir = runtime_base.join(uid.to_string());
+            if !dir.join("bus").exists() {
+                return vars;
+            }
+            vars.push(("XDG_RUNTIME_DIR", dir.display().to_string()));
+            dir
+        }
+    };
+    if set("DBUS_SESSION_BUS_ADDRESS").is_none() && runtime.join("bus").exists() {
+        vars.push((
+            "DBUS_SESSION_BUS_ADDRESS",
+            format!("unix:path={}/bus", runtime.display()),
+        ));
+    }
+    vars
+}
+
+/// The user-manager variables for `uid` as this process sees them (see `user_bus_env`).
+fn user_manager_env(uid: u32) -> Vec<(&'static str, String)> {
+    user_bus_env(uid, Path::new(RUNTIME_BASE), |name| std::env::var(name).ok())
 }
 
 /// The pid the daemon on `socket` reports for itself (`daemon.info`), or `None` when nothing answers.
@@ -541,8 +634,8 @@ pub async fn restart_for(home: PathBuf, exe: PathBuf, daemon_pid: Option<u32>) -
         let user_home = dirs::home_dir().context("no home directory")?;
         let paths = Paths::new(&home, &user_home);
         let mode = service::installed_mode(&paths);
-        let manager = mode.and_then(|m| manager_pid(&paths, m));
         let (_, uid) = service::current_user()?;
+        let manager = mode.and_then(|m| manager_pid(&paths, m, uid));
         let argv = daemon_argv(&home, &user_home, &exe);
         Ok(restart_plan(mode, manager, daemon_pid, uid, &paths, argv))
     })
@@ -566,12 +659,13 @@ pub fn daemon_argv(home: &Path, user_home: &Path, exe: &Path) -> Vec<String> {
 
 /// Starts the restart. For systemd and launchd the service manager stops the old daemon, so the caller
 /// may be that daemon and must answer first. For background it stops the old daemon with SIGTERM.
-pub fn run_restart(restart: &Restart) -> Result<()> {
+pub fn run_restart(restart: &Restart) -> Result<Handover> {
     match restart {
-        Restart::Manual => Ok(()),
-        Restart::Systemd => run_quiet(&["systemctl", "--user", "--no-block", "restart", service::UNIT_NAME]),
+        Restart::Manual => Ok(Handover::Accepted),
+        Restart::Systemd { uid } => run_restart_command(SYSTEMD_RESTART, &user_manager_env(*uid)),
         Restart::Launchd { uid } => {
-            run_quiet(&["launchctl", "kickstart", "-k", &format!("gui/{uid}/{}", service::LABEL)])
+            let target = format!("gui/{uid}/{}", service::LABEL);
+            run_restart_command(&["launchctl", "kickstart", "-k", &target], &[])
         }
         Restart::Background {
             pid,
@@ -581,25 +675,44 @@ pub fn run_restart(restart: &Restart) -> Result<()> {
         } => {
             start_after_exit(*pid, argv, log, pid_file)?;
             terminate(*pid);
-            Ok(())
+            Ok(Handover::Accepted)
         }
     }
 }
 
-fn run_quiet(argv: &[&str]) -> Result<()> {
+/// Runs a restart command and judges how it ended (see `judge_restart`). `env` is added to this process's.
+fn run_restart_command(argv: &[&str], env: &[(&'static str, String)]) -> Result<Handover> {
     let out = Command::new(argv[0])
         .args(&argv[1..])
+        .envs(env.iter().map(|(k, v)| (*k, v.as_str())))
         .stdin(Stdio::null())
+        // Own process group: launchd stops the whole process group of a job it kills, and this command
+        // must outlive the daemon that starts it.
+        .process_group(0)
         .output()
         .with_context(|| format!("cannot run {}", argv[0]))?;
-    if !out.status.success() {
-        bail!(
-            "`{}` failed: {}",
-            argv.join(" "),
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
+    judge_restart(argv, out.status, String::from_utf8_lossy(&out.stderr).trim())
+}
+
+/// Reads how a restart command ended. Exit status 0 is accepted. A stop signal means the service manager
+/// stopped the command together with the old daemon: the restart went on in the manager, so it is a handover
+/// and not an error. Any other exit is a failure, reported with the command's own message.
+pub fn judge_restart(argv: &[&str], status: ExitStatus, stderr: &str) -> Result<Handover> {
+    if status.success() {
+        return Ok(Handover::Accepted);
     }
-    Ok(())
+    if let Some(signal) = status.signal() {
+        if STOP_SIGNALS.contains(&signal) {
+            return Ok(Handover::Stopped { signal });
+        }
+        bail!("`{}` was killed by signal {signal}", argv.join(" "));
+    }
+    let detail = match (stderr.is_empty(), status.code()) {
+        (false, _) => stderr.to_string(),
+        (true, Some(code)) => format!("exit status {code}, no message"),
+        (true, None) => "no exit status".to_string(),
+    };
+    bail!("`{}` failed: {detail}", argv.join(" "))
 }
 
 /// Starts `argv` after process `pid` exits (up to 30 s), in its own process group, with output appended to
@@ -784,8 +897,12 @@ pub async fn rpc_apply(version: &str) -> Result<bool> {
     }
     tokio::spawn(async move {
         tokio::time::sleep(RESTART_AFTER_REPLY).await;
+        let manager = restart.manager();
         match tokio::task::spawn_blocking(move || run_restart(&restart)).await {
-            Ok(Ok(())) => {}
+            Ok(Ok(Handover::Accepted)) => tracing::info!("restart requested from {manager}"),
+            Ok(Ok(Handover::Stopped { signal })) => {
+                tracing::info!(signal, "restart handed to {manager}");
+            }
             Ok(Err(e)) => tracing::error!("restart after update failed: {e:#}"),
             Err(e) => tracing::error!("restart after update stopped: {e}"),
         }
@@ -793,20 +910,274 @@ pub async fn rpc_apply(version: &str) -> Result<bool> {
     Ok(true)
 }
 
-/// Calls `on_available` when a newer release exists: once, 10 minutes after start, then every 24 hours.
-/// Nothing is installed here.
-pub fn spawn_background_check(current: &'static str, on_available: impl Fn(UpdateInfo) + Send + 'static) {
+/// The hours (server local time) when `auto_update = install` may install: 02:00 up to 05:00, not included.
+pub const INSTALL_FROM_HOUR: u32 = 2;
+pub const INSTALL_UNTIL_HOUR: u32 = 5;
+/// How often the install check runs while the install window is open.
+pub const INSTALL_CHECK_EVERY: Duration = Duration::from_secs(10 * 60);
+
+/// True when `hour` (0 to 23, server local time) is inside the install window.
+pub fn install_window(hour: u32) -> bool {
+    (INSTALL_FROM_HOUR..INSTALL_UNTIL_HOUR).contains(&hour)
+}
+
+/// True when an available release may be installed now: the setting is `install`, the hour is in the window, and no
+/// agent runs a turn (`running` is the number of turns running). Nothing else is checked here.
+pub fn may_install(mode: AutoUpdate, available: bool, hour: u32, running: usize) -> bool {
+    mode == AutoUpdate::Install && available && install_window(hour) && running == 0
+}
+
+/// Calls `on_available` when a newer release exists: once, 10 minutes after start, then every 24 hours. Nothing is
+/// installed here. With `auto_update = off` no check runs by itself (see docs/ARCHITECTURE.md#server-settings).
+pub fn spawn_background_check(
+    current: &'static str,
+    store: Arc<Store>,
+    on_available: impl Fn(UpdateInfo) + Send + 'static,
+) {
     tokio::spawn(async move {
         tokio::time::sleep(FIRST_CHECK_AFTER).await;
         loop {
-            match check_async(current).await {
-                Ok(info) if info.available => on_available(info),
-                Ok(_) => {}
-                Err(e) => tracing::debug!("update check: {e:#}"),
+            if store.server_settings_or_default().auto_update != AutoUpdate::Off {
+                match check_async(current).await {
+                    Ok(info) if info.available => on_available(info),
+                    Ok(_) => {}
+                    Err(e) => tracing::debug!("update check: {e:#}"),
+                }
             }
             tokio::time::sleep(CHECK_EVERY).await;
         }
     });
+}
+
+/// How long the gate stays closed after an install that asked for a restart: the restart comes one second after the
+/// reply (see `rpc_apply`), so no turn can start in between. If the restart does not come, the gate opens after this.
+pub const INSTALL_RESTART_GRACE: Duration = Duration::from_secs(3);
+
+/// After a failed install, no new attempt (and no new download of the release) for this long.
+pub const INSTALL_RETRY_AFTER: Duration = Duration::from_secs(6 * 60 * 60);
+
+/// What the night install remembers between its attempts: the release installed last, and until when a failed
+/// attempt holds the next one back.
+#[derive(Debug, Default)]
+pub struct InstallRetry {
+    installed: Option<String>,
+    retry_after_ms: i64,
+}
+
+impl InstallRetry {
+    /// True when no backoff is in force at `now_ms`: a check may run.
+    pub fn may_check(&self, now_ms: i64) -> bool {
+        now_ms >= self.retry_after_ms
+    }
+
+    /// True when `latest` should be installed now: no backoff, and it is not the release installed last.
+    pub fn wants(&self, now_ms: i64, latest: &str) -> bool {
+        self.may_check(now_ms) && self.installed.as_deref() != Some(latest)
+    }
+
+    /// Records a successful install of `latest` (and ends any backoff).
+    pub fn installed(&mut self, latest: &str) {
+        self.installed = Some(latest.to_string());
+        self.retry_after_ms = 0;
+    }
+
+    /// Records a failed attempt at `now_ms`: the next one waits [`INSTALL_RETRY_AFTER`].
+    pub fn failed(&mut self, now_ms: i64) {
+        let wait = i64::try_from(INSTALL_RETRY_AFTER.as_millis()).unwrap_or(i64::MAX);
+        self.retry_after_ms = now_ms.saturating_add(wait);
+    }
+}
+
+/// With `auto_update = install`: installs a newer release at night, through [`rpc_apply`] (the same path as the
+/// owner's request, with its restart), while the install window is open and no agent runs a turn. Each release is
+/// installed once. A failed attempt starts a backoff of [`INSTALL_RETRY_AFTER`]: until it ends, the daemon does not even
+/// look for the release again.
+///
+/// The check of "no turn runs" and the closing of the gate happen together ([`TurnGate::close_when`]): while the
+/// install runs, a new turn waits in its queue, like a turn past `max_running_agents`. If a turn runs, the gate is not
+/// closed and the install waits for the next check. Every attempt runs in its own task ([`run_isolated`]): a panic
+/// ends that attempt, counts as a failure, and the loop goes on.
+pub fn spawn_auto_install(store: Arc<Store>, turns: Arc<TurnGate>, current: &'static str) {
+    let state = Arc::new(Mutex::new(InstallRetry::default()));
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(INSTALL_CHECK_EVERY);
+        loop {
+            tick.tick().await;
+            let attempt = install_attempt(Arc::clone(&store), Arc::clone(&turns), current, Arc::clone(&state));
+            run_isolated(Arc::clone(&state), attempt).await;
+        }
+    });
+}
+
+/// Runs one attempt in its own task. A panic, or an attempt that was cancelled, is a failure: the backoff applies.
+async fn run_isolated(state: Arc<Mutex<InstallRetry>>, attempt: impl Future<Output = ()> + Send + 'static) {
+    if let Err(e) = tokio::spawn(attempt).await {
+        tracing::error!("the night install stopped: {e}");
+        state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .failed(crate::store::now_ms());
+    }
+}
+
+/// One night-install attempt: see [`spawn_auto_install`].
+async fn install_attempt(
+    store: Arc<Store>,
+    turns: Arc<TurnGate>,
+    current: &'static str,
+    state: Arc<Mutex<InstallRetry>>,
+) {
+    if store.server_settings_or_default().auto_update != AutoUpdate::Install || !install_window(Local::now().hour()) {
+        return;
+    }
+    if !state
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .may_check(crate::store::now_ms())
+    {
+        return;
+    }
+    let info = match check_async(current).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::debug!("install check: {e:#}");
+            return;
+        }
+    };
+    let now = crate::store::now_ms();
+    if !state.lock().unwrap_or_else(|p| p.into_inner()).wants(now, &info.latest) {
+        return;
+    }
+    let hour = Local::now().hour();
+    let Some(hold) = turns.close_when(|running| may_install(AutoUpdate::Install, info.available, hour, running)) else {
+        tracing::debug!("install waits: a turn is running, or no newer release");
+        return;
+    };
+    tracing::info!(version = %info.latest, "installing the newer release (auto_update = install)");
+    match rpc_apply(&info.latest).await {
+        Ok(restarting) => {
+            state.lock().unwrap_or_else(|p| p.into_inner()).installed(&info.latest);
+            tracing::info!(version = %info.latest, restarting, "newer release installed");
+            if restarting {
+                tokio::time::sleep(INSTALL_RESTART_GRACE).await;
+            }
+        }
+        Err(e) => {
+            state
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .failed(crate::store::now_ms());
+            tracing::error!("installing the newer release failed (next try in 6 hours): {e:#}");
+        }
+    }
+    // Success without a restart, a failure, or the grace after a restart: the waiting turns start now.
+    drop(hold);
+}
+
+#[cfg(test)]
+mod install_tests {
+    use super::*;
+
+    #[test]
+    fn the_install_window_is_two_to_five_in_the_morning() {
+        assert!(!install_window(1));
+        assert!(install_window(2));
+        assert!(install_window(4));
+        assert!(!install_window(5));
+        assert!(!install_window(12));
+    }
+
+    #[test]
+    fn install_waits_for_the_window_an_available_release_and_no_running_turn() {
+        assert!(may_install(AutoUpdate::Install, true, 3, 0));
+        assert!(
+            !may_install(AutoUpdate::Install, true, 3, 1),
+            "a running turn blocks the install"
+        );
+        assert!(!may_install(AutoUpdate::Install, true, 5, 0), "outside the window");
+        assert!(!may_install(AutoUpdate::Install, false, 3, 0), "no newer release");
+    }
+
+    #[test]
+    fn a_failed_install_waits_six_hours_before_the_next_attempt_and_the_release_is_not_fetched_again() {
+        const HOUR: i64 = 3_600_000;
+        let t0 = 1_800_000_000_000;
+        let mut retry = InstallRetry::default();
+        assert!(retry.wants(t0, "1.2.3"), "the first night may install");
+
+        retry.failed(t0);
+        assert!(
+            !retry.may_check(t0 + 5 * HOUR),
+            "no check and no download during the backoff"
+        );
+        assert!(!retry.wants(t0 + 5 * HOUR, "1.2.3"));
+        assert!(
+            retry.may_check(t0 + 6 * HOUR),
+            "after six hours the next attempt may run"
+        );
+        assert!(retry.wants(t0 + 6 * HOUR, "1.2.3"));
+
+        retry.installed("1.2.3");
+        assert!(
+            !retry.wants(t0 + 7 * HOUR, "1.2.3"),
+            "an installed release is not installed again"
+        );
+        assert!(retry.wants(t0 + 7 * HOUR, "1.2.4"), "a newer release is");
+    }
+
+    #[tokio::test]
+    async fn a_panicking_attempt_is_a_failure_and_the_loop_goes_on() {
+        let state = Arc::new(Mutex::new(InstallRetry::default()));
+        run_isolated(Arc::clone(&state), async { panic!("install attempt panicked (test)") }).await;
+        let now = crate::store::now_ms();
+        {
+            let retry = state.lock().unwrap();
+            assert!(!retry.may_check(now), "the panic put the attempts into backoff");
+        }
+        // The next attempt that runs in its own task completes normally and is not affected by the earlier panic.
+        run_isolated(Arc::clone(&state), async {}).await;
+    }
+
+    #[test]
+    fn only_the_install_setting_installs_by_itself() {
+        assert!(!may_install(AutoUpdate::Notify, true, 3, 0));
+        assert!(!may_install(AutoUpdate::Off, true, 3, 0));
+    }
+
+    #[test]
+    fn the_install_holds_the_gate_only_when_it_is_due_and_no_turn_runs() {
+        let gate = TurnGate::new();
+        let due = |running: usize| may_install(AutoUpdate::Install, true, 3, running);
+
+        // A turn runs: the gate is not closed, a new turn still starts, and the install waits.
+        let slot = gate.try_take(usize::MAX).expect("a turn starts");
+        assert!(gate.close_when(due).is_none());
+        drop(slot);
+        assert!(gate.try_take(usize::MAX).is_some(), "the gate was left open");
+
+        // Idle and due: the gate closes, so a turn that asks now waits in the queue.
+        let hold = gate.close_when(due).expect("idle and due: the hold is taken");
+        assert!(gate.try_take(usize::MAX).is_none(), "a turn waits during the install");
+        assert!(!gate.has_room(usize::MAX), "the waiting message is shown as queued");
+        // The install ends (success or failure): the waiting turn starts.
+        drop(hold);
+        assert!(gate.try_take(usize::MAX).is_some());
+
+        // Idle, but not due: no hold at all.
+        assert!(
+            gate.close_when(|r| may_install(AutoUpdate::Notify, true, 3, r))
+                .is_none()
+        );
+        assert!(
+            gate.close_when(|r| may_install(AutoUpdate::Install, true, 5, r))
+                .is_none()
+        );
+        assert!(
+            gate.close_when(|r| may_install(AutoUpdate::Install, false, 3, r))
+                .is_none()
+        );
+        assert!(gate.try_take(usize::MAX).is_some());
+    }
 }
 
 #[cfg(test)]
@@ -1345,7 +1716,10 @@ mod tests {
         let paths = Paths::new(Path::new("/h/.bandito"), Path::new("/h"));
         let argv = vec!["/bin/bandito".to_string(), "daemon".to_string()];
         let plan = |mode, manager, daemon| restart_plan(mode, manager, daemon, 501, &paths, argv.clone());
-        assert_eq!(plan(Some(Mode::Systemd), Some(42), Some(42)), Restart::Systemd);
+        assert_eq!(
+            plan(Some(Mode::Systemd), Some(42), Some(42)),
+            Restart::Systemd { uid: 501 }
+        );
         assert_eq!(
             plan(Some(Mode::Launchd), Some(42), Some(42)),
             Restart::Launchd { uid: 501 }
@@ -1393,6 +1767,129 @@ mod tests {
             Restart::Background { pid, .. } => assert_eq!(pid, 42),
             other => panic!("expected background, got {other:?}"),
         }
+    }
+
+    /// A runtime base with a user bus socket for `uid` (a plain file stands in for the socket: only its
+    /// existence is checked).
+    fn runtime_base_with_bus(uid: u32) -> (tempfile::TempDir, PathBuf) {
+        let base = tempfile::tempdir().unwrap();
+        let dir = base.path().join(uid.to_string());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("bus"), "").unwrap();
+        (base, dir)
+    }
+
+    #[test]
+    fn a_missing_runtime_dir_and_bus_are_filled_in_from_the_user_socket() {
+        let (base, dir) = runtime_base_with_bus(501);
+        let vars = user_bus_env(501, base.path(), |_| None);
+        assert_eq!(
+            vars,
+            vec![
+                ("XDG_RUNTIME_DIR", dir.display().to_string()),
+                ("DBUS_SESSION_BUS_ADDRESS", format!("unix:path={}/bus", dir.display())),
+            ]
+        );
+    }
+
+    #[test]
+    fn variables_that_are_set_are_kept() {
+        let (base, _dir) = runtime_base_with_bus(501);
+        let env = |name: &str| match name {
+            "XDG_RUNTIME_DIR" => Some("/elsewhere".to_string()),
+            "DBUS_SESSION_BUS_ADDRESS" => Some("unix:path=/elsewhere/bus".to_string()),
+            _ => None,
+        };
+        assert!(user_bus_env(501, base.path(), env).is_empty());
+    }
+
+    #[test]
+    fn only_the_missing_bus_address_is_added_when_the_runtime_dir_is_set() {
+        let (base, dir) = runtime_base_with_bus(501);
+        let env = |name: &str| (name == "XDG_RUNTIME_DIR").then(|| dir.display().to_string());
+        assert_eq!(
+            user_bus_env(501, base.path(), env),
+            vec![("DBUS_SESSION_BUS_ADDRESS", format!("unix:path={}/bus", dir.display()))]
+        );
+    }
+
+    #[test]
+    fn empty_variables_count_as_missing() {
+        let (base, dir) = runtime_base_with_bus(501);
+        let env = |name: &str| (name == "XDG_RUNTIME_DIR" || name == "DBUS_SESSION_BUS_ADDRESS").then(String::new);
+        let vars = user_bus_env(501, base.path(), env);
+        assert_eq!(vars[0], ("XDG_RUNTIME_DIR", dir.display().to_string()));
+        assert_eq!(vars.len(), 2);
+    }
+
+    #[test]
+    fn nothing_is_added_without_a_user_bus_socket() {
+        let base = tempfile::tempdir().unwrap();
+        // The runtime dir of user 501 exists, but it has no bus: the environment stays as it is.
+        std::fs::create_dir_all(base.path().join("501")).unwrap();
+        assert!(user_bus_env(501, base.path(), |_| None).is_empty());
+        assert!(user_bus_env(502, base.path(), |_| None).is_empty());
+    }
+
+    #[test]
+    fn the_systemd_restart_runs_in_a_transient_unit_outside_the_daemon() {
+        assert_eq!(
+            SYSTEMD_RESTART,
+            [
+                "systemd-run",
+                "--user",
+                "--no-block",
+                "--collect",
+                "--quiet",
+                "systemctl",
+                "--user",
+                "restart",
+                "bandito.service",
+            ]
+        );
+    }
+
+    fn status_of(raw: i32) -> ExitStatus {
+        ExitStatus::from_raw(raw)
+    }
+
+    #[test]
+    fn a_restart_that_exits_zero_is_accepted() {
+        let got = judge_restart(&["systemctl"], status_of(0), "").unwrap();
+        assert_eq!(got, Handover::Accepted);
+    }
+
+    #[test]
+    fn a_restart_that_exits_non_zero_is_a_failure_with_its_message() {
+        let err = judge_restart(&["systemd-run"], status_of(1 << 8), "Failed to connect to bus").unwrap_err();
+        assert!(format!("{err:#}").contains("Failed to connect to bus"), "{err:#}");
+        let err = judge_restart(&["systemd-run"], status_of(1 << 8), "").unwrap_err();
+        assert!(format!("{err:#}").contains("exit status 1"), "{err:#}");
+    }
+
+    #[test]
+    fn a_restart_stopped_by_a_stop_signal_is_handed_over_not_failed() {
+        for signal in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP, libc::SIGKILL] {
+            let got = judge_restart(&["systemctl"], status_of(signal), "").unwrap();
+            assert_eq!(got, Handover::Stopped { signal });
+        }
+    }
+
+    #[test]
+    fn a_restart_killed_by_another_signal_is_a_failure() {
+        let err = judge_restart(&["systemctl"], status_of(libc::SIGSEGV), "").unwrap_err();
+        assert!(format!("{err:#}").contains("killed by signal"), "{err:#}");
+    }
+
+    #[test]
+    fn a_real_command_is_judged_by_how_it_ended() {
+        let fail = run_restart_command(&["sh", "-c", "echo no bus >&2; exit 3"], &[]).unwrap_err();
+        assert!(format!("{fail:#}").contains("no bus"), "{fail:#}");
+        let stopped = run_restart_command(&["sh", "-c", "kill -TERM $$"], &[]).unwrap();
+        assert_eq!(stopped, Handover::Stopped { signal: libc::SIGTERM });
+        let env = [("BANDITO_RESTART_TEST", "yes".to_string())];
+        let accepted = run_restart_command(&["sh", "-c", "test \"$BANDITO_RESTART_TEST\" = yes"], &env).unwrap();
+        assert_eq!(accepted, Handover::Accepted);
     }
 
     #[test]

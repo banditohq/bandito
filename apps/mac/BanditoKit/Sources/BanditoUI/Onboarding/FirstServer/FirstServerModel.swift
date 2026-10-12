@@ -329,10 +329,11 @@ enum ServerSyncPayload {
         var payload = SyncPayload()
         let addedAt = Int64(now.timeIntervalSince1970 * 1000)
         payload.servers = configs.compactMap { config in
-            guard case .ssh(let text, _) = config.endpoint, let target = SSHTarget.parse(text) else { return nil }
+            // The key file is this Mac's own path: only the host, user and port travel.
+            guard case .ssh(let server, _) = config.endpoint else { return nil }
             return SyncedServer(
                 id: config.id, name: config.name,
-                endpoint: .ssh(host: target.host, user: target.user, port: target.port), addedAt: addedAt)
+                endpoint: .ssh(host: server.host, user: server.user, port: server.port), addedAt: addedAt)
         }
         return payload
     }

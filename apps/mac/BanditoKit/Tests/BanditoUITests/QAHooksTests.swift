@@ -43,6 +43,30 @@ import Testing
         #expect(QACommand.parse("onboarding again") == nil)
     }
 
+    @Test func zoomTakesNoArgumentAndIsTheTitleStripDoubleClick() {
+        #expect(QACommand.parse("zoom") == .zoom)
+        #expect(QACommand.parse("zoom 2") == nil)
+    }
+
+    @Test func marketCommandNamesAPageAndAFilter() {
+        #expect(QACommand.parse("market services") == .market(.services, .all))
+        #expect(QACommand.parse("market bots bundles") == .market(.bots, .bundles))
+        #expect(QACommand.parse("market skills category:dev") == .market(.skills, .category("dev")))
+        #expect(QACommand.parse("market services connected") == .market(.services, .connected))
+        #expect(QACommand.parse("market services category:") == nil)
+        #expect(QACommand.parse("market nowhere") == nil)
+        #expect(QACommand.parse("market services all extra") == nil)
+        #expect(QACommand.parse("market") == nil)
+    }
+
+    @Test func shelfCommandPressesAnArrow() {
+        #expect(QACommand.parse("shelf next") == .shelf(forward: true, index: 0))
+        #expect(QACommand.parse("shelf back 2") == .shelf(forward: false, index: 2))
+        #expect(QACommand.parse("shelf sideways") == nil)
+        #expect(QACommand.parse("shelf next -1") == nil)
+        #expect(QACommand.parse("shelf next x") == nil)
+    }
+
     @Test func blankLinesAndUnknownWordsAreNotCommands() {
         #expect(QACommand.parse("") == nil)
         #expect(QACommand.parse("   ") == nil)

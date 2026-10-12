@@ -18,6 +18,7 @@ struct ServerOverview: View {
     @State private var actionError: UserFacingMessage?
     /// The metric whose detail is open, if any.
     @State private var detail: OverviewMetric?
+    @Environment(\.scenarioRequests) private var scenario
     /// Two columns of cards or one. Starts narrow; changes only when the measured page width crosses the threshold.
     @State private var isWide = false
 
@@ -101,6 +102,9 @@ struct ServerOverview: View {
             let wide = Self.isTwoColumns(width: width)
             if wide != isWide { isWide = wide }
         }
+        .onChange(of: scenario?.overviewMetric) { _, metric in
+            if detail != metric { detail = metric }
+        }
         .task(id: server?.id) {
             guard let server else { return }
             await monitor.run(server)
@@ -143,8 +147,20 @@ struct ServerOverview: View {
                     }),
                 options: [(HostHistoryRange.hour, L10n.Server.range1h), (HostHistoryRange.day, L10n.Server.range24h)])
             .fixedSize()
+            if let server {
+                Button(L10n.ServerSettings.openLink) { openServerSettings(server) }
+                    .banditoButton(.quiet())
+                    .fixedSize()
+            }
         }
         .fixedSize()
+    }
+
+    /// Opens Settings on this server's settings page (Settings → Servers → the server).
+    private func openServerSettings(_ server: ServerModel) {
+        SettingsNavigation.shared.requestedServer = server.id
+        SettingsNavigation.shared.requested = .servers
+        WindowActions.showSettings()
     }
 
     /// Page width from which the cards sit in two columns; narrower pages stack them in one.
@@ -272,7 +288,7 @@ struct ServerOverview: View {
         let memTotal = monitor.stats?.memTotal ?? 0
         let memFraction = memTotal > 0 ? min(1, Double(row.rssBytes) / Double(memTotal)) : 0
         return HStack(alignment: .center, spacing: 10) {
-            ownerAvatar(row, name: name)
+            ownerAvatar(row, name: name, server: server)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                     .font(BanditoFont.text(size: 13, weight: 600))
@@ -325,10 +341,10 @@ struct ServerOverview: View {
     }
 
     @ViewBuilder
-    private func ownerAvatar(_ row: ProcessRow, name: String) -> some View {
+    private func ownerAvatar(_ row: ProcessRow, name: String, server: ServerModel) -> some View {
         switch row.owner.kind {
         case .agent:
-            AgentAvatar(name: name, size: 24)
+            OwnerAgentAvatar(owner: row.owner, server: server, fallbackName: name, size: 24)
         case .terminal, .daemon:
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.Bandito.text.opacity(0.07))
@@ -604,28 +620,102 @@ struct Sparkline: View {
     var fillOpacity = 0.22
     var lineWidth: CGFloat = 2
 
+    // Drawn as two shapes, not as a chart: a chart builds a mark for every sample of the four tiles and was a large
+    // part of opening the Server page; it also animated every new sample through the whole chart.
     var body: some View {
         if values.count < 2 {
             Color.clear
         } else {
-            Chart {
-                ForEach(Array(values.enumerated()), id: \.offset) { index, value in
-                    AreaMark(x: .value("Sample", index), y: .value("Value", value))
-                        .interpolationMethod(.monotone)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [tint.opacity(fillOpacity), tint.opacity(0)], startPoint: .top, endPoint: .bottom))
-                    LineMark(x: .value("Sample", index), y: .value("Value", value))
-                        .interpolationMethod(.monotone)
-                        .lineStyle(StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
-                        .foregroundStyle(tint)
-                }
+            let top = max(1, values.max() ?? 1)
+            ZStack {
+                SparklineShape(values: values, top: top, inset: lineWidth / 2, closed: true)
+                    .fill(
+                        LinearGradient(
+                            colors: [tint.opacity(fillOpacity), tint.opacity(0)], startPoint: .top, endPoint: .bottom))
+                SparklineShape(values: values, top: top, inset: lineWidth / 2, closed: false)
+                    .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
             }
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-            .chartYScale(domain: 0...max(1, values.max() ?? 1))
-            .banditoAnimation(.easeInOut(duration: 0.6), value: values)
         }
+    }
+}
+
+/// The line of a sparkline through its samples (monotone cubic, so it never overshoots a sample), or the area under
+/// it when `closed`. The samples span the width; 0 is the bottom, `top` the top.
+struct SparklineShape: Shape {
+    let values: [Double]
+    let top: Double
+    /// Room kept at the top and the bottom for the line's width.
+    var inset: CGFloat = 0
+    var closed: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let points = SparklineGeometry.points(values: values, top: top, in: rect.insetBy(dx: 0, dy: inset))
+        var path = Path()
+        guard let first = points.first else { return path }
+        path.move(to: first)
+        let tangents = SparklineGeometry.tangents(points)
+        for index in 1..<points.count {
+            let a = points[index - 1]
+            let b = points[index]
+            let third = (b.x - a.x) / 3
+            path.addCurve(
+                to: b, control1: CGPoint(x: a.x + third, y: a.y + tangents[index - 1] * third),
+                control2: CGPoint(x: b.x - third, y: b.y - tangents[index] * third))
+        }
+        if closed, let last = points.last {
+            path.addLine(to: CGPoint(x: last.x, y: rect.maxY))
+            path.addLine(to: CGPoint(x: first.x, y: rect.maxY))
+            path.closeSubpath()
+        }
+        return path
+    }
+}
+
+/// Where the samples of a sparkline go, and the slopes of a monotone curve through them (Fritsch–Carlson). Pure.
+enum SparklineGeometry {
+    static func points(values: [Double], top: Double, in rect: CGRect) -> [CGPoint] {
+        guard values.count > 1, top > 0 else { return [] }
+        let step = rect.width / CGFloat(values.count - 1)
+        return values.enumerated().map { index, value in
+            let share = min(max(value / top, 0), 1)
+            return CGPoint(x: rect.minX + CGFloat(index) * step, y: rect.maxY - CGFloat(share) * rect.height)
+        }
+    }
+
+    /// The slope (dy/dx) at each point, limited so the curve keeps the order of the samples.
+    static func tangents(_ points: [CGPoint]) -> [CGFloat] {
+        let count = points.count
+        guard count > 1 else { return Array(repeating: 0, count: count) }
+        var secants: [CGFloat] = []
+        for index in 0..<(count - 1) {
+            let dx = points[index + 1].x - points[index].x
+            secants.append(dx == 0 ? 0 : (points[index + 1].y - points[index].y) / dx)
+        }
+        var slopes = [CGFloat](repeating: 0, count: count)
+        slopes[0] = secants[0]
+        slopes[count - 1] = secants[count - 2]
+        if count > 2 {
+            for index in 1..<(count - 1) {
+                let left = secants[index - 1]
+                let right = secants[index]
+                slopes[index] = left * right <= 0 ? 0 : (left + right) / 2
+            }
+        }
+        for index in 0..<(count - 1) where secants[index] == 0 {
+            slopes[index] = 0
+            slopes[index + 1] = 0
+        }
+        for index in 0..<(count - 1) where secants[index] != 0 {
+            let a = slopes[index] / secants[index]
+            let b = slopes[index + 1] / secants[index]
+            let length = a * a + b * b
+            if length > 9 {
+                let scale = 3 / length.squareRoot()
+                slopes[index] = scale * a * secants[index]
+                slopes[index + 1] = scale * b * secants[index]
+            }
+        }
+        return slopes
     }
 }
 
@@ -640,5 +730,22 @@ struct PortBadge: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(Color.Bandito.ok.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+}
+
+/// The avatar of the agent that owns a process: its own look (color, face, picture) when the server knows the agent,
+/// else one drawn from the name, so the Server screens show the same faces as the sidebar.
+struct OwnerAgentAvatar: View {
+    let owner: ProcessOwnerRef
+    let server: ServerModel?
+    let fallbackName: String
+    let size: CGFloat
+
+    var body: some View {
+        if let server, let agent = server.agents.first(where: { $0.id == owner.id }) {
+            AgentAvatarView(agent: agent, server: server, size: size)
+        } else {
+            AgentAvatar(name: fallbackName, size: size)
+        }
     }
 }

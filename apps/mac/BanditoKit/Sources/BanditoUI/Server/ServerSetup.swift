@@ -165,8 +165,6 @@ struct ServerFeaturesCard: View {
     let server: ServerModel
     @Bindable var setup: SetupModel
     @Environment(Router.self) private var router
-    /// The whole log is open, not only its last lines. It is part of the page flow, so the page scrolls it.
-    @State private var showsFullLog = false
 
     var body: some View {
         ServerCard {
@@ -188,25 +186,10 @@ struct ServerFeaturesCard: View {
                 }
             }
             if let job = setup.job {
-                logPanel(job)
+                SetupJobPanel(setup: setup, job: job)
             }
             if let command = setup.passwordCommand {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(L10n.Setup.needsPassword)
-                        .font(BanditoFont.text(size: 12.5, weight: 400))
-                        .foregroundStyle(Color.Bandito.text2)
-                    Text(command)
-                        .font(BanditoFont.mono(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.text)
-                        .textSelection(.enabled)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    Button(L10n.Setup.openTerminal) {
-                        router.requestTerminalCommand(command)
-                    }
-                    .banditoButton(.quiet())
-                }
+                SetupPasswordNote(command: command)
             }
             if let failed = setup.job?.failedComponent {
                 Text(L10n.Setup.failed(component: failed))
@@ -291,33 +274,6 @@ struct ServerFeaturesCard: View {
     /// Lines shown before the person opens the whole log.
     static let logPreviewLines = 12
 
-    /// The newest lines of the job's log, and a button for the rest. No scroll of its own: a nested scroll area would
-    /// take the wheel from the overview page, which must scroll as one piece. Opened, every line sits in the page flow.
-    private func logPanel(_ job: SetupJob) -> some View {
-        let text = setup.log.isEmpty ? job.step : setup.log
-        let count = Self.logLines(text).count
-        return VStack(alignment: .leading, spacing: 8) {
-            Text(showsFullLog ? text : Self.logTail(text, lines: Self.logPreviewLines))
-                .font(BanditoFont.mono(size: 11, weight: 400))
-                .foregroundStyle(Color.Bandito.text2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
-            if count > Self.logPreviewLines {
-                Button {
-                    showsFullLog.toggle()
-                } label: {
-                    Text(showsFullLog ? L10n.Setup.collapseLog : L10n.Setup.showFullLog(count: count))
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-                .banditoButton(.quiet())
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
     /// The lines of `text`. The newline that ends the text does not start a line of its own.
     static func logLines(_ text: String) -> [Substring] {
         var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
@@ -335,6 +291,66 @@ struct ServerFeaturesCard: View {
         case .ready: L10n.Setup.ready
         case .missing: L10n.Setup.missing
         case .unsupported: L10n.Setup.unsupported
+        }
+    }
+}
+
+/// The progress of an install job: its newest log lines, and a button for the whole log. Shared by Server → Capabilities
+/// and the server screen, which installs the programs it lacks.
+struct SetupJobPanel: View {
+    let setup: SetupModel
+    let job: SetupJob
+    /// The whole log is open, not only its last lines. It is part of the page flow, so the page scrolls it.
+    @State private var showsFullLog = false
+
+    var body: some View {
+        let text = setup.log.isEmpty ? job.step : setup.log
+        let count = ServerFeaturesCard.logLines(text).count
+        VStack(alignment: .leading, spacing: 8) {
+            Text(showsFullLog ? text : ServerFeaturesCard.logTail(text, lines: ServerFeaturesCard.logPreviewLines))
+                .font(BanditoFont.mono(size: 11, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+            if count > ServerFeaturesCard.logPreviewLines {
+                Button {
+                    showsFullLog.toggle()
+                } label: {
+                    Text(showsFullLog ? L10n.Setup.collapseLog : L10n.Setup.showFullLog(count: count))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .banditoButton(.quiet())
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+/// The command an install needs an administrator password for, with the button that opens a terminal of the app.
+/// The user types the password there, never in Bandito.
+struct SetupPasswordNote: View {
+    let command: String
+    @Environment(Router.self) private var router
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.Setup.needsPassword)
+                .font(BanditoFont.text(size: 12.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+            Text(command)
+                .font(BanditoFont.mono(size: 12, weight: 400))
+                .foregroundStyle(Color.Bandito.text)
+                .textSelection(.enabled)
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Button(L10n.Setup.openTerminal) {
+                router.requestTerminalCommand(command)
+            }
+            .banditoButton(.quiet())
         }
     }
 }

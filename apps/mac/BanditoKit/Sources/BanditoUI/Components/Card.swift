@@ -1,8 +1,7 @@
 import BanditoDesign
 import SwiftUI
 
-/// Card surface: a solid surface1 fill, a hairline border that fades from top to bottom, and a light line along
-/// the top inside edge. Selected cards add a signal tint and a cream border. Apply with `.banditoCard(selected:hoverLift:)`.
+/// Card surface: a solid surface1 fill, a hairline border, and a light line along the top inside edge. Selected cards add a signal tint and a cream border. Apply with `.banditoCard(selected:hoverLift:)`.
 public struct BanditoCardModifier: ViewModifier {
     /// Whether the card is in the selected state (signal tint and cream border).
     public var selected: Bool
@@ -22,12 +21,9 @@ public struct BanditoCardModifier: ViewModifier {
     public func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
         let lifted = hoverLift && hovered
-        let border: AnyShapeStyle = selected
-            ? AnyShapeStyle(Color.Bandito.text.opacity(0.45))
-            : AnyShapeStyle(
-                LinearGradient(
-                    colors: [Color.Bandito.text.opacity(0.09), Color.Bandito.text.opacity(0.04)],
-                    startPoint: .top, endPoint: .bottom))
+        // Solid: a gradient stroke is painted by the processor over the whole card, again whenever the card is drawn
+        // (about twice the cost of the card itself in a list). The 8% hairline reads the same on the dark surface.
+        let border = Color.Bandito.text.opacity(selected ? 0.45 : 0.08)
         content
             .background {
                 ZStack {

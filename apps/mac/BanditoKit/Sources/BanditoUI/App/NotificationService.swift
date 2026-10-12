@@ -7,7 +7,11 @@ import os
 public enum AgentNotice: Equatable, Sendable {
     /// The agent waits for an approval. `command` is the full command, which the notification never shows
     /// (only the approval's short title), so multi-line or long commands are reviewed in the app.
-    case approval(agentID: String, agentName: String, approvalID: String, title: String, command: String? = nil)
+    /// `reviewOnly`: the request must be read on its own card (a creation of an agent), so the notification never
+    /// offers Allow, whatever its text looks like.
+    case approval(
+        agentID: String, agentName: String, approvalID: String, title: String, command: String? = nil,
+        reviewOnly: Bool = false)
     /// The agent finished a turn.
     case finished(agentID: String, agentName: String)
     /// The agent's turn failed.
@@ -17,7 +21,17 @@ public enum AgentNotice: Equatable, Sendable {
 
     public var agentID: String {
         switch self {
-        case .approval(let id, _, _, _, _), .finished(let id, _), .failed(let id, _, _), .resolveFailed(let id): id
+        case .approval(let id, _, _, _, _, _), .finished(let id, _), .failed(let id, _, _), .resolveFailed(let id): id
+        }
+    }
+
+    /// The kind a server's notification scope is checked against. An answer that did not go through concerns a
+    /// waiting approval, so it counts as `needsYou`.
+    public var kind: ServerNoticeKind {
+        switch self {
+        case .approval, .resolveFailed: .needsYou
+        case .finished: .finished
+        case .failed: .failed
         }
     }
 }
@@ -75,6 +89,8 @@ public struct NotificationContent: Equatable, Sendable {
     public var agentID: String
     /// The approval the buttons answer, for approval notices. Also the notification's identifier.
     public var approvalID: String?
+    /// The server the notice came from, when the app knows it (`handle(_:serverID:)` sets it).
+    public var serverID: UUID?
 
     /// Allow and Deny.
     public static let approvalCategory = "bandito.approval"
@@ -93,19 +109,20 @@ public struct NotificationContent: Equatable, Sendable {
     }
 
     /// The category for an approval. No command means the plain one (Allow and Deny).
-    public static func approvalCategoryID(command: String?) -> String {
+    public static func approvalCategoryID(command: String?, reviewOnly: Bool = false) -> String {
+        if reviewOnly { return approvalReviewCategory }
         guard let command, needsReview(command) else { return approvalCategory }
         return approvalReviewCategory
     }
 
     public static func make(_ notice: AgentNotice) -> NotificationContent {
         switch notice {
-        case .approval(let agentID, let agentName, let approvalID, let title, let command):
-            let reviewed = command.map(needsReview) ?? false
+        case .approval(let agentID, let agentName, let approvalID, let title, let command, let reviewOnly):
+            let reviewed = reviewOnly || (command.map(needsReview) ?? false)
             return NotificationContent(
                 title: L10n.Notify.needsApproval(name: agentName),
                 body: reviewed ? reviewBody(command ?? "") : title,
-                categoryID: approvalCategoryID(command: command), agentID: agentID, approvalID: approvalID)
+                categoryID: approvalCategoryID(command: command, reviewOnly: reviewOnly), agentID: agentID, approvalID: approvalID)
         case .finished(let agentID, let agentName):
             return NotificationContent(
                 title: L10n.Notify.finished(name: agentName), body: "",
@@ -163,27 +180,34 @@ public final class NotificationService {
     private let windowActive: () -> Bool
     private let selectedAgentID: () -> String?
     private let resolve: (_ agentID: String, _ approvalID: String, _ decision: Decision) async throws -> Void
+    private let scope: (UUID) -> NotificationScope
 
+    /// `scope` says which notifications each server sends (`ServerConfig.notifications`). The default lets all through.
     public init(
         sink: Sink,
         settings: @escaping () -> NotificationSettings,
         windowActive: @escaping () -> Bool,
         selectedAgentID: @escaping () -> String?,
-        resolve: @escaping (_ agentID: String, _ approvalID: String, _ decision: Decision) async throws -> Void
+        resolve: @escaping (_ agentID: String, _ approvalID: String, _ decision: Decision) async throws -> Void,
+        scope: @escaping (UUID) -> NotificationScope = { _ in .all }
     ) {
         self.sink = sink
         self.settings = settings
         self.windowActive = windowActive
         self.selectedAgentID = selectedAgentID
         self.resolve = resolve
+        self.scope = scope
     }
 
-    /// Shows the notice when the rules allow it.
-    public func handle(_ notice: AgentNotice) {
+    /// Shows the notice when the rules allow it. With a `serverID`, the server's notification scope is checked first.
+    public func handle(_ notice: AgentNotice, serverID: UUID? = nil) {
+        if let serverID, !scope(serverID).allows(notice.kind) { return }
         guard NotificationRules.shouldDeliver(
             notice, settings: settings(), windowActive: windowActive(), selectedAgentID: selectedAgentID())
         else { return }
-        sink.post(NotificationContent.make(notice))
+        var content = NotificationContent.make(notice)
+        content.serverID = serverID
+        sink.post(content)
     }
 
     /// A button on an approval notification was pressed. Clicks on the body answer nothing.

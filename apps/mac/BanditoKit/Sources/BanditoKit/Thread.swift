@@ -90,6 +90,15 @@ public struct ToolRow: Sendable, Hashable {
     public var output: String?
     /// Unix milliseconds when the call started; `nil` when the event did not say.
     public var startedAt: Int64? = nil
+
+    public init(callId: String, tool: String, title: String, ok: Bool? = nil, output: String? = nil, startedAt: Int64? = nil) {
+        self.callId = callId
+        self.tool = tool
+        self.title = title
+        self.ok = ok
+        self.output = output
+        self.startedAt = startedAt
+    }
 }
 
 public enum ApprovalState: Sendable, Hashable {
@@ -108,6 +117,12 @@ public struct ApprovalRow: Sendable, Hashable {
     public var diff: String?
     public var reason: String
     public var state: ApprovalState
+    /// What the answer is about, for a question the daemon asks itself (`agent.create`); nil for the rest.
+    public var input: JSONValue? = nil
+
+    /// True for a request that is allowed only on its own card, after the person has read all of it: a request to
+    /// create an agent. A shortcut, the menu bar, a notification or a message from another client never allows it.
+    public var mustBeReadOnItsCard: Bool { tool == AgentCreateSummary.tool }
 }
 
 /// The visible state of one agent, folded from its events.
@@ -133,12 +148,17 @@ public struct AgentThread: Sendable, Hashable {
     private var resentSeqs: Set<Int64> = []
     /// Reactions by the `seq` of the message they are on.
     public private(set) var reactions: [Int64: MessageReactions] = [:]
+    /// The buttons the agent offers now (see docs/ARCHITECTURE.md#quick-replies): the newest set, until the person
+    /// writes something themselves, a new turn begins, or a newer set replaces it.
+    public private(set) var quickReplies: QuickReplies?
     /// The message each reply answers: `seq` of the reply to `seq` of the original.
     public private(set) var replies: [Int64: Int64] = [:]
     /// The files each message carries, by its `seq`.
     public private(set) var attachments: [Int64: [MessageAttachment]] = [:]
     /// The `@` mentions each message carries (feature `mentions`), by its `seq`: chips under the message.
     public private(set) var mentions: [Int64: [Mention]] = [:]
+    /// The messages the person sent by pressing a quick-reply button the agent offered, by `seq`: a quiet mark under them.
+    public private(set) var viaButton: Set<Int64> = []
     /// How each form ended, by form id. Kept apart from the rows because a page of history may hold the answer and not
     /// the question (the question comes with an older page).
     private var formOutcomes: [String: FormOutcome] = [:]
@@ -231,20 +251,25 @@ public struct AgentThread: Sendable, Hashable {
         }
         switch e.body {
         case .turnStarted(_, _, let messageSeq):
+            // The conversation moved on: buttons of an earlier turn are not an answer to anything now.
+            quickReplies = nil
             turnRunning = true
             turnStartedAt = e.ts
             if let messageSeq { startedAt[messageSeq] = e.seq }
         case .messageDropped(let seq, _):
             droppedAt[seq] = e.seq
-        case .messageUser(let text, let source, let from, let replyTo, let files, let queued, let mentioned):
+        case .messageUser(let text, let source, let from, let replyTo, let files, let queued, let mentioned, let pressed):
             if queued, source != .system, e.seq > 0 { queuedSeqs.insert(e.seq) }
             if source != .system {
                 if let replyTo { replies[e.seq] = replyTo }
                 if !files.isEmpty { attachments[e.seq] = files }
                 if !mentioned.isEmpty { mentions[e.seq] = mentioned }
+                if pressed { viaButton.insert(e.seq) }
             }
             switch source {
             case .user:
+                // The person wrote for themselves (or pressed a button, which sends its reply as a message).
+                quickReplies = nil
                 dropStreaming()
                 items.append(.user(id: e.id, text: text, source: source, from: nil, ts: e.ts, attachments: files))
             case .crew:
@@ -290,13 +315,13 @@ public struct AgentThread: Sendable, Hashable {
             } else {
                 items.append(.tool(ToolRow(callId: callId, tool: "tool", title: "Tool", ok: ok, output: output)))
             }
-        case .approvalRequested(let id, _, let tool, let title, let command, let diff, let reason):
+        case .approvalRequested(let id, _, let tool, let title, let command, let diff, let reason, let input):
             finalizeStreaming(e)
             items.append(
                 .approval(
                     ApprovalRow(
                         approvalId: id, tool: tool, title: title, command: command, diff: diff, reason: reason,
-                        state: .pending)))
+                        state: .pending, input: input)))
         case .approvalResolved(let id, let decision, let by, let remember):
             if let i = items.firstIndex(where: { $0.id == "approval-\(id)" }), case .approval(var row) = items[i] {
                 row.state = decision == .allow ? .approved(by: by, remember: remember) : .denied(by: by)
@@ -351,6 +376,7 @@ public struct AgentThread: Sendable, Hashable {
             }
             close(form: formId, with: outcome)
             if case .replied(let text) = outcome, !text.isEmpty {
+                quickReplies = nil
                 // The person's reply is a message of theirs in the thread. It has no `seq` of its own (it is not a
                 // `message.user` event), so nothing offers a reaction or a quote on it.
                 let id = "reply-\(formId)"
@@ -374,9 +400,24 @@ public struct AgentThread: Sendable, Hashable {
             case .declined: close(connect: requestId, with: .declined)
             case .expired: close(connect: requestId, with: .expired)
             }
+        case .agentQuickReplies(let buttons, let link, let progress):
+            // Streamed text goes on under the buttons: they are state of the thread, not a row in it.
+            let shown = buttons.filter { !$0.label.isEmpty && !$0.reply.isEmpty }
+            quickReplies =
+                shown.isEmpty
+                ? nil
+                : QuickReplies(
+                    buttons: shown, link: link, progress: progress.flatMap { $0.isValid ? $0 : nil }, seq: e.seq, ts: e.ts)
+        case .agentSpawned(_, let name, _, _, _, let approvedBy):
+            finalizeStreaming(e)
+            let text = approvedBy == .user ? L10n.Thread.agentCreated(name: name) : L10n.Thread.agentCreatedUnasked(name: name)
+            items.append(.note(id: e.id, text: text, kind: .crew, ts: e.ts))
+        case .agentCreatedBy(_, let byName, _):
+            finalizeStreaming(e)
+            items.append(.note(id: e.id, text: L10n.Thread.createdBy(name: byName), kind: .crew, ts: e.ts))
         case .reaction(let seq, let emoji, let by):
             reactions[seq, default: MessageReactions()].set(by: by, emoji: emoji, eventSeq: e.seq)
-        case .usageLimits, .agentChanged, .telegramChanged, .unknown:
+        case .usageLimits, .agentChanged, .telegramChanged, .serverSettingsChanged, .unknown:
             // Not part of a thread: the team's agent list reads its own records, Telegram has its own section.
             break
         }
@@ -463,6 +504,7 @@ public struct AgentThread: Sendable, Hashable {
         for (seq, to) in other.replies where replies[seq] == nil { replies[seq] = to }
         for (seq, files) in other.attachments where attachments[seq] == nil { attachments[seq] = files }
         for (seq, list) in other.mentions where mentions[seq] == nil { mentions[seq] = list }
+        viaButton.formUnion(other.viaButton)
         for (id, outcome) in other.formOutcomes where formOutcomes[id] == nil { formOutcomes[id] = outcome }
         for (id, outcome) in other.connectOutcomes where connectOutcomes[id] == nil { connectOutcomes[id] = outcome }
         for (i, item) in items.enumerated() {

@@ -225,6 +225,13 @@ struct DetailsTab: View {
                         label: L10n.Inspector.approvals, placeholder: agent.approvalMode.title)
                         .frame(maxWidth: 260)
                 }
+                Text(agent.approvalMode.hint)
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 2)
+                    .padding(.bottom, 10)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.Capability.title)
                         .font(BanditoFont.text(size: 12.5, weight: 400))
@@ -1075,6 +1082,15 @@ extension ApprovalMode {
         case .risky: L10n.ApprovalMode.risky
         case .always: L10n.ApprovalMode.always
         case .never: L10n.ApprovalMode.never
+        }
+    }
+
+    /// One line under the choice: what the mode asks about.
+    var hint: String {
+        switch self {
+        case .risky: L10n.ApprovalMode.Hint.risky
+        case .always: L10n.ApprovalMode.Hint.always
+        case .never: L10n.ApprovalMode.Hint.never
         }
     }
 }

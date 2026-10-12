@@ -84,8 +84,9 @@ async fn leave_safe_mode(app: &App) -> Result<(), RpcError> {
         tokio::time::sleep(RESTART_AFTER_REPLY).await;
         let record = backup::read_safe_mode(&home);
         let _ = backup::clear_safe_mode(&home);
+        // A handover (the service manager stopped the command with the daemon) is a restart that went on.
         let why = match tokio::task::spawn_blocking(move || update::run_restart(&restart)).await {
-            Ok(Ok(())) => return,
+            Ok(Ok(_)) => return,
             Ok(Err(e)) => format!("{e:#}"),
             Err(e) => e.to_string(),
         };
@@ -140,8 +141,9 @@ async fn restore(home: &Path, name: String) -> Result<String, RpcError> {
     };
     tokio::spawn(async move {
         tokio::time::sleep(RESTART_AFTER_REPLY).await;
+        // A handover (the service manager stopped the command with the daemon) is a restart that went on.
         let why = match tokio::task::spawn_blocking(move || update::run_restart(&restart)).await {
-            Ok(Ok(())) => return,
+            Ok(Ok(_)) => return,
             Ok(Err(e)) => format!("{e:#}"),
             Err(e) => e.to_string(),
         };

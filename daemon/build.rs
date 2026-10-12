@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     println!("cargo:rerun-if-changed=skills");
+    // The store embeds the migrations with `include_str!` (store/mod.rs). Cargo tracks only the files it has read,
+    // so a new migration file would not rebuild the crate without this: the folder is watched, a new file reruns this.
+    println!("cargo:rerun-if-changed=migrations");
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"));
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
     let root = manifest.join("skills");

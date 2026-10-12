@@ -39,7 +39,7 @@ Each agent has one status. Agents that need you are sorted to the top and get th
 ## Sidebar: pin, delete, pause
 
 <!-- id: team-sidebar-menu; covers: -->
-Pinned agents are listed at the top. The context menu of an agent has Pin (Закрепить) or Unpin (Открепить), Pause (Приостановить) or Resume (Продолжить), and Delete… (Удалить…). A paused agent shows a pause mark next to its name, and its avatar sleeps.
+Pinned agents are listed at the top. The context menu of an agent has Pin (Закрепить) or Unpin (Открепить), Pause (Приостановить) or Resume (Продолжить), and Move to… (Перенести на…) when another connected server takes moved agents, and Delete… (Удалить…). A paused agent shows a pause mark next to its name, and its avatar sleeps.
 Где: Team → sidebar → agent → right click
 1. Right-click an agent and choose Pause (Приостановить). The mark appears and the avatar goes to sleep.
 2. Right-click it again and choose Resume (Продолжить) to bring it back.
@@ -53,6 +53,15 @@ Pause all agents (Пауза для всех агентов) pauses every agent 
 2. To pause every agent, press ⌘⇧P or choose Agent → Pause all agents. Choose it again to resume them all.
 3. To resume one agent, click Resume (Продолжить) in the same place.
 4. On a server with an older Bandito the pause items are disabled (see [troubleshooting.md](troubleshooting.md)).
+
+## Move an agent to another server (Перенести на…)
+
+<!-- id: team-move-agent; covers: sheet:moveAgent -->
+Move to… (Перенести на…) in the agent's menu moves it to another connected server of yours that takes moved agents. Its settings, memory and chat history move; the project folder (the code) does not, so you choose the project folder on the new server: a new folder in the agents folder, or an existing one. The agent is paused on the old server while it moves. Progress goes through packing, copying, unpacking and done. Cancel (Остановить перенос) stops it before the new server has the agent. A failed move leaves the agent on the old server as it was, and Try again (Повторить) starts it over.
+Где: Team → sidebar → agent → right click → Move to… (Перенести на…). The item is there only when another connected server takes moved agents.
+1. Right-click an agent and choose Move to… (Перенести на…). Pick the server and the project folder there, then Move (Перенести).
+2. Wait for Done (Готово). Then choose Done to open the agent on the new server.
+3. On the old server the agent shows Moved to <server> (Перенесён на <сервер>) under its header, paused. Open there (Открыть там) goes to it; Delete here (Удалить здесь) deletes the copy on the old server after a confirmation.
 
 ## Team home (⌘0)
 
@@ -115,6 +124,22 @@ Hear an agent's answer. The voice follows the language of the text. Markdown is 
 Где: the ⋯ menu of an agent's message (or right-click) → Read aloud (Прочитать вслух); Inspector → Details → Read replies aloud (Читать ответы вслух)
 1. Point at an agent's message, press ⋯ and choose Read aloud. Choose Stop reading (Остановить) to stop.
 2. To hear every new finished reply of one agent, turn on Read replies aloud in its Details. It is off by default and kept on this Mac, per agent. A reply is read once, when its turn has ended. It is read only while Bandito is the active app; opening a thread reads nothing from its history.
+
+## Links in a message (Ссылки в сообщениях)
+
+<!-- id: team-message-links; covers: -->
+Web addresses and file paths in a message are links. A file opens in the workbench panel beside the chat, a folder in Files, and ⌥-click shows a file in Files. A web address opens in the built-in browser in the panel, unless Settings say otherwise (see Open links from chat in). ⌘-click opens it in the browser of the Mac; sign-in pages (Google, Microsoft, Apple, GitHub login, Composio, Auth0, any login or OAuth page) open in the browser of the Mac by default. ⌘ reverses every link, sign-in pages included. When the pointer is over a message with a web address, a hint under the message says where a click opens the link and where ⌘ takes it: hold ⌘ and the hint turns round. The first web link you click on this Mac shows a note with the same explanation; it goes away by itself and does not come back.
+Где: Team → agent thread → a message with a link. Hover over the message to see the hint
+1. Click a web address: it opens in the built-in browser. Hold ⌘ and click: it opens in the browser of the Mac.
+2. To change which one a click uses, open Settings (⌘,) → General (Общие) → Open links from chat in (Ссылки из чата открывать).
+
+## When a message was sent (Когда отправлено)
+
+<!-- id: team-message-time; covers: -->
+Point at a message, yours or the agent's, and the row of its actions shows when it was sent: quietly, at the end of the row, without moving the text. Today it reads сегодня, 14:22:05; yesterday вчера, 09:03:12; earlier this year 3 окт., 22:14:37; in an older year 11 окт. 2025, 22:14:37. The clock is 24-hour and shows the seconds. Hover over the time for a moment to see the full date with the weekday, the year and the seconds.
+Где: Team → agent thread → hover over a message; the time is at the end of the row under it
+1. Point at a message. The time appears under it, at the end of the row of actions (on the agent's message after the ⋯ button, on yours before the icons).
+2. Hover over the time: a tooltip gives the whole date, for example Sunday, October 11, 2026, 22:14:37.
 
 ## Attach a file to a message
 
@@ -207,6 +232,26 @@ When an agent needs a service from the catalog (GitHub, Notion, Composio and so 
 3. Click Not now (Не сейчас) to refuse: the line says "You did not connect GitHub" (Вы не стали подключать GitHub), and the agent is told so.
 4. A request that nobody answered for a day, or that was open when the server restarted, ends as "The request for GitHub timed out" (Запрос на GitHub истёк). A server older than this build shows no card.
 
+## An agent asks to create another agent
+
+<!-- id: team-agent-create; covers: -->
+The main agent of the crew creates agents when you ask for one: "make an agent that checks my mail every 5 minutes". A card appears in its thread, "Forge wants to create an agent" (Forge хочет создать агента), with everything the new agent gets: Role (Роль), Runs on (Работает на), Asks you (Спрашивает вас), Can use (Может использовать), Services (Сервисы), Runs (Запуски), Folder (Папка) and Instructions (Инструкции). A new agent never gets more than the one that creates it: not a capability or a service it lacks, and it asks you at least as often.
+Где: Team → main agent's thread → card "wants to create an agent"
+1. Read the rows. Nothing exists yet.
+2. Click Create (Создать) to make the agent: it has no shortcut. When the instructions or a run's text is long it sits in a box that scrolls, and Create stays grey, with "Scroll the text above to its end to allow" (Чтобы разрешить, долистайте текст выше до конца), until you have scrolled every such box to its end. The labels say how long each text is (Instructions · 115 characters · 1 line). A run shows when it starts, its name and its whole text. The agent appears in the sidebar, and its thread says "Created by Forge" (Создан агентом Forge). The main agent then sets its regular runs and gives it its first task.
+3. Click Decline (Отклонить) or press Esc (⎋) to refuse. The main agent is told not to try again unless you ask.
+4. The card folds into a line: You allowed creating “Mailer” (Вы разрешили создать «Mailer»), You declined creating “Mailer” (Вы отклонили создание «Mailer»), or The request to create “Mailer” timed out (Запрос на создание «Mailer» истёк).
+5. If the main agent asks for nothing (its approvals are set to About nothing), the agent is made at once, and the thread says "Created the agent “Mailer” without asking" (Создан агент «Mailer» без вопроса).
+
+## Quick replies under a message
+
+<!-- id: team-quick-replies; covers: -->
+When an agent waits for you to do something outside the chat, or offers choices, it shows buttons under its last message instead of waiting for you to type: for example Done, it is connected (Готово, подключил) after you connect a mailbox, or buttons for options 1 and 2. A button with an arrow (↗) opens a page, such as the settings you have to change. "2 of 6" (2 из 6) says where you are in a long setup.
+Где: Team → agent thread → buttons above the message field
+1. Click a button to answer. Its text is sent as your message, and the buttons disappear. When what a button sends is not its label, the text stands under the label in small print, and the whole of it shows when you point at the button. The message you sent this way carries the mark "answered with a button" (ответ кнопкой), and the agent knows it was its own button. A button with an arrow shows the site it opens next to its name.
+2. Click the button with the arrow to open the page. Web links open as links in messages do (see Links in a message).
+3. Write your own message instead and the buttons go away too. They also go away when the agent starts another turn, and a newer set replaces an older one.
+
 ## Go to who needs you (К тому, кто ждёт вас)
 
 <!-- id: team-needs-you; covers: -->
@@ -245,7 +290,7 @@ The main settings of the agent. Each row changes the agent for the next message.
 1. Runs on (Работает на): choose another runtime, Claude Code, Codex or Grok. Memory and tasks move with the agent.
 2. Model (Модель): type a model name, or click Default (По умолчанию) to use the runtime's default.
 3. If the limit runs out (Если лимит кончится): choose Don't switch (Не переключаться) or another runtime. The agent continues there until the first limit resets.
-4. Approvals (Одобрения): choose Risky only (Только рискованное), Everything (Всё подряд) or Nothing (Ничего). See [security.md](security.md).
+4. Ask for permission (Спрашивать разрешение): choose Only the risky ones (Только о рискованном), About everything (Обо всём) or About nothing (Ни о чём). See [security.md](security.md).
 5. Project (Проект): the folder the agent works in on the server. Change it with the folder picker of the row.
 6. Effort (Усилие): choose Low, Medium, High, Very high or Max. Higher levels are smarter on hard tasks but use the limit faster.
 7. Instructions (INSTRUCTIONS): edit the text, then click Save (Сохранить).

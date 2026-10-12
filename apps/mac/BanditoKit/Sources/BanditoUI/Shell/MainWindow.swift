@@ -1,4 +1,5 @@
 import BanditoDesign
+import BanditoKit
 import BanditoL10n
 import SwiftUI
 
@@ -29,9 +30,12 @@ struct MainWindow: View {
                 PendingDevicesBanner()
                 ModeArea()
             }
+            // The title strip of the main column: at the column's root, like the sidebar's, so it runs up under the
+            // traffic lights. The mode's ground does not take clicks, so the strip gets the empty space.
+            .titleBarBand()
             .overlay { SwipeHint(progress: swipeProgress, symbol: swipeSymbol) }
         }
-        .frame(minWidth: 900, minHeight: 600)
+        .windowRoot(minWidth: 900, minHeight: 600)
         .background(Color.Bandito.bg)
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: router.sidebarVisible)
         .onTwoFingerSwipe(
@@ -77,11 +81,16 @@ struct MainWindow: View {
             }
         }
         .banditoAnimation(BanditoMotion.ease, value: router.botNotice?.id)
-        .overlayPreferenceValue(TourAnchorKey.self) { anchors in
-            if onboarding.tourRequested {
-                TourLayer(anchors: anchors)
+        .overlay(alignment: .bottom) {
+            if let notice = router.chatLinkNotice {
+                ChatLinkNoticeToast(notice: notice) { router.chatLinkNotice = nil }
+                    .padding(.bottom, 18)
+                    .padding(.horizontal, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .banditoAnimation(BanditoMotion.ease, value: router.chatLinkNotice?.id)
+        .modifier(TourOverlay(active: onboarding.tourRequested))
         .task {
             // Only with a session: without one nobody can ask for pending devices, and no device key is needed yet.
             guard hub.signedIn else { return }
@@ -113,7 +122,10 @@ struct MainWindow: View {
     }
 
     private var browserModel: BrowserModel? {
-        app.currentServer.map { BrowserStore.shared.model(for: $0) }
+        app.currentServer.map {
+            BrowserStore.shared.model(
+                for: $0, workspace: WorkspaceSelections.shared.selection(mode: "browser", server: $0).selectedID)
+        }
     }
 
     /// Whether the swipe has anywhere to go: a page with no earlier page, or Files at its first folder, shows no arrow.
@@ -164,6 +176,31 @@ struct MainWindow: View {
             InstallSharedSheet(shareID: shareID, server: app.currentServer)
         case .myShares:
             MySharesView(servers: app.servers)
+        case .moveAgent(let agentID, let serverID):
+            if let source = app.servers.first(where: { $0.id == serverID }),
+                let agent = source.agents.first(where: { $0.id == agentID })
+            {
+                MoveAgentSheet(
+                    source: source, agent: agent,
+                    targets: MigrationTargets.eligible(source: source, among: app.servers))
+            }
+        }
+    }
+}
+
+/// The tour over the window. Only while it runs are the anchors of its targets collected: reading them merged a
+/// preference through every view of the window at every layout (a few percent of the main thread at an agent switch).
+/// Starting or ending the tour builds the window again, once.
+private struct TourOverlay: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        if active {
+            content
+                .overlayPreferenceValue(TourAnchorKey.self) { anchors in TourLayer(anchors: anchors) }
+                .environment(\.tourActive, true)
+        } else {
+            content
         }
     }
 }
@@ -171,22 +208,34 @@ struct MainWindow: View {
 /// The main area: the view of the current mode, cross-fading when the mode changes.
 private struct ModeArea: View {
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
 
     var body: some View {
         ZStack {
-            modeView(for: router.mode)
-                .id(router.mode)
-                .transition(.opacity)
+            // Team mode stays built under the other modes, for the last two servers (`KeptMode`,
+            // `Router.teamServers`): coming back to it builds nothing (it cost 70–130 ms at each return).
+            let front = app.currentServer?.id.uuidString
+            ForEach(TeamKeeping.built(kept: router.teamServers, front: front, teamShown: router.mode == .team), id: \.self) {
+                serverID in
+                TeamMode(serverID: serverID)
+                    .keptMode(hidden: router.mode != .team || serverID != front)
+            }
+            if router.mode != .team {
+                modeView(for: router.mode)
+                    .id(router.mode)
+                    .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background { ContentBackdrop().ignoresSafeArea() }
+        // The backdrop takes no clicks: the title strip behind the main column gets the empty space.
+        .background { ContentBackdrop().ignoresSafeArea().allowsHitTesting(false) }
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: router.mode)
     }
 
     @ViewBuilder
     private func modeView(for mode: AppMode) -> some View {
         switch mode {
-        case .team: TeamMode()
+        case .team: TeamMode(serverID: app.currentServer?.id.uuidString)
         case .files: FilesMode()
         case .terminals: TerminalsMode()
         case .browser: BrowserMode()
@@ -198,23 +247,77 @@ private struct ModeArea: View {
 }
 
 /// The main area's backdrop: the warm background, a faint signal glow hanging over the top edge, and a slight
-/// darkening toward the bottom. Static: nothing here animates or redraws per frame.
+/// darkening toward the bottom. Static: nothing here animates or redraws per frame. The gradients are Core Animation
+/// layers: drawn by SwiftUI they were painted by the processor into the window's picture, again whenever the content
+/// beside them changed (a mode switch repainted a radial gradient the size of the window, about 10 ms).
 private struct ContentBackdrop: View {
     var body: some View {
+        #if os(macOS)
+        BackdropLayers()
+        #else
         ZStack {
             Color.Bandito.bg
             RadialGradient(
                 colors: [Color.Bandito.signal.opacity(0.09), Color.Bandito.signal.opacity(0)],
-                center: UnitPoint(x: 0.5, y: -0.05),
-                startRadius: 0,
-                endRadius: 700)
+                center: UnitPoint(x: 0.5, y: -0.05), startRadius: 0, endRadius: BackdropLayers.glowRadius)
             LinearGradient(
-                colors: [Color.black.opacity(0), Color.black.opacity(0.18)],
-                startPoint: .top,
-                endPoint: .bottom)
+                colors: [Color.black.opacity(0), Color.black.opacity(0.18)], startPoint: .top, endPoint: .bottom)
+        }
+        #endif
+    }
+}
+
+#if os(macOS)
+/// The backdrop as layers: the background colour, the radial glow, the darkening.
+private struct BackdropLayers: NSViewRepresentable {
+    /// The radius of the glow, in points.
+    static let glowRadius: CGFloat = 700
+
+    func makeNSView(context: Context) -> BackdropView { BackdropView() }
+    func updateNSView(_ view: BackdropView, context: Context) {}
+
+    final class BackdropView: NSView {
+        private let glow = CAGradientLayer()
+        private let shade = CAGradientLayer()
+
+        init() {
+            super.init(frame: .zero)
+            wantsLayer = true
+            let signal = NSColor(Color.Bandito.signal)
+            layer?.backgroundColor = NSColor(Color.Bandito.bg).cgColor
+            glow.type = .radial
+            glow.colors = [signal.withAlphaComponent(0.09).cgColor, signal.withAlphaComponent(0).cgColor]
+            shade.colors = [NSColor.black.withAlphaComponent(0).cgColor, NSColor.black.withAlphaComponent(0.18).cgColor]
+            // Top to bottom (the view's layer is not flipped: y grows upward).
+            shade.startPoint = CGPoint(x: 0.5, y: 1)
+            shade.endPoint = CGPoint(x: 0.5, y: 0)
+            for gradient in [glow, shade] {
+                gradient.actions = ["bounds": NSNull(), "position": NSNull(), "startPoint": NSNull(), "endPoint": NSNull()]
+                layer?.addSublayer(gradient)
+            }
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError("not used") }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func layout() {
+            super.layout()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            shade.frame = bounds
+            glow.frame = bounds
+            // The centre hangs just above the top edge (unit y 1.05 from the bottom); the end point sets the radius.
+            let width = max(bounds.width, 1)
+            let height = max(bounds.height, 1)
+            glow.startPoint = CGPoint(x: 0.5, y: 1.05)
+            glow.endPoint = CGPoint(x: 0.5 + BackdropLayers.glowRadius / width, y: 1.05 + BackdropLayers.glowRadius / height)
+            CATransaction.commit()
         }
     }
 }
+#endif
 
 /// The arrow at the edge of the main area while a swipe is under way: it grows and brightens as the swipe nears the
 /// distance that commits it, and says where the swipe goes (a page back, a folder back, the team home).

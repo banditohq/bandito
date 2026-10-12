@@ -661,6 +661,9 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
         sup.recover()?;
     }
     let app = App::new_in_home(sup.clone(), agents_root, App::default_files(), home.to_path_buf());
+    // Archives and uploads of an agent move that an earlier daemon left are removed once they are an hour old.
+    rpc::migrate::cleanup_at_start(home);
+    rpc::migrate::spawn_cleanup(app.clone());
     if let Some(why) = &safe_mode {
         app.enter_safe_mode(why);
     }
@@ -695,8 +698,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
         // Polls the Telegram bot when a token is set (never in safe mode: the database is not the real one).
         app.telegram.start();
     }
-    // Stops server screens that nobody has used for 30 minutes (see docs/ARCHITECTURE.md#screen).
-    app.screens.spawn_idle_reaper();
+    // Stops server screens that nobody has used for `screen_idle_minutes` (see docs/ARCHITECTURE.md#screen).
+    app.screens.spawn_idle_reaper(app.sup.hub().store.clone());
 
     {
         let sup = sup.clone();
@@ -767,9 +770,13 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     }
 
     // Looks for a newer release now and then. Nothing is installed here (docs/ARCHITECTURE.md#self-update).
-    bandito::update::spawn_background_check(rpc::VERSION, |info| {
+    bandito::update::spawn_background_check(rpc::VERSION, sup.hub().store.clone(), |info| {
         tracing::info!(current = %info.current, latest = %info.latest, "a newer Bandito release is available");
     });
+    // With `auto_update = install`, a newer release is installed at night when no agent runs a turn.
+    if safe_mode.is_none() {
+        bandito::update::spawn_auto_install(sup.hub().store.clone(), sup.hub().turns().clone(), rpc::VERSION);
+    }
 
     tracing::info!(version = rpc::VERSION, socket = %sock.display(), %listen, "bandito daemon is running");
     shutdown_signal().await;

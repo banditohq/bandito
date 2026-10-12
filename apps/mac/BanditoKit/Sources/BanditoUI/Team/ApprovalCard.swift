@@ -12,8 +12,22 @@ struct ApprovalCard: View {
     var onDecide: (Decision, Bool) -> Void
 
     @State private var remember = false
+    /// The blocks of a creation card the person has scrolled to the end of (see `AgentCreateRows.canCreate`).
+    @State private var reached: Set<String> = []
+
+    /// The summary of an agent the asking agent wants to create; `nil` for every other approval.
+    private var createSummary: AgentCreateSummary? { AgentCreateRows.summary(for: row) }
 
     var body: some View {
+        if let summary = createSummary, let line = AgentCreateRows.resolvedLine(for: row.state, name: summary.name) {
+            createResolvedLine(line)
+        } else {
+            standardBody
+        }
+    }
+
+    @ViewBuilder
+    private var standardBody: some View {
         switch row.state {
         case .pending:
             pendingCard
@@ -44,20 +58,27 @@ struct ApprovalCard: View {
                 .background(Color.Bandito.signal.opacity(0.13), in: Capsule())
                 .overlay(Capsule().stroke(Color.Bandito.signal.opacity(0.3), lineWidth: 1))
 
-                Text(L10n.Approval.wants(name: agentName))
+                Text(createSummary != nil ? L10n.AgentCreate.wants(name: agentName) : L10n.Approval.wants(name: agentName))
                     .font(BanditoFont.text(size: 14.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 8)
-                Text(ApprovalReason.text(row.reason))
-                    .help(row.reason)
-                    .font(BanditoFont.text(size: 11.5, weight: 500))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
+                // A creation says what it is in its title: the reason would only repeat it, and take the room of the name.
+                if createSummary == nil {
+                    Text(ApprovalReason.text(row.reason))
+                        .help(row.reason)
+                        .font(BanditoFont.text(size: 11.5, weight: 500))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                }
             }
 
-            commandBlock
+            if let summary = createSummary {
+                AgentCreateDetails(summary: summary, reached: $reached)
+            } else {
+                commandBlock
+            }
 
-            if let diff = row.diff, !diff.isEmpty {
+            if createSummary == nil, let diff = row.diff, !diff.isEmpty {
                 ScrollView {
                     Text(diff)
                         .font(BanditoFont.mono(size: 11.5, weight: 400))
@@ -70,30 +91,24 @@ struct ApprovalCard: View {
                 .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
-            HStack(spacing: 10) {
-                Button {
-                    onDecide(.deny, false)
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(L10n.Approval.deny)
-                        KeyCap(text: "esc")
+            if let summary = createSummary {
+                // Nothing is remembered for a creation: Decline and Create only. Create waits until every long text
+                // above has been read to its end.
+                let ready = AgentCreateRows.canCreate(AgentCreateRows.rows(summary), reached: reached)
+                VStack(alignment: .trailing, spacing: 6) {
+                    ActionRow {
+                        createDeclineButton
+                        createButton(enabled: ready)
+                    }
+                    if !ready {
+                        Text(L10n.AgentCreate.scrollHint)
+                            .font(BanditoFont.text(size: 11.5, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .multilineTextAlignment(.trailing)
                     }
                 }
-                .banditoButton(.quiet())
-
-                Button {
-                    onDecide(.allow, remember)
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(L10n.Approval.approve)
-                        KeyCap(text: "⌘↵")
-                    }
-                }
-                .banditoButton(.signal())
-
-                Spacer(minLength: 8)
-
-                CheckBoxRow(isOn: $remember, label: L10n.Approval.alwaysHere)
+            } else {
+                standardActions
             }
         }
         .padding(18)
@@ -114,6 +129,105 @@ struct ApprovalCard: View {
             in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
         .shadow(color: Color.Bandito.signal.opacity(0.3), radius: 24, x: 0, y: 14)
+    }
+
+    /// Deny and Approve with the "always allow here" checkbox.
+    private var standardActions: some View {
+        // Wide: the checkbox sits beside the buttons. Narrow: the checkbox takes a line of its own above them.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                denyButton
+                approveButton
+                Spacer(minLength: 8)
+                rememberBox
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                rememberBox
+                ActionRow {
+                    denyButton
+                    approveButton
+                }
+            }
+        }
+        // ViewThatFits takes all the height on offer; the card is only as tall as its chosen variant.
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var denyButton: some View {
+        Button {
+            onDecide(.deny, false)
+        } label: {
+            HStack(spacing: 8) {
+                Text(L10n.Approval.deny)
+                KeyCap(text: "esc")
+            }
+        }
+        .banditoButton(.quiet())
+    }
+
+    private var approveButton: some View {
+        Button {
+            onDecide(.allow, remember)
+        } label: {
+            HStack(spacing: 8) {
+                Text(L10n.Approval.approve)
+                KeyCap(text: "⌘↵")
+            }
+        }
+        .banditoButton(.signal())
+    }
+
+    private var createDeclineButton: some View {
+        Button {
+            onDecide(.deny, false)
+        } label: {
+            HStack(spacing: 8) {
+                Text(L10n.AgentCreate.decline)
+                KeyCap(text: "esc")
+            }
+        }
+        .banditoButton(.quiet())
+    }
+
+    /// Create has no shortcut: a key must not allow what the person has not read.
+    private func createButton(enabled: Bool) -> some View {
+        Button {
+            onDecide(.allow, false)
+        } label: {
+            Text(L10n.AgentCreate.create)
+        }
+        .banditoButton(.signal())
+        .disabled(!enabled)
+    }
+
+    /// The quiet line a creation folds into once it is answered or over.
+    private func createResolvedLine(_ text: String) -> some View {
+        var icon = "checkmark.circle"
+        var tint = Color.Bandito.ok
+        switch row.state {
+        case .approved, .pending: break
+        case .denied(let by):
+            icon = "xmark.circle"
+            tint = by == .user ? Color.Bandito.danger : Color.Bandito.text3
+        case .withdrawn:
+            icon = "arrow.uturn.backward.circle"
+            tint = Color.Bandito.text3
+        }
+        return HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(tint)
+            Text(text)
+                .lineLimit(2)
+        }
+        .font(BanditoFont.text(size: 12.5, weight: 400))
+        .foregroundStyle(Color.Bandito.text3)
+        .padding(.horizontal, 4)
+    }
+
+    /// The "always allow here" checkbox. Its label is one line in both layouts: it never breaks letter by letter.
+    private var rememberBox: some View {
+        CheckBoxRow(isOn: $remember, label: L10n.Approval.alwaysHere)
+            .fixedSize(horizontal: true, vertical: false)
     }
 
     private var commandBlock: some View {
@@ -222,8 +336,64 @@ enum ApprovalReason {
         if r == "approval required for every action" { return L10n.Approval.Why.always }
         if r.hasPrefix("rule: ") { return L10n.Approval.Why.yourRule(rule: String(r.dropFirst("rule: ".count))) }
         if r == "touches Bandito's files by name" { return L10n.Approval.Why.bandito }
+        if r == "agent: create" { return L10n.AgentCreate.why }
         if r == "service: confirm changes" { return L10n.Approval.Why.serviceConfirm }
         if r == "service: confirm tool" { return L10n.Approval.Why.serviceTool }
         return L10n.Approval.rule(rule: r)
+    }
+}
+
+/// What an agent that asks to create another agent is going to make, one row each: the person reads all of it before
+/// pressing Create. Rows come from `AgentCreateRows`; a label sits above its value, so no column is squeezed.
+struct AgentCreateDetails: View {
+    var summary: AgentCreateSummary
+    /// The ids of the long blocks scrolled to their end; written when a block's end comes into view.
+    @Binding var reached: Set<String>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text(summary.name)
+                .font(BanditoFont.text(size: 15, weight: 600))
+                .foregroundStyle(Color.Bandito.text)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(AgentCreateRows.rows(summary)) { row in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.label)
+                        .font(BanditoFont.text(size: 11.5, weight: 500))
+                        .foregroundStyle(Color.Bandito.text3)
+                    if row.scrolls {
+                        // All of it, in a box that scrolls: what the new agent is told is what the person allows.
+                        // The mark at the end of the text tells when the person has got there.
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                valueText(row)
+                                Color.clear.frame(height: 1)
+                                    .onAppear {
+                                        if !reached.contains(row.id) { reached.insert(row.id) }
+                                    }
+                            }
+                        }
+                        .frame(height: AgentCreateRows.instructionsBoxHeight)
+                    } else {
+                        valueText(row)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+    }
+
+    private func valueText(_ row: AgentCreateRows.Row) -> some View {
+        Text(row.value)
+            .font(BanditoFont.font(size: 13, weight: 400, mono: row.mono))
+            .foregroundStyle(Color.Bandito.text)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

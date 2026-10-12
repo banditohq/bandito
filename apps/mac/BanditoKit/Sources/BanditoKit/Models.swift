@@ -69,7 +69,7 @@ public struct LastMessage: Codable, Sendable, Hashable {
     /// and nothing but user and assistant messages counts. Nil for any other event.
     init?(event e: Event) {
         switch e.body {
-        case .messageUser(let text, let source, _, _, _, _, _) where source != .system:
+        case .messageUser(let text, let source, _, _, _, _, _, _) where source != .system:
             self.init(role: "user", text: Self.cut(text), ts: e.ts)
         case .messageAssistant(let text):
             self.init(role: "assistant", text: Self.cut(text), ts: e.ts)
@@ -156,6 +156,11 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     /// The agent template this bot was made from (`agents.create_from_template`); `nil` for an agent made by hand, and
     /// for a daemon that does not send the field. Read only: the app never sends it.
     public var templateId: String?
+    /// The server the agent was moved to (`migrated_to`, the server's name); `nil` when it was not moved. Set by
+    /// `agents.migrate_done` with `moved_to`, which also pauses the agent. A daemon before the feature sends none.
+    public var migratedTo: String?
+    /// When it was moved (Unix milliseconds, `migrated_at`); `nil` with `migratedTo`.
+    public var migratedAt: Int64?
     /// The newest user or assistant message; `nil` when there is none, or when the daemon predates the field.
     public var lastMessage: LastMessage?
     /// The status from the agent's newest `agent.status` event; `nil` before any, or when the daemon predates the field.
@@ -192,8 +197,12 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         capabilities: [String]? = nil,
         integrations: [String]? = nil,
         lead: Bool = false,
-        templateId: String? = nil
+        templateId: String? = nil,
+        migratedTo: String? = nil,
+        migratedAt: Int64? = nil
     ) {
+        self.migratedTo = migratedTo
+        self.migratedAt = migratedAt
         self.templateId = templateId
         self.lead = lead
         self.avatar = avatar
@@ -263,6 +272,8 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         integrations = try c.decodeIfPresent([String].self, forKey: .integrations)
         lead = try c.decodeIfPresent(Bool.self, forKey: .lead) ?? false
         templateId = try c.decodeIfPresent(String.self, forKey: .templateId)
+        migratedTo = try c.decodeIfPresent(String.self, forKey: .migratedTo)
+        migratedAt = try c.decodeIfPresent(Int64.self, forKey: .migratedAt)
         status = try c.decodeIfPresent(AgentStatus.self, forKey: .status)
         pendingApprovals = try c.decodeIfPresent(Int.self, forKey: .pendingApprovals) ?? 0
         pendingApprovalIds = Set(try c.decodeIfPresent([String].self, forKey: .pendingApprovalIds) ?? [])
@@ -430,16 +441,17 @@ public enum EventBody: Sendable, Hashable {
     /// in the text (feature `mentions`).
     case messageUser(
         text: String, source: MessageSource, fromAgent: String?, replyTo: Int64? = nil,
-        attachments: [AgentAttachment] = [], queued: Bool = false, mentions: [Mention] = [])
+        attachments: [AgentAttachment] = [], queued: Bool = false, mentions: [Mention] = [], viaButton: Bool = false)
     /// A message shown as waiting (`queued`) will not get a turn (`reason`: crash, stopped, failed, restart).
     case messageDropped(seq: Int64, reason: String)
     case messageAssistant(text: String)
     case messageDelta(text: String)
     case toolCall(callId: String, tool: String, title: String, input: JSONValue)
     case toolResult(callId: String, ok: Bool, output: String)
+    /// `input` is what the answer is about, for a question the daemon asks itself (`agent.create`): nil for the rest.
     case approvalRequested(
         approvalId: String, callId: String, tool: String, title: String, command: String?, diff: String?,
-        reason: String)
+        reason: String, input: JSONValue? = nil)
     case approvalResolved(approvalId: String, decision: Decision, by: DecidedBy, remember: Bool)
     /// The runtime took the request back: nobody decided it.
     case approvalWithdrawn(approvalId: String)
@@ -462,10 +474,20 @@ public enum EventBody: Sendable, Hashable {
     case integrationRequested(requestId: String, service: String, reason: String?)
     /// The request ended: connected, declined or expired (`integration_request_ended`).
     case integrationRequestEnded(requestId: String, status: ConnectStatus, integration: String?)
+    /// Buttons the agent offers under its last message (`agent.quick_replies`); the newest set replaces the older ones.
+    case agentQuickReplies(buttons: [QuickReplyButton], link: QuickReplyLink?, progress: QuickReplyProgress?)
+    /// This agent created another one (`agent.spawned`, in its feed). `approvedBy` is `user` when the person pressed
+    /// Create, `policy` when the agent runs without asking.
+    case agentSpawned(agentId: String, name: String, role: String?, runtime: String, model: String?, approvedBy: DecidedBy)
+    /// Another agent created this one (`agent.created_by`, in its feed).
+    case agentCreatedBy(byAgentId: String, byName: String, approvedBy: DecidedBy)
     /// A reaction on the message with that `seq`; no `emoji` means it was taken off.
     case reaction(seq: Int64, emoji: String?, by: ReactionBy)
     /// The Telegram bot or its linked chats changed (`telegram.changed`, no data). Read `telegram.status` again.
     case telegramChanged
+    /// The owner changed the server's settings (`server.settings_changed`); `keys` are the names that changed. Read
+    /// `server.settings_get` again. Broadcast only, never stored.
+    case serverSettingsChanged(keys: [String])
     /// A kind this app version doesn't know yet. Shown as nothing; kept for forward compatibility.
     case unknown(kind: String)
 }
@@ -496,6 +518,7 @@ extension Event: Decodable {
     private struct MessageUserP: Decodable {
         var text: String; var source: MessageSource; var fromAgent: String?
         var replyTo: Int64?; var attachments: [AgentAttachment]?; var queued: Bool?; var mentions: [Mention]?
+        var viaButton: Bool?
     }
     private struct FormRequestedP: Decodable {
         var formId: String
@@ -515,12 +538,20 @@ extension Event: Decodable {
         var requestId: String; var status: ConnectStatus; var integration: String?
     }
     private struct ReactionP: Decodable { var seq: Int64; var emoji: String?; var by: ReactionBy }
+    private struct QuickRepliesP: Decodable {
+        var buttons: [QuickReplyButton]; var link: QuickReplyLink?; var progress: QuickReplyProgress?
+    }
+    private struct AgentSpawnedP: Decodable {
+        var agentId: String; var name: String; var role: String?; var runtime: String; var model: String?
+        var approvedBy: DecidedBy
+    }
+    private struct AgentCreatedByP: Decodable { var byAgentId: String; var byName: String; var approvedBy: DecidedBy }
     private struct TextP: Decodable { var text: String }
     private struct ToolCallP: Decodable { var callId: String; var tool: String; var title: String; var input: JSONValue? }
     private struct ToolResultP: Decodable { var callId: String; var ok: Bool; var output: String }
     private struct ApprovalRequestedP: Decodable {
         var approvalId: String; var callId: String; var tool: String; var title: String
-        var command: String?; var diff: String?; var reason: String
+        var command: String?; var diff: String?; var reason: String; var input: JSONValue?
     }
     private struct ApprovalResolvedP: Decodable {
         var approvalId: String; var decision: Decision; var by: DecidedBy; var remember: Bool
@@ -531,6 +562,7 @@ extension Event: Decodable {
     }
     private struct AgentStatusP: Decodable { var status: AgentStatus; var detail: String? }
     private struct UsageLimitsP: Decodable { var runtime: String; var windows: [LimitWindow] }
+    private struct SettingsChangedP: Decodable { var keys: [String] }
     private struct SessionRotatedP: Decodable { var chapter: Int; var reason: String; var contextTokens: Int }
     private struct RuntimeSwitchedP: Decodable { var from: String; var to: String; var until: Int64? }
     private struct ErrorP: Decodable { var message: String }
@@ -550,7 +582,8 @@ extension Event: Decodable {
             let x = try p(MessageUserP.self)
             body = .messageUser(
                 text: x.text, source: x.source, fromAgent: x.fromAgent, replyTo: x.replyTo,
-                attachments: x.attachments ?? [], queued: x.queued ?? false, mentions: x.mentions ?? [])
+                attachments: x.attachments ?? [], queued: x.queued ?? false, mentions: x.mentions ?? [],
+                viaButton: x.viaButton ?? false)
         case "message.dropped":
             let x = try p(MessageDroppedP.self); body = .messageDropped(seq: x.seq, reason: x.reason)
         case "message.assistant": body = .messageAssistant(text: try p(TextP.self).text)
@@ -564,7 +597,7 @@ extension Event: Decodable {
             let x = try p(ApprovalRequestedP.self)
             body = .approvalRequested(
                 approvalId: x.approvalId, callId: x.callId, tool: x.tool, title: x.title, command: x.command,
-                diff: x.diff, reason: x.reason)
+                diff: x.diff, reason: x.reason, input: x.input)
         case "approval.resolved":
             let x = try p(ApprovalResolvedP.self)
             body = .approvalResolved(approvalId: x.approvalId, decision: x.decision, by: x.by, remember: x.remember)
@@ -605,7 +638,29 @@ extension Event: Decodable {
             body = .integrationRequestEnded(requestId: x.requestId, status: x.status, integration: x.integration)
         case "reaction":
             let x = try p(ReactionP.self); body = .reaction(seq: x.seq, emoji: x.emoji, by: x.by)
+        // A kind newer than the app is never allowed to break a page of history: one that does not read is unknown.
+        case "agent.quick_replies":
+            if let x = try? p(QuickRepliesP.self) {
+                body = .agentQuickReplies(buttons: x.buttons, link: x.link, progress: x.progress)
+            } else {
+                body = .unknown(kind: kind)
+            }
+        case "agent.spawned":
+            if let x = try? p(AgentSpawnedP.self) {
+                body = .agentSpawned(
+                    agentId: x.agentId, name: x.name, role: x.role, runtime: x.runtime, model: x.model,
+                    approvedBy: x.approvedBy)
+            } else {
+                body = .unknown(kind: kind)
+            }
+        case "agent.created_by":
+            if let x = try? p(AgentCreatedByP.self) {
+                body = .agentCreatedBy(byAgentId: x.byAgentId, byName: x.byName, approvedBy: x.approvedBy)
+            } else {
+                body = .unknown(kind: kind)
+            }
         case "telegram.changed": body = .telegramChanged
+        case "server.settings_changed": body = .serverSettingsChanged(keys: try p(SettingsChangedP.self).keys)
         default: body = .unknown(kind: kind)
         }
     }

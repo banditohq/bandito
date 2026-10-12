@@ -21,9 +21,18 @@ public final class Telemetry: @unchecked Sendable {
     public static let shared = Telemetry(
         defaults: .standard, http: URLSessionHTTPClient(), baseURL: AccountClient.defaultBaseURL)
 
-    /// Counts one use of a feature in the shared instance.
+    /// Counts one use of a feature in the shared instance. Nothing while `isPaused`.
     public static func count(_ event: TelemetryEvent) {
+        guard !isPaused else { return }
         shared.count(event)
+    }
+
+    private static let pauseLock = NSLock()
+    nonisolated(unsafe) private static var pausedValue = false
+    /// While true, nothing is counted: the smoothness check drives a demo copy of the app, which is not a use.
+    public static var isPaused: Bool {
+        get { pauseLock.withLock { pausedValue } }
+        set { pauseLock.withLock { pausedValue = newValue } }
     }
 
     /// The counts of this many days are kept at most (the oldest go first when a pulse cannot reach the server).
@@ -41,6 +50,9 @@ public final class Telemetry: @unchecked Sendable {
     }
 
     private let lock = NSLock()
+    /// The counts as last read or written, so a count does not decode them from the defaults again (each mode switch,
+    /// each screen counts one, on the main thread). Under `lock`.
+    private var counterCache: [String: [String: Int]]?
     private let defaults: UserDefaults
     private let http: HTTPClient
     private let baseURL: URL
@@ -80,7 +92,10 @@ public final class Telemetry: @unchecked Sendable {
         set {
             lock.withLock {
                 defaults.set(newValue, forKey: Key.statsEnabled)
-                if !newValue { defaults.removeObject(forKey: Key.counters) }
+                if !newValue {
+                    defaults.removeObject(forKey: Key.counters)
+                    counterCache = nil
+                }
             }
         }
     }
@@ -128,9 +143,14 @@ public final class Telemetry: @unchecked Sendable {
     }
 
     private func loadCounters() -> [String: [String: Int]] {
+        if let counterCache { return counterCache }
         guard let data = defaults.data(forKey: Key.counters),
             let all = try? JSONDecoder().decode([String: [String: Int]].self, from: data)
-        else { return [:] }
+        else {
+            counterCache = [:]
+            return [:]
+        }
+        counterCache = all
         return all
     }
 
@@ -139,6 +159,7 @@ public final class Telemetry: @unchecked Sendable {
         for day in kept.keys.sorted().dropLast(Self.maxDays) {
             kept[day] = nil
         }
+        counterCache = kept
         if kept.isEmpty {
             defaults.removeObject(forKey: Key.counters)
         } else if let data = try? JSONEncoder().encode(kept) {
@@ -196,6 +217,7 @@ public final class Telemetry: @unchecked Sendable {
         }
         lock.withLock {
             defaults.removeObject(forKey: Key.counters)
+            counterCache = nil
             defaults.set(UUID().uuidString.lowercased(), forKey: Key.installID)
         }
     }

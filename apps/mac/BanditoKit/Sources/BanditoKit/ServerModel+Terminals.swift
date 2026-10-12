@@ -11,19 +11,21 @@ extension ServerModel {
         try await rpc().call("term.list", NoParams(), as: [TermInfo].self)
     }
 
-    /// Starts a terminal. `cwd` defaults to the daemon user's home, `command` to the login shell.
+    /// Starts a terminal. `cwd` defaults to the daemon user's home, `command` to the login shell. `workspace` (nil or
+    /// `shared` is the server) names a container workspace: the terminal then runs inside it, and `cwd` is a folder there.
     /// `cols` and `rows` are 1…1000.
     public func openTerminal(
         cwd: String? = nil, command: [String]? = nil, title: String? = nil, cols: Int, rows: Int,
-        env: [String: String]? = nil
+        env: [String: String]? = nil, workspace: String? = nil
     ) async throws -> TermInfo {
         try Self.checkSize(cols: cols, rows: rows)
         struct P: Encodable {
             var cwd: String?; var command: [String]?; var title: String?; var cols: Int; var rows: Int
             var env: [String: String]?
+            var workspace: String?
         }
         return try await rpc().call(
-            "term.open", P(cwd: cwd, command: command, title: title, cols: cols, rows: rows, env: env),
+            "term.open", P(cwd: cwd, command: command, title: title, cols: cols, rows: rows, env: env, workspace: workspace),
             as: TermInfo.self)
     }
 

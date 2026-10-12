@@ -82,6 +82,16 @@ public enum ThreadRows {
         return rows
     }
 
+    /// The rows of `new` made from the rows of `old` when only the last item changed and it is a stream (no time, its
+    /// own row, its own id); nil otherwise (then the rows are built again).
+    public static func replacingLast(_ rows: [ThreadRow], from old: [ThreadItem], to new: [ThreadItem]) -> [ThreadRow]? {
+        guard old.count == new.count, let last = new.last, let previous = old.last, last.id == previous.id,
+            case .streaming = last, case .item(let shown)? = rows.last, shown.id == last.id,
+            old.dropLast().elementsEqual(new.dropLast())
+        else { return nil }
+        return rows.dropLast() + [.item(last)]
+    }
+
     /// Timestamp in Unix milliseconds, when the item has one.
     static func timestamp(of item: ThreadItem) -> Int64? { item.timestamp }
 }
@@ -323,6 +333,15 @@ public enum AgentPreview {
     /// code (`` ` ``) marks go, a heading `#`, a quote `>` and a list marker (`-`, `*`, `+`, `1.`) at a line start
     /// go, and every line break becomes a space. Nil when nothing is left.
     public static func plainLine(_ markdown: String) -> String? {
+        // A one-line row shows the start of a message: a long one is cut before the six passes below run over it.
+        let head = markdown.utf8.count > 1_200 ? String(markdown.prefix(600)) : markdown
+        if let known = PlainLineCache.shared.value(for: head) { return known.line }
+        let line = computePlainLine(head)
+        PlainLineCache.shared.store(line, for: head)
+        return line
+    }
+
+    private static func computePlainLine(_ markdown: String) -> String? {
         var text = markdown.replacingOccurrences(of: "```", with: "")
         text = text.replacingOccurrences(of: #"!?\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
         text = text.replacingOccurrences(of: #"\*\*|__|~~"#, with: "", options: .regularExpression)
@@ -334,11 +353,47 @@ public enum AgentPreview {
         return line.isEmpty ? nil : line
     }
 
+    /// The preview from a thread's summary (see `AgentThreadState.lastMessageHead`).
+    @MainActor public static func text(summary: AgentThreadState, agent: Agent) -> String? {
+        (summary.lastMessageHead ?? agent.lastMessage?.text).flatMap(plainLine)
+    }
+
+    /// The row's time from a thread's summary.
+    @MainActor public static func timestamp(summary: AgentThreadState, agent: Agent) -> Int64 {
+        [summary.lastItemTimestamp, agent.lastMessage?.ts].compactMap { $0 }.max() ?? agent.lastTurnAt ?? agent.updatedAt
+    }
+
     /// The time shown on the row: the newest of the thread's last event and the daemon's last message. Without
     /// either, the last finished turn, else the last update.
     public static func timestamp(thread: AgentThread, agent: Agent) -> Int64 {
         let fromThread = thread.items.reversed().lazy.compactMap { ThreadRows.timestamp(of: $0) }.first
         return [fromThread, agent.lastMessage?.ts].compactMap { $0 }.max() ?? agent.lastTurnAt ?? agent.updatedAt
+    }
+}
+
+/// The one-line previews already worked out, by message text. A row of the sidebar asks for its preview every time the
+/// sidebar is drawn (a streaming agent redraws it several times a second), and the work is six regular-expression passes:
+/// the answer for a text that did not change is kept. Bounded: it is emptied when it grows past 512 texts.
+final class PlainLineCache: @unchecked Sendable {
+    static let shared = PlainLineCache()
+
+    struct Known {
+        let line: String?
+    }
+
+    private let lock = NSLock()
+    private var entries: [String: Known] = [:]
+    private let limit = 512
+
+    func value(for text: String) -> Known? {
+        lock.withLock { entries[text] }
+    }
+
+    func store(_ line: String?, for text: String) {
+        lock.withLock {
+            if entries.count >= limit { entries.removeAll(keepingCapacity: true) }
+            entries[text] = Known(line: line)
+        }
     }
 }
 
@@ -371,6 +426,9 @@ public enum TeamSelection {
     /// The agent the team shows now: `resolve` over this server's sidebar order.
     @MainActor
     public static func shownAgentID(server: ServerModel, selected: String?, pinned: Set<String>) -> String? {
+        // The chosen agent is on this server: it is the one, whatever the order (the order reads every agent's
+        // state, which made the team's body depend on all of them and cost a sort at every switch).
+        if let selected, server.agents.contains(where: { $0.id == selected }) { return selected }
         let order = TeamSidebarOrder.ids(agents: server.sortedAgents, pinned: pinned) { server.needsPerson($0) }
         return resolve(
             selected: selected,

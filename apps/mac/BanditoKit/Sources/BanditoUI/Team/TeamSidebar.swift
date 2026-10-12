@@ -5,31 +5,41 @@ import SwiftUI
 
 /// Team sidebar: pinned agents, the agents waiting for you, then the rest of the team.
 struct TeamSidebar: View {
+    /// The server listed (one sidebar is kept built per server, as Team mode is); nil: none.
+    let serverID: String?
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @State private var pins = PinnedAgents()
     @State private var pendingDelete: Agent?
     @State private var actionError: UserFacingMessage?
+    @Environment(\.modeHidden) private var hidden
+    @State private var lastShown = TeamModeShown()
 
     var body: some View {
-        if let server = app.currentServer {
+        if let server = serverID.flatMap({ id in app.servers.first { $0.id.uuidString == id } }) {
             content(server)
-                // Many agents, some asleep: their "z" stands still here.
-                .environment(\.avatarSleepRests, true)
         } else {
             SidebarPlaceholder(mode: .team)
         }
     }
 
+    private func markedAgent(_ server: ServerModel) -> String? {
+        let id = router.showsTeamHome
+            ? nil
+            : TeamSelection.shownAgentID(server: server, selected: router.selectedAgentID, pinned: Set(pins.ids))
+        lastShown.agentID = id
+        return id
+    }
+
     @ViewBuilder
     private func content(_ server: ServerModel) -> some View {
+        let _ = PerfCounters.hit("TeamSidebar")
         // The main agent goes first in the whole list, before the list is split into its groups.
         let lead = server.leadAgentID
         let agents = LeadAgent.leadFirst(server.sortedAgents, id: \.id, lead: lead)
-        // On the team home no chat is on screen, so no row is marked.
-        let shown = router.showsTeamHome
-            ? nil
-            : TeamSelection.shownAgentID(server: server, selected: router.selectedAgentID, pinned: Set(pins.ids))
+        // On the team home no chat is on screen, so no row is marked. Out of sight (another mode or server) the row
+        // marked last stays: the router's choices are not read, so they rebuild nothing unseen.
+        let shown = hidden ? lastShown.agentID : markedAgent(server)
         let waiting = agents.filter { server.needsPerson($0.id) }
         let waitingIDs = Set(waiting.map(\.id))
         let others = agents.filter { !waitingIDs.contains($0.id) }
@@ -37,7 +47,9 @@ struct TeamSidebar: View {
         let pinned = Array(agents.filter { pins.isPinned($0.id) }.prefix(TeamSidebarOrder.pinnedTiles))
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            // Lazy: rows of the same height; a team of forty built forty rows (with their avatars) at every visit of the
+            // team, and when the sidebar came back after another mode.
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if agents.isEmpty {
                     emptyState
                 } else {
@@ -55,7 +67,14 @@ struct TeamSidebar: View {
                             .padding(.bottom, 6)
                         VStack(spacing: 8) {
                             ForEach(waiting) { agent in
-                                waitingCard(agent, thread: server.thread(for: agent.id), server: server)
+                                ThreadReader(server: server, agentID: agent.id) { facts in
+                                    Memo(key: SidebarRowKey(
+                                        agent: agent, facts: facts, status: .needsYou, selected: false, isLead: false,
+                                        pinned: pins.isPinned(agent.id))) {
+                                        waitingCard(agent, facts: facts, server: server)
+                                    }
+                                    .equatable()
+                                }
                             }
                         }
                         .padding(.horizontal, 8)
@@ -76,15 +95,26 @@ struct TeamSidebar: View {
                     .padding(.horizontal, 8)
                     .padding(.top, 12)
                     .padding(.bottom, 2)
-                    VStack(spacing: 2) {
-                        ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
-                            teamRow(
-                                agent, thread: server.thread(for: agent.id), server: server, selected: shown == agent.id,
-                                isLead: lead == agent.id)
-                                .banditoRise(delay: Double(index) * 0.06)
-                        }
+                    ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
+                            ThreadReader(server: server, agentID: agent.id) { facts in
+                                let status = server.status(of: agent.id)
+                                let place = WorkspacePickerLogic.label(
+                                    workspaceID: agent.workspaceId,
+                                    workspaces: WorkspaceDirectories.shared.directory(for: server).workspaces)
+                                Memo(key: SidebarRowKey(
+                                    agent: agent, facts: facts, status: status, selected: shown == agent.id,
+                                    isLead: lead == agent.id, pinned: pins.isPinned(agent.id), place: place)) {
+                                    teamRow(
+                                        agent, facts: facts, status: status, server: server, selected: shown == agent.id,
+                                        isLead: lead == agent.id, place: place)
+                                }
+                                .equatable()
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 2)
+                            // The first rows rise in one after another; the rest (out of sight) are just there.
+                            .modifier(SidebarRise(index: index))
                     }
-                    .padding(.horizontal, 8)
                 }
                 if let actionError {
                     UserFacingErrorView(message: actionError)
@@ -95,6 +125,16 @@ struct TeamSidebar: View {
             .padding(.bottom, 12)
         }
         .background(Color.Bandito.surface1)
+        // The names of the containers label the agents that run in them. Read only while some agent does.
+        .task(id: "\(agents.contains { $0.workspaceId != Workspace.sharedID }) \(server.supports("workspaces"))") {
+            guard agents.contains(where: { $0.workspaceId != Workspace.sharedID }), server.supports("workspaces")
+            else { return }
+            let directory = WorkspaceDirectories.shared.directory(for: server)
+            while !Task.isCancelled {
+                if directory.shouldPoll { await directory.refresh() }
+                try? await Task.sleep(for: .seconds(15))
+            }
+        }
         .confirmationDialog(
             pendingDelete.map { L10n.Agent.Delete.confirm(name: $0.name) } ?? "",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
@@ -116,8 +156,11 @@ struct TeamSidebar: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(agents) { agent in
-                    let thread = server.thread(for: agent.id)
+                    ThreadReader(server: server, agentID: agent.id) { facts in
                     let status = server.status(of: agent.id)
+                    Memo(key: SidebarRowKey(
+                        agent: agent, facts: facts, status: status, selected: shown == agent.id, isLead: false,
+                        pinned: true)) {
                     Button {
                         router.selectAgent(agent.id, on: server)
                     } label: {
@@ -125,7 +168,7 @@ struct TeamSidebar: View {
                             ZStack(alignment: .bottomTrailing) {
                                 AgentAvatarView(
                                     agent: agent, server: server, size: 36,
-                                    mood: AvatarMood.make(status: status, turnRunning: thread.turnRunning, paused: agent.paused))
+                                    mood: AvatarMood.make(status: status, turnRunning: facts.turnRunning, paused: agent.paused))
                                 StatusDot(status: status, size: 10, ringColor: Color.Bandito.surface1)
                             }
                             Text(agent.name)
@@ -141,6 +184,9 @@ struct TeamSidebar: View {
                     .banditoButton(.row(cornerRadius: 10, hoverOpacity: 0.06))
                     .help(agent.name)
                     .contextMenu { menu(for: agent, server: server) }
+                    }
+                    .equatable()
+                    }
                 }
             }
             .padding(.horizontal, 18)
@@ -150,7 +196,7 @@ struct TeamSidebar: View {
 
     // MARK: waiting
 
-    private func waitingCard(_ agent: Agent, thread: AgentThread, server: ServerModel) -> some View {
+    private func waitingCard(_ agent: Agent, facts: SidebarThreadFacts, server: ServerModel) -> some View {
         Button {
             router.selectAgent(agent.id, on: server)
         } label: {
@@ -165,11 +211,11 @@ struct TeamSidebar: View {
                             .truncationMode(.tail)
                         if !agent.role.isEmpty { Chip(text: agent.role) }
                         Spacer(minLength: 4)
-                        Text(lastActivityLabel(agent, thread: thread))
+                        Text(TeamTime.label(ms: facts.lastActivityMs))
                             .font(BanditoFont.text(size: 11, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
-                    Text(thread.pendingApprovals.first?.title ?? AgentPreview.text(thread: thread, agent: agent) ?? "")
+                    Text(facts.pendingTitle ?? facts.preview ?? "")
                         .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.signalGlow)
                         .lineLimit(1)
@@ -194,21 +240,20 @@ struct TeamSidebar: View {
 
     // MARK: team
 
-    private func teamRow(_ agent: Agent, thread: AgentThread, server: ServerModel, selected: Bool, isLead: Bool) -> some View {
+    private func teamRow(
+        _ agent: Agent, facts: SidebarThreadFacts, status: AgentStatus, server: ServerModel, selected: Bool, isLead: Bool,
+        place: String?
+    ) -> some View {
         return Button {
             router.selectAgent(agent.id, on: server)
         } label: {
             AgentRow(
-                agent: agent, server: server, thread: thread, status: server.status(of: agent.id), isSelected: selected,
-                lastActivity: lastActivityLabel(agent, thread: thread), isLead: isLead)
+                agent: agent, server: server, facts: facts, status: status, isSelected: selected,
+                lastActivity: TeamTime.label(ms: facts.lastActivityMs), isLead: isLead, place: place)
                 .contentShape(Rectangle())
         }
         .banditoButton(.row(cornerRadius: 10))
         .contextMenu { menu(for: agent, server: server) }
-    }
-
-    private func lastActivityLabel(_ agent: Agent, thread: AgentThread) -> String {
-        TeamTime.label(ms: AgentPreview.timestamp(thread: thread, agent: agent))
     }
 
     // MARK: menu
@@ -243,6 +288,12 @@ struct TeamSidebar: View {
             router.inspectorTab = .details
             router.showInWorkbench(.details, agentID: agent.id)
         }
+        // Moving needs another connected server with the feature; a moved agent is not moved again from here.
+        if agent.migratedTo == nil, !MigrationTargets.eligible(source: server, among: app.servers).isEmpty {
+            Button(L10n.Migrate.menu) {
+                router.sheet = .moveAgent(agentID: agent.id, serverID: server.id)
+            }
+        }
         Divider()
         Button(L10n.Agent.Menu.delete, role: .destructive) {
             pendingDelete = agent
@@ -274,12 +325,89 @@ struct TeamSidebar: View {
     }
 }
 
+/// Reads what a row of the sidebar shows of one agent's thread. The sidebar itself does not read threads: a stream
+/// writes a thread several times a second, and every view that read it was built again. This reader reads the thread's
+/// summary (`AgentThreadState`), which a token does not change once the preview line is full, and hands the row its
+/// facts (`SidebarThreadFacts`); a row whose facts did not change is not built again (`Memo`).
+private struct ThreadReader<Content: View>: View {
+    let server: ServerModel
+    let agentID: String
+    @ViewBuilder var content: (SidebarThreadFacts) -> Content
+
+    var body: some View {
+        content(
+            SidebarThreadFacts(summary: server.threadSummary(for: agentID), agent: server.agents.first { $0.id == agentID }))
+    }
+}
+
+/// The entrance of the first rows of the team list. Rows further down are not staggered: forty rows rising one after
+/// another kept the window redrawing for nearly three seconds at every return to the team.
+private struct SidebarRise: ViewModifier {
+    let index: Int
+
+    func body(content: Content) -> some View {
+        if index < 10 {
+            content.banditoRise(delay: Double(index) * 0.05)
+        } else {
+            content
+        }
+    }
+}
+
+/// What a row of the sidebar shows of an agent's thread.
+struct SidebarThreadFacts: Equatable {
+    /// The last message as one line, or nil.
+    var preview: String?
+    /// When the agent last did something (Unix ms).
+    var lastActivityMs: Int64
+    var turnRunning: Bool
+    /// The title of the oldest approval that waits, if any.
+    var pendingTitle: String?
+
+    /// From the thread's summary: a streamed token changes none of it once the preview is full.
+    @MainActor init(summary: AgentThreadState, agent: Agent?) {
+        preview = agent.flatMap { AgentPreview.text(summary: summary, agent: $0) }
+        lastActivityMs = agent.map { AgentPreview.timestamp(summary: summary, agent: $0) } ?? 0
+        turnRunning = summary.turnRunning
+        pendingTitle = summary.firstPendingApprovalTitle
+    }
+
+    init(thread: AgentThread, agent: Agent?) {
+        preview = agent.flatMap { AgentPreview.text(thread: thread, agent: $0) }
+        lastActivityMs = agent.map { AgentPreview.timestamp(thread: thread, agent: $0) } ?? 0
+        turnRunning = thread.turnRunning
+        pendingTitle = thread.pendingApprovals.first?.title
+    }
+}
+
+/// Builds `content` again only when `key` changes (with `.equatable()`).
+struct Memo<Key: Equatable, Content: View>: View, Equatable {
+    let key: Key
+    @ViewBuilder let content: () -> Content
+
+    nonisolated static func == (lhs: Memo, rhs: Memo) -> Bool { lhs.key == rhs.key }
+
+    var body: some View { content() }
+}
+
+/// Everything a row of the team list depends on.
+private struct SidebarRowKey: Equatable {
+    var agent: Agent
+    var facts: SidebarThreadFacts
+    var status: AgentStatus
+    var selected: Bool
+    var isLead: Bool
+    var pinned: Bool
+    var place: String?
+}
+
 /// One agent in the team list: avatar with its status dot, name, role, the time of the last event and a preview.
 struct AgentRow: View {
     var agent: Agent
     /// The server the agent lives on, for its picture.
     var server: ServerModel?
-    var thread: AgentThread
+    /// What the row shows of the thread.
+    var facts: SidebarThreadFacts
     /// The status the team shows (see `ServerModel.status(of:)`); the thread may not be loaded.
     var status: AgentStatus
     var isSelected = false
@@ -287,12 +415,36 @@ struct AgentRow: View {
     var lastActivity = ""
     /// The server's main agent: a crown on the avatar.
     var isLead = false
+    /// The name of the container the agent runs in; nil for the shared server.
+    var place: String?
+
+    init(
+        agent: Agent, server: ServerModel? = nil, facts: SidebarThreadFacts, status: AgentStatus,
+        isSelected: Bool = false, lastActivity: String = "", isLead: Bool = false, place: String? = nil
+    ) {
+        self.agent = agent
+        self.server = server
+        self.facts = facts
+        self.status = status
+        self.isSelected = isSelected
+        self.lastActivity = lastActivity
+        self.isLead = isLead
+        self.place = place
+    }
+
+    /// A row made from the whole thread (pictures of the row in tests).
+    init(agent: Agent, server: ServerModel? = nil, thread: AgentThread, status: AgentStatus, isSelected: Bool = false) {
+        self.init(
+            agent: agent, server: server, facts: SidebarThreadFacts(thread: thread, agent: agent), status: status,
+            isSelected: isSelected)
+    }
 
     var body: some View {
+        let _ = PerfCounters.hit("AgentRow")
         HStack(alignment: .center, spacing: 11) {
             AgentAvatarView(
                 agent: agent, server: server, size: 40,
-                mood: AvatarMood.make(status: status, turnRunning: thread.turnRunning, paused: agent.paused))
+                mood: AvatarMood.make(status: status, turnRunning: facts.turnRunning, paused: agent.paused))
                 .overlay(alignment: .bottomTrailing) {
                     StatusDot(status: status, size: 11, ringColor: Color.Bandito.surface1)
                         .offset(x: 2, y: 2)
@@ -317,6 +469,7 @@ struct AgentRow: View {
                             .help(L10n.Inspector.statePaused)
                     }
                     if !agent.role.isEmpty { Chip(text: agent.role) }
+                    if let place { WorkspaceChip(text: place) }
                     Spacer(minLength: 4)
                     if !lastActivity.isEmpty {
                         Text(lastActivity)
@@ -324,7 +477,7 @@ struct AgentRow: View {
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }
-                Text(AgentPreview.text(thread: thread, agent: agent) ?? L10n.Team.noMessages)
+                Text(facts.preview ?? L10n.Team.noMessages)
                     .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(status == .needsYou ? Color.Bandito.signalGlow : Color.Bandito.text3)
                     .lineLimit(1)

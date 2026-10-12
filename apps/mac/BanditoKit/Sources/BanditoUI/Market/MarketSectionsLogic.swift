@@ -1,47 +1,154 @@
 import BanditoKit
 import Foundation
 
-/// One block of the Services page under the All filter: the connected services, or the services of one category.
-struct MarketSection: Identifiable, Equatable {
+// The rules of the Marketplace showcase: which shelves the Services page has and in what order, what a category's page
+// holds, how the shelves and the grid are measured, and the arithmetic of a shelf's arrows. Pure, so each rule is
+// tested without a view.
+
+/// One shelf of the Services page under All: a header and a row of cards that scrolls sideways.
+struct MarketShelf: Identifiable, Equatable {
     enum Kind: Hashable {
         /// The connected services (the rich cards), always first.
         case connected
+        /// What the daemon suggests for the project of the agent on screen. Right after the connected shelf, or first.
+        case recommended
         /// A category of the catalog: `dev`, `productivity`, ...
         case category(String)
-        /// A catalog from a daemon that sends no categories at all: one block for everything.
+        /// A catalog from a daemon that sends no categories at all: one block for everything, not a shelf (nothing to
+        /// open with "All").
         case catalog
     }
 
     let kind: Kind
+    /// The services of the shelf. Empty for the suggestions: they are not entries, the page holds them.
     var entries: [MarketEntry]
+    /// The number in the header: the cards the shelf holds.
+    let count: Int
+
+    init(kind: Kind, entries: [MarketEntry], count: Int? = nil) {
+        self.kind = kind
+        self.entries = entries
+        self.count = count ?? entries.count
+    }
 
     var id: String {
         switch kind {
         case .connected: "connected"
+        case .recommended: "recommended"
         case .category(let name): "category:\(name)"
         case .catalog: "catalog"
         }
     }
 
-    /// The identity the scroll view knows the block by: what `ForEach` takes as the element id and what a jump scrolls to.
-    var scrollID: String { id }
-
-    /// The category name of a category section; nil for the others.
+    /// The category name of a category shelf; nil for the others.
     var categoryName: String? {
         if case .category(let name) = kind { return name }
         return nil
     }
+
+    /// The symbol in front of the shelf's name.
+    var symbol: String {
+        switch kind {
+        case .connected: MarketShelfSymbol.connected
+        case .recommended: MarketShelfSymbol.recommended
+        case .category(let name): MarketCategory.symbol(name)
+        case .catalog: MarketCategory.symbol("other")
+        }
+    }
+
+    /// The filter that "All" in the header opens. Nil: the shelf has no page of its own.
+    var destination: MarketFilter? {
+        switch kind {
+        case .connected: .connected
+        case .category(let name): .category(name)
+        case .recommended, .catalog: nil
+        }
+    }
+}
+
+/// A shelf of the Bots or Skills page: the items of one category.
+struct MarketCategoryShelf<Item: Identifiable>: Identifiable {
+    let category: String
+    let items: [Item]
+
+    var id: String { category }
+}
+
+extension MarketCategoryShelf: Equatable where Item: Equatable {}
+
+extension MarketCategoryShelf {
+    /// The items grouped by category, one shelf per category that has any, in `order` and then the others alphabetically.
+    /// The items of a shelf keep the order they came in.
+    static func group(_ items: [Item], category: (Item) -> String, order: [String]) -> [MarketCategoryShelf<Item>] {
+        var byCategory: [String: [Item]] = [:]
+        for item in items { byCategory[category(item), default: []].append(item) }
+        let used = Set(byCategory.keys)
+        let names = order.filter { used.contains($0) } + used.subtracting(order).sorted()
+        return names.compactMap { name in
+            byCategory[name].map { MarketCategoryShelf(category: name, items: $0) }
+        }
+    }
+}
+
+/// The symbols of the shelves that are not categories.
+enum MarketShelfSymbol {
+    static let connected = "checkmark.circle"
+    static let recommended = "sparkles"
+    static let bundles = "square.stack.3d.up"
+    static let ownSkills = "wand.and.stars"
+}
+
+/// A page that lists one thing in full: reached with "All" on a shelf, or from the sidebar.
+enum MarketPageKind: Hashable {
+    case connected
+    case category(String)
+
+    var filter: MarketFilter {
+        switch self {
+        case .connected: .connected
+        case .category(let name): .category(name)
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .connected: MarketShelfSymbol.connected
+        case .category(let name): MarketCategory.symbol(name)
+        }
+    }
+
+    var title: String { filter.title }
 }
 
 /// What the Services page shows for a filter and a search.
 enum MarketContent: Equatable {
-    /// All filter, no search: the connected block, then one block per category.
-    case sections([MarketSection])
-    /// A search, or the Connected filter: one plain list without blocks, and why it may be empty.
+    /// All filter, no search: the shelves.
+    case shelves([MarketShelf])
+    /// The page of the connected services or of a category (the search narrows it): a header with Back and a grid.
+    case page(MarketPageKind, [MarketEntry], MarketEmptyState?)
+    /// A search under All: one plain grid of what matches, and why it may be empty.
     case flat([MarketEntry], MarketEmptyState?)
 }
 
-/// The rules of the sectioned Services page. Pure, so the order, the grouping and the jump targets are easy to test.
+/// How a Marketplace page (Services, Bots or Skills) lays itself out for a filter and a search.
+enum MarketPageMode: Equatable {
+    /// Under All with no search: shelves.
+    case shelves
+    /// A category (or the connected services, or the sets): its own page with a header and a Back.
+    case page
+    /// A search under All, or a filter that has no page of its own (installed skills, my bots): a plain grid.
+    case flat
+
+    static func of(filter: MarketFilter, searching: Bool) -> MarketPageMode {
+        switch filter {
+        case .all: searching ? .flat : .shelves
+        case .connected, .category, .bundles: .page
+        case .installed, .myBots: .flat
+        }
+    }
+}
+
+/// The rules of the sectioned Services page. Pure, so the order, the grouping and the pages are easy to test.
 enum MarketSections {
     /// The word a template without a category goes under, when the catalog has categories at all.
     static let fallbackCategory = "other"
@@ -57,20 +164,21 @@ enum MarketSections {
         entries.contains { !$0.isOwn && $0.template?.category != nil }
     }
 
-    /// The blocks of the All page. The connected services come first (including the owner's own integrations). The
-    /// categories follow in the sidebar order, each with all its catalog services whether connected or not (a connected
-    /// one shows its mark), and an empty category has no block. A category the daemon adds later comes after the known
-    /// ones, in alphabetical order. A catalog with no categories is one `catalog` block.
-    static func sections(_ entries: [MarketEntry]) -> [MarketSection] {
-        var result: [MarketSection] = []
+    /// The shelves of the All page. The connected services come first (including the owner's own integrations), then the
+    /// suggestions when there are `recommended` of them, then one shelf per category in the sidebar order, each with all
+    /// its catalog services whether connected or not (a connected one shows its mark). An empty category has no shelf. A
+    /// category the daemon adds later comes after the known ones, in alphabetical order. A catalog with no categories
+    /// is one `catalog` block.
+    static func shelves(_ entries: [MarketEntry], recommended: Int = 0) -> [MarketShelf] {
+        var result: [MarketShelf] = []
         let connected = entries.filter(\.isConnected)
-        if !connected.isEmpty { result.append(MarketSection(kind: .connected, entries: connected)) }
+        if !connected.isEmpty { result.append(MarketShelf(kind: .connected, entries: connected)) }
+        if recommended > 0 { result.append(MarketShelf(kind: .recommended, entries: [], count: recommended)) }
 
         let catalogEntries = entries.filter { !$0.isOwn }
         guard !catalogEntries.isEmpty else { return result }
-        let hasCategories = hasCategories(entries)
-        guard hasCategories else {
-            result.append(MarketSection(kind: .catalog, entries: catalogEntries))
+        guard hasCategories(entries) else {
+            result.append(MarketShelf(kind: .catalog, entries: catalogEntries))
             return result
         }
         var byCategory: [String: [MarketEntry]] = [:]
@@ -79,7 +187,7 @@ enum MarketSections {
         }
         for name in orderedCategories(Set(byCategory.keys)) {
             if let list = byCategory[name], !list.isEmpty {
-                result.append(MarketSection(kind: .category(name), entries: list))
+                result.append(MarketShelf(kind: .category(name), entries: list))
             }
         }
         return result
@@ -90,17 +198,27 @@ enum MarketSections {
         MarketCategory.order.filter { used.contains($0) } + used.subtracting(MarketCategory.order).sorted()
     }
 
-    /// What the page shows. Under All with no search: the blocks. A search: one flat list of what matches (the filter
-    /// still narrows it). The Connected filter: the connected services, flat.
-    static func content(_ entries: [MarketEntry], filter: MarketFilter, query: String) -> MarketContent {
+    /// What the page shows. Under All with no search: the shelves. A search under All: one flat list of what matches.
+    /// The Connected filter and a category: that page, narrowed by the search.
+    static func content(_ entries: [MarketEntry], filter: MarketFilter, query: String, recommended: Int = 0)
+        -> MarketContent
+    {
         let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if !searching, filter == .all { return .sections(sections(entries)) }
         let shown = MarketLogic.visible(entries, filter: filter, query: query)
-        if shown.isEmpty {
-            if searching { return .flat([], .noResults) }
-            return .flat([], filter == .connected ? .nothingConnected : nil)
+        let empty: MarketEmptyState? =
+            shown.isEmpty ? (searching ? .noResults : (filter == .connected ? .nothingConnected : nil)) : nil
+        switch MarketPageMode.of(filter: filter, searching: searching) {
+        case .shelves:
+            return .shelves(shelves(entries, recommended: recommended))
+        case .page:
+            switch filter {
+            case .connected: return .page(.connected, shown, empty)
+            case .category(let name): return .page(.category(name), shown, empty)
+            default: return .flat(shown, empty)
+            }
+        case .flat:
+            return .flat(shown, empty)
         }
-        return .flat(shown, nil)
     }
 }
 
@@ -152,171 +270,112 @@ enum MarketGridLayout {
 
 // MARK: - sizes
 
-/// The fixed sizes of the Services page. Heights are fixed on purpose (an even row, a stable header), but nothing here
-/// decides where the page scrolls: jumps go to the anchor of a block, and the block in view comes from where the
-/// anchors really are (`MarketSectionTracker`).
-enum MarketSectionMetrics {
-    /// The pinned header of a block.
-    static let headerHeight: CGFloat = 44
-    /// A catalog card: the tile and name, two lines, the foot with one button.
-    static let cardHeight: CGFloat = 156
-    /// The space under every row of cards.
-    static let rowGap: CGFloat = MarketGridLayout.gap
-    /// The space under the last row of a block, before the next header.
-    static let sectionGap: CGFloat = 12
-    /// The space above the first block.
+/// The fixed sizes of the showcase. A shelf is a lazy row, and a lazy row cannot ask the cards it has not built how tall
+/// they are, so every shelf has one fixed card height and every card has one fixed width.
+enum MarketShelfMetrics {
+    /// A card of a shelf.
+    static let cardWidth: CGFloat = 260
+    /// The space between cards of a shelf.
+    static let gap: CGFloat = MarketGridLayout.gap
+    /// One step of a shelf: the distance between two card edges, which is where it snaps.
+    static var pitch: CGFloat { cardWidth + gap }
+    /// The header of a shelf (symbol, name, number, "All").
+    static let headerHeight: CGFloat = 30
+    /// The space between a header and its cards.
+    static let headerGap: CGFloat = 8
+    /// Room above the cards for the 1.5 pt lift of the hovered card, and below them for its shadow. The shelf clips to
+    /// its box, so the room is inside it.
+    static let laneTop: CGFloat = 6
+    static let laneBottom: CGFloat = 22
+    /// The space between two shelves, under the room below the cards.
+    static let shelfGap: CGFloat = 8
+    /// The space above the first shelf.
     static let topInset: CGFloat = 6
 
-    /// The height of a block of catalog cards: its header, its rows, the gap after it.
-    static func height(cards: Int, columns: Int) -> CGFloat {
-        headerHeight + CGFloat(MarketGridLayout.rowCount(items: cards, columns: columns)) * (cardHeight + rowGap) + sectionGap
-    }
+    /// A catalog card: the tile and name, two lines, the foot with one button.
+    static let catalogCardHeight: CGFloat = 156
+    /// A suggestion card: tile and name, the reason, the file, one button.
+    static let suggestionCardHeight: CGFloat = 156
+    /// A card of a bot template: tile, three lines, the services, one button.
+    static let botCardHeight: CGFloat = 200
+    /// A set of bots: tile, two lines, the members, one button.
+    static let bundleCardHeight: CGFloat = 176
+    /// A skill: tile, two lines, chips, a warning line, the foot.
+    static let skillCardHeight: CGFloat = 204
+    /// One of the owner's own skills.
+    static let ownSkillCardHeight: CGFloat = 176
 
-    /// The space to leave under the last block so that it, short as it may be, can be scrolled to the top (and never less
-    /// than a margin).
-    static func bottomPadding(viewport: CGFloat, last: CGFloat, minimum: CGFloat = 24) -> CGFloat {
-        max(minimum, viewport - last)
-    }
-}
+    /// The height of the lane for a card height.
+    static func laneHeight(card: CGFloat) -> CGFloat { card + laneTop + laneBottom }
 
-/// Where the header of a block sits while the block is under it, as an offset from the block's top: zero before the
-/// block reaches the top of the scroll view, then as far down as the block has scrolled past, and no further than leaves
-/// the header at the bottom of the block (the next block's header pushes it out there, as native pinned headers do).
-enum MarketStickyOffset {
-    static func offset(sectionMinY: CGFloat, sectionHeight: CGFloat, headerHeight: CGFloat = MarketSectionMetrics.headerHeight) -> CGFloat {
-        guard sectionMinY.isFinite, sectionHeight.isFinite else { return 0 }
-        return min(max(-sectionMinY, 0), max(sectionHeight - headerHeight, 0))
-    }
-}
+    /// The height of a shelf: header, gap, lane.
+    static func shelfHeight(card: CGFloat) -> CGFloat { headerHeight + headerGap + laneHeight(card: card) }
 
-/// Which block is in view, from the positions the blocks report (the top edge of each, in the scroll view). A block has
-/// passed when its top is no lower than the bottom of the pinned header (the next header takes over there). The block in
-/// view is the last one passed. A jump sets the flags itself (`jump(to:)`), so the blocks it flies over are not reported.
-@MainActor
-final class MarketSectionTracker {
-    /// How far below the top an anchor may be and still count as passed.
-    static let threshold = MarketSectionMetrics.headerHeight + 1
-
-    private var ids: [String] = []
-    private var passed: [Bool] = []
-    /// Until then a change of the block in view is not reported (a jump passes the blocks between).
-    var quietUntil: TimeInterval = 0
-    private var lastReported: Int?
-
-    var active: Int? { passed.lastIndex(of: true) }
-
-    /// Starts over for these blocks (the list changed, or the page was shown again).
-    func configure(ids new: [String]) {
-        guard new != ids else { return }
-        reset(ids: new)
-    }
-
-    func reset(ids new: [String]? = nil) {
-        if let new { ids = new }
-        passed = Array(repeating: false, count: ids.count)
-        lastReported = nil
-    }
-
-    /// An anchor moved. Returns true when the block in view changed and may be reported.
-    func report(index: Int, minY: Int, now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
-        guard passed.indices.contains(index) else { return false }
-        passed[index] = CGFloat(minY) <= Self.threshold
-        guard active != lastReported else { return false }
-        lastReported = active
-        return now >= quietUntil
-    }
-
-    /// A jump to block `index` (nil: the top): the blocks up to it count as passed, the ones after it as not.
-    func jump(to index: Int?) {
-        for i in passed.indices { passed[i] = index.map { i <= $0 } ?? false }
-        lastReported = active
+    /// The height of the connected services' cards: the lines every card has (name and address, the check, the switch)
+    /// and the ones some cards add (what it was used for, the update, signing in again). The shelf takes the tallest.
+    static func connectedCardHeight(hasStats: Bool, hasUpdate: Bool, needsLogin: Bool) -> CGFloat {
+        var height: CGFloat = 14 + 32 + 10 + 18 + 10 + 22 + 14
+        if hasStats { height += 10 + 16 }
+        if hasUpdate { height += 10 + 26 }
+        if needsLogin { height += 10 + 28 }
+        return height
     }
 }
 
-// MARK: - jumping from the sidebar
+// MARK: - the arrows of a shelf
 
-/// Where a click in the sidebar sends the Services page.
-enum MarketScrollTarget: Hashable {
-    case top
-    case category(String)
-}
+/// Where a shelf's row is, in the numbers of its scroll view: what decides whether an arrow shows, and where a click on
+/// it goes. Plain numbers, so the rule is tested without a window.
+struct MarketShelfScroll: Equatable {
+    /// The scroll offset (`contentOffset.x`): `-leadingInset` at the start.
+    var offset: CGFloat = 0
+    /// The width of the visible box.
+    var container: CGFloat = 0
+    /// The width of the cards and the gaps between them.
+    var content: CGFloat = 0
+    /// The page margins inside the scroll view.
+    var leadingInset: CGFloat = 0
+    var trailingInset: CGFloat = 0
 
-/// A request to scroll the Services page. The id makes a second click on the same row a new request.
-struct MarketScrollRequest: Equatable {
-    let id: Int
-    let target: MarketScrollTarget
-    /// When it was made (system uptime, seconds). A request that waited too long for the page is dropped, so a click
-    /// from long ago does not move the page when the catalog finally loads.
-    let created: TimeInterval
+    var minOffset: CGFloat { -leadingInset }
 
-    init(id: Int, target: MarketScrollTarget, created: TimeInterval = ProcessInfo.processInfo.systemUptime) {
-        self.id = id
-        self.target = target
-        self.created = created
+    var maxOffset: CGFloat { max(minOffset, content + trailingInset - container) }
+
+    var canBack: Bool { offset > minOffset + 1 }
+
+    var canForward: Bool { offset < maxOffset - 1 }
+
+    /// More than one screen of cards: the row has somewhere to go.
+    var overflows: Bool { maxOffset > minOffset + 1 }
+
+    /// How many whole cards fit between the page margins (at least one): what a click on an arrow moves by.
+    func screenful(pitch: CGFloat = MarketShelfMetrics.pitch) -> Int {
+        guard pitch > 0, container.isFinite else { return 1 }
+        let room = container - leadingInset - trailingInset
+        return max(1, Int(((room + MarketShelfMetrics.gap) / pitch).rounded(.down)))
     }
 
-    static let lifetime: TimeInterval = 8
-
-    func isFresh(at now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
-        now - created < Self.lifetime
+    /// The card a click on an arrow scrolls to the start of: one screenful of cards from the card nearest to the start
+    /// edge now, and never before the first or after the last. Nil when there are no cards.
+    func pageIndex(forward: Bool, count: Int, pitch: CGFloat = MarketShelfMetrics.pitch) -> Int? {
+        guard count > 0, pitch > 0, offset.isFinite else { return nil }
+        let from = Int(((offset - minOffset) / pitch).rounded())
+        let to = from + (forward ? screenful(pitch: pitch) : -screenful(pitch: pitch))
+        return min(max(to, 0), count - 1)
     }
-
-    var isFresh: Bool { isFresh() }
 }
 
-/// What a click on a sidebar row of the Services page does.
-enum MarketSidebarAction: Equatable {
-    /// Set the filter (the flat Connected page).
-    case filter(MarketFilter)
-    /// Go to the sectioned page and scroll to a place on it.
-    case scroll(MarketScrollTarget)
-}
+// MARK: - the sidebar
 
+/// What a click on a sidebar row of the Marketplace does. Every page filters the same way now: the row sets the page's
+/// filter, and All is the showcase.
 enum MarketSidebarLogic {
-    /// The action of a row. On the Services page All and the categories scroll the sectioned page (leaving a filter if
-    /// one is set); Connected is a filter of its own. The other pages filter as before.
-    static func action(for row: MarketFilter, tab: MarketTab) -> MarketSidebarAction {
-        guard tab == .services else { return .filter(row) }
-        switch row {
-        case .all: return .scroll(.top)
-        case .category(let name): return .scroll(.category(name))
-        default: return .filter(row)
-        }
-    }
+    /// The filter a click on `row` sets.
+    static func target(for row: MarketFilter) -> MarketFilter { row }
 
-    /// The row to light. Under All it follows the scroll: the block in view; the top and the connected block light All.
-    static func highlighted(tab: MarketTab, filter: MarketFilter, section: String?) -> MarketFilter {
-        guard tab == .services, filter == .all || filter.isCategory else { return filter }
-        if let section { return .category(section) }
-        return .all
-    }
-
-    /// Where a target lands: the top, or the block of a category. Nil when there is no such block (an empty category).
-    static func landing(of target: MarketScrollTarget, sections: [MarketSection]) -> MarketLanding? {
-        switch target {
-        case .top: return .top
-        case .category(let name):
-            return sections.firstIndex { $0.categoryName == name }.map { .section($0) }
-        }
-    }
-}
-
-extension MarketSidebarLogic {
-    /// The id a jump hands to `scrollTo`: the top's, or the `scrollID` of the block (the element id of the page's `ForEach`).
-    static func scrollID(for landing: MarketLanding, sections: [MarketSection]) -> String {
-        switch landing {
-        case .top: MarketScrollDriver.topID
-        case .section(let index): sections[index].scrollID
-        }
-    }
-}
-
-enum MarketLanding: Equatable {
-    case top
-    case section(Int)
-
-    var index: Int? {
-        if case .section(let index) = self { return index }
+    /// The category rows carry their symbol; the others do not.
+    static func symbol(of row: MarketFilter) -> String? {
+        if case .category(let name) = row { return MarketCategory.symbol(name) }
         return nil
     }
 }
@@ -325,35 +384,5 @@ extension MarketFilter {
     var isCategory: Bool {
         if case .category = self { return true }
         return false
-    }
-}
-
-// MARK: - tones
-
-/// The calm accent of a block, as a name; the view maps it to a color of the design system.
-enum MarketTone: Equatable {
-    case connected, sky, peach, lilac, rose, cream, neutral
-    /// A category the app has no color for: a palette entry picked by the name.
-    case hashed(Int)
-
-    /// The tone of a block: the known categories keep their color, the others take a stable one from the name.
-    static func of(_ section: MarketSection) -> MarketTone {
-        switch section.kind {
-        case .connected: return .connected
-        case .catalog: return .neutral
-        case .category(let name): return of(category: name)
-        }
-    }
-
-    static func of(category name: String) -> MarketTone {
-        switch name {
-        case "dev": .sky
-        case "productivity": .peach
-        case "data": .lilac
-        case "web": .rose
-        case "design": .cream
-        case "other": .neutral
-        default: .hashed(MarketTileStyle.paletteIndex(for: name))
-        }
     }
 }

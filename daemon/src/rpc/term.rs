@@ -5,7 +5,9 @@ use super::{
     App, INVALID_PARAMS, Id, METHOD_NOT_FOUND, Peer, RpcError, RpcResult, SERVER_ERROR, TERM_ERROR, UNAUTHORIZED,
 };
 use super::{check_cwd, ok, params};
-use crate::terminal::{OpenSpec, TermError, TermEvent};
+use crate::store::{SHARED_WORKSPACE, WorkspaceKind};
+use crate::terminal::{ContainerTarget, OpenSpec, TermError, TermEvent};
+use crate::workspace::{self, WorkspaceError, WorkspaceSpec};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 use serde::Deserialize;
@@ -29,6 +31,9 @@ struct OpenParams {
     rows: u16,
     #[serde(default)]
     env: BTreeMap<String, String>,
+    /// `shared` (default) runs on the server; the id of a container workspace runs inside its container.
+    #[serde(default)]
+    workspace: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -67,13 +72,23 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
             if p.command.as_ref().is_some_and(Vec::is_empty) {
                 return Err(RpcError::new(INVALID_PARAMS, "command is empty"));
             }
+            let (cwd, container, command) = match p.workspace.as_deref() {
+                None | Some(SHARED_WORKSPACE) => (resolve_cwd(p.cwd.as_deref())?, None, p.command),
+                Some(id) => {
+                    let target = container_target(app, id, p.cwd.as_deref()).await?;
+                    let command = p.command.or_else(|| Some(crate::terminal::container_shell()));
+                    // The docker client runs on the server, in the home folder; the folder asked for is inside.
+                    (resolve_cwd(None)?, Some(target), command)
+                }
+            };
             let spec = OpenSpec {
-                cwd: resolve_cwd(p.cwd.as_deref())?,
-                command: p.command,
+                cwd,
+                command,
                 title: p.title,
                 cols: p.cols,
                 rows: p.rows,
                 env: p.env.into_iter().collect(),
+                container,
             };
             ok(app.terminals.open(spec).map_err(term_error)?)
         }
@@ -110,6 +125,46 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
             ok(json!({}))
         }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
+    }
+}
+
+/// Where a terminal of container workspace `id` runs. Starts the container when it is stopped (as the next message
+/// of an agent would). `cwd` is a folder inside the container: absolute, or `~` for the container's home (`/root`).
+async fn container_target(app: &App, id: &str, cwd: Option<&str>) -> Result<ContainerTarget, RpcError> {
+    if id.is_empty() {
+        return Err(RpcError::new(INVALID_PARAMS, "workspace is empty"));
+    }
+    let cwd = container_cwd(cwd)?;
+    let store = app.sup.hub().store.clone();
+    let manager = app.sup.workspaces().clone();
+    let ws = store
+        .workspace_get(id)?
+        .ok_or_else(|| WorkspaceError::NotFound(id.to_string()))?;
+    if ws.kind != WorkspaceKind::Container {
+        return Err(WorkspaceError::Invalid(format!("{id} is not a container workspace")).into());
+    }
+    let mounts = workspace::mounts_for(&store, &ws)?;
+    manager.ensure_running(&ws, &mounts).await?;
+    let WorkspaceSpec::Container { name, docker } = manager.spec(&ws) else {
+        return Err(WorkspaceError::Invalid("not a container workspace".into()).into());
+    };
+    Ok(ContainerTarget {
+        workspace_id: ws.id,
+        name,
+        docker,
+        cwd,
+    })
+}
+
+/// The folder of a container terminal. The container runs as root: `None` and `~` are `/root`.
+fn container_cwd(cwd: Option<&str>) -> Result<String, RpcError> {
+    const HOME: &str = "/root";
+    let bad = || RpcError::new(INVALID_PARAMS, "cwd must be an absolute folder inside the container");
+    match cwd {
+        None | Some("~") | Some("") => Ok(HOME.to_string()),
+        Some(path) if path.starts_with("~/") => Ok(format!("{HOME}/{}", &path[2..])),
+        Some(path) if path.starts_with('/') && !path.contains(['\0', '\n']) => Ok(path.to_string()),
+        Some(_) => Err(bad()),
     }
 }
 
@@ -720,6 +775,83 @@ mod tests {
         c.ok("term.close", json!({ "id": info["id"] })).await;
     }
 
+    #[test]
+    fn container_folders_are_inside_the_container() {
+        assert_eq!(container_cwd(None).unwrap(), "/root");
+        assert_eq!(container_cwd(Some("~")).unwrap(), "/root");
+        assert_eq!(container_cwd(Some("~/app")).unwrap(), "/root/app");
+        assert_eq!(container_cwd(Some("/work/x")).unwrap(), "/work/x");
+        assert_eq!(container_cwd(Some("work")).unwrap_err().code, INVALID_PARAMS);
+        assert_eq!(container_cwd(Some("/a\nb")).unwrap_err().code, INVALID_PARAMS);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_container_terminal_runs_docker_exec_and_names_its_workspace() {
+        use crate::store::{Network, NewWorkspace};
+        use crate::workspace::{WorkspaceManager, testing::fake_docker};
+        let fake = fake_docker(None);
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let ws = store
+            .workspace_create(NewWorkspace {
+                name: "Box".into(),
+                kind: WorkspaceKind::Container,
+                image: Some("img:1".into()),
+                cpus: None,
+                memory_mb: None,
+                network: Network::Internet,
+                mounts: Vec::new(),
+            })
+            .unwrap();
+        let manager = WorkspaceManager::new(fake.docker.clone(), fake.dir.path().join("build"));
+        let sup = Supervisor::new_with_workspaces(Hub::new(store), Runtimes::default(), None, manager);
+        let app = App::new(sup, std::env::temp_dir());
+        let _guard = Cleanup(app.clone());
+        let mut c = connect(&app, Peer::Local);
+        let mut p = sh_params();
+        p["workspace"] = json!(ws.id);
+        p["cwd"] = json!("/work");
+        p.as_object_mut().unwrap().remove("command");
+        let info = c.ok("term.open", p).await;
+        assert_eq!(info["workspace"], json!(ws.id));
+        assert_eq!(info["cwd"], json!("/work"));
+        // The logical command is the container shell, not the docker client.
+        assert_eq!(info["command"][0], json!("sh"));
+        // The fake docker is a script started by the terminal: its log line comes a moment after the open.
+        let mut log = fake.calls();
+        for _ in 0..100 {
+            if log.iter().any(|l| l.starts_with("exec ")) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            log = fake.calls();
+        }
+        let exec = log
+            .iter()
+            .find(|l| l.starts_with("exec "))
+            .expect("docker exec was run");
+        assert!(exec.starts_with("exec -it -w /work -e TERM"), "{exec}");
+        assert!(exec.contains(&format!("bandito-ws-{}", ws.id)), "{exec}");
+        // The container was started first.
+        assert!(log.iter().any(|l| l.starts_with("run ")), "{log:?}");
+        c.ok("term.close", json!({ "id": info["id"] })).await;
+    }
+
+    #[tokio::test]
+    async fn an_unknown_workspace_is_refused_and_shared_is_the_default() {
+        let (app, _guard) = test_app();
+        let mut c = connect(&app, Peer::Local);
+        let mut p = sh_params();
+        p["workspace"] = json!("nope");
+        let (code, _) = c.fail("term.open", p).await;
+        assert_eq!(code, crate::rpc::WORKSPACE_ERROR);
+        let mut p = sh_params();
+        p["workspace"] = json!("shared");
+        let info = c.ok("term.open", p).await;
+        assert_eq!(info["workspace"], json!("shared"));
+        c.ok("term.close", json!({ "id": info["id"] })).await;
+    }
+
     #[tokio::test]
     async fn lagged_stream_catches_up_from_the_terminal() {
         let (app, _guard) = test_app();
@@ -730,6 +862,7 @@ mod tests {
             cols: 80,
             rows: 24,
             env: Vec::new(),
+            container: None,
         };
         let id = app.terminals.open(spec).unwrap().id;
         app.terminals.input(&id, b"echo hel\"\"lo\n").await.unwrap();

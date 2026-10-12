@@ -2,6 +2,7 @@
 import AppKit
 import BanditoKit
 import Foundation
+import os
 
 // QA hooks for the QA copies of the app (`dev.bandito.mac.debug.qa<n>`, driven by `scripts/qa`). Debug builds only:
 // the whole file and its call sites are compiled out of a release build.
@@ -41,6 +42,18 @@ enum QACommand: Equatable {
     case tab(ServerSection)
     /// The workbench of the agent on screen: `details`, `terminal`, `browser`, `changes`, `toggle`, `split`.
     case workbench(String)
+    /// The double-click of a title strip (`TitleBarZoom.doubleClick`), without a mouse: zooms or restores the window.
+    case zoom
+    /// A performance scenario in the smoothness check's window (`perf <scenario> [result path]`, see `PerfScenarios`).
+    case perf(PerfScenario, path: String?)
+    /// Every scenario in a row, as the Help menu's smoothness check runs them (`perf check [summary path]`).
+    case perfCheck(path: String?)
+    /// Answers the first-run notice about statistics with "Don't send", so a fresh QA copy has no sheet in front.
+    case dismissConsent
+    /// A page of the Marketplace: `market services|bots|skills [all|connected|installed|bundles|myBots|category:<name>]`.
+    case market(MarketTab, MarketFilter)
+    /// An arrow of the n-th shelf on screen (`shelf next|back [n]`, n counts from 0).
+    case shelf(forward: Bool, index: Int)
 
     static func parse(_ text: String) -> QACommand? {
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -68,8 +81,46 @@ enum QACommand: Equatable {
             return ServerSection(rawValue: name).map { .tab($0) }
         case ("workbench", let action?) where ["details", "terminal", "browser", "changes", "toggle", "split"].contains(action):
             return .workbench(action)
+        case ("zoom", nil):
+            return .zoom
+        case ("shelf", let rest?):
+            let words = rest.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+            guard let direction = words.first, ["next", "back"].contains(direction), words.count <= 2 else { return nil }
+            let index = words.count == 2 ? Int(words[1]) : 0
+            guard let index, index >= 0 else { return nil }
+            return .shelf(forward: direction == "next", index: index)
+        case ("market", let rest?):
+            let words = rest.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+            guard let first = words.first, let tab = MarketTab(rawValue: first), words.count <= 2 else { return nil }
+            guard words.count == 2 else { return .market(tab, .all) }
+            return parseMarketFilter(words[1]).map { .market(tab, $0) }
+        case ("perf", let rest?):
+            let words = rest.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard let name = words.first.map(String.init) else { return nil }
+            let path = words.count > 1 ? String(words[1]).trimmingCharacters(in: .whitespaces) : nil
+            let given = path?.isEmpty == false ? path : nil
+            if name == "check" { return .perfCheck(path: given) }
+            guard let scenario = PerfScenario(rawValue: name) else { return nil }
+            return .perf(scenario, path: given)
+        case ("dismiss-consent", nil):
+            return .dismissConsent
         default:
             return nil
+        }
+    }
+
+    /// The filter a `market` command names.
+    static func parseMarketFilter(_ name: String) -> MarketFilter? {
+        switch name {
+        case "all": return .all
+        case "connected": return .connected
+        case "installed": return .installed
+        case "bundles": return .bundles
+        case "myBots": return .myBots
+        default:
+            guard name.hasPrefix("category:") else { return nil }
+            let category = String(name.dropFirst("category:".count))
+            return category.isEmpty ? nil : .category(category)
         }
     }
 
@@ -91,6 +142,7 @@ enum QAHooks {
     private static var started = false
     private static var router: Router?
     private static var onboarding: OnboardingModel?
+    private static var telemetry: TelemetryCenter?
     private static var observer: NSObjectProtocol?
     private static weak var app: AppModel?
 
@@ -117,21 +169,25 @@ enum QAHooks {
 
     /// Called once when the main window appears: applies the launch arguments and starts listening for commands.
     /// Does nothing outside a QA copy (`QABuild`), so the development build `dev.bandito.mac.debug` gets no hooks.
-    static func start(router: Router, onboarding: OnboardingModel) {
+    static func start(router: Router, onboarding: OnboardingModel, telemetry: TelemetryCenter) {
         guard QABuild.isRunningQA, !started else { return }
         started = true
         self.router = router
         self.onboarding = onboarding
+        self.telemetry = telemetry
         applyLaunchArguments(to: router)
         observeCommands()
     }
 
     /// One command line, from the notification. Unknown commands are logged and ignored.
     static func handle(_ text: String) {
+        let log = Logger(subsystem: "dev.bandito", category: "qa")
         guard let command = QACommand.parse(text) else {
             NSLog("QA unknown command \(text)")
+            log.notice("unknown command: \(text, privacy: .public)")
             return
         }
+        log.notice("command: \(text, privacy: .public)")
         guard let router, let onboarding else { return }
         switch command {
         case .mode(let mode):
@@ -156,6 +212,25 @@ enum QAHooks {
             router.serverSection = section
         case .workbench(let action):
             runWorkbench(action, router: router)
+        case .zoom:
+            TitleBarZoom.doubleClick()
+        case .perf(let scenario, let path):
+            PerfCheck.runQA([scenario], summaryPath: nil, singlePath: path)
+        case .perfCheck(let path):
+            PerfCheck.runQA(PerfScenario.allCases, summaryPath: path, singlePath: nil)
+        case .dismissConsent:
+            telemetry?.answerNotice(sendStatistics: false)
+        case .shelf(let forward, let index):
+            MarketShelfDebug.press(forward: forward, index: index)
+        case .market(let tab, let filter):
+            router.select(mode: .market)
+            router.marketTab = tab
+            router.marketDetail = nil
+            switch tab {
+            case .services: router.marketFilter = filter
+            case .bots: router.marketBotFilter = filter
+            case .skills: router.marketSkillFilter = filter
+            }
         }
     }
 
@@ -232,7 +307,11 @@ enum QAHooks {
     /// Sets the content size of the main window and centres it. False when there is no such window yet.
     @discardableResult
     private static func resizeMainWindow(_ size: QASize) -> Bool {
-        guard let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.isVisible && !$0.isMiniaturized }) else {
+        guard
+            let window = NSApp.windows.first(where: {
+                $0.canBecomeMain && $0.isVisible && !$0.isMiniaturized && $0.identifier != PerfCheck.windowIdentifier
+            })
+        else {
             return false
         }
         window.setContentSize(NSSize(width: size.width, height: size.height))

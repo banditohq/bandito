@@ -105,11 +105,13 @@ struct PortsView: View {
         .task(id: server?.info != nil) {
             guard let server, server.supports("host") else { return }
             while !Task.isCancelled {
-                do {
-                    reply = try await server.hostPorts()
-                    error = nil
-                } catch {
-                    self.error = UserFacingError.message(for: error)
+                if AppActivity.isActive {
+                    do {
+                        reply = try await server.hostPorts()
+                        error = nil
+                    } catch {
+                        self.error = UserFacingError.message(for: error)
+                    }
                 }
                 try? await Task.sleep(for: HostMonitor.interval)
             }

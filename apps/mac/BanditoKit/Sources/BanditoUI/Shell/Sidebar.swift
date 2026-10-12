@@ -21,12 +21,16 @@ struct Sidebar: View {
         }
         .frame(width: Self.width)
         .frame(maxHeight: .infinity)
+        // The title strip runs over the whole top of the column, under the traffic lights too. It is drawn before the
+        // surface, so the surface does not cover it.
+        .titleBarBand()
         .background(Color.Bandito.surface1)
     }
 }
 
-/// 52 pt high, like the title bar. The traffic lights sit on the left, then the brand; the empty strip between the
-/// brand and the buttons zooms the window on a double-click. Search and new agent sit on the right.
+/// 52 pt high, like the title bar. The traffic lights sit on the left, then the brand; the empty space of the row
+/// (between the brand and the buttons, and around them) zooms the window on a double-click and moves it on a drag.
+/// Search and new agent sit on the right and keep their own clicks.
 private struct SidebarTopRow: View {
     @Environment(Router.self) private var router
 
@@ -45,7 +49,6 @@ private struct SidebarTopRow: View {
             .accessibilityElement(children: .combine)
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(TitleBarZoomArea())
             Button {
                 router.paletteOpen = true
             } label: {
@@ -73,12 +76,21 @@ private struct SidebarTopRow: View {
 /// The list under the mode bar. Switching modes cross-fades the lists.
 private struct ModeSidebarContent: View {
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
 
     var body: some View {
         ZStack {
-            sidebar(for: router.mode)
-                .id(router.mode)
-                .transition(.opacity)
+            let front = app.currentServer?.id.uuidString
+            ForEach(TeamKeeping.built(kept: router.teamServers, front: front, teamShown: router.mode == .team), id: \.self) {
+                serverID in
+                TeamSidebar(serverID: serverID)
+                    .keptMode(hidden: router.mode != .team || serverID != front)
+            }
+            if router.mode != .team {
+                sidebar(for: router.mode)
+                    .id(router.mode)
+                    .transition(.opacity)
+            }
         }
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: router.mode)
     }
@@ -86,7 +98,7 @@ private struct ModeSidebarContent: View {
     @ViewBuilder
     private func sidebar(for mode: AppMode) -> some View {
         switch mode {
-        case .team: TeamSidebar()
+        case .team: TeamSidebar(serverID: app.currentServer?.id.uuidString)
         case .files: FilesSidebar()
         case .terminals: TerminalsSidebar()
         case .browser: BrowserSidebar()

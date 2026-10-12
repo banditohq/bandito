@@ -2,7 +2,7 @@ import BanditoKit
 import Foundation
 import BanditoL10n
 
-/// What the "Only risky / Everything / Nothing" control means, in the words of the approval policy.
+/// What the "Only about risky / About everything / About nothing" control means, in the words of the approval policy.
 public enum ApprovalChoice: CaseIterable, Sendable {
     case risky, always, never
 

@@ -54,6 +54,8 @@ struct ThreadRowKey: Equatable {
     var quoted: ReplyTarget?
     /// The mentions of the message, drawn as chips under it.
     var mentions: [Mention]
+    /// The message was sent by pressing a button of the agent's.
+    var viaButton: Bool
     var flashing: Bool
     var isLastAgent: Bool
     /// 0 for a message that is not waiting, 1 while it is queued, 2 when it was not delivered.
@@ -77,6 +79,7 @@ struct ThreadRowKey: Equatable {
             reactions = seq.flatMap { chat.reactions[$0] }
             quoted = (chat.repliesOn ? seq.flatMap { chat.replies[$0] } : nil).flatMap { chat.original($0) }
             mentions = seq.flatMap { chat.mentions[$0] } ?? []
+            viaButton = seq.map { chat.viaButton.contains($0) } ?? false
             flashing = chat.highlightedID == item.id
             isLastAgent = chat.lastAgentID == item.id
             waiting = seq.map { chat.waiting.contains($0) ? 1 : chat.undelivered.contains($0) ? 2 : 0 } ?? 0
@@ -85,6 +88,7 @@ struct ThreadRowKey: Equatable {
             reactions = nil
             quoted = nil
             mentions = []
+            viaButton = false
             flashing = false
             isLastAgent = false
         }
@@ -106,6 +110,7 @@ struct EquatableThreadRow: View, Equatable {
     }
 
     var body: some View {
+        let _ = PerfCounters.hit("ThreadRow")
         ThreadRowView(
             row: key.row, agentName: key.agentName, primaryRuntime: key.primaryRuntime, server: server, chat: chat,
             agentID: key.agentID, folder: key.folder, onError: onError)
@@ -139,6 +144,7 @@ private struct ItemView: View {
     @Environment(Router.self) private var router: Router?
 
     var body: some View {
+        let _ = PerfCounters.hit("ItemView")
         content
             // Links in a message (file paths, web addresses) open here, in the workbench beside the chat.
             .environment(\.openURL, OpenURLAction { url in
@@ -152,7 +158,7 @@ private struct ItemView: View {
     @ViewBuilder
     private var content: some View {
         switch item {
-        case .user(let id, let text, let source, let from, _, let files):
+        case .user(let id, let text, let source, let from, let ts, let files):
             if source == .user {
                 let seq = item.messageSeq
                 if text.isEmpty, !files.isEmpty {
@@ -164,12 +170,18 @@ private struct ItemView: View {
                 } else {
                     MessageContainer(
                         itemID: id, seq: seq, text: text, fromUser: true, chat: chat, files: files, agentID: agentID,
-                        server: server
+                        server: server, sentAt: Date(timeIntervalSince1970: TimeInterval(ts) / 1000)
                     ) {
                         VStack(alignment: .trailing, spacing: 4) {
                             UserBubble(text: text) { quote(forSeq: seq) }
                             if let seq, let mentions = chat.mentions[seq], !mentions.isEmpty {
                                 MessageMentions(mentions: mentions, agentID: agentID, server: server)
+                            }
+                            if let seq, chat.viaButton.contains(seq) {
+                                Text(L10n.Thread.viaButton)
+                                    .font(BanditoFont.text(size: 11.5, weight: 400))
+                                    .foregroundStyle(Color.Bandito.text3)
+                                    .padding(.trailing, 4)
                             }
                             if let seq, chat.waiting.contains(seq) || chat.undelivered.contains(seq) {
                                 Text(chat.undelivered.contains(seq) ? L10n.Thread.notDelivered : L10n.Thread.queued)
@@ -194,9 +206,12 @@ private struct ItemView: View {
                     }
                 }
             }
-        case .assistant(let id, let text, _):
+        case .assistant(let id, let text, let ts):
             let seq = item.messageSeq
-            MessageContainer(itemID: id, seq: seq, text: text, fromUser: false, chat: chat) {
+            MessageContainer(
+                itemID: id, seq: seq, text: text, fromUser: false, chat: chat,
+                sentAt: Date(timeIntervalSince1970: TimeInterval(ts) / 1000)
+            ) {
                 AgentBubble(text: text) { quote(forSeq: seq) }
             }
         case .streaming(let text):
@@ -262,11 +277,10 @@ enum BubbleLook {
     static var userTint: Color { Color.Bandito.text.opacity(0.13) }
     static var userBorder: Color { Color.Bandito.text.opacity(0.08) }
 
-    /// The agent's bubble: the surface, with an edge that fades from top to bottom.
-    static var agentBorder: LinearGradient {
-        LinearGradient(
-            colors: [Color.Bandito.text.opacity(0.08), Color.Bandito.text.opacity(0.03)],
-            startPoint: .top, endPoint: .bottom)
+    /// The agent's bubble: the surface, with a quiet solid edge. It faded from top to bottom once; a gradient stroke
+    /// is painted by the processor over the whole bubble, and it doubled what a message cost to show.
+    static var agentBorder: Color {
+        Color.Bandito.text.opacity(0.06)
     }
 }
 
@@ -374,22 +388,23 @@ struct TypingIndicator: View {
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
     /// The row is on screen: the wave stops when it scrolls away (the timeline is not driven off screen).
     @State private var onScreen = false
+    @State private var layerShown = false
     /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
     private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     var body: some View {
         HStack(spacing: 9) {
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still || !onScreen)) { context in
-                let time = context.date.timeIntervalSinceReferenceDate
-                HStack(spacing: 4) {
-                    ForEach(0..<3, id: \.self) { index in
-                        Circle()
-                            .fill(Color.Bandito.text2)
-                            .frame(width: 6, height: 6)
-                            .opacity(Self.opacity(time: time, index: index, still: still))
-                            .offset(y: Self.lift(time: time, index: index, still: still))
+            ZStack {
+                Self.dots(time: 0, still: true)
+                    .opacity(!still && onScreen && layerShown ? 0 : 1)
+                #if os(macOS)
+                // The wave is a Core Animation layer (see `LayerMotion`): it must not redraw the thread.
+                if !still && onScreen {
+                    TypingDotsMotion(color: Color.Bandito.text2) { shown in
+                        if layerShown != shown { layerShown = shown }
                     }
                 }
+                #endif
             }
             Text(activity.title)
                 .font(BanditoFont.text(size: 12.5, weight: 400))
@@ -419,6 +434,19 @@ struct TypingIndicator: View {
     }
 
     /// Each dot brightens in turn, 0.2 s apart, over a 1.2 s cycle. Still dots stay at a middle level.
+    /// The three dots at `time`.
+    static func dots(time: Double, still: Bool) -> some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(Color.Bandito.text2)
+                    .frame(width: 6, height: 6)
+                    .opacity(opacity(time: time, index: index, still: still))
+                    .offset(y: lift(time: time, index: index, still: still))
+            }
+        }
+    }
+
     static func opacity(time: Double, index: Int, still: Bool) -> Double {
         if still { return 0.6 }
         return 0.25 + 0.75 * peak(time: time, index: index)
@@ -491,12 +519,7 @@ private struct DayDivider: View {
             .padding(.vertical, 6)
     }
 
-    private var caption: String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return L10n.Thread.today }
-        if calendar.isDateInYesterday(date) { return L10n.Thread.yesterday }
-        return date.formatted(.dateTime.day().month(.wide).year())
-    }
+    private var caption: String { DayCaption.text(date) }
 }
 
 private struct Rule: View {

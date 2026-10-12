@@ -55,6 +55,29 @@ final class TerminalController {
         sessions[id]
     }
 
+    // MARK: workplaces
+
+    /// The workplace a new terminal opens in (the choice in the Terminals sidebar), with the list it comes from.
+    var selection: WorkspaceSelection {
+        WorkspaceSelections.shared.selection(mode: "terminals", server: server)
+    }
+
+    /// The daemon can open a terminal inside a container workplace (`term.open {workspace}`).
+    var supportsWorkplaces: Bool { server.supports("terminal_workspaces") }
+
+    /// The workplace a terminal opens in: the one asked for, else the chosen one. An older daemon has only the shared
+    /// server, so that is where a terminal opens then.
+    private func target(_ asked: String?) -> String {
+        guard supportsWorkplaces else { return Workspace.sharedID }
+        return asked ?? selection.selectedID
+    }
+
+    /// The name of the workplace a terminal runs in, or nil for the shared server (it needs no label).
+    func workspaceLabel(for id: String) -> String? {
+        guard let info = sessions[id]?.info else { return nil }
+        return WorkspacePickerLogic.label(workspaceID: info.workspace, workspaces: selection.directory.workspaces)
+    }
+
     /// The name the session has on screen (see `TerminalNames`), or nil when the session is not here.
     func displayTitle(_ id: String) -> String? {
         names[id]
@@ -151,10 +174,20 @@ final class TerminalController {
     /// `afterFocused` places it next to the focused pane (split).
     /// Opens a terminal on the server. Returns its id, or `nil` when it could not be opened (then `notice` says why).
     @discardableResult
-    func openNew(cwd: String?, afterFocused: Bool) async -> String? {
+    func openNew(cwd: String?, afterFocused: Bool, workspace workspaceID: String? = nil) async -> String? {
         let size = focusedSize()
+        let place = target(workspaceID)
+        // A stopped container is started first, with "starting" in the picker, instead of a wait with no word.
+        if WorkspacePickerLogic.needsStartBeforeTerminal(selection.directory.workspace(place)) {
+            await selection.directory.start(place)
+            if let failure = selection.directory.errorText {
+                notice = failure.wrapped { L10n.Terminals.newFailed(message: $0) }
+                return nil
+            }
+        }
         do {
-            let info = try await server.openTerminal(cwd: cwd, cols: size.cols, rows: size.rows)
+            let info = try await server.openTerminal(
+                cwd: cwd, cols: size.cols, rows: size.rows, workspace: WorkspacePickerLogic.rpcParameter(place))
             let placement = workspace.add(info.id, afterFocused: afterFocused, at: .now)
             await makeSession(info, attachFrom: nil)
             // A new terminal takes the keyboard at once, so typing starts without a click. One in the dock has no pane yet.
@@ -201,7 +234,8 @@ final class TerminalController {
         guard let old = sessions[id]?.info else { return }
         do {
             let info = try await server.openTerminal(
-                cwd: old.cwd, command: old.command, title: old.title, cols: old.cols, rows: old.rows)
+                cwd: old.cwd, command: old.command, title: old.title, cols: old.cols, rows: old.rows,
+                workspace: WorkspacePickerLogic.rpcParameter(old.workspace))
             try? await server.closeTerminal(id)
             sessions[id]?.stop()
             sessions[id] = nil

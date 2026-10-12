@@ -50,6 +50,14 @@ struct TerminalsContent: View {
         .task(id: server.id) {
             await controller.start()
         }
+        // The workplaces: their names label the terminals, and the sidebar chooses among them.
+        .task(id: "\(server.id.uuidString) \(controller.supportsWorkplaces)") {
+            guard controller.supportsWorkplaces else { return }
+            while !Task.isCancelled {
+                if controller.selection.directory.shouldPoll { await controller.selection.refresh() }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
         // The Terminals mode draws the terminal views while it is on screen; a workbench pane gives them up.
         .onAppear { controller.claimDisplay(place) }
         .onDisappear { controller.releaseDisplay(place) }
@@ -88,19 +96,24 @@ struct TerminalsContent: View {
     /// focused pane's folder instead.
     private func openNew(_ controller: TerminalController, split: Bool) {
         let cwd: String?
+        var workspace: String?
         if split {
+            // A split stays where the focused pane runs, folder and workplace.
             cwd = controller.focusedSession?.info.cwd
+            workspace = controller.focusedSession?.info.workspace
         } else {
             cwd = router.takeTerminalCwd()
+            // A folder handed over by Files is a path on the server itself.
+            if cwd != nil { workspace = Workspace.sharedID }
         }
-        Task { await controller.openNew(cwd: cwd, afterFocused: split) }
+        Task { await controller.openNew(cwd: cwd, afterFocused: split, workspace: workspace) }
     }
 
     /// Takes the folder waiting in the Router (once) and opens a new terminal there, as soon as the server lists
     /// its terminals.
     private func openPendingFolder(_ controller: TerminalController) {
         guard controller.isListed, server.supports("terminals"), let cwd = router.takeTerminalCwd() else { return }
-        Task { await controller.openNew(cwd: cwd, afterFocused: false) }
+        Task { await controller.openNew(cwd: cwd, afterFocused: false, workspace: Workspace.sharedID) }
     }
 
     /// A new terminal that starts with a command typed into it (Server → Install, Update): the command goes in
@@ -108,7 +121,7 @@ struct TerminalsContent: View {
     private func runInNewTerminal(_ command: String, controller: TerminalController) {
         Task {
             await controller.start()
-            await controller.openNew(cwd: nil, afterFocused: false)
+            await controller.openNew(cwd: nil, afterFocused: false, workspace: Workspace.sharedID)
             guard let id = controller.workspace.focusedID else { return }
             try? await controller.server.input(Data((command + "\n").utf8), to: id)
         }

@@ -21,6 +21,7 @@ use crate::store::{
     Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind,
     capabilities_csv, new_id, now_ms,
 };
+use crate::turn_gate::{SlotWait, TurnSlot};
 use crate::workspace::{self, WorkspaceManager, WorkspaceSpec};
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Local, NaiveTime, TimeZone};
@@ -30,7 +31,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 
 /// Available runtimes by kind.
 #[derive(Default, Clone)]
@@ -72,6 +73,8 @@ pub struct Inbound {
     pub attachments: Vec<Attachment>,
     /// `@` mentions of the message (a human's message only), checked by `agents.send`.
     pub mentions: Vec<Mention>,
+    /// The person pressed a quick-reply button the agent offered (checked by `agents.send` against the buttons shown).
+    pub via_button: bool,
 }
 
 impl Inbound {
@@ -87,6 +90,7 @@ impl Inbound {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         }
     }
 
@@ -102,6 +106,7 @@ impl Inbound {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         }
     }
 }
@@ -268,12 +273,22 @@ const CHAT_GUIDE: &str = "Когда вам нужно несколько отв
 Если для задачи нужен сервис из каталога Bandito (почта, Slack, GitHub, Notion и т. п.), не просите человека искать идентификаторы и ключи: вызовите инструмент request_connection — человек увидит в чате карточку с кнопкой «Подключить».
 Можно ставить реакции на сообщения человека инструментом react (например 👍 — принял, 👀 — смотрю), вместо коротких ответов.";
 
+/// Put in the system prompt of every agent: do what was asked, say what is missing, offer buttons
+/// (see docs/ARCHITECTURE.md#quick-replies).
+const PRINCIPLES: &str = "Do exactly what the person asked. If there is no tool for the request, say at once what is missing and offer the options as buttons (reply_buttons); never swap the request for a similar action. When you wait for the person to confirm an outside step (connect, sign in, check) or you offer choices, use reply_buttons.";
+
+/// Added to the main agent's prompt: it creates agents (see docs/ARCHITECTURE.md#agents-creating-agents).
+const LEAD_CREATES: &str = "You can create agents, and \"create an agent that does X\" always means a new agent, not a schedule of your own. To create one: crew_create_agent (name, instructions, and services or capabilities it needs), then schedule_create with agent_id for its regular runs, then team_assign to hand it the first task. Never say you cannot create agents.";
+
 /// Put in the system prompt of the main agent of the crew (see docs/ARCHITECTURE.md#lead-agent).
 const LEAD_BRIEFING: &str = "Вы главный в команде. Делите большие задачи между агентами (team_list, team_assign), следите за ходом (team_status с wait=true, а не опросом в цикле), собирайте итог и отвечайте человеку. Сами делайте только то, что никому не подходит. Агенты команды — это не встроенный инструмент Agent (субагенты): задачи им отправляйте только через team_assign.";
 
 /// Put in the system prompt of every other agent when the crew has a main one. `{name}` is replaced by its name.
 const LEAD_NOTICE: &str =
     "Главный в команде — {name}. Задачи от него выполняйте как от человека и отвечайте ему кратко итогом.";
+
+/// Put before a message the person sent by pressing a button the agent had offered with `reply_buttons`.
+const BUTTON_NOTE: &str = "[The person pressed a button that you offered with reply_buttons; the text below is that button's reply, not words they typed.]";
 
 /// Put before a message from the main agent, so the runtime knows who wrote it. `{name}` is replaced by its name.
 const FROM_LEAD: &str = "Сообщение от главного в команде ({name}):";
@@ -535,6 +550,10 @@ impl Supervisor {
             turn_until: None,
             manual_chapter: false,
             status: None,
+            slot: None,
+            slot_rx: self.hub.turns().subscribe(),
+            slot_waiting: false,
+            wait: None,
         };
         tokio::spawn(actor.run(rx));
         actors.insert(agent_id.to_string(), tx.clone());
@@ -658,6 +677,7 @@ impl Supervisor {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
@@ -710,7 +730,15 @@ impl Supervisor {
     /// expired then). `remember` is ignored for these: no rule is created.
     pub async fn ask_external(&self, agent_id: &str, spec: ApprovalSpec, limit: Duration) -> Result<Decision> {
         let (approval_id, mut answer) = self.call(agent_id, |reply| Cmd::AskExternal { spec, reply }).await?;
-        match tokio::time::timeout(limit, &mut answer).await {
+        // If this call is dropped while the question waits (the agent's connection closed, its turn was cancelled),
+        // the question is denied, so no card is left that nothing waits for.
+        let mut guard = DenyOnDrop {
+            actor: self.actor(agent_id).ok(),
+            approval_id: approval_id.clone(),
+        };
+        let outcome = tokio::time::timeout(limit, &mut answer).await;
+        guard.disarm();
+        match outcome {
             Ok(Ok(decision)) => Ok(decision),
             Ok(Err(_)) => Ok(Decision::Deny),
             Err(_) => {
@@ -917,6 +945,43 @@ impl Drop for ExpireOnDrop {
     }
 }
 
+/// Denies a question of the daemon's own (`ask_external`) when the call that waits for it is dropped.
+struct DenyOnDrop {
+    actor: Option<mpsc::Sender<Cmd>>,
+    approval_id: String,
+}
+
+impl DenyOnDrop {
+    fn disarm(&mut self) {
+        self.actor = None;
+    }
+}
+
+impl Drop for DenyOnDrop {
+    fn drop(&mut self) {
+        let Some(actor) = self.actor.take() else {
+            return;
+        };
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let approval_id = std::mem::take(&mut self.approval_id);
+        handle.spawn(async move {
+            let (reply, _) = oneshot::channel();
+            // Already answered or gone: the actor says no, and that is fine.
+            let _ = actor
+                .send(Cmd::Resolve {
+                    approval_id,
+                    decision: Decision::Deny,
+                    by: DecidedBy::Policy,
+                    remember: false,
+                    reply,
+                })
+                .await;
+        });
+    }
+}
+
 struct PendingApproval {
     key: String,
     /// What a "remember" rule should match: the command, or the title.
@@ -986,6 +1051,14 @@ struct Actor {
     /// A new chapter was asked for while a turn ran: it starts when the turn ends.
     manual_chapter: bool,
     status: Option<AgentStatus>,
+    /// The turn slot this agent holds while a turn or a wrap-up runs (see `turn_gate` and `max_running_agents`).
+    slot: Option<TurnSlot>,
+    /// Sees every change of the turn gate: a waiting agent checks again when it changes.
+    slot_rx: watch::Receiver<u64>,
+    /// A turn was ready but no slot was free: the agent waits, its message shown as queued.
+    slot_waiting: bool,
+    /// This agent's place in the line for a slot, while it waits (see `turn_gate`).
+    wait: Option<SlotWait>,
 }
 
 async fn recv_opt(rx: &mut Option<mpsc::Receiver<RuntimeOutput>>) -> Option<RuntimeOutput> {
@@ -1012,9 +1085,64 @@ impl Actor {
                     Some(o) => self.output(o).await,
                     None => self.output = None,
                 },
+                woke = self.slot_rx.changed(), if self.slot_waiting => match woke {
+                    Ok(()) => self.slot_retry().await,
+                    Err(_) => self.slot_waiting = false,
+                },
+            }
+            // Whatever the step did, a slot is held only while a turn or a wrap-up runs, and a place in the line only
+            // while the agent waits for one.
+            if self.turn.is_none() && self.wrap_up.is_none() {
+                self.slot = None;
+            }
+            if !self.slot_waiting {
+                self.wait = None;
             }
         }
         self.close().await;
+    }
+
+    /// The largest number of turns that may run at once, from the settings (0 in the settings means no limit).
+    fn slot_limit(&self) -> usize {
+        self.hub.store.server_settings_or_default().turn_limit()
+    }
+
+    /// Takes a turn slot for this agent (keeps it when it holds one). The agent asks in line (see `turn_gate`): the
+    /// slot goes to the first in line only. When it does not get one, the agent waits, and the watch is marked as seen
+    /// first, so a change after this check wakes the agent (see `run`).
+    fn claim_slot(&mut self) -> bool {
+        if self.slot.is_some() {
+            return true;
+        }
+        let _ = self.slot_rx.borrow_and_update();
+        let gate = self.hub.turns().clone();
+        let limit = self.slot_limit();
+        let wait = self.wait.get_or_insert_with(|| gate.join());
+        match gate.take(wait, limit) {
+            Some(slot) => {
+                self.slot = Some(slot);
+                self.wait = None;
+                self.slot_waiting = false;
+                true
+            }
+            None => {
+                self.slot_waiting = true;
+                false
+            }
+        }
+    }
+
+    /// A slot was given back or the limit changed: the waiting work starts now, if a slot is free.
+    async fn slot_retry(&mut self) {
+        self.slot_waiting = false;
+        if self.manual_chapter
+            && let Err(e) = self.apply_manual_chapter().await
+        {
+            tracing::warn!(agent = self.id, "new chapter after a wait: {e:#}");
+        }
+        if let Err(e) = self.pump().await {
+            tracing::warn!(agent = self.id, "next message after a wait: {e:#}");
+        }
     }
 
     fn set_status(&mut self, status: AgentStatus, detail: Option<String>) {
@@ -1028,13 +1156,14 @@ impl Actor {
         match cmd {
             Cmd::Send(msg, reply) => {
                 let held = self.is_paused();
-                // A message that cannot start now is shown now, marked as waiting. One that starts at once is
-                // shown by its turn, as before.
-                let waits = held
-                    || self.turn.is_some()
-                    || self.wrap_up.is_some()
-                    || !self.queue.is_empty()
-                    || self.chapter_pending();
+                // An idle agent asks for its slot now. The answer is the decision whether the message waits: a message
+                // that waits is shown now, marked as queued; one that starts at once is shown by its turn, as before.
+                let idle = !held
+                    && self.turn.is_none()
+                    && self.wrap_up.is_none()
+                    && self.queue.is_empty()
+                    && !self.chapter_pending();
+                let waits = !(idle && self.claim_slot());
                 let echoed = waits.then(|| self.echo(&msg, true)).filter(|seq| *seq > 0);
                 self.queue.push_back(Queued { msg, echoed });
                 let res = self.pump().await.map(|()| held);
@@ -1147,6 +1276,7 @@ impl Actor {
                 attachments: msg.attachments.clone(),
                 mentions: msg.mentions.clone(),
                 queued,
+                via_button: msg.via_button,
             },
         );
         ev.seq
@@ -1330,9 +1460,11 @@ impl Actor {
             ));
         }
         blocks.push(CHAT_GUIDE.to_string());
+        blocks.push(PRINCIPLES.to_string());
         blocks.push(SCHEDULE_BRIEFING.to_string());
         if agent.lead {
             blocks.push(LEAD_BRIEFING.to_string());
+            blocks.push(LEAD_CREATES.to_string());
         } else if let Some(lead) = self.hub.store.agent_lead()? {
             blocks.push(LEAD_NOTICE.replace("{name}", &lead.name));
         }
@@ -1470,6 +1602,10 @@ impl Actor {
         if self.queue.is_empty() || self.is_paused() {
             return Ok(());
         }
+        // No free slot (`max_running_agents`): the message stays queued until the gate changes.
+        if !self.claim_slot() {
+            return Ok(());
+        }
         // A chapter that is over budget, or a new memory day, closes before the message goes out.
         // (If the agent can't be loaded, `ensure_session` reports it below.)
         if let Ok(agent) = self.agent()
@@ -1532,6 +1668,7 @@ impl Actor {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         match self.start_turn(msg, None).await {
             Ok(()) => true,
@@ -1548,6 +1685,10 @@ impl Actor {
     /// as an automatic close does. Waits (keeps the request) while a turn or a wrap-up runs.
     async fn apply_manual_chapter(&mut self) -> Result<()> {
         if self.turn.is_some() || self.wrap_up.is_some() {
+            return Ok(());
+        }
+        // Waits for a free slot like a turn does; the request stays until then.
+        if !self.claim_slot() {
             return Ok(());
         }
         self.manual_chapter = false;
@@ -1667,6 +1808,9 @@ impl Actor {
         );
         if let Some(name) = self.lead_sender(&msg) {
             prompt = format!("{}\n\n{prompt}", FROM_LEAD.replace("{name}", &name));
+        }
+        if msg.via_button {
+            prompt = format!("{BUTTON_NOTE}\n\n{prompt}");
         }
         let turn_id = new_id();
         self.turn = Some(turn_id.clone());
@@ -2135,6 +2279,9 @@ impl Actor {
         if self.manual_chapter && self.apply_manual_chapter().await.is_ok() && self.wrap_up.is_some() {
             return;
         }
+        // The turn is over: the slot goes back to the line. An agent with more messages asks again below, so it goes
+        // to the end, behind the agents already waiting (a long queue must not hold a slot).
+        self.slot = None;
         // A paused agent holds its queue: it is idle until the pause ends.
         if self.queue.is_empty() || self.is_paused() {
             self.set_status(AgentStatus::Idle, None);
@@ -2260,7 +2407,7 @@ impl Actor {
             }
             Verdict::Deny(reason) => self.refuse(&req, &reason, agent_message.as_deref()).await,
             Verdict::Ask(reason) => {
-                let a = self.record(&req, &reason)?;
+                let a = self.record(&req, &reason, false)?;
                 self.pending.insert(
                     a,
                     PendingApproval {
@@ -2279,7 +2426,7 @@ impl Actor {
     /// Refuse a call: it is recorded and closed as the policy's doing, and the CLI is told, with `message` when there is
     /// one. Whatever fails while recording, the CLI still gets its answer, so the call never waits for nothing.
     async fn refuse(&mut self, req: &ApprovalRequest, reason: &str, message: Option<&str>) -> Result<()> {
-        let recorded = self.record(req, reason).and_then(|a| {
+        let recorded = self.record(req, reason, false).and_then(|a| {
             self.hub.store.approval_resolve(&a, Decision::Deny)?;
             Ok(a)
         });
@@ -2377,7 +2524,7 @@ impl Actor {
             input: spec.input,
         };
         self.redactor.redact_approval(&mut req);
-        let approval_id = self.record(&req, &spec.reason)?;
+        let approval_id = self.record(&req, &spec.reason, true)?;
         let (answer, received) = oneshot::channel();
         self.pending.insert(
             approval_id.clone(),
@@ -2392,8 +2539,9 @@ impl Actor {
         Ok((approval_id, received))
     }
 
-    /// Store an approval and emit `approval.requested`. Returns its id.
-    fn record(&self, req: &ApprovalRequest, reason: &str) -> Result<String> {
+    /// Store an approval and emit `approval.requested`. Returns its id. `show_input`: the event carries the input
+    /// too (the daemon's own questions, which a client draws a card for).
+    fn record(&self, req: &ApprovalRequest, reason: &str, show_input: bool) -> Result<String> {
         let reason = self.redactor.redact(reason);
         let payload = json!({
             "command": req.command,
@@ -2416,6 +2564,7 @@ impl Actor {
                 command: req.command.clone(),
                 diff: req.diff.clone(),
                 reason: reason.into_owned(),
+                input: show_input.then(|| req.input.clone()),
             },
         );
         Ok(a.id)
@@ -3064,6 +3213,109 @@ mod tests {
         w.push(done()).await;
         w.wait_log("send second").await;
         assert_eq!(w.spawns.lock().unwrap().len(), 1, "one session for both turns");
+    }
+
+    /// Sets server settings in `store`, through the same checks as `server.settings_set`.
+    fn set_setting(store: &Store, patch: serde_json::Value) {
+        let changes = crate::server_settings::check_patch(patch.as_object().unwrap()).unwrap();
+        store.server_settings_write(&changes).unwrap();
+    }
+
+    /// A second agent of `w`'s runtime, in the same store and folder.
+    fn second_agent(w: &World, name: &str) -> String {
+        w.store
+            .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
+                integrations: None,
+                name: name.into(),
+                role: "reviewer".into(),
+                runtime: RuntimeKind::Claude,
+                model: Some("opus".into()),
+                cwd: "/bandito-probe/u/app".into(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
+            })
+            .unwrap()
+            .id
+    }
+
+    #[tokio::test]
+    async fn max_running_agents_one_makes_the_second_agent_wait_for_the_first() {
+        let mut w = world(ApprovalMode::Risky);
+        set_setting(&w.store, json!({"max_running_agents": 1}));
+        let scout = second_agent(&w, "Scout");
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        w.sup.send(&scout, Inbound::user("second")).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        assert!(
+            !w.log.lock().unwrap().iter().any(|l| l == "send second"),
+            "the second turn starts only when a slot is free"
+        );
+        assert_eq!(w.sup.hub().turns().running(), 1);
+        // The waiting message is in the thread at once, marked as queued.
+        let queued = w
+            .store
+            .events_since(0, 1000, Some(&scout))
+            .unwrap()
+            .into_iter()
+            .any(|e| matches!(e.body, EventBody::MessageUser { queued: true, .. }));
+        assert!(queued, "the message waits in the queue");
+        // The first turn ends: its slot goes to the waiting agent.
+        w.push(done()).await;
+        w.wait_log("send second").await;
+        assert_eq!(w.sup.hub().turns().running(), 1);
+        let _ = w.wait(|b| matches!(b, EventBody::TurnStarted { .. })).await;
+    }
+
+    #[tokio::test]
+    async fn no_limit_lets_both_agents_run_at_once() {
+        let w = world(ApprovalMode::Risky);
+        let scout = second_agent(&w, "Scout");
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.sup.send(&scout, Inbound::user("second")).await.unwrap();
+        w.wait_log("send first").await;
+        w.wait_log("send second").await;
+        assert_eq!(w.sup.hub().turns().running(), 2);
+    }
+
+    /// With one slot: an agent that starts at once is not marked queued; the agent with more messages goes behind the
+    /// agent that waited for the slot before it asked again.
+    #[tokio::test]
+    async fn the_line_is_first_come_first_served_and_a_queue_does_not_overtake() {
+        let w = world(ApprovalMode::Risky);
+        set_setting(&w.store, json!({"max_running_agents": 1}));
+        let b = second_agent(&w, "Scout");
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        // A is the only one running: its own message was not waiting.
+        let a_first_queued = w
+            .store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .any(|e| matches!(e.body, EventBody::MessageUser { queued: true, text, .. } if text == "first"));
+        assert!(!a_first_queued, "an agent that starts at once is not marked queued");
+        // B asks while A runs, then A gets a second message: it waits behind B in its own queue.
+        w.sup.send(&b, Inbound::user("b-msg")).await.unwrap();
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+        // A's turn ends: B was first in line, so B gets the slot, and A's second message waits.
+        w.push(done()).await;
+        w.wait_log("send b-msg").await;
+        assert!(
+            !w.log.lock().unwrap().iter().any(|l| l == "send second"),
+            "A's queued message does not overtake B"
+        );
+        // B's turn ends: now A's second message runs.
+        w.push_as(&b, done()).await;
+        w.wait_log("send second").await;
     }
 
     fn user_texts(w: &World) -> Vec<String> {
@@ -3798,6 +4050,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
             queued: true,
         };
         let lost = w.store.append_event(&w.agent, queued("lost")).unwrap().seq;
@@ -3936,6 +4189,7 @@ mod tests {
                 reply_to: None,
                 attachments: Vec::new(),
                 mentions: Vec::new(),
+                via_button: false,
                 queued: false,
             }
         );
@@ -4018,6 +4272,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -4140,6 +4395,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -4243,11 +4499,45 @@ mod tests {
             .expect("lead prompt");
         assert!(lead_prompt.contains("team_assign"));
         assert!(!lead_prompt.contains("Главный в команде — "));
+        // The main agent knows it creates agents, and in which order.
+        assert!(lead_prompt.contains(LEAD_CREATES));
+        assert!(lead_prompt.contains("crew_create_agent"));
+        assert!(lead_prompt.contains("schedule_create with agent_id"));
+        assert!(lead_prompt.contains("team_assign to hand it the first task"));
+        assert!(lead_prompt.contains("always means a new agent, not a schedule of your own"));
         let plain = all
             .iter()
             .find(|p| p.contains("Главный в команде — Forge. Задачи от него выполняйте как от человека"))
             .expect("plain agent prompt");
         assert!(!plain.contains("Вы главный"));
+        // Everyone is told to do what was asked, to say what is missing, and to use buttons; only the main agent
+        // is told about creating agents.
+        for prompt in [lead_prompt, plain] {
+            assert!(prompt.contains(PRINCIPLES));
+            assert!(prompt.contains("Do exactly what the person asked"));
+            assert!(prompt.contains("never swap the request for a similar action"));
+            assert!(prompt.contains("reply_buttons"));
+        }
+        assert!(!plain.contains("crew_create_agent"));
+    }
+
+    #[tokio::test]
+    async fn a_button_press_is_marked_in_the_thread_and_in_what_the_agent_reads() {
+        let mut w = world(ApprovalMode::Risky);
+        let mut msg = Inbound::user("Connected");
+        msg.via_button = true;
+        w.sup.send(&w.agent, msg).await.unwrap();
+        // The agent reads that it is a press of its own button, then the reply.
+        w.wait_log(&format!("send {BUTTON_NOTE}\n\nConnected")).await;
+        let marked = w.store.events_since(0, 100, Some(&w.agent)).unwrap().into_iter().any(
+            |e| matches!(e.body, EventBody::MessageUser { via_button: true, ref text, .. } if text == "Connected"),
+        );
+        assert!(marked, "the thread marks it");
+        w.push(done()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+        // A message typed by the person is neither marked nor prefixed.
+        w.sup.send(&w.agent, Inbound::user("typed")).await.unwrap();
+        w.wait_log("send typed").await;
     }
 
     #[tokio::test]
@@ -5252,6 +5542,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
         };
         w.sup.send(&w.agent, wrap_up).await.unwrap();
         w.wait_log("send wrap up").await;

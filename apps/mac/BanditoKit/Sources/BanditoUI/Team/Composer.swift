@@ -16,7 +16,6 @@ import AppKit
 /// folder, open browser tabs. A pick leaves `@Label` in the text and a chip above the field; Backspace at the end of
 /// the text takes a whole chip away. A service that is not connected asks "Connect X?" before the message goes.
 struct Composer: View {
-    @Binding var draft: String
     var agentName: String
     var running: Bool
     /// Share of the context window in use, 0 to 1.
@@ -46,7 +45,26 @@ struct Composer: View {
 
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
+
+    /// The text of this agent's draft, kept by the Router (see `Router.drafts`). The composer reads and writes it itself:
+    /// it was once passed in as a binding made by the thread, and a binding made there was read while the thread was
+    /// built, so every typed letter built the whole thread (hundreds of rows) again.
+    private var draft: String {
+        get { router.drafts[agentID] ?? "" }
+        nonmutating set { router.drafts[agentID] = newValue }
+    }
+
+    private var draftBinding: Binding<String> {
+        Binding(get: { draft }, set: { draft = $0 })
+    }
+
+    /// What the composer's own body shows of the draft (see `DraftFacts`). The body never reads the text: the field
+    /// (`ComposerTextField`) does, so a typed letter redraws the field, not the whole composer.
+    @State private var draftFacts = DraftFacts()
     @FocusState private var focused: Bool
+    /// Kept built under another mode (`KeptMode`): it gives up the focus and takes it again when it shows, as it did
+    /// when it was made anew.
+    @Environment(\.modeHidden) private var hidden
     @State private var slash = SlashMenuModel()
     @State private var mention = MentionMenuModel()
     /// The context popover is open (the ring is a button).
@@ -56,13 +74,13 @@ struct Composer: View {
     /// The dictation of this field: the microphone button, ⌥⌘D and Esc. See `DictationController`.
     @State private var dictation = DictationController()
     private var canSend: Bool {
-        AttachmentTray.canSend(text: draft, files: files)
+        AttachmentTray.canSend(hasText: draftFacts.hasText, files: files)
     }
 
     /// What the round button does now: send, stop, or answer the waiting form with the typed message.
     private var sendMode: ComposerSendMode {
-        let typed = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let isCommand = SlashInvocationParser.parse(draft) != nil
+        let typed = draftFacts.hasText
+        let isCommand = draftFacts.isCommand
         return ComposerSendMode.resolve(
             running: running, hasText: typed && !isCommand, hasFiles: !files.isEmpty, waitingFormId: replyFormId)
     }
@@ -80,7 +98,7 @@ struct Composer: View {
     /// The typed command name while the menu is open, `nil` when it is closed.
     private var query: String? {
         guard agent != nil, !slash.suppressed else { return nil }
-        return SlashTrigger.query(for: draft)
+        return draftFacts.slashQuery
     }
 
     private var entries: [SlashEntry] {
@@ -97,7 +115,7 @@ struct Composer: View {
     /// The `@word` being typed at the end of the draft; `nil` while the slash menu is open or Esc closed this one.
     private var mentionMatch: MentionTrigger.Match? {
         guard agent != nil, server != nil, !mention.suppressed, query == nil else { return nil }
-        return MentionTrigger.match(in: draft)
+        return draftFacts.mentionMatch
     }
 
     private var mentionSections: [MentionSection] {
@@ -117,7 +135,69 @@ struct Composer: View {
         rows.isEmpty ? nil : rows[min(max(mention.index, 0), rows.count - 1)]
     }
 
+    /// The draft changed (typed, pasted, dictated, or set by an action).
+    private func draftChanged(_ old: String, _ new: String) {
+        // A typed change during a dictation is taken back: the dictated text is what the field shows.
+        if let restored = DictationFreeze.restored(current: new, dictated: dictation.dictatedText, phase: dictation.phase) {
+            draft = restored
+            return
+        }
+        draftFacts.update(new)
+        // Written only when they change: each write redraws the composer.
+        if slash.suppressed { slash.suppressed = false }
+        if slash.notice != nil { slash.notice = nil }
+        if slash.index != 0 { slash.index = 0 }
+        if mention.suppressed { mention.suppressed = false }
+        if mention.notice != nil { mention.notice = nil }
+        if mention.index != 0 { mention.index = 0 }
+        reconcileMentions()
+        if SoundRules.isTypedCharacter(old: old, new: new) { SoundPlayer.play(.type) }
+    }
+
+    /// The keys the field hands over: the menus' arrows, Tab and Esc, Backspace over a chip, ⌘V of pictures, Return.
+    private func handleKey(_ press: KeyPress) -> KeyPress.Result {
+        switch press.key {
+        case .upArrow, .downArrow, .tab, .escape:
+            return handleMenuKey(press.key)
+        case .delete:
+            return handleBackspace(press)
+        case .return:
+            // Frozen while a dictation runs: Return neither sends nor breaks the line.
+            if DictationFreeze.isFrozen(dictation.phase) { return .handled }
+            // Shift or Option with Return: a line break at the caret. Plain Return sends.
+            let newLine = ComposerReturn.action(
+                shift: press.modifiers.contains(.shift), option: press.modifiers.contains(.option))
+            if newLine == .newLine {
+                #if os(macOS)
+                FieldNewline.insert()
+                #endif
+                return .handled
+            }
+            if query != nil, entries.indices.contains(slash.index) {
+                run(entries[slash.index])
+                return .handled
+            }
+            if let picked = selectedMention(in: mentionRows(mentionSections)) {
+                pickMention(picked)
+                return .handled
+            }
+            if case .replyToForm(let formId) = sendMode {
+                submitReply(formId)
+            } else if canSend && !running {
+                submit()
+            }
+            return .handled
+        default:
+            // ⌘V of pictures or files (and no text) attaches them. Text paste is left to the field.
+            guard press.key == KeyEquivalent("v"), canAttach, press.modifiers == .command, attachFromPasteboard() else {
+                return .ignored
+            }
+            return .handled
+        }
+    }
+
     var body: some View {
+        let _ = PerfCounters.hit("Composer")
         @Bindable var model = slash
         @Bindable var mentionModel = mention
         VStack(spacing: 8) {
@@ -184,54 +264,11 @@ struct Composer: View {
                         dictationButton
                     }
 
-                    TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(BanditoFont.text(size: 14.5, weight: 400))
-                        .foregroundStyle(Color.Bandito.text)
-                        .tint(Color.Bandito.signal)
-                        .lineLimit(1...8)
-                        .focused($focused)
-                        .padding(.vertical, 8)
-                        // Read-only while a dictation runs: no clicks move the caret or the selection.
-                        .allowsHitTesting(!DictationFreeze.isFrozen(dictation.phase))
-                        .onKeyPress(keys: [.upArrow, .downArrow, .tab, .escape]) { press in
-                            handleMenuKey(press.key)
-                        }
-                        .onKeyPress(keys: [.delete]) { press in
-                            handleBackspace(press)
-                        }
-                        .onKeyPress(keys: [KeyEquivalent("v")]) { press in
-                            // ⌘V of pictures or files (and no text) attaches them. Text paste is left to the field.
-                            guard canAttach, press.modifiers == .command, attachFromPasteboard() else { return .ignored }
-                            return .handled
-                        }
-                        .onKeyPress(keys: [.return]) { press in
-                            // Frozen while a dictation runs: Return neither sends nor breaks the line.
-                            if DictationFreeze.isFrozen(dictation.phase) { return .handled }
-                            // Shift or Option with Return: a line break at the caret. Plain Return sends.
-                            let newLine = ComposerReturn.action(
-                                shift: press.modifiers.contains(.shift), option: press.modifiers.contains(.option))
-                            if newLine == .newLine {
-                                #if os(macOS)
-                                FieldNewline.insert()
-                                #endif
-                                return .handled
-                            }
-                            if query != nil, entries.indices.contains(slash.index) {
-                                run(entries[slash.index])
-                                return .handled
-                            }
-                            if let picked = selectedMention(in: mentionRows(mentionSections)) {
-                                pickMention(picked)
-                                return .handled
-                            }
-                            if case .replyToForm(let formId) = sendMode {
-                                submitReply(formId)
-                            } else if canSend && !running {
-                                submit()
-                            }
-                            return .handled
-                        }
+                    ComposerTextField(
+                        agentID: agentID, focused: $focused, frozen: DictationFreeze.isFrozen(dictation.phase),
+                        onChange: draftChanged, onKey: handleKey)
+                        // Its own field per agent: the undo of one agent's text never reaches another's.
+                        .id(agentID)
 
                     // The row is bottom-aligned: the 34 pt send disc, and the + and mic (30 pt plus 2) centre 17 pt
                     // above the bottom. The 22 pt indicator sits 6 pt up from the bottom, so its centre matches them.
@@ -273,12 +310,23 @@ struct Composer: View {
             dictation.cancel()
             router.dictationRecording = false
         }
+        .onChange(of: hidden) { _, hidden in
+            if hidden {
+                focused = false
+                dictation.cancel()
+                router.dictationRecording = false
+            } else if let agentID = agent?.id, router.takeComposerFocus(agentID: agentID) {
+                takeFocus(.requested)
+            } else {
+                takeFocus(.agentOpened)
+            }
+        }
         .onChange(of: dictation.phase) { _, _ in syncEscape() }
         .onChange(of: focused) { _, _ in syncEscape() }
         .onChange(of: router.dictationRequest) { _, _ in toggleDictation() }
         .tourAnchor(.composer)
         .onChange(of: router.composerFocusAgentID, initial: true) { _, _ in
-            guard let agentID = agent?.id else { return }
+            guard !hidden, let agentID = agent?.id else { return }
             if router.takeComposerFocus(agentID: agentID) { takeFocus(.requested) }
         }
         .onChange(of: mentionMatch?.query) { old, new in
@@ -290,7 +338,15 @@ struct Composer: View {
                 mention.closed()
             }
         }
-        .onChange(of: agent?.id, initial: true) { _, id in
+        .onChange(of: agent?.id, initial: true) { old, id in
+            draftFacts.update(draft)
+            // The composer stays when another agent is shown (see `ThreadView`): what was open for the last one closes.
+            if old != id {
+                dictation.cancel()
+                router.dictationRecording = false
+                showsContext = false
+                asksNewChapter = false
+            }
             // A connect belongs to the agent it was started for: going to another one drops it, and sends nothing.
             mention.agentID = id
             if mention.connecting != nil { mention.connecting = nil }
@@ -310,22 +366,6 @@ struct Composer: View {
                     existingNames: MentionServices.shared.snapshot(for: server)?.integrations.map(\.name) ?? [],
                     onChecked: { _, _ in }, onSaved: { await MentionServices.shared.ensure(server, force: true) })
             }
-        }
-        .onChange(of: draft) { old, new in
-            // A typed change during a dictation is taken back: the dictated text is what the field shows.
-            if let restored = DictationFreeze.restored(current: new, dictated: dictation.dictatedText, phase: dictation.phase) {
-                draft = restored
-                return
-            }
-            slash.suppressed = false
-            slash.notice = nil
-            slash.index = 0
-            // Written only when they change: each write redraws the composer.
-            if mention.suppressed { mention.suppressed = false }
-            if mention.notice != nil { mention.notice = nil }
-            if mention.index != 0 { mention.index = 0 }
-            reconcileMentions()
-            if SoundRules.isTypedCharacter(old: old, new: new) { SoundPlayer.play(.type) }
         }
         .task(id: agent?.id) {
             guard let agent, let server else { return }
@@ -606,7 +646,7 @@ struct Composer: View {
         guard agent != nil else { return }
         // The caret is taken only from the field itself; with the focus elsewhere the text goes to the end.
         let caret = focused ? FieldCaret.location : nil
-        dictation.toggle(text: $draft, caret: caret, placeCaret: FieldCaret.place)
+        dictation.toggle(text: draftBinding, caret: caret, placeCaret: FieldCaret.place)
         focused = true
     }
 
@@ -1216,5 +1256,60 @@ enum FieldCaret {
             editor.setSelectedRange(NSRange(location: min(max(offset, 0), length), length: 0))
         }
         #endif
+    }
+}
+
+
+/// What the composer shows of its draft besides the text: whether there is text to send, a command, the `/word` of the
+/// command menu, the `@word` of the mention menu. Each is written only when it changes, so typing a word redraws the
+/// composer once (when the send button lights up), not at every letter.
+@MainActor
+@Observable
+final class DraftFacts {
+    private(set) var hasText = false
+    private(set) var isCommand = false
+    private(set) var slashQuery: String?
+    private(set) var mentionMatch: MentionTrigger.Match?
+
+    func update(_ text: String) {
+        let typed = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasText != typed { hasText = typed }
+        let command = SlashInvocationParser.parse(text) != nil
+        if isCommand != command { isCommand = command }
+        let query = SlashTrigger.query(for: text)
+        if slashQuery != query { slashQuery = query }
+        let match = MentionTrigger.match(in: text)
+        if mentionMatch != match { mentionMatch = match }
+    }
+}
+
+/// The text field of the composer. It reads and writes the agent's draft itself (`Router.drafts`), so a typed letter
+/// redraws this view only; the composer hears of the change through `onChange`.
+private struct ComposerTextField: View {
+    let agentID: String
+    var focused: FocusState<Bool>.Binding
+    /// Read-only while a dictation runs: no clicks move the caret or the selection.
+    var frozen: Bool
+    var onChange: (String, String) -> Void
+    var onKey: (KeyPress) -> KeyPress.Result
+    @Environment(Router.self) private var router
+
+    var body: some View {
+        let text = Binding(
+            get: { router.drafts[agentID] ?? "" },
+            set: { router.drafts[agentID] = $0 })
+        TextField(L10n.Thread.placeholder, text: text, axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(BanditoFont.text(size: 14.5, weight: 400))
+            .foregroundStyle(Color.Bandito.text)
+            .tint(Color.Bandito.signal)
+            .lineLimit(1...8)
+            .focused(focused)
+            .padding(.vertical, 8)
+            .allowsHitTesting(!frozen)
+            .onKeyPress(keys: [.upArrow, .downArrow, .tab, .escape, .delete, .return, KeyEquivalent("v")]) { press in
+                onKey(press)
+            }
+            .onChange(of: router.drafts[agentID] ?? "") { old, new in onChange(old, new) }
     }
 }

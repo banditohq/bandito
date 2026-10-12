@@ -5,8 +5,9 @@ import Testing
 
 @testable import BanditoUI
 
-/// Renders the blocks of the Services page to PNG at 2 and 4 columns, to look at the edges, the even rows and the
-/// buttons. The real page scrolls; ScrollView does not render offscreen, so the blocks are stacked in a plain VStack here.
+/// Renders the shelves of the Services page and a category's page to PNG, to look at the headers, the edges, the even
+/// rows and the buttons. The real shelves scroll sideways; ScrollView does not render offscreen, so a shelf is drawn here
+/// as a plain row cut by the window's edge.
 @MainActor
 @Suite struct MarketGridSnapshots {
     private static func template(
@@ -41,52 +42,103 @@ import Testing
         open: { _ in }, connect: { _ in }, configure: { _ in }, check: { _ in }, remove: { _ in },
         signInAgain: { _ in }, setEnabled: { _, _ in }, update: { _ in })
 
-    private func page(columns: Int, width: CGFloat) -> some View {
+    /// A shelf as it looks, without the scroll view (ScrollView does not render offscreen): the header over a row of cards
+    /// of the shelf's size, started at the page margin and cut by the window's edge.
+    private func shelf<Item: Identifiable, Card: View>(
+        _ title: String, _ symbol: String, count: Int, items: [Item], cardHeight: CGFloat, width: CGFloat,
+        onAll: (() -> Void)? = {}, @ViewBuilder card: @escaping (Item) -> Card
+    ) -> some View {
+        VStack(alignment: .leading, spacing: MarketShelfMetrics.headerGap) {
+            MarketShelfHeader(title: title, symbol: symbol, count: count, onAll: onAll)
+            HStack(alignment: .top, spacing: MarketShelfMetrics.gap) {
+                ForEach(items) { item in
+                    card(item).frame(width: MarketShelfMetrics.cardWidth, height: cardHeight)
+                }
+            }
+            .padding(.leading, MarketGridLayout.sidePadding)
+            .padding(.top, MarketShelfMetrics.laneTop)
+            .padding(.bottom, MarketShelfMetrics.laneBottom)
+            .frame(width: width, alignment: .leading)
+            .clipped()
+        }
+    }
+
+    private func showcase(width: CGFloat) -> some View {
         let entries = MarketLogic.entries(catalog: Self.catalog, integrations: Self.integrations, languageCode: "en")
-        let sections = MarketSections.sections(entries)
-        return VStack(alignment: .leading, spacing: 0) {
-            ForEach(sections) { section in
-                MarketSectionHeader(title: title(of: section), count: section.entries.count, tone: .of(section))
-                if section.kind == .connected {
-                    MarketRowList(items: section.entries, columns: columns, rowHeight: nil, inset: 30) { entry in
+        let shelves = MarketSections.shelves(entries, recommended: 1)
+        return VStack(alignment: .leading, spacing: MarketShelfMetrics.shelfGap) {
+            ForEach(shelves) { section in
+                switch section.kind {
+                case .connected:
+                    shelf(
+                        "Connected", section.symbol, count: section.count, items: section.entries,
+                        cardHeight: MarketShelfMetrics.connectedCardHeight(hasStats: true, hasUpdate: false, needsLogin: false),
+                        width: width
+                    ) { entry in
                         if let integration = entry.integration {
                             MarketConnectedCard(
                                 entry: entry, integration: integration, status: .connected(tools: 12),
                                 statsLine: "12 calls today", updating: false, checking: false, actions: actions)
                         }
                     }
-                } else {
-                    MarketRowList(items: section.entries, columns: columns, rowHeight: MarketSectionMetrics.cardHeight, inset: 30) { entry in
+                case .recommended:
+                    shelf(
+                        "Suited to the project of Boss", section.symbol, count: 1,
+                        items: [
+                            RecommendationLogic.Item(
+                                template: Self.catalog[0], reasonKey: "vercel", evidence: "apps/web/vercel.json")
+                        ],
+                        cardHeight: MarketShelfMetrics.suggestionCardHeight, width: width, onAll: nil
+                    ) { item in
+                        RecommendationCard(item: item, onConnect: {})
+                    }
+                default:
+                    shelf(
+                        MarketCategory.title(section.categoryName ?? "other"), section.symbol, count: section.count,
+                        items: section.entries, cardHeight: MarketShelfMetrics.catalogCardHeight, width: width
+                    ) { entry in
                         MarketCatalogCard(entry: entry, actions: actions)
                     }
                 }
-                Color.clear.frame(height: MarketSectionMetrics.sectionGap)
             }
         }
+        .padding(.top, MarketShelfMetrics.topInset)
         .frame(width: width, alignment: .topLeading)
         .background(Color.Bandito.bg)
     }
 
-    private func title(of section: MarketSection) -> String {
-        switch section.kind {
-        case .connected: "Connected"
-        case .category(let name): MarketCategory.title(name)
-        case .catalog: "Catalog"
+    private func categoryPage(columns: Int, width: CGFloat) -> some View {
+        let entries = MarketLogic.entries(catalog: Self.catalog, integrations: Self.integrations, languageCode: "en")
+        let dev = entries.filter { $0.category == "dev" }
+        return VStack(alignment: .leading, spacing: 18) {
+            MarketPageHeader(
+                title: MarketCategory.title("dev"), symbol: MarketCategory.symbol("dev"), count: dev.count, onBack: {})
+            MarketRowList(items: dev, columns: columns, rowHeight: MarketShelfMetrics.catalogCardHeight, inset: 30) { entry in
+                MarketCatalogCard(entry: entry, actions: actions)
+            }
         }
+        .padding(.top, MarketShelfMetrics.topInset)
+        .frame(width: width, alignment: .topLeading)
+        .background(Color.Bandito.bg)
     }
 
-    @Test func twoColumns() throws {
-        let url = try SnapshotSupport.render(page(columns: 2, width: 640), "market-grid-2", size: CGSize(width: 640, height: 1700))
+    @Test func showcaseWide() throws {
+        let url = try SnapshotSupport.render(showcase(width: 1000), "market-showcase", size: CGSize(width: 1000, height: 1250))
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 
-    @Test func threeColumns() throws {
-        let url = try SnapshotSupport.render(page(columns: 3, width: 1000), "market-grid-3", size: CGSize(width: 1000, height: 1250))
+    @Test func showcaseNarrow() throws {
+        let url = try SnapshotSupport.render(showcase(width: 604), "market-showcase-narrow", size: CGSize(width: 604, height: 1250))
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 
-    @Test func fourColumns() throws {
-        let url = try SnapshotSupport.render(page(columns: 4, width: 1100), "market-grid-4", size: CGSize(width: 1100, height: 1000))
+    @Test func categoryPageTwoColumns() throws {
+        let url = try SnapshotSupport.render(categoryPage(columns: 2, width: 640), "market-category-2", size: CGSize(width: 640, height: 620))
+        #expect(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @Test func categoryPageFourColumns() throws {
+        let url = try SnapshotSupport.render(categoryPage(columns: 4, width: 1100), "market-category-4", size: CGSize(width: 1100, height: 420))
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 }

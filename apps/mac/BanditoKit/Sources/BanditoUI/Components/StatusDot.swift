@@ -70,33 +70,28 @@ private struct PulseRing: View {
     let size: CGFloat
     let color: Color
 
-    @State private var isExpanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    @State private var layerShown = false
     /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
     private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     var body: some View {
         let base = size + 4
-        Circle()
-            .strokeBorder(color, lineWidth: 2)
-            .frame(width: base, height: base)
-            .scaleEffect(isExpanded ? (size + 14) / base : 1)
-            .opacity(isExpanded ? 0 : 0.55)
-            .onAppear(perform: updatePulse)
-            .onChange(of: still) { _, _ in updatePulse() }
-    }
-
-    /// Starts the repeating pulse, or rests the ring without animation when Reduce Motion is on.
-    private func updatePulse() {
-        if still {
-            withAnimation(nil) {
-                isExpanded = false
+        ZStack {
+            Circle()
+                .strokeBorder(color, lineWidth: 2)
+                .frame(width: base, height: base)
+                .opacity(still || layerShown ? 0 : 0.55)
+            #if os(macOS)
+            // The pulse is a Core Animation layer (see `LayerMotion`): a dot in the sidebar must not redraw the window.
+            if !still {
+                PulseRingMotion(size: size, color: color) { shown in
+                    if layerShown != shown { layerShown = shown }
+                }
             }
-        } else {
-            withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) {
-                isExpanded = true
-            }
+            #endif
         }
+        .frame(width: base, height: base)
     }
 }

@@ -1,6 +1,7 @@
 #if os(macOS)
 import BanditoKit
 import BanditoL10n
+import AppKit
 import Foundation
 import Observation
 import RoyalVNCKit
@@ -23,12 +24,15 @@ enum ScreenClipboard: String, CaseIterable, Sendable {
     case shared, off
 }
 
-/// The state of one server's screen: its status, and the VNC connection that shows it.
-/// Lives as long as the app keeps the server (see `ScreenStore`).
+/// The state of the screen of one workplace of one server: its status, and the VNC connection that shows it.
+/// Lives as long as the app keeps the server (see `ScreenStore`). The screens of the other workplaces have models of
+/// their own; only the chosen one is attached, so only one VNC connection is open.
 @MainActor
 @Observable
 final class ScreenModel {
     let server: ServerModel
+    /// The workplace whose screen this is: `shared`, or the id of a container workplace.
+    let workspace: String
 
     private(set) var status: ScreenStatus?
     private(set) var framebuffer: VNCFramebuffer?
@@ -40,6 +44,10 @@ final class ScreenModel {
     /// The last failure of a start or of a connection. It stays until a start is made or a picture arrives, so a poll
     /// does not wipe it. Shown by the start area with "Повторить" (see `phase`).
     private(set) var startError: UserFacingMessage?
+    /// Programs the server lacks, as the last start named them. Shown with "Установить" (see `installMissing`).
+    private(set) var missingComponents: [String] = []
+    /// Installs the missing programs, with the same install as Server → Capabilities. Its progress shows in the area.
+    let setup: SetupModel
     /// A `screen.start` call is in flight.
     private(set) var isStarting = false
     /// The connection waited `ScreenStartRules.frameTimeout` for its first picture and got none.
@@ -58,11 +66,22 @@ final class ScreenModel {
         (defaults.object(forKey: "screen.sharedClipboard") as? Bool ?? true) ? .shared : .off
     }
 
-    private var pollTask: Task<Void, Never>?
+    /// The daemon refused the id of this workplace, so its screen cannot be shown (an older daemon, see `ScreenCardRules`).
+    private(set) var workplaceUnavailable = false
 
-    init(server: ServerModel) {
+    private var pollTask: Task<Void, Never>?
+    private var previewTick = 0
+    /// Draws the picture on screen into a small image. Set by the VNC view; not observed.
+    @ObservationIgnored var snapshotProvider: (() -> NSImage?)?
+
+    init(server: ServerModel, workspace: String = Workspace.sharedID) {
         self.server = server
+        self.workspace = workspace
+        self.setup = SetupModel()
     }
+
+    /// The `workspace` parameter of the calls: nothing for the shared workplace, so an older daemon is asked as before.
+    private var wsParam: String? { WorkspacePickerLogic.rpcParameter(workspace) }
 
     var isSupported: Bool { server.supports("screen") }
 
@@ -76,7 +95,8 @@ final class ScreenModel {
         ScreenStartRules.phase(
             ScreenStartRules.Facts(
                 supported: isSupported, startInFlight: isStarting, running: status?.running == true,
-                hasFrame: framebuffer != nil, frameTimedOut: frameTimedOut, error: startError))
+                hasFrame: framebuffer != nil, frameTimedOut: frameTimedOut, error: startError,
+                missing: missingComponents, installing: setup.isRunning, workplaceUnavailable: workplaceUnavailable))
     }
 
     // MARK: Lifecycle
@@ -102,16 +122,22 @@ final class ScreenModel {
     func refresh() async {
         guard isSupported else { return }
         do {
-            let fresh = try await server.screenStatus()
-            status = fresh
-            errorText = nil
+            let fresh = try await server.screenStatus(workspace: wsParam)
+            if status != fresh { status = fresh }
+            if errorText != nil { errorText = nil }
+            if workplaceUnavailable { workplaceUnavailable = false }
             if fresh.running {
                 if connection == nil { await connect() }
+                capturePreview()
             } else {
                 disconnect()
             }
         } catch {
-            errorText = BrowserModel.describe(error)
+            if refuses(error) {
+                workplaceUnavailable = true
+            } else {
+                errorText = BrowserModel.describe(error)
+            }
         }
     }
 
@@ -121,9 +147,10 @@ final class ScreenModel {
         guard !isStarting else { return }
         isStarting = true
         startError = nil
+        missingComponents = []
         defer { isStarting = false }
         do {
-            let fresh = try await server.screenStart(width: 1280, height: 800)
+            let fresh = try await server.screenStart(workspace: wsParam, width: 1280, height: 800)
             status = fresh
             guard fresh.running else {
                 startError = UserFacingMessage(text: L10n.Screen.didNotStart, canRetry: true)
@@ -131,18 +158,66 @@ final class ScreenModel {
             }
             await connect()
         } catch {
-            startError = Self.startFailure(error)
+            if refuses(error) {
+                workplaceUnavailable = true
+            } else {
+                apply(Self.startFailure(error))
+            }
         }
     }
 
-    /// The sentence for a failed start or connection. Retry is always offered: starting again is the way out.
-    static func startFailure(_ error: Error) -> UserFacingMessage {
-        if let rpc = error as? RPCError, rpc.reason == "missing_component", let component = rpc.data?["component"]?.string {
-            return UserFacingMessage(text: L10n.Screen.missingComponent(component: component), technical: rpc.message, canRetry: true)
+    /// The daemon refused the workplace id as a bad parameter: an older daemon that accepts only short ids. Only a
+    /// workplace other than the shared one can be refused so.
+    private func refuses(_ error: Error) -> Bool {
+        guard let rpc = error as? RPCError else { return false }
+        return ScreenCardRules.state(status: nil, refusal: rpc, workspaceID: workspace, previous: .unknown) == .unavailable
+    }
+
+    /// Installs the whole screen feature that is missing, as Server → Capabilities does (the programs the last start
+    /// named come first), then starts the screen again. The install's log shows in the area. Nothing starts when the
+    /// install did not finish (its failure shows, with "Установить" again).
+    func installMissing() async {
+        let required = missingComponents
+        guard !required.isEmpty, !setup.isRunning else { return }
+        // Fresh status: what the screen feature lacks now. If the status cannot be read, the named programs alone install.
+        await setup.load(server)
+        let feature = (setup.status?.components ?? [])
+            .filter { $0.feature == .screen && !$0.installed && $0.installable }
+            .map(\.id)
+        await setup.install(ScreenStartRules.installIds(required: required, feature: feature), server: server)
+        if setup.job?.state == .done {
+            await start()
+        }
+    }
+
+    /// Shows a failed start: the programs it names, or the sentence. Retry is always offered for a sentence: starting
+    /// again is the way out.
+    private func apply(_ failure: ScreenStartFailure) {
+        switch failure {
+        case .missingComponents(let names):
+            missingComponents = names
+            startError = nil
+        case .failed(let message):
+            missingComponents = []
+            startError = message
+        }
+    }
+
+    /// Reads a failed start or connection. An RPC error is read by `ScreenStartRules.failure`; any other error (the
+    /// server did not answer, the connection dropped) gets the usual sentence, and Retry.
+    static func startFailure(_ error: Error) -> ScreenStartFailure {
+        if let rpc = error as? RPCError {
+            let components: [String] = {
+                guard case .array(let items)? = rpc.data?["components"] else { return [] }
+                return items.compactMap(\.string)
+            }()
+            return ScreenStartRules.failure(
+                reason: rpc.reason, components: components, component: rpc.data?["component"]?.string,
+                message: rpc.message)
         }
         var message = UserFacingError.message(for: error)
         message.canRetry = true
-        return message
+        return .failed(message)
     }
 
     /// Connects to the running screen: the VNC port goes through a one-shot tunnel, with the screen's password.
@@ -181,11 +256,21 @@ final class ScreenModel {
             connection.connect()
             armFrameTimer()
         } catch {
-            startError = Self.startFailure(error)
+            apply(Self.startFailure(error))
         }
     }
 
+    /// Keeps a small picture of the screen for the sidebar card, about every 6 s while the screen is shown. The card
+    /// keeps the last picture when the screen is left, so a screen that is not open still has its preview.
+    private func capturePreview(force: Bool = false) {
+        previewTick += 1
+        guard force || previewTick % 2 == 1, framebuffer != nil, let image = snapshotProvider?() else { return }
+        ScreenPreviews.shared.box(server: server.id, workspace: workspace).image = image
+    }
+
     func disconnect() {
+        capturePreview(force: true)
+        snapshotProvider = nil
         let old = connection
         connection = nil
         vncDelegate = nil
@@ -254,7 +339,7 @@ final class ScreenModel {
 
     private func setControl(_ holder: ControlHolder) async {
         do {
-            status = try await server.screenControl(holder)
+            status = try await server.screenControl(holder, workspace: wsParam)
             asksToTakeControl = false
         } catch {
             errorText = BrowserModel.describe(error)
@@ -279,26 +364,50 @@ final class ScreenModel {
     func stop() async {
         disconnect()
         startError = nil
+        missingComponents = []
         do {
-            try await server.screenStop()
-            status = try await server.screenStatus()
+            try await server.screenStop(workspace: wsParam)
+            status = try await server.screenStatus(workspace: wsParam)
         } catch {
             errorText = BrowserModel.describe(error)
         }
     }
 }
 
-/// One `ScreenModel` per server, so the sidebar and the main area show the same screen.
+/// One `ScreenModel` per server and workplace, so the sidebar and the main area show the same screen.
 @MainActor
 final class ScreenStore {
     static let shared = ScreenStore()
-    private var models: [UUID: ScreenModel] = [:]
+    private var models: [String: ScreenModel] = [:]
 
-    func model(for server: ServerModel) -> ScreenModel {
-        if let model = models[server.id] { return model }
-        let model = ScreenModel(server: server)
-        models[server.id] = model
+    func model(for server: ServerModel, workspace: String = Workspace.sharedID) -> ScreenModel {
+        let key = "\(server.id.uuidString)|\(workspace)"
+        if let model = models[key] { return model }
+        let model = ScreenModel(server: server, workspace: workspace)
+        models[key] = model
         return model
+    }
+}
+
+/// The last small picture of one workplace's screen. An object of its own, so a new picture redraws only the card that
+/// shows it.
+@MainActor
+@Observable
+final class ScreenPreviewBox {
+    var image: NSImage?
+}
+
+@MainActor
+final class ScreenPreviews {
+    static let shared = ScreenPreviews()
+    private var boxes: [String: ScreenPreviewBox] = [:]
+
+    func box(server: UUID, workspace: String) -> ScreenPreviewBox {
+        let key = "\(server.uuidString)|\(workspace)"
+        if let box = boxes[key] { return box }
+        let box = ScreenPreviewBox()
+        boxes[key] = box
+        return box
     }
 }
 #endif

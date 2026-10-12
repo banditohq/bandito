@@ -1,5 +1,6 @@
 import AppKit
 import BanditoKit
+import BanditoL10n
 import SwiftUI
 
 /// Makes the file paths and web addresses of a message into links, and opens them.
@@ -49,8 +50,8 @@ enum ChatLinkText {
 
     /// Opens a link from a message. A path is asked of the server first (`fs.stat`, which also expands `~/`): a
     /// folder opens in Files, a file opens in the workbench panel beside the chat, and ⌥ shows a file in Files instead.
-    /// A path that is not there opens nothing. A web address opens in the browser tab of the panel; ⌘ opens it in
-    /// the browser of the Mac instead.
+    /// A path that is not there opens nothing. A web address goes where `ChatLinkRouting` says: the browser tab of
+    /// the panel, or the browser of the Mac. The first web link clicked on this Mac also raises a one-time note.
     @MainActor
     static func open(_ url: URL, agentID: String, folder: String?, server: ServerModel, router: Router) {
         let flags = NSEvent.modifierFlags
@@ -74,13 +75,23 @@ enum ChatLinkText {
             return
         }
         guard url.scheme == "http" || url.scheme == "https" else { return }
-        if flags.contains(.command) {
-            NSWorkspace.shared.open(url)
-            return
+        let preferences = ChatLinkPreferences.stored()
+        let destination = ChatLinkRouting.destination(
+            for: url, commandHeld: flags.contains(.command), preferences: preferences)
+        if !UserDefaults.standard.bool(forKey: ChatLinkSettings.hintShownKey) {
+            UserDefaults.standard.set(true, forKey: ChatLinkSettings.hintShownKey)
+            router.chatLinkNotice = ChatLinkNotice(
+                target: preferences.openTarget,
+                browserName: ChatLinkBrowser.defaultName() ?? L10n.ChatLinks.Browser.fallback)
         }
-        let model = BrowserStore.shared.model(for: server)
-        model.addressText = url.absoluteString
-        model.submitAddress()
-        router.showInWorkbench(.browser, agentID: agentID)
+        switch destination {
+        case .macBrowser:
+            NSWorkspace.shared.open(url)
+        case .builtIn:
+            let model = BrowserStore.shared.model(for: server)
+            model.addressText = url.absoluteString
+            model.submitAddress()
+            router.showInWorkbench(.browser, agentID: agentID)
+        }
     }
 }

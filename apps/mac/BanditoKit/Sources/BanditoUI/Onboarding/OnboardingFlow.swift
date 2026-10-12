@@ -72,7 +72,7 @@ public struct OnboardingFlow: View {
         .padding(.horizontal, OnboardingLayout.horizontal)
         .padding(.top, OnboardingLayout.top)
         .padding(.bottom, OnboardingLayout.bottom)
-        .frame(minWidth: 900, minHeight: 640)
+        .windowRoot(minWidth: 900, minHeight: 640)
         .background {
             OnboardingBackground(showsOrbs: onboarding.step == .welcome)
                 .ignoresSafeArea()

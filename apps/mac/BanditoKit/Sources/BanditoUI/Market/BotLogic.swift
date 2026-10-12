@@ -13,6 +13,11 @@ enum BotLogic {
         return categoryOrder.filter { used.contains($0) } + used.subtracting(categoryOrder).sorted()
     }
 
+    /// The shelves of the Bots page under All: the templates by category, in the sidebar order.
+    static func shelves(_ templates: [BotTemplate]) -> [MarketCategoryShelf<BotTemplate>] {
+        MarketCategoryShelf.group(templates, category: \.category, order: categoryOrder)
+    }
+
     /// The templates the filter keeps, then the ones the search keeps. The search reads the name in the app's language
     /// and in English, and the description in the app's language; it ignores case and spaces at the ends.
     static func visible(
@@ -22,7 +27,7 @@ enum BotLogic {
         return templates.filter { template in
             switch filter {
             case .all, .connected, .installed: true
-            case .myBots: false
+            case .myBots, .bundles: false
             case .category(let name): template.category == name
             }
         }.filter { template in

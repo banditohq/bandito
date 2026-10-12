@@ -66,11 +66,26 @@ public final class AppModel {
     public let device: DeviceSignIn
 
     public init(defaults: UserDefaults = .standard) {
+        LaunchProbe.record?("savedServers")
         self.defaults = defaults
         oauth = OAuthSignIn(defaults: defaults)
         device = DeviceSignIn()
         load()
     }
+
+    /// Servers that are never saved: no list in the defaults, no token in the Keychain. The smoothness check (Help
+    /// menu) runs its demo copy of the app on such a model, with demo daemons.
+    init(ephemeral servers: [ServerModel], defaults: UserDefaults) {
+        self.defaults = defaults
+        oauth = OAuthSignIn(defaults: defaults)
+        device = DeviceSignIn()
+        isEphemeral = true
+        self.servers = servers
+        selectedServerID = servers.first?.id
+    }
+
+    /// The list is not saved and touches no Keychain (see `init(ephemeral:defaults:)`).
+    @ObservationIgnored private var isEphemeral = false
 
     /// Takes `bandito://oauth/callback` from the browser: hands the code to the server that began the sign-in and
     /// brings that server to the front. Returns false when `url` is not a sign-in callback.
@@ -103,6 +118,9 @@ public final class AppModel {
                     throw AgentNotFoundError()
                 }
                 try await server.resolve(approvalID, decision, remember: false)
+            },
+            scope: { [weak self] serverID in
+                self?.servers.first { $0.id == serverID }?.config.notifications ?? .all
             })
         sink.service = service
         sink.start()
@@ -127,7 +145,7 @@ public final class AppModel {
                 SoundPlayer.play(sound)
             }
             guard let notice = Self.notice(for: event, in: server) else { return }
-            self.notifications?.handle(notice)
+            self.notifications?.handle(notice, serverID: server.id)
         }
     }
 
@@ -259,9 +277,10 @@ public final class AppModel {
     static func notice(for event: Event, in server: ServerModel) -> AgentNotice? {
         let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
         switch event.body {
-        case .approvalRequested(let approvalID, _, _, let title, let command, _, _):
+        case .approvalRequested(let approvalID, _, let tool, let title, let command, _, _, _):
             return .approval(
-                agentID: event.agentId, agentName: name, approvalID: approvalID, title: title, command: command)
+                agentID: event.agentId, agentName: name, approvalID: approvalID, title: title, command: command,
+                reviewOnly: tool == AgentCreateSummary.tool)
         case .turnCompleted(_, .ok, _, _):
             return .finished(agentID: event.agentId, agentName: name)
         case .error(let message):
@@ -340,9 +359,28 @@ public final class AppModel {
     /// servers, which are the owner's unix socket, are left alone.
     private var reachableServers: [ServerModel] {
         servers.filter { server in
+            if server.config.disabled { return false }
             if QABuild.isRunningQA, case .local = server.config.endpoint { return false }
             return true
         }
+    }
+
+    /// Switches a server off (it disconnects and stays so until it is switched on) or on (it connects now).
+    public func setServerDisabled(_ id: UUID, _ disabled: Bool) async {
+        guard let server = servers.first(where: { $0.id == id }) else { return }
+        changeServer(id) { $0.disabled = disabled }
+        if disabled {
+            await server.disconnect()
+        } else {
+            await server.connect()
+        }
+    }
+
+    /// Drops the link and opens a new one, with the server's current address.
+    public func reconnectServer(_ id: UUID) async {
+        guard let server = servers.first(where: { $0.id == id }) else { return }
+        await server.disconnect()
+        await server.connect()
     }
 
     /// Re-reads every connected server's `daemon.info` once an hour, so the update offer follows the daemon's own
@@ -414,6 +452,7 @@ public final class AppModel {
     }
 
     public func add(_ config: ServerConfig) {
+        guard !isEphemeral else { return }
         // A server whose token cannot be stored could never authenticate: refuse it instead of adding a dead entry.
         guard Keychain.setToken(config.token, for: config.id) else {
             lastError = "Could not save the device token in the Keychain. The server was not added."
@@ -434,6 +473,7 @@ public final class AppModel {
     }
 
     public func remove(_ id: UUID) {
+        guard !isEphemeral else { return }
         guard let i = servers.firstIndex(where: { $0.id == id }) else { return }
         let s = servers.remove(at: i)
         keyRepair[id] = nil
@@ -451,6 +491,30 @@ public final class AppModel {
         save()
     }
 
+    /// Changes what the app keeps about one server: its name, icon, color, main flag or notifications. The connection
+    /// is not touched. Saved at once.
+    public func changeServer(_ id: UUID, _ change: (inout ServerConfig) -> Void) {
+        guard let server = servers.first(where: { $0.id == id }) else { return }
+        server.changeConfig(change)
+        save()
+    }
+
+    /// Makes `id` the main server (nil: none). Only one server is main, and the choice is saved at once.
+    public func setPrimaryServer(_ id: UUID?) {
+        let updated = ServerConfigRules.settingPrimary(id, in: servers.map(\.config))
+        for (server, config) in zip(servers, updated) {
+            server.changeConfig { $0.isPrimary = config.isPrimary }
+        }
+        save()
+    }
+
+    /// Puts a server at `index` in the list (the order of Settings → Servers and of the server menu), and saves it.
+    public func moveServer(_ id: UUID, to index: Int) {
+        let order = ServerConfigRules.moved(servers.map(\.config), id: id, to: index).map(\.id)
+        servers = order.compactMap { serverID in servers.first { $0.id == serverID } }
+        save()
+    }
+
     #if os(macOS)
     /// The terminals of `server`, created on first use.
     /// ⌘R: reconnects to the server in front and re-reads what the screen on show displays. The thread and the folder
@@ -465,7 +529,8 @@ public final class AppModel {
             await terminalController(for: server).refresh()
         }
         if reloads.contains(.browserPage) {
-            await BrowserStore.shared.model(for: server).reload()
+            let chosen = WorkspaceSelections.shared.selection(mode: "browser", server: server).selectedID
+            await BrowserStore.shared.model(for: server, workspace: chosen).reload()
         }
         router.refreshRequests += 1
     }
@@ -485,7 +550,7 @@ public final class AppModel {
         if let data = defaults.data(forKey: Self.storeKey),
             let saved = try? JSONDecoder().decode([ServerConfig].self, from: data)
         {
-            configs = saved
+            configs = ServerConfigRules.normalizedPrimary(saved)
         }
         servers = configs.map { c in
             var c = c
@@ -494,7 +559,8 @@ public final class AppModel {
             attachNotifications(model)
             return model
         }
-        selectedServerID = servers.first?.id
+        // The main server opens at launch; without one, the first server.
+        selectedServerID = ServerConfigRules.startupServerID(configs)
         #if DEBUG && os(macOS)
         // QA copies (scripts/qa): the server named by the launch arguments is added once. Not in release builds.
         QAHooks.addLaunchServer(to: self)
@@ -502,6 +568,7 @@ public final class AppModel {
     }
 
     private func save() {
+        guard !isEphemeral else { return }
         // Tokens never go to UserDefaults.
         let configs = servers.map { s -> ServerConfig in
             var c = s.config

@@ -39,10 +39,7 @@ struct ThreadHeader: View {
         HStack(spacing: 10) {
             Color.clear.frame(width: 0)
             Button(action: onInspect) {
-                ViewThatFits(in: .horizontal) {
-                    capsule(showsCaption: true)
-                    capsule(showsCaption: false)
-                }
+                capsule
             }
             .banditoButton(.row(cornerRadius: 18, hoverOpacity: 0.06))
             .help(L10n.Team.Header.openInspector)
@@ -73,7 +70,9 @@ struct ThreadHeader: View {
         }
     }
 
-    private func capsule(showsCaption: Bool) -> some View {
+    /// The agent's capsule: avatar, name, the model when it fits, the status. Only the words are tried in two widths
+    /// (`ViewThatFits` builds every candidate): two whole capsules built the avatar twice at every agent switch.
+    private var capsule: some View {
         HStack(spacing: 9) {
             AgentAvatarView(
                 agent: agent, server: server, size: 26,
@@ -84,6 +83,20 @@ struct ThreadHeader: View {
                             .offset(x: 4, y: -4)
                     }
                 }
+            ViewThatFits(in: .horizontal) {
+                capsuleWords(showsCaption: true)
+                capsuleWords(showsCaption: false)
+            }
+        }
+        .padding(.leading, 6)
+        .padding(.trailing, 14)
+        .padding(.vertical, 5)
+        .background(Color.Bandito.surface1.opacity(0.8), in: Capsule())
+        .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 1))
+    }
+
+    private func capsuleWords(showsCaption: Bool) -> some View {
+        HStack(spacing: 9) {
             Text(agent.name)
                 .font(BanditoFont.display(size: 12.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
@@ -101,11 +114,6 @@ struct ThreadHeader: View {
                 .lineLimit(1)
                 .fixedSize()
         }
-        .padding(.leading, 6)
-        .padding(.trailing, 14)
-        .padding(.vertical, 5)
-        .background(Color.Bandito.surface1.opacity(0.8), in: Capsule())
-        .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 1))
     }
 
     private var caption: String {

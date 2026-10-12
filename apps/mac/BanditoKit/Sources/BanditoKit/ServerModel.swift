@@ -3,17 +3,85 @@ import os
 import Observation
 
 /// How the app reaches a server. See docs/ARCHITECTURE.md#transports.
-public enum ServerEndpoint: Codable, Sendable, Hashable {
+public enum ServerEndpoint: Sendable, Hashable, Codable {
     /// The daemon on this Mac (unix socket, no token).
     case local(socketPath: String)
     /// A WebSocket URL (`ws://127.0.0.1:7878/v1/rpc`, a tailnet address, `wss://…`).
     case webSocket(url: URL)
-    /// The daemon on a server reached over ssh. `target` is `[user@]host[:port]` or an alias; `remotePort`
-    /// is the daemon's listen port on the server's loopback. See `SSHTransport`.
-    case ssh(target: String, remotePort: Int)
+    /// The daemon on a server reached over ssh: the server's address (host, user, port, key file), and `remotePort`,
+    /// the daemon's listen port on the server's loopback. See `SSHTransport`.
+    case ssh(server: SSHServerAddress, remotePort: Int)
 
     public static var defaultLocal: ServerEndpoint {
         .local(socketPath: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".bandito/bandito.sock").path)
+    }
+
+    /// An ssh endpoint from one text, `[user@]host[:port]` or an alias, as the add-server sheet takes it. Text that
+    /// `SSHTarget` refuses keeps as the host, so the connection reports why it fails.
+    public static func ssh(target: String, remotePort: Int) -> ServerEndpoint {
+        .ssh(server: SSHServerAddress(parsing: target) ?? SSHServerAddress(host: target), remotePort: remotePort)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case local, webSocket, ssh
+    }
+
+    private enum LocalKeys: String, CodingKey {
+        case socketPath
+    }
+
+    private enum WebSocketKeys: String, CodingKey {
+        case url
+    }
+
+    private enum SSHKeys: String, CodingKey {
+        case server, remotePort
+        /// The address as one text, `[user@]host[:port]`. It is written with `server` (for an app that predates the
+        /// fields) and it is what a record saved before `server` existed holds.
+        case target
+    }
+
+    /// Reads every shape the app has saved. A record from before the address fields keeps its `target` text, which
+    /// becomes the fields here, so an old `servers.v1` keeps its servers.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.local) {
+            let nested = try container.nestedContainer(keyedBy: LocalKeys.self, forKey: .local)
+            self = .local(socketPath: try nested.decode(String.self, forKey: .socketPath))
+        } else if container.contains(.webSocket) {
+            let nested = try container.nestedContainer(keyedBy: WebSocketKeys.self, forKey: .webSocket)
+            self = .webSocket(url: try nested.decode(URL.self, forKey: .url))
+        } else if container.contains(.ssh) {
+            let nested = try container.nestedContainer(keyedBy: SSHKeys.self, forKey: .ssh)
+            let remotePort = try nested.decode(Int.self, forKey: .remotePort)
+            if let server = try nested.decodeIfPresent(SSHServerAddress.self, forKey: .server) {
+                self = .ssh(server: server, remotePort: remotePort)
+            } else {
+                self = .ssh(target: try nested.decode(String.self, forKey: .target), remotePort: remotePort)
+            }
+        } else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "unknown server endpoint"))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .local(let socketPath):
+            var nested = container.nestedContainer(keyedBy: LocalKeys.self, forKey: .local)
+            try nested.encode(socketPath, forKey: .socketPath)
+        case .webSocket(let url):
+            var nested = container.nestedContainer(keyedBy: WebSocketKeys.self, forKey: .webSocket)
+            try nested.encode(url, forKey: .url)
+        case .ssh(let server, let remotePort):
+            var nested = container.nestedContainer(keyedBy: SSHKeys.self, forKey: .ssh)
+            try nested.encode(server, forKey: .server)
+            try nested.encode(remotePort, forKey: .remotePort)
+            // The one-text form too, so an app that predates the fields (0.1.10) reads the same server after a
+            // downgrade. It has no key file, which that app never had.
+            try nested.encode(server.targetText, forKey: .target)
+        }
     }
 }
 
@@ -27,27 +95,57 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
     /// True for the daemon this app installed on this Mac (`LocalDaemonPairing` sets it). Configs saved before this
     /// flag existed decode as false; `LocalDaemonUpgrade.confirmsThisMac` checks them at launch.
     public var isThisMac: Bool
+    /// The main server: it opens at launch. At most one server has it (`ServerConfigRules.settingPrimary`).
+    public var isPrimary: Bool
+    /// The icon the person chose: an SF Symbol name from `ServerIcon`. nil means the automatic icon of the kind.
+    public var iconName: String?
+    /// The color the person chose: a `ServerTint` name. nil means the default color.
+    public var tintName: String?
+    /// Which of this server's notifications reach the person (`NotificationScope`).
+    public var notifications: NotificationScope
+    /// Switched off by the person: the app does not connect to it until it is switched on again (`ServerModel.connect`).
+    public var disabled: Bool
+
+    /// The icon the person chose, when the name is one this app knows.
+    public var icon: ServerIcon? { iconName.flatMap(ServerIcon.init(rawValue:)) }
+    /// The color the person chose, when the name is one this app knows.
+    public var tint: ServerTint? { tintName.flatMap(ServerTint.init(rawValue:)) }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, endpoint, isThisMac
+        case id, name, endpoint, isThisMac, isPrimary, iconName, tintName, notifications, disabled
     }
 
     public init(
-        id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil, isThisMac: Bool = false
+        id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil, isThisMac: Bool = false,
+        isPrimary: Bool = false, iconName: String? = nil, tintName: String? = nil,
+        notifications: NotificationScope = .all, disabled: Bool = false
     ) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.token = token
         self.isThisMac = isThisMac
+        self.isPrimary = isPrimary
+        self.iconName = iconName
+        self.tintName = tintName
+        self.notifications = notifications
+        self.disabled = disabled
     }
 
+    /// A record saved before a field existed reads the default of that field, so an old `servers.v1` keeps its
+    /// servers as they were. An unknown notification scope reads as `all`, the default.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         endpoint = try container.decode(ServerEndpoint.self, forKey: .endpoint)
         isThisMac = try container.decodeIfPresent(Bool.self, forKey: .isThisMac) ?? false
+        isPrimary = try container.decodeIfPresent(Bool.self, forKey: .isPrimary) ?? false
+        iconName = try container.decodeIfPresent(String.self, forKey: .iconName)
+        tintName = try container.decodeIfPresent(String.self, forKey: .tintName)
+        notifications = try container.decodeIfPresent(String.self, forKey: .notifications)
+            .flatMap(NotificationScope.init(rawValue:)) ?? .all
+        disabled = try container.decodeIfPresent(Bool.self, forKey: .disabled) ?? false
     }
 
     /// For logs and debugging: the name and the kind of connection only. The id, the address and the token
@@ -60,6 +158,12 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
         }
         return "ServerConfig(name: \(name), connection: \(kind))"
     }
+}
+
+/// The result of "Check the connection": the server answered in this many milliseconds, or the reason it did not.
+public enum ConnectionCheck: Sendable, Equatable {
+    case answered(milliseconds: Int)
+    case failed(FailureKind)
 }
 
 public enum ConnectionState: Sendable, Hashable {
@@ -84,8 +188,17 @@ public final class ServerModel: Identifiable {
     /// Some events were skipped because this app does not know their shape: update the app.
     public nonisolated static let decodeWarning = FailureKind.reason("decode_failed")
 
-    public let config: ServerConfig
-    public nonisolated var id: UUID { config.id }
+    /// What the app keeps about this server. Only the app's own choices change through `changeConfig`; the connection
+    /// (endpoint, token) is fixed for the life of the model.
+    public private(set) var config: ServerConfig
+    /// The server's id never changes, so it can be read from any thread.
+    public nonisolated let id: UUID
+
+    /// Changes the app's own record of this server: its name, icon, color, main flag or notifications. The endpoint and
+    /// the token are not touched by the callers that use this (see `AppModel.changeServer`).
+    public func changeConfig(_ change: (inout ServerConfig) -> Void) {
+        change(&config)
+    }
 
     public private(set) var state: ConnectionState = .disconnected {
         didSet {
@@ -138,7 +251,10 @@ public final class ServerModel: Identifiable {
     /// A retry is waiting out its delay.
     @ObservationIgnored private var agentsRetryScheduled = false
     private static let log = Logger(subsystem: "dev.bandito", category: "agents")
-    public private(set) var threads: [String: AgentThread] = [:]
+    /// The threads of the agents, each in an observed box of its own (`AgentThreadState`): a token streamed into one
+    /// agent's thread redraws the views that read that thread, not every view that reads any thread (the sidebar, the
+    /// chat on screen, the menu bar all did, at every token of every agent).
+    public let threads = ThreadStates()
     public private(set) var runtimes: [RuntimeStatus] = []
     /// When `runtimes` was last read from the daemon; nil until the first answer.
     public private(set) var runtimesFetchedAt: Date?
@@ -194,14 +310,15 @@ public final class ServerModel: Identifiable {
         reconnectDelay: (@Sendable (Int) -> Duration)? = nil
     ) {
         self.config = config
+        self.id = config.id
         self.makeTransport =
             makeTransport ?? { cfg in
                 switch cfg.endpoint {
                 case .local(let path): return UnixSocketTransport(path: path)
                 case .webSocket(let url): return WebSocketTransport(url: url, token: cfg.token)
-                case .ssh(let target, let remotePort):
+                case .ssh(let server, let remotePort):
                     #if os(macOS)
-                    return SSHTransport(target: target, remotePort: remotePort, token: cfg.token)
+                    return SSHTransport(target: server.target, remotePort: remotePort, token: cfg.token)
                     #else
                     return UnavailableTransport(reason: "ssh servers are not available on this platform yet")
                     #endif
@@ -219,32 +336,52 @@ public final class ServerModel: Identifiable {
         threads[agentId] ?? AgentThread()
     }
 
+    /// The parts of an agent's thread the team shows without the thread itself (status, waiting approvals, a running
+    /// turn). Each changes only when its value does, so a streamed token redraws none of their readers.
+    public func threadSummary(for agentId: String) -> AgentThreadState {
+        threads.box(agentId)
+    }
+
     /// Agents that need a human first, then by name.
     public var sortedAgents: [Agent] {
-        agents.sorted { a, b in
-            let na = needsPerson(a.id)
-            let nb = needsPerson(b.id)
-            if na != nb { return na }
-            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
-        }
+        // Whether each agent needs a person is found once, not in every comparison: `needsPerson(_:)` looks the agent
+        // up by id, and a sort of forty agents asked it hundreds of times (a few milliseconds at every agent switch).
+        let keyed = agents.map { agent in (agent: agent, needs: needsPerson(agent)) }
+        return keyed.sorted { a, b in
+            if a.needs != b.needs { return a.needs }
+            return a.agent.name.localizedCaseInsensitiveCompare(b.agent.name) == .orderedAscending
+        }.map(\.agent)
+    }
+
+    /// `needsPerson(_:)` for an agent at hand.
+    private func needsPerson(_ agent: Agent) -> Bool {
+        let summary = threads.box(agent.id)
+        let status = agent.status ?? summary.loadedStatus ?? .idle
+        if status == .needsYou { return true }
+        let pending =
+            agent.reportsPendingApprovalIds
+            ? agent.pendingApprovalIds.count
+            : max(agent.pendingApprovals, summary.pendingApprovalCount)
+        return pending > 0
     }
 
     /// The status the team shows for an agent, whether or not its thread is loaded: the newest `agent.status` the app
     /// knows (the daemon's answer, then the live events), else the thread's, else idle.
     public func status(of agentId: String) -> AgentStatus {
-        agents.first { $0.id == agentId }?.status ?? threads[agentId]?.status ?? .idle
+        agents.first { $0.id == agentId }?.status ?? threads.box(agentId).loadedStatus ?? .idle
     }
 
     /// Approvals of the agent that wait for an answer. A daemon that sends the ids counts the ids (a replayed event
     /// adds or removes nothing twice). An older one sends only a count: the larger of that and the loaded thread's.
     public func pendingApprovalCount(of agentId: String) -> Int {
+        let summary = threads.box(agentId)
         guard let agent = agents.first(where: { $0.id == agentId }) else {
-            return thread(for: agentId).pendingApprovals.count
+            return summary.pendingApprovalCount
         }
         if agent.reportsPendingApprovalIds {
             return agent.pendingApprovalIds.count
         }
-        return max(agent.pendingApprovals, thread(for: agentId).pendingApprovals.count)
+        return max(agent.pendingApprovals, summary.pendingApprovalCount)
     }
 
     /// Needs a person: the status says so, or an approval waits. Drives the "needs you" group and the menu bar.
@@ -256,6 +393,8 @@ public final class ServerModel: Identifiable {
 
     /// Connects unless already connecting or connected. A pending reconnect is cancelled in favour of this attempt.
     public func connect() async {
+        // A server the person switched off stays unconnected until it is switched on (`AppModel.setServerDisabled`).
+        guard !config.disabled else { return }
         switch state {
         case .connecting, .connected: return
         case .disconnected, .reconnecting, .failed: break
@@ -272,6 +411,32 @@ public final class ServerModel: Identifiable {
             guard attempt == generation else { return }
             // A connection lost during this attempt has already scheduled a reconnect: keep retrying instead of giving up.
             if reconnectTask == nil { state = .failed(FailureKind.classify(error)) }
+        }
+    }
+
+    /// Asks the server for `daemon.info` and times the answer. A connected server is asked over the link it has. Any
+    /// other one is reached with a link of its own, closed again at once, so checking does not change the state.
+    public func checkConnection() async -> ConnectionCheck {
+        let started = ContinuousClock.now
+        func elapsed() -> Int { Int((ContinuousClock.now - started) / .milliseconds(1)) }
+        if state == .connected, let link = client {
+            do {
+                _ = try await link.call("daemon.info", NoParams(), as: DaemonInfo.self)
+                return .answered(milliseconds: elapsed())
+            } catch {
+                return .failed(FailureKind.classify(error))
+            }
+        }
+        let probe = RPCClient(transport: makeTransport(config), onDecodeFailure: nil)
+        do {
+            try await probe.start()
+            _ = try await probe.call("daemon.info", NoParams(), as: DaemonInfo.self)
+            let answered = ConnectionCheck.answered(milliseconds: elapsed())
+            await probe.close()
+            return answered
+        } catch {
+            await probe.close()
+            return .failed(FailureKind.classify(error))
         }
     }
 
@@ -481,6 +646,9 @@ public final class ServerModel: Identifiable {
     /// Counts the `telegram.changed` events this model applied. The Telegram section reads the status again on each
     /// change of this number.
     public internal(set) var telegramRevision = 0
+    /// Counts the `server.settings_changed` events this model applied. The server's settings page reads the settings
+    /// again on each change of this number.
+    public internal(set) var settingsRevision = 0
     /// Whether the daemon knows the Telegram RPCs. `unknown` until `checkTelegramSupport()` has answered; the Settings
     /// window shows the Telegram section only for `supported`.
     public internal(set) var telegramSupport = TelegramSupport.unknown
@@ -490,6 +658,10 @@ public final class ServerModel: Identifiable {
         if e.seq > lastSeq { lastSeq = e.seq }
         if case .telegramChanged = e.body {
             telegramRevision &+= 1
+            return
+        }
+        if case .serverSettingsChanged = e.body {
+            settingsRevision &+= 1
             return
         }
         if case .usageLimits(let runtime, let windows) = e.body {
@@ -513,7 +685,7 @@ public final class ServerModel: Identifiable {
             switch e.body {
             case .agentStatus(let status, _):
                 agents[i].status = status
-            case .approvalRequested(let approvalId, _, _, _, _, _, _):
+            case .approvalRequested(let approvalId, _, _, _, _, _, _, _):
                 if agents[i].reportsPendingApprovalIds {
                     agents[i].pendingApprovalIds.insert(approvalId)
                 } else {
@@ -580,9 +752,38 @@ public final class ServerModel: Identifiable {
     }
 
     private func setAgents(_ list: [Agent]) {
-        agents = list
+        // The performance scenarios' synthetic agents survive a refresh of the list.
+        agents =
+            syntheticAgents.isEmpty
+            ? list
+            : list + syntheticAgents.values.filter { s in !list.contains { $0.id == s.id } }.sorted { $0.name < $1.name }
         agentsReadAt = Date()
     }
+
+    /// Agents that exist only in the app, for the performance scenarios (the QA command `perf` and the smoothness
+    /// check of the Help menu, which runs on a demo daemon): a thread built in memory, no daemon behind it.
+    @ObservationIgnored private var syntheticAgents: [String: Agent] = [:]
+
+    /// Adds an agent with a ready thread. Its history is never asked of the daemon.
+    public func installSyntheticAgent(_ agent: Agent, items: [ThreadItem]) {
+        syntheticAgents[agent.id] = agent
+        var thread = AgentThread()
+        thread.items = items
+        thread.lastSeq = Int64(items.count)
+        threads[agent.id] = thread
+        hasMoreHistory[agent.id] = false
+        replaceAgent(agent)
+    }
+
+    /// Takes the synthetic agents out again.
+    public func removeSyntheticAgents() {
+        let ids = Set(syntheticAgents.keys)
+        syntheticAgents.removeAll()
+        agents.removeAll { ids.contains($0.id) }
+        for id in ids { threads[id] = nil }
+    }
+
+    public func isSynthetic(_ agentId: String) -> Bool { syntheticAgents[agentId] != nil }
 
     /// Reads `agents.list` now and waits for the answer, for a caller that must see the list as it is (after a create
     /// that failed, the agents it made may be in it). Throws when the read fails; the list stays as it was.
@@ -677,6 +878,7 @@ public final class ServerModel: Identifiable {
     /// Loads the newest page of an agent's thread. Live state that arrived meanwhile
     /// (streaming text, status, turn flag) is kept.
     public func loadHistory(_ agentId: String) async throws {
+        if syntheticAgents[agentId] != nil { return }
         let page = try await rpc().call(
             "events.page", PageRequest(agentId: agentId, before: nil), as: [Event].self)
         var t = AgentThread()
@@ -718,6 +920,7 @@ public final class ServerModel: Identifiable {
 
     /// Prepends the page before the oldest loaded event.
     public func loadOlder(_ agentId: String) async throws {
+        if syntheticAgents[agentId] != nil { return }
         guard let before = oldestSeq[agentId] else { return }
         let page = try await rpc().call(
             "events.page", PageRequest(agentId: agentId, before: before), as: [Event].self)
@@ -740,12 +943,13 @@ public final class ServerModel: Identifiable {
     /// keeps the `@Name` words and nothing more.
     public func send(
         _ text: String, to agentId: String, replyTo: Int64? = nil, attachments: [AgentAttachment] = [],
-        mentions: [Mention] = []
+        mentions: [Mention] = [], viaButton: Bool = false
     ) async throws {
         let request = AgentSendRequest(
             agentId: agentId, text: text, attachments: attachments.isEmpty ? nil : attachments.map(\.path),
             replyTo: supports("attachments") ? replyTo : nil,
-            mentions: mentions.isEmpty || !supports("mentions") ? nil : mentions)
+            mentions: mentions.isEmpty || !supports("mentions") ? nil : mentions,
+            viaButton: viaButton && supports("quick_replies") ? true : nil)
         try await rpc().call("agents.send", request)
     }
 

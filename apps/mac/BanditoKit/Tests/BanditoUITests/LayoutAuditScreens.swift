@@ -50,7 +50,86 @@ extension LayoutAuditSnapshots {
 
     private static let hostFeatures = ["host", "update", "workspaces", "secrets", "backups", "schedules", "crew"]
 
-    static let serverScreens: [AuditCase] = [
+    /// Two containers next to the shared server, with long names on purpose: one stopped, one with Docker not answering.
+    private static let auditWorkspaces: [Workspace] = [
+        Workspace(id: Workspace.sharedID, name: "Shared", kind: .shared),
+        Workspace(
+            id: "box-1", name: "Testumgebung für die Abnahme der neuen Version", kind: .container,
+            status: WorkspaceStatus(running: true, containerId: "c1")),
+        Workspace(
+            id: "box-2", name: "Рабочее место для долгой проверки", kind: .container,
+            status: WorkspaceStatus(running: false)),
+        Workspace(
+            id: "box-3", name: "Build", kind: .container, status: WorkspaceStatus(running: false, error: "docker_unavailable")),
+    ]
+
+    private static func auditSelection(_ env: AuditEnvironment, selected: String = "box-1") -> WorkspaceSelection {
+        let suite = "dev.bandito.layout-audit-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.set(selected, forKey: WorkspacePickerLogic.storageKey(mode: "audit", serverID: env.server.id))
+        let directory = WorkspaceDirectory(server: env.server, workspaces: auditWorkspaces, loaded: true)
+        let selection = WorkspaceSelection(mode: "audit", directory: directory, defaults: defaults)
+        // The choice is read at init; the audit never writes it, so nothing is left on disk.
+        defaults.removePersistentDomain(forName: suite)
+        return selection
+    }
+
+    /// The sidebars of the Screen, Browser, Terminals and Files modes with two containers next to the shared server.
+    /// The sidebar is 296 pt wide.
+    static let workspaceSidebars: [AuditCase] = [
+        AuditCase(name: "workspace-picker", width: 296) { env in
+            AnyView(WorkspacePicker(selection: auditSelection(env)).padding(.horizontal, 8))
+        },
+        AuditCase(name: "screen-sidebar-cards", width: 296) { env in
+            let cards = ScreenCardData.make(
+                workspaces: auditWorkspaces,
+                states: ["shared": .running, "box-1": .asleep, "box-2": .unavailable, "box-3": .unknown],
+                selectedID: "box-1")
+            return AnyView(
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(cards) { card in
+                        ScreenCard(
+                            data: card, preview: ScreenPreviews.shared.box(server: env.server.id, workspace: card.id),
+                            onSelect: {})
+                    }
+                }
+                .padding(.horizontal, 8))
+        },
+        AuditCase(name: "files-workplace-group", width: 296) { _ in
+            let box = auditWorkspaces[1]
+            let agent = Agent(
+                id: "a1", name: "Forge with a long name for the layout check", runtime: .claude,
+                cwd: "/work/a-project-folder-with-a-rather-long-name", workspaceId: "box-1")
+            let folders = WorkspaceFolders.folders(
+                of: Workspace(
+                    id: box.id, name: box.name, kind: .container,
+                    mounts: [WorkspaceMount(host: "/data/shared-datasets-for-all-containers", target: "/data", readOnly: true)]),
+                in: auditWorkspaces, agents: [agent])
+            return AnyView(
+                VStack(alignment: .leading, spacing: 6) {
+                    SectionLabel(L10n.Files.workplaceGroup(name: box.name))
+                        .padding(.horizontal, 18)
+                    ForEach(folders) { folder in
+                        WorkspaceFolderRow(folder: folder, isCurrent: false, action: {})
+                    }
+                    .padding(.horizontal, 8)
+                })
+        },
+    ]
+
+    static let serverScreens: [AuditCase] = workspaceSidebars + [
+        AuditCase(name: "screen-missing-components", width: modeArea) { _ in
+            AnyView(ScreenMissingComponents(components: ["x11vnc", "xdotool"], setup: SetupModel(), onInstall: {}))
+        },
+        // The shared failure view with "Подробнее" (collapsed): the row spans the whole 360 pt text column.
+        AuditCase(name: "error-view-details", width: 360) { _ in
+            AnyView(
+                UserFacingErrorView(
+                    message: UserFacingMessage(
+                        text: L10n.Screen.startFailed,
+                        technical: "cannot start the screen: Xvfb did not open :90 within 5 s", canRetry: true),
+                    onRetry: {}))
+        },
         AuditCase(name: "server-overview", width: modeArea, scrolls: true) { env in
             env.serverInfo(features: hostFeatures)
             return AnyView(ServerOverview(server: env.server, monitor: seededMonitor()))
@@ -188,6 +267,93 @@ extension LayoutAuditSnapshots {
                 id: "catalog:filesystem", name: "Filesystem", description: "Read and write files", template: filesystem,
                 integration: nil)
             return AnyView(marketDetail(entry))
+        },
+    ]
+
+    // MARK: showcase
+
+    private static let showcaseActions = MarketCardActions(
+        open: { _ in }, connect: { _ in }, configure: { _ in }, check: { _ in }, remove: { _ in },
+        signInAgain: { _ in }, setEnabled: { _, _ in }, update: { _ in })
+
+    private static var showcaseEntries: [MarketEntry] {
+        MarketLogic.entries(
+            catalog: MarketGridSnapshots.catalog, integrations: MarketGridSnapshots.integrations,
+            languageCode: L10n.locale.identifier)
+    }
+
+    /// A row of cards as a shelf draws it, cut by the window's edge (a ScrollView does not render offscreen).
+    private static func shelfRow<Item: Identifiable, Card: View>(
+        _ items: [Item], height: CGFloat, @ViewBuilder card: @escaping (Item) -> Card
+    ) -> some View {
+        HStack(alignment: .top, spacing: MarketShelfMetrics.gap) {
+            ForEach(items) { item in card(item).frame(width: MarketShelfMetrics.cardWidth, height: height) }
+        }
+        .padding(.leading, MarketGridLayout.sidePadding)
+        .padding(.vertical, 8)
+        .frame(width: modeArea, alignment: .leading)
+        .clipped()
+    }
+
+    static let marketShelfScreens: [AuditCase] = [
+        // The headers with the longest words: a long category, a suggestion title with a long agent name, the "All" link.
+        AuditCase(name: "market-shelves", width: modeArea, selfSized: true) { _ in
+            let entries = showcaseEntries
+            let dev = entries.filter { $0.category == "dev" }
+            let connected = entries.filter(\.isConnected)
+            let suggestion = RecommendationLogic.Item(
+                template: MarketGridSnapshots.catalog[0], reasonKey: "vercel", evidence: "apps/web/vercel.json")
+            return AnyView(
+                VStack(alignment: .leading, spacing: 8) {
+                    MarketShelfHeader(
+                        title: L10n.Market.Filter.connected, symbol: MarketShelfSymbol.connected, count: connected.count,
+                        onAll: {})
+                    shelfRow(
+                        connected,
+                        height: MarketShelfMetrics.connectedCardHeight(hasStats: true, hasUpdate: false, needsLogin: false)
+                    ) { entry in
+                        if let integration = entry.integration {
+                            MarketConnectedCard(
+                                entry: entry, integration: integration, status: .connected(tools: 12),
+                                statsLine: "12", updating: false, checking: false, actions: showcaseActions)
+                        }
+                    }
+                    MarketShelfHeader(
+                        title: L10n.Market.Recommend.title(agent: "Integration agent with a very long name"),
+                        symbol: MarketShelfSymbol.recommended, count: 1, onAll: nil
+                    ) {
+                        Image(systemName: "xmark")
+                    }
+                    shelfRow([suggestion], height: MarketShelfMetrics.suggestionCardHeight) { item in
+                        RecommendationCard(item: item, onConnect: {})
+                    }
+                    MarketShelfHeader(
+                        title: MarketCategory.title("productivity"), symbol: MarketCategory.symbol("productivity"),
+                        count: 14, onAll: {})
+                    shelfRow(dev, height: MarketShelfMetrics.catalogCardHeight) { entry in
+                        MarketCatalogCard(entry: entry, actions: showcaseActions)
+                    }
+                }
+                .padding(.vertical, 12)
+                .background(Color.Bandito.bg))
+        },
+        AuditCase(name: "market-category-page", width: modeArea, selfSized: true) { _ in
+            let shown = showcaseEntries.filter { $0.category == "productivity" || $0.category == "dev" }
+            return AnyView(
+                VStack(alignment: .leading, spacing: 18) {
+                    MarketPageHeader(
+                        title: MarketCategory.title("productivity"), symbol: MarketCategory.symbol("productivity"),
+                        count: shown.count, onBack: {})
+                    MarketRowList(
+                        items: shown, columns: 2, rowHeight: MarketShelfMetrics.catalogCardHeight,
+                        inset: MarketGridLayout.sidePadding
+                    ) { entry in
+                        MarketCatalogCard(entry: entry, actions: showcaseActions)
+                    }
+                }
+                .frame(width: modeArea, alignment: .topLeading)
+                .padding(.vertical, 12)
+                .background(Color.Bandito.bg))
         },
     ]
 

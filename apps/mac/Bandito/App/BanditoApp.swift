@@ -3,7 +3,7 @@ import BanditoDesign
 import BanditoUI
 import SwiftUI
 
-@main
+/// The app. `Main` starts it, or the smoothness check alone (`--perf-check`, see `PerfStandalone`).
 struct BanditoApp: App {
     @State private var model: AppModel
     @State private var router = Router()
@@ -20,6 +20,8 @@ struct BanditoApp: App {
     init() {
         // Brand fonts first: the first frame already draws with them.
         BanditoFont.registerBundledFonts()
+        // Freezes of the main thread go to the unified log and the anonymous counters (see `HangMonitor`).
+        HangMonitor.start()
         // Saved servers are read synchronously by AppModel, so the first frame already knows the launch state.
         let app = AppModel()
         _model = State(initialValue: app)

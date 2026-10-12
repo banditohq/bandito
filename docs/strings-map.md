@@ -76,7 +76,8 @@
 | Сведения агента (Inspector) | `status.idle` | ждёт задачу |
 | Сведения агента (Inspector) | `agentSheet.title` | Новый агент |
 | Сведения агента (Inspector) | `agentSheet.model` | Модель |
-| Сведения агента (Inspector) | `agentSheet.approvals` | Одобрения |
+| Сведения агента (Inspector) | `inspector.approvals` | Спрашивать разрешение |
+| Сведения агента (Inspector) | `approvalMode.hint.*` | Подсказка под выбором (по режиму) |
 | Сведения агента (Inspector) | `agentSheet.instructions` | Инструкции |
 | Сведения агента (Inspector) | `connect.stateLoggedIn` | вход выполнен |
 | Сведения агента (Inspector) | `connect.stateLoginNeeded` | нужен вход |
@@ -149,9 +150,7 @@
 | Новый агент (NewAgent) | `agentSheet.modelDefault` | По умолчанию |
 | Новый агент (NewAgent) | `agentSheet.folder` | Проект на сервере |
 | Новый агент (NewAgent) | `agentSheet.folderHint` | Где лежит код, с которым он работает. |
-| Новый агент (NewAgent) | `agentSheet.approvals` | Одобрения |
-| Новый агент (NewAgent) | `agentSheet.askAbout` | Что спрашивать у вас |
-| Новый агент (NewAgent) | `agentSheet.approvalsHint` | Пуш, деплой, удаление и запись вне {path} ждут вашего «да». Остальное он делает сам. |
+| Новый агент (NewAgent) | `agentSheet.askAbout` | Спрашивать разрешение |
 | Новый агент (NewAgent) | `agentSheet.instructions` | Инструкции |
 | Новый агент (NewAgent) | `agentSheet.instructionsHint` | необязательно, как ТЗ для нового сотрудника |
 | Новый агент (NewAgent) | `agentSheet.memoryAuto` | создастся сама |
@@ -178,9 +177,10 @@
 | Новый агент (NewAgent) | `effort.xhigh` | Очень |
 | Новый агент (NewAgent) | `effort.max` | Максимум |
 | Новый агент (NewAgent) | `effort.hint` | Чем выше, тем умнее на сложных задачах, но дольше и быстрее тратит лимит. Для обычной работы хватает среднего. |
-| Новый агент (NewAgent) | `approvalMode.risky` | Только рискованное |
-| Новый агент (NewAgent) | `approvalMode.always` | Всё подряд |
-| Новый агент (NewAgent) | `approvalMode.never` | Ничего |
+| Новый агент (NewAgent) | `approvalMode.risky` | Только о рискованном |
+| Новый агент (NewAgent) | `approvalMode.hint.*` | Подсказка под выбором (по режиму) |
+| Новый агент (NewAgent) | `approvalMode.always` | Обо всём |
+| Новый агент (NewAgent) | `approvalMode.never` | Ни о чём |
 | Новый агент (NewAgent) | `memory.title` | Память |
 | Новый агент (NewAgent) | `memory.smartChapters` | Умные главы |
 
@@ -400,7 +400,7 @@
 | Первый агент (FirstAgent) | `agentSheet.runtime` | Чем думает |
 | Первый агент (FirstAgent) | `effort.title` | Усилие |
 | Первый агент (FirstAgent) | `effort.medium` | Среднее |
-| Первый агент (FirstAgent) | `approvalMode.risky` | Только рискованное |
+| Первый агент (FirstAgent) | `approvalMode.risky` | Только о рискованном |
 | Первый агент (FirstAgent) | `inspector.project` | Проект |
 | Первый агент (FirstAgent) | `onboarding.agent.title` | Кого нанять первым? |
 | Первый агент (FirstAgent) | `onboarding.agent.subtitle` | Выберите готовую роль — мы подставим модель, инструкции и расписание. Всё можно поменять потом, а новых агентов добавить в любой момент. |

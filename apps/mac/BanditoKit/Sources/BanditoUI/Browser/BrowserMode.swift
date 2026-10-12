@@ -29,8 +29,11 @@ private struct BrowserContent: View {
     @Environment(Keymap.self) private var keymap
 
     var body: some View {
-        let model = BrowserStore.shared.model(for: server)
+        let selection = WorkspaceSelections.shared.selection(mode: "browser", server: server)
+        let workspaceID = selection.selectedID
+        let model = BrowserStore.shared.model(for: server, workspace: workspaceID)
         BrowserMainArea(model: model)
+            .id(workspaceID)
             // ⌘⇧C takes the browser from the agent, or gives it back when the user holds it.
             .keymapShortcut("browser.takeControl", keymap: keymap) {
                 Task {
@@ -43,16 +46,31 @@ private struct BrowserContent: View {
             }
             .keymapShortcut("browser.newTab", keymap: keymap) { Task { await model.newTab() } }
             .keymapShortcut("browser.closeTab", keymap: keymap) { Task { await model.closeCurrentTab() } }
-            .task(id: server.id) {
+            .task(id: workspaceID) {
                 model.attach()
+            }
+            // Choosing another workplace lets the browser shown go (its page connection closes), and shows the other.
+            .onChange(of: workspaceID) { old, _ in
+                BrowserStore.shared.model(for: server, workspace: old).detach()
+            }
+            // The list of workplaces: read now and every few seconds while the mode is on screen.
+            .task(id: server.id) {
+                while !Task.isCancelled {
+                    if selection.directory.shouldPoll { await selection.refresh() }
+                    try? await Task.sleep(for: .seconds(5))
+                }
             }
             // ⌘[ and ⌘] (and the Go menu) walk the page's history while Browser mode is on screen.
             .onAppear {
+                // The handle follows the chosen workplace: it looks the browser up when it is used.
+                let shown: @MainActor () -> BrowserModel = {
+                    BrowserStore.shared.model(for: server, workspace: selection.selectedID)
+                }
                 router.browserHistory = BrowserHistoryHandle(
-                    canBack: { model.canGoBack },
-                    canForward: { model.canGoForward },
-                    back: { Task { await model.goBack() } },
-                    forward: { Task { await model.goForward() } })
+                    canBack: { shown().canGoBack },
+                    canForward: { shown().canGoForward },
+                    back: { Task { await shown().goBack() } },
+                    forward: { Task { await shown().goForward() } })
             }
             .onDisappear {
                 model.detach()
@@ -102,7 +120,8 @@ struct BrowserMainArea: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Bandito.bg)
+        // The ground takes no clicks, so the title band behind the mode gets the empty space (double-click zooms).
+        .background { Color.Bandito.bg.allowsHitTesting(false) }
     }
 
     @ViewBuilder
@@ -112,7 +131,20 @@ struct BrowserMainArea: View {
             PreviewPane(model: model, port: port)
         case .page?, nil:
             if model.status?.running == true {
-                PageSurface(model: model)
+                switch model.pageState {
+                case .noTabs:
+                    BrowserNoTabsView { Task { await model.newTab() } }
+                case .startPage:
+                    BrowserStartPageView(
+                        recent: model.recentAddresses,
+                        agentTabs: model.agentTabs,
+                        onOpenAddress: { model.openRecent($0) },
+                        onSelectTab: { id in Task { await model.selectPage(id) } }
+                    )
+                    .onAppear { model.requestAddressFocus() }
+                case .waitingForFrame, .frameTimedOut, .showsPage:
+                    PageSurface(model: model)
+                }
             } else {
                 BrowserStopped(model: model)
             }
@@ -223,6 +255,8 @@ private struct BrowserToolbar: View {
         }
         // The shortcuts come from the keymap, so Settings → Keys can change them: ⌘L address (⌘R is Refresh, in the menu).
         .keymapShortcut("browser.address", keymap: keymap) { addressFocused = true }
+        // A new tab's start page asks for the address field at once.
+        .onChange(of: model.addressFocusRequest) { _, _ in addressFocused = true }
     }
 
     private func addressBar(compact: Bool) -> some View {
@@ -348,28 +382,30 @@ private struct ChromeInstallCard: View {
     }
 }
 
-/// A thin orange sweep under the address bar while a page loads.
+/// A thin orange sweep under the address bar while a page loads. The sweep is a Core Animation layer (see
+/// `LayerMotion`); still motion shows a steady segment in the middle instead.
 private struct LoadingBar: View {
-    @State private var phase: CGFloat = -0.3
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    @State private var layerShown = false
 
     var body: some View {
-        GeometryReader { geo in
-            Rectangle()
-                .fill(LinearGradient(colors: [.clear, Color.Bandito.signal, .clear], startPoint: .leading, endPoint: .trailing))
-                .frame(width: geo.size.width * 0.25, height: 2)
-                .offset(x: geo.size.width * phase)
-                .onAppear {
-                    // Still motion: a steady segment in the middle instead of a sweep.
-                    if reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion {
-                        phase = 0.375
-                        return
-                    }
-                    withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
-                        phase = 1
-                    }
+        let still = reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion
+        ZStack {
+            GeometryReader { geo in
+                Rectangle()
+                    .fill(LinearGradient(colors: [.clear, Color.Bandito.signal, .clear], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: geo.size.width * 0.25, height: 2)
+                    .offset(x: geo.size.width * 0.375)
+            }
+            .opacity(!still && layerShown ? 0 : 1)
+            #if os(macOS)
+            if !still {
+                SweepMotion(color: Color.Bandito.signal) { shown in
+                    if layerShown != shown { layerShown = shown }
                 }
+            }
+            #endif
         }
         .frame(height: 2)
         .clipped()
@@ -500,7 +536,8 @@ private struct PageSurface: View {
                     BrowserFrameLayer(store: model.frames)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .accessibilityHidden(true)
-                } else {
+                } else if model.pageState == .waitingForFrame {
+                    // Still waiting: a spinner. After the timeout the retry view below takes its place.
                     VStack(spacing: 10) {
                         ProgressView().controlSize(.small)
                         Text(L10n.Browser.connecting)
@@ -540,6 +577,10 @@ private struct PageSurface: View {
                     canSwipe: { back in back ? model.canGoBack : model.canGoForward }
                 )
                 #endif
+                // Above the input, so its retry button can be pressed.
+                if model.pageState == .frameTimedOut {
+                    BrowserFrameTimedOutView { Task { await model.retryFrame() } }
+                }
             }
             // The page is sized to the area the picture is drawn in, so the picture fills it with no bars.
             .onAppear { reportArea(size) }
@@ -718,15 +759,27 @@ struct BrowserSidebar: View {
 
     var body: some View {
         if let server = app.currentServer, server.supports("browser") {
-            BrowserSidebarContent(model: BrowserStore.shared.model(for: server))
+            BrowserSidebarHost(server: server)
         } else {
             SidebarPlaceholder(mode: .browser)
         }
     }
 }
 
+/// Picks the model of the chosen workplace for the sidebar. The picker sits above the tabs and does not rebuild with them.
+private struct BrowserSidebarHost: View {
+    let server: ServerModel
+
+    var body: some View {
+        let selection = WorkspaceSelections.shared.selection(mode: "browser", server: server)
+        BrowserSidebarContent(
+            model: BrowserStore.shared.model(for: server, workspace: selection.selectedID), selection: selection)
+    }
+}
+
 private struct BrowserSidebarContent: View {
     @Bindable var model: BrowserModel
+    let selection: WorkspaceSelection
     @State private var ports: [ListeningPort] = []
     /// The first-visit hint, closed once for good.
     @AppStorage("browser.sidebarHintClosed") private var hintClosed = false
@@ -734,6 +787,7 @@ private struct BrowserSidebarContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
+                WorkspacePicker(selection: selection)
                 HStack(spacing: 6) {
                     SectionLabel(L10n.Browser.tabs)
                     Spacer(minLength: 6)

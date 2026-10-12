@@ -13,12 +13,15 @@ enum BrowserSelection: Hashable {
     case preview(Int)
 }
 
-/// The state of one server's browser: its status, its tabs, the picture of the current page, and the input
-/// that goes to the page. Lives as long as the app keeps the server (see `BrowserStore`).
+/// The state of one workplace's browser on one server: its status, its tabs, the picture of the current page, and the
+/// input that goes to the page. Lives as long as the app keeps the server (see `BrowserStore`).
 @MainActor
 @Observable
 final class BrowserModel {
     let server: ServerModel
+    /// The workplace whose browser this is: `shared`, or the id of a container workplace. Every call, every tab route
+    /// and the list of recent addresses are of this workplace.
+    let workspace: String
     private static let log = Logger(subsystem: "dev.bandito.app", category: "browser")
 
     private(set) var status: BrowserStatus?
@@ -95,10 +98,27 @@ final class BrowserModel {
     private var reconnect = BrowserReconnectPolicy()
     /// True after five reconnects in a row failed: the browser is shown as stopped, with a button to start it.
     private(set) var gaveUp = false
+    /// True when a page sent no picture for `BrowserPageStateRule.frameTimeout` after it connected: the page area then
+    /// says so and offers a retry. Written once when it turns true, and cleared with the next connection.
+    private(set) var frameWaitExpired = false
+    /// The timer of that wait (see `startFrameWait`).
+    private var frameWait: Task<Void, Never>?
+    /// Counts up each time the address field is asked for the focus (a new tab's start page wants it at once).
+    private(set) var addressFocusRequest = 0
 
-    init(server: ServerModel) {
+    init(server: ServerModel, workspace: String = Workspace.sharedID) {
         self.server = server
+        self.workspace = workspace
         wheel = WheelSender { [weak self] batch in await self?.sendWheel(batch) }
+    }
+
+    /// The `workspace` parameter of the calls: nothing for the shared workplace, so an older daemon is asked as before.
+    private var wsParam: String? { WorkspacePickerLogic.rpcParameter(workspace) }
+
+    /// The key of this workplace's lists in the stored settings: the server's id, and the workplace when it is not the
+    /// shared one (so the shared list keeps the key it always had).
+    private var storageKey: String {
+        workspace == Workspace.sharedID ? server.id.uuidString : "\(server.id.uuidString).\(workspace)"
     }
 
     /// Whether the server has the browser feature (`server.info.features`).
@@ -118,7 +138,8 @@ final class BrowserModel {
         guard attachments.attach() else { return }
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.refresh()
+                // A browser view in a window nobody looks at does not need the tab list every two seconds.
+                if AppActivity.isActive { await self?.refresh() }
                 try? await Task.sleep(for: .seconds(2))
             }
         }
@@ -132,12 +153,27 @@ final class BrowserModel {
         Task { await closeClient() }
     }
 
+    /// The pictures of the demo browser's pages, by tab id; nil for a real browser. See `showDemo`.
+    @ObservationIgnored private var demoPages: [String: CGImage]?
+
+    /// Shows a browser that is not there: the smoothness check's demo daemon has no Chrome, so its tabs and their
+    /// pictures are given here. Switching tabs then works as with a running browser, without a connection.
+    func showDemo(tabs: [BrowserTab], pictures: [String: CGImage]) {
+        demoPages = pictures
+        status = BrowserStatus(running: true, cdp: "relay")
+        self.tabs = tabs
+        if let first = tabs.first {
+            selection = .page(first.id)
+            setFrame(pictures[first.id])
+        }
+    }
+
     /// Starts the browser on the server, then connects to its first page.
     func start() async {
         gaveUp = false
         reconnect = BrowserReconnectPolicy()
         do {
-            status = try await server.browserStart()
+            status = try await server.browserStart(workspace: wsParam)
             errorText = nil
             needsChrome = false
             await refresh()
@@ -156,7 +192,7 @@ final class BrowserModel {
             return
         }
         guard let id = await createBlankTab() else { return }
-        tabs = (try? await server.browserTabs()) ?? tabs
+        tabs = (try? await server.browserTabs(workspace: wsParam)) ?? tabs
         await selectPage(id)
     }
 
@@ -164,7 +200,7 @@ final class BrowserModel {
     private func createBlankTab() async -> String? {
         let browser: CDPClient
         do {
-            browser = try await server.browserTargetsClient()
+            browser = try await server.browserTargetsClient(workspace: wsParam)
         } catch {
             errorText = Self.describe(error)
             return nil
@@ -187,7 +223,8 @@ final class BrowserModel {
     /// holds. The browser is asked to close it and given 3 s; a tab that does not answer, or is refused, is closed by the
     /// daemon (`browser.close_tab`). Either way the tab leaves the list: a hung page never keeps its tab open.
     /// When the shown page is the one closed, the next tab takes its place (see `BrowserTabPolicy`); when none is
-    /// left, a blank tab opens. While an agent drives the browser, it asks to take control instead.
+    /// left, the page area says there are no tabs, and nothing opens a new one. While an agent drives the browser, it
+    /// asks to take control instead.
     func closeTab(_ id: String) async {
         guard status?.isRelay == true else { return }
         guard canInteract else {
@@ -201,10 +238,10 @@ final class BrowserModel {
         }
         if await !askToClose(id, within: Self.closeTimeout) {
             // Old daemons have no forced close: the tab is then dropped from the list and the next poll tells the truth.
-            try? await server.browserCloseTab(id)
+            try? await server.browserCloseTab(id, workspace: wsParam)
         }
         let before = tabs.map(\.id)
-        let fresh = (try? await server.browserTabs()) ?? tabs
+        let fresh = (try? await server.browserTabs(workspace: wsParam)) ?? tabs
         tabs = fresh.filter { $0.id != id }
         let shown: String? = { if case .page(let shown) = selection { return shown } else { return nil } }()
         switch BrowserTabPolicy.afterClosing(closedID: id, shownID: shown, before: before, remaining: tabs.map(\.id)) {
@@ -212,13 +249,10 @@ final class BrowserModel {
             return
         case .show(let next):
             await selectPage(next)
-        case .openBlank:
+        case .empty:
+            // Nothing opens in the closed tab's place: the page area shows that there are no tabs (see `pageState`).
             await closeClient()
             selection = nil
-            if let blank = await createBlankTab() {
-                tabs = (try? await server.browserTabs()) ?? tabs
-                await selectPage(blank)
-            }
         }
     }
 
@@ -226,7 +260,7 @@ final class BrowserModel {
     private func askToClose(_ id: String, within seconds: Double) async -> Bool {
         let browser: CDPClient
         do {
-            browser = try await server.browserTargetsClient()
+            browser = try await server.browserTargetsClient(workspace: wsParam)
         } catch {
             return false
         }
@@ -265,9 +299,9 @@ final class BrowserModel {
     /// One poll: the status, the tabs every few polls, a reconnect when the page connection is down, and a
     /// keep-alive while the browser is on screen and the app is the active one.
     func refresh() async {
-        guard isSupported else { return }
+        guard isSupported, demoPages == nil else { return }
         do {
-            let fresh = try await server.browserStatus()
+            let fresh = try await server.browserStatus(workspace: wsParam)
             errorText = nil
             guard fresh.isRelay else {
                 status = fresh
@@ -282,18 +316,18 @@ final class BrowserModel {
             status = fresh
             pollTick += 1
             if pollTick % 5 == 1 {
-                tabs = try await server.browserTabs()
+                tabs = try await server.browserTabs(workspace: wsParam)
                 fillAddressFromTabs()
                 // The page's own history is the truth for the address: it repairs one the events missed.
                 if let client, !isEditingAddress { await readCurrentAddress(client: client) }
             }
-            // The page connection follows the page tabs; a preview needs none.
-            if client == nil, !isPreviewSelected {
+            // The page connection follows the page tabs; a preview needs none. With no tab there is nothing to connect to.
+            if client == nil, !isPreviewSelected, !tabs.isEmpty {
                 await reconnectIfDue()
             }
             if Date().timeIntervalSince(lastTouch) > 60, NSApplication.shared.isActive {
                 lastTouch = Date()
-                try? await server.browserTouch()
+                try? await server.browserTouch(workspace: wsParam)
             }
         } catch {
             errorText = Self.describe(error)
@@ -342,6 +376,12 @@ final class BrowserModel {
 
     /// Shows a page of the browser.
     func selectPage(_ id: String) async {
+        if let demoPages {
+            // The smoothness check's demo browser: the page's picture is at hand, nothing is connected.
+            selection = .page(id)
+            setFrame(demoPages[id])
+            return
+        }
         selection = .page(id)
         clientTabID = nil
         await closeClient()
@@ -395,7 +435,7 @@ final class BrowserModel {
 
     private func setControl(_ holder: ControlHolder) async {
         do {
-            status = try await server.browserControl(holder)
+            status = try await server.browserControl(holder, workspace: wsParam)
             asksToTakeControl = false
         } catch {
             errorText = Self.describe(error)
@@ -606,13 +646,15 @@ final class BrowserModel {
         await closeClient()
         isLoading = true
         do {
-            let (client, tab) = try await server.browserPageClient(tabID: tabID)
+            let (client, tab) = try await server.browserPageClient(tabID: tabID, workspace: wsParam)
             self.client = client
             clientTabID = tab.id
             if selection == nil { selection = .page(tab.id) }
             currentURL = tab.url
+            rememberAddress(tab.url)
             addressText = BrowserAddressRule.shownAddress(tab.url)
             pageTitle = tab.title
+            startFrameWait()
             eventTask = Task { [weak self] in
                 for await event in client.events {
                     guard let self else { return }
@@ -701,7 +743,66 @@ final class BrowserModel {
         if let image {
             lastFrames.set(image)
             if !hasLastFrame { hasLastFrame = true }
+            // The page has its picture: nothing is waiting for one any more.
+            if frameWait != nil || frameWaitExpired { cancelFrameWait() }
         }
+    }
+
+    /// Starts the wait for the first picture of a page connection. After `BrowserPageStateRule.frameTimeout` without
+    /// one, `frameWaitExpired` turns on, and the page area offers a retry.
+    private func startFrameWait() {
+        frameWait?.cancel()
+        frameWaitExpired = false
+        frameWait = Task { [weak self] in
+            try? await Task.sleep(for: BrowserPageStateRule.frameTimeout)
+            guard !Task.isCancelled, let self, !self.hasFrame else { return }
+            self.frameWaitExpired = true
+        }
+    }
+
+    private func cancelFrameWait() {
+        frameWait?.cancel()
+        frameWait = nil
+        frameWaitExpired = false
+    }
+
+    /// What the page area shows, decided from the tabs, the shown address and the picture (see `BrowserPageStateRule`).
+    var pageState: BrowserPageState {
+        let shownURL = currentURL.isEmpty ? (tabs.first { $0.id == pageTabID }?.url ?? "") : currentURL
+        return BrowserPageStateRule.make(
+            hasTabs: !tabs.isEmpty, url: shownURL, hasFrame: hasFrame, frameWaitExpired: frameWaitExpired)
+    }
+
+    /// Asks the page's retry: the page connection is made again, so the picture is asked for again.
+    func retryFrame() async {
+        guard let id = pageTabID else { return }
+        await selectPage(id)
+    }
+
+    /// The addresses opened on this server, newest first: the start page's "recent" list.
+    var recentAddresses: [String] {
+        BrowserRecentAddresses.list(serverKey: storageKey)
+    }
+
+    /// The tabs agents opened, except the one shown: the start page's "agent tabs" list.
+    var agentTabs: [BrowserTab] {
+        tabs.filter { $0.agent && $0.id != pageTabID }
+    }
+
+    /// Opens an address from the recent list, as if it were typed into the address field.
+    func openRecent(_ url: String) {
+        addressText = url
+        submitAddress()
+    }
+
+    /// Asks the address field for the focus: a new tab's start page wants the address typed at once.
+    func requestAddressFocus() {
+        addressFocusRequest += 1
+    }
+
+    /// Keeps a web address in the recent list of this server (see `BrowserRecentAddresses`).
+    private func rememberAddress(_ url: String) {
+        BrowserRecentAddresses.remember(url, serverKey: storageKey)
     }
 
     /// The page shows another size than the viewport it was given (the override was lost): sends it again, at most
@@ -782,6 +883,7 @@ final class BrowserModel {
         let next = BrowserAddressRule.afterPageMoved(to: url, currentURL: currentURL, typed: addressText, editing: isEditingAddress)
         currentURL = next.currentURL
         addressText = next.typed
+        rememberAddress(url)
         // The tab row in the sidebar names the tab by its address too, so its entry follows the page.
         if let clientTabID, let index = tabs.firstIndex(where: { $0.id == clientTabID }), tabs[index].url != url {
             tabs[index].url = url
@@ -816,6 +918,7 @@ final class BrowserModel {
         stopWheel()
         eventTask?.cancel()
         eventTask = nil
+        cancelFrameWait()
         let old = client
         client = nil
         clientTabID = nil
@@ -889,17 +992,26 @@ private final class TitleDeadline {
     }
 }
 
-/// One `BrowserModel` per server, so the sidebar and the main area show the same browser.
+/// One `BrowserModel` per server and workplace, so the sidebar and the main area show the same browser. The panels in
+/// the chat and the workbench ask for the shared workplace's browser (`model(for:)`): agents in a container have no
+/// browser tools, so only the shared browser holds what an agent opened.
 @MainActor
 final class BrowserStore {
     static let shared = BrowserStore()
-    private var models: [UUID: BrowserModel] = [:]
+    private var models: [String: BrowserModel] = [:]
 
-    func model(for server: ServerModel) -> BrowserModel {
-        if let model = models[server.id] { return model }
-        let model = BrowserModel(server: server)
-        models[server.id] = model
+    func model(for server: ServerModel, workspace: String = Workspace.sharedID) -> BrowserModel {
+        let key = "\(server.id.uuidString)|\(workspace)"
+        if let model = models[key] { return model }
+        let model = BrowserModel(server: server, workspace: workspace)
+        models[key] = model
         return model
+    }
+
+    /// Drops the models of a server that is gone (the demo servers of the smoothness check), in every workplace.
+    func forget(serverID: UUID) {
+        let prefix = "\(serverID.uuidString)|"
+        models = models.filter { !$0.key.hasPrefix(prefix) }
     }
 }
 
@@ -910,15 +1022,15 @@ enum BrowserTabPolicy {
         case keep
         /// The shown page closed: show this tab.
         case show(String)
-        /// The shown page closed and no tab is left: open a blank one.
-        case openBlank
+        /// The shown page closed and no tab is left: nothing is shown, and nothing opens in its place.
+        case empty
     }
 
     /// `before` is the tab ids before the close, `remaining` the ids after it (without `closedID`). The tab that takes
     /// the place of the closed one is the one on its right, or the last one when it was the last of the row.
     static func afterClosing(closedID: String, shownID: String?, before: [String], remaining: [String]) -> Outcome {
         guard shownID == closedID else { return .keep }
-        guard !remaining.isEmpty else { return .openBlank }
+        guard !remaining.isEmpty else { return .empty }
         let index = before.firstIndex(of: closedID) ?? 0
         return .show(remaining[min(index, remaining.count - 1)])
     }

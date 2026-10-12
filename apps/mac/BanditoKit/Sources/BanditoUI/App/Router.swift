@@ -36,12 +36,14 @@ public enum AppMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The filter of the Marketplace sidebar: everything, only the connected services or the installed skills, or one
-/// category of the catalog.
+/// The filter of the Marketplace sidebar: everything (the shelves), only the connected services or the installed
+/// skills, or one category of the catalog (its page).
 public enum MarketFilter: Hashable, Identifiable, Sendable {
     case all, connected
     /// Skills that are installed somewhere on the server.
     case installed
+    /// The sets of bots (the Bots page only): the page "All" of the Bundles shelf.
+    case bundles
     /// Bots made from a template (the Bots page only). Not a catalog filter: it keeps no template, service or skill.
     case myBots
     /// A catalog category: `dev`, `productivity`, `data`, `web`, `design`, `other`.
@@ -52,6 +54,7 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
         case .all: "all"
         case .connected: "connected"
         case .installed: "installed"
+        case .bundles: "bundles"
         case .myBots: "myBots"
         case .category(let name): "category:\(name)"
         }
@@ -62,6 +65,7 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
         case .all: L10n.Market.Filter.all
         case .connected: L10n.Market.Filter.connected
         case .installed: L10n.Market.Filter.installed
+        case .bundles: L10n.Market.Bundles.title
         case .myBots: L10n.Market.Filter.myBots
         case .category(let name): MarketCategory.title(name)
         }
@@ -104,6 +108,25 @@ public enum MarketCategory {
         default: name.prefix(1).uppercased() + name.dropFirst()
         }
     }
+
+    /// The SF Symbol in front of a category's name in a shelf header, a page header and the sidebar. A category the app
+    /// has no symbol for gets the neutral tag.
+    public static func symbol(_ name: String) -> String {
+        switch name {
+        case "dev": "chevron.left.forwardslash.chevron.right"
+        case "productivity": "checklist"
+        case "data": "cylinder.split.1x2"
+        case "web": "globe"
+        case "design": "paintpalette"
+        case "other": "square.grid.2x2"
+        case "ops": "wrench.and.screwdriver"
+        case "research": "magnifyingglass"
+        case "writing": "pencil.line"
+        case "business": "briefcase"
+        case "personal": "person"
+        default: "tag"
+        }
+    }
 }
 
 /// A modal sheet over the main window.
@@ -123,6 +146,8 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     case installShared(shareID: String)
     /// The bots and skills this account shared: visibility, update, delete (see `MySharesView`).
     case myShares
+    /// Move an agent of this server to another connected server (see `MoveAgentSheet`).
+    case moveAgent(agentID: String, serverID: UUID)
 
     public var id: String {
         switch self {
@@ -135,6 +160,7 @@ public enum Sheet: Identifiable, Hashable, Sendable {
         case .share(.skill(let name)): "share-skill-\(name)"
         case .installShared(let shareID): "install-\(shareID)"
         case .myShares: "myShares"
+        case .moveAgent(let agentID, let serverID): "moveAgent-\(agentID)-\(serverID.uuidString)"
         }
     }
 }
@@ -162,6 +188,11 @@ public final class Router {
     public private(set) var mode: AppMode {
         didSet {
             if mode != oldValue, let screen = mode.telemetryScreen { Telemetry.count(.screen(screen)) }
+            if mode != oldValue {
+                HangMonitor.note(screen: mode)
+                HangMonitor.note(action: "mode.switch")
+            }
+            if mode == .team { keepTeam(of: frontServerID) }
         }
     }
 
@@ -170,7 +201,10 @@ public final class Router {
         didSet {
             if selectedAgentID != nil { showsTeamHome = false }
             // The picture viewer belongs to the chat it was opened in: another agent closes it.
-            if selectedAgentID != oldValue { imageViewer = nil }
+            if selectedAgentID != oldValue {
+                imageViewer = nil
+                HangMonitor.note(action: "agent.select")
+            }
         }
     }
     /// Team: the home screen (greeting, templates, recent agents) is shown instead of a chat.
@@ -218,19 +252,6 @@ public final class Router {
     public var marketDetail: String?
     /// Marketplace: the categories of the loaded catalog, for the sidebar. Set by the Marketplace page.
     public var marketCategories: [String] = []
-    /// Marketplace, Services page under All: the category block in view (its name), nil at the top or in the connected
-    /// block. The sidebar lights its row. Set by the page when the block changes.
-    public var marketSection: String?
-    /// Marketplace, Services page: a jump the sidebar asked for. The page takes it once (and sets it back to nil).
-    var marketScroll: MarketScrollRequest?
-    @ObservationIgnored private var marketScrollCount = 0
-
-    /// Asks the Services page to scroll to a place; each call is a new request, so a second click on the same row scrolls
-    /// again.
-    func requestMarketScroll(_ target: MarketScrollTarget) {
-        marketScrollCount += 1
-        marketScroll = MarketScrollRequest(id: marketScrollCount, target: target)
-    }
     /// Marketplace: the page in front (services, bots or skills). Restored from the app's defaults at start. The
     /// page shown is `MarketTab.effective(_:available:)`: a server without the feature falls back to services.
     public var marketTab: MarketTab = .services
@@ -243,6 +264,8 @@ public final class Router {
     public var marketSkillCategories: [String] = []
     /// What the last bot creation left to say: shown over the window as a toast until closed.
     var botNotice: BotNotice?
+    /// The one-time note after the first web link clicked in a chat: where links open, and what ⌘ does.
+    var chatLinkNotice: ChatLinkNotice?
     /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
     public var pendingTerminalCommand: String?
 
@@ -252,7 +275,18 @@ public final class Router {
     /// The agent whose chat is on screen (set by Team mode). ⌘I, ⌘J and the workbench shortcuts act on it.
     var shownAgentID: String?
     /// The server in front (set by the main window). Workbench state belongs to an agent of this server.
-    var frontServerID: String?
+    var frontServerID: String? {
+        didSet { if mode == .team { keepTeam(of: frontServerID) } }
+    }
+    /// The servers whose Team mode stays built (`KeptMode`), the last shown last: the two last shown in Team mode. A
+    /// return to Team mode, or to one of them, builds nothing (it cost 70–130 ms each time).
+    private(set) var teamServers: [String] = []
+    static let keptTeams = 2
+
+    private func keepTeam(of serverID: String?) {
+        guard let serverID, teamServers.last != serverID else { return }
+        teamServers = TeamKeeping.kept(teamServers, adding: serverID, limit: Self.keptTeams)
+    }
 
     /// The workbench panel of each agent, by `workbenchKey`: its tabs and panes (see `WorkbenchRules`).
     var workbench: [String: WorkbenchState] = [:]
@@ -310,7 +344,9 @@ public final class Router {
         terminalsOpening.remove(workbenchKey(agentID))
     }
 
-    public var sheet: Sheet?
+    public var sheet: Sheet? {
+        didSet { if sheet != oldValue, sheet != nil { HangMonitor.note(action: "sheet.open") } }
+    }
     /// The address the add-server sheet starts with: set by "Connect again" on a server that refused this Mac's key.
     public var addServerAddress: String?
     /// The picture viewer: the pictures to show, and the first one. Set to show it over the main window; `nil` closes it.
@@ -335,6 +371,7 @@ public final class Router {
 
     public init(mode: AppMode = .team, defaults: UserDefaults = .standard) {
         self.mode = mode
+        HangMonitor.note(screen: mode)
         marketTab = MarketTabStore.load(defaults: defaults)
     }
 

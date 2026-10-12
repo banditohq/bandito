@@ -11,6 +11,13 @@ final class SettingsNavigation {
     static let shared = SettingsNavigation()
 
     var requested: SettingsSection?
+    /// The server whose settings page the Servers section opens on, asked for with `requested = .servers`.
+    var requestedServer: UUID?
+}
+
+extension EnvironmentValues {
+    /// The navigation requests a Settings view takes: its own for the smoothness check's demo copy, else `shared`.
+    @Entry var settingsNavigation: SettingsNavigation?
 }
 
 /// Hands a route over to the main window: Settings closes, the main window comes forward with the route applied.
@@ -28,7 +35,10 @@ enum SettingsHandoff {
 /// 900 × 640 pt, never smaller than 760 × 520.
 public struct SettingsWindow: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.settingsNavigation) private var ownNavigation
     @State private var section: SettingsSection = .general
+
+    private var navigationRequests: SettingsNavigation { ownNavigation ?? .shared }
 
     public init() {}
 
@@ -59,13 +69,13 @@ public struct SettingsWindow: View {
             .clipped()
             .background(Color.Bandito.surface1)
         }
-        .frame(minWidth: 760, idealWidth: 900, maxWidth: .infinity, minHeight: 520, idealHeight: 640, maxHeight: .infinity)
+        .windowRoot(minWidth: 760, minHeight: 520, idealWidth: 900, idealHeight: 640)
         .preferredColorScheme(.dark)
         .onAppear {
             Telemetry.count(.screen(.settings))
             takeRequest()
         }
-        .onChange(of: SettingsNavigation.shared.requested) { _, _ in takeRequest() }
+        .onChange(of: navigationRequests.requested) { _, _ in takeRequest() }
         .task(id: TelegramProbe(server: app.currentServer?.id, connected: app.currentServer?.info != nil)) {
             await app.currentServer?.checkTelegramSupport()
         }
@@ -76,9 +86,9 @@ public struct SettingsWindow: View {
     }
 
     private func takeRequest() {
-        guard let requested = SettingsNavigation.shared.requested else { return }
+        guard let requested = navigationRequests.requested else { return }
         section = requested
-        SettingsNavigation.shared.requested = nil
+        navigationRequests.requested = nil
     }
 
     private var navigation: some View {

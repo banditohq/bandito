@@ -180,19 +180,20 @@ struct KeysAndGesturesSection: View {
         }
     }
 
+    /// A column of groups, lazy: only the rows that show are made (every shortcut of the app used to be built when the
+    /// section opened). The rows of a group are 2 pt apart, the groups 10 pt.
     private func column(_ groups: [(KeyContext, [Command])]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(groups, id: \.0) { context, commands in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(context.title.uppercased())
-                        .font(BanditoFont.text(size: 11, weight: 600))
-                        .tracking(0.8)
-                        .foregroundStyle(Color.Bandito.text3)
-                        .padding(.top, 6)
-                        .padding(.bottom, 4)
-                    ForEach(commands) { command in
-                        commandRow(command)
-                    }
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(groups.enumerated()), id: \.element.0) { index, group in
+                Text(group.0.title.uppercased())
+                    .font(BanditoFont.text(size: 11, weight: 600))
+                    .tracking(0.8)
+                    .foregroundStyle(Color.Bandito.text3)
+                    .padding(.top, (index == 0 ? 0 : 10) + 6)
+                    .padding(.bottom, 4 + 2)
+                ForEach(Array(group.1.enumerated()), id: \.element.id) { position, command in
+                    commandRow(command)
+                        .padding(.bottom, position == group.1.count - 1 ? 0 : 2)
                 }
             }
         }

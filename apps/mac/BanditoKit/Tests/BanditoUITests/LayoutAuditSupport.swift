@@ -161,11 +161,6 @@ enum LayoutAudit {
     private static let tallest: CGFloat = 2600
     private static let flag = NSColor(srgbRed: 1, green: 0, blue: 1, alpha: 1)
 
-    /// Switches every string to `language` (the test hook of `L10n`; the system language is not touched).
-    static func use(language: String) { L10n.useLanguageForTests(language) }
-
-    static func finish() { L10n.useLanguageForTests(nil) }
-
     static func audit(_ item: AuditCase, language: String, into directory: URL?) -> AuditFinding {
         let env = AuditEnvironment(signedIn: item.signedIn)
         defer { env.cleanUp() }

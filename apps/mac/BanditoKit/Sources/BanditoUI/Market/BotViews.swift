@@ -3,7 +3,8 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-// The Bots page of the Marketplace: the cards, the page of one template, and the sheet that makes a bot from it.
+// The Bots page of the Marketplace: the shelves and the pages, the cards, the page of one template, and the sheet that
+// makes a bot from it.
 
 extension MarketTileStyle {
     /// The colour of a tile from a `#RRGGBB` accent, or a stable palette colour of `name` when there is none.
@@ -63,6 +64,8 @@ struct ServiceMiniLogo: View {
 
 // MARK: - the page
 
+/// The Bots page. Under All with no search: a shelf of sets, then one shelf per category of bots. A category, or the
+/// sets: their own page under a header with Back. A search under All: one flat grid. My bots: its own flat grid.
 struct BotsPage: View {
     let model: BotsMarketModel
     let catalog: [IntegrationCatalogEntry]
@@ -81,19 +84,124 @@ struct BotsPage: View {
 
     @Environment(Router.self) private var router
 
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
     var body: some View {
-        if router.marketBotFilter == .myBots {
-            myBots
-        } else {
-            templateGrid
+        let filter = router.marketBotFilter
+        switch MarketPageMode.of(filter: filter, searching: searching) {
+        case .shelves:
+            shelves
+        case .page:
+            page(filter)
+        case .flat:
+            if filter == .myBots {
+                myBots
+            } else {
+                flatGrid
+            }
         }
     }
+
+    // MARK: shelves
+
+    /// The sets, then a shelf per category. Nothing to show says why (the failure, the empty server).
+    @ViewBuilder
+    private var shelves: some View {
+        let groups = BotLogic.shelves(model.templates)
+        VStack(alignment: .leading, spacing: 0) {
+            if model.bundlesFailure != nil {
+                bundlesFailedLine
+                    .padding(.horizontal, MarketGridLayout.sidePadding)
+                    .padding(.bottom, 14)
+            }
+            if !model.bundles.isEmpty {
+                MarketShelfView(
+                    title: L10n.Market.Bundles.title, symbol: MarketShelfSymbol.bundles, count: model.bundles.count,
+                    items: model.bundles, cardHeight: MarketShelfMetrics.bundleCardHeight,
+                    onAll: { router.marketBotFilter = .bundles }
+                ) { bundle in
+                    BundleCard(
+                        bundle: bundle, members: BundleLogic.members(of: bundle, templates: model.templates),
+                        languageCode: languageCode, onView: { onViewBundle(bundle) }
+                    )
+                    .equatable()
+                }
+                .padding(.bottom, MarketShelfMetrics.shelfGap)
+            }
+            let first = model.bundles.isEmpty ? 0 : 1
+            ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                MarketShelfView(
+                    title: MarketCategory.title(group.category), symbol: MarketCategory.symbol(group.category),
+                    count: group.items.count, items: group.items, cardHeight: MarketShelfMetrics.botCardHeight,
+                    onAll: { router.marketBotFilter = .category(group.category) }
+                ) { template in
+                    botCard(template)
+                }
+                .padding(.bottom, MarketShelfMetrics.shelfGap)
+                .environment(\.marketShelfOrder, first + index)
+            }
+            if groups.isEmpty {
+                emptyOrFailed.padding(.horizontal, MarketGridLayout.sidePadding)
+            }
+        }
+    }
+
+    private func botCard(_ template: BotTemplate) -> some View {
+        BotCard(
+            template: template,
+            services: BotLogic.services(of: template, catalog: catalog, integrations: integrations),
+            languageCode: languageCode,
+            onView: { onView(template) },
+            onCreate: { onCreate(template) }
+        )
+        .equatable()
+    }
+
+    // MARK: a page
+
+    /// The page of a category (its sets, then its bots) or of all the sets.
+    @ViewBuilder
+    private func page(_ filter: MarketFilter) -> some View {
+        let templates = BotLogic.visible(model.templates, filter: filter, query: query, languageCode: languageCode)
+        let sets = BundleLogic.visible(model.bundles, filter: filter, query: query, languageCode: languageCode)
+        let symbol = filter.isCategory ? MarketCategory.symbol(categoryName(filter)) : MarketShelfSymbol.bundles
+        VStack(alignment: .leading, spacing: 22) {
+            MarketPageHeader(
+                title: filter.title, symbol: symbol, count: templates.count + sets.count,
+                onBack: { router.marketBotFilter = .all })
+            if !sets.isEmpty {
+                VStack(alignment: .leading, spacing: 14) {
+                    if filter != .bundles { MarketPartLabel(text: L10n.Market.Bundles.title) }
+                    bundleRows(sets)
+                }
+            }
+            if filter != .bundles {
+                VStack(alignment: .leading, spacing: 14) {
+                    if !sets.isEmpty { MarketPartLabel(text: L10n.Market.Bots.catalog) }
+                    if templates.isEmpty {
+                        if sets.isEmpty { emptyOrFailed.padding(.horizontal, MarketGridLayout.sidePadding) }
+                    } else {
+                        botRows(templates)
+                    }
+                }
+            } else if sets.isEmpty {
+                emptyOrFailed.padding(.horizontal, MarketGridLayout.sidePadding)
+            }
+        }
+    }
+
+    private func categoryName(_ filter: MarketFilter) -> String {
+        if case .category(let name) = filter { return name }
+        return ""
+    }
+
+    // MARK: flat grids
 
     /// The bots the owner made from a template, one card each. Empty: a short hint, or "nothing found" for a search.
     private var myBots: some View {
         let bots = BotLogic.myBots(agents: agents, templates: model.templates, query: query, languageCode: languageCode)
         return VStack(alignment: .leading, spacing: 14) {
-            SectionLabel(L10n.Market.Filter.myBots)
+            MarketPartLabel(text: L10n.Market.Filter.myBots)
             if !bots.isEmpty {
                 MarketRows(items: bots) { bot in
                     MyBotCard(
@@ -101,28 +209,55 @@ struct BotsPage: View {
                         onOpen: { onOpen(bot.agent) })
                 }
             } else {
-                Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.Market.MyBots.empty : L10n.Market.noResults)
+                Text(searching ? L10n.Market.noResults : L10n.Market.MyBots.empty)
                     .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .padding(.vertical, 6)
+                    .padding(.horizontal, MarketGridLayout.sidePadding)
             }
         }
     }
 
-    /// The templates of the sidebar's filter and the search: the catalog grid.
-    private var templateGrid: some View {
+    /// What a search under All found: the sets, then the bots, as grids.
+    private var flatGrid: some View {
         let shown = BotLogic.visible(
             model.templates, filter: router.marketBotFilter, query: query, languageCode: languageCode)
         let sets = BundleLogic.visible(
             model.bundles, filter: router.marketBotFilter, query: query, languageCode: languageCode)
         return VStack(alignment: .leading, spacing: 28) {
             if model.bundlesFailure != nil {
-                bundlesFailedLine
+                bundlesFailedLine.padding(.horizontal, MarketGridLayout.sidePadding)
             }
             if !sets.isEmpty {
-                BundlesRow(bundles: sets, templates: model.templates, languageCode: languageCode, onView: onViewBundle)
+                VStack(alignment: .leading, spacing: 14) {
+                    MarketPartLabel(text: L10n.Market.Bundles.title)
+                    bundleRows(sets)
+                }
             }
-            catalogGrid(shown)
+            VStack(alignment: .leading, spacing: 14) {
+                MarketPartLabel(text: L10n.Market.Bots.catalog)
+                if !shown.isEmpty {
+                    botRows(shown)
+                } else {
+                    emptyOrFailed.padding(.horizontal, MarketGridLayout.sidePadding)
+                }
+            }
+        }
+    }
+
+    private func botRows(_ templates: [BotTemplate]) -> some View {
+        MarketRows(items: templates) { template in
+            botCard(template)
+        }
+    }
+
+    private func bundleRows(_ sets: [AgentBundle]) -> some View {
+        MarketRows(items: sets) { bundle in
+            BundleCard(
+                bundle: bundle, members: BundleLogic.members(of: bundle, templates: model.templates),
+                languageCode: languageCode, onView: { onViewBundle(bundle) }
+            )
+            .equatable()
         }
     }
 
@@ -137,33 +272,23 @@ struct BotsPage: View {
         }
     }
 
-    /// The catalog of single bots: the grid, or the failure, or the empty and no-result texts.
+    /// Why there is nothing to show: the failure, a search that found nothing, or a server without templates.
     @ViewBuilder
-    private func catalogGrid(_ shown: [BotTemplate]) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionLabel(L10n.Market.Bots.catalog)
-            if !shown.isEmpty {
-                MarketRows(items: shown) { template in
-                    BotCard(
-                        template: template,
-                        services: BotLogic.services(of: template, catalog: catalog, integrations: integrations),
-                        languageCode: languageCode,
-                        onView: { onView(template) },
-                        onCreate: { onCreate(template) })
-                }
-            } else if let failure = model.failure {
-                UserFacingErrorView(message: failure, onRetry: onRetry)
-            } else if model.loaded {
-                Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.Market.Bots.empty : L10n.Market.noResults)
-                    .font(BanditoFont.text(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .padding(.vertical, 6)
-            }
+    private var emptyOrFailed: some View {
+        if let failure = model.failure {
+            UserFacingErrorView(message: failure, onRetry: onRetry)
+        } else if model.loaded {
+            Text(searching ? L10n.Market.noResults : L10n.Market.Bots.empty)
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .padding(.vertical, 6)
         }
     }
 }
 
-struct BotCard: View {
+/// A bot template: its tile, name, three lines, the services it uses and Create bot. `Equatable` on what it draws (not
+/// on its closures), so a redraw of the page does not rebuild the cards.
+struct BotCard: View, Equatable {
     let template: BotTemplate
     let services: [BotLogic.Service]
     let languageCode: String
@@ -171,6 +296,10 @@ struct BotCard: View {
     var onCreate: () -> Void
 
     private static let logoLimit = 5
+
+    nonisolated static func == (lhs: BotCard, rhs: BotCard) -> Bool {
+        lhs.template == rhs.template && lhs.services == rhs.services && lhs.languageCode == rhs.languageCode
+    }
 
     var body: some View {
         MarketCardFrame {

@@ -147,6 +147,17 @@ public actor SSHTunnel {
         self.listeners = listeners
     }
 
+    /// The tunnel to an address the app keeps as fields (host, user, port, key file).
+    public init(
+        target: SSHTarget, remotePort: Int, sshPath: String = SSHTunnel.sshPath,
+        listeners: @escaping ListenerLookup = SSHTunnel.listeningProcesses
+    ) {
+        self.target = target
+        self.remotePort = remotePort
+        self.sshPath = sshPath
+        self.listeners = listeners
+    }
+
     /// Opens the tunnel. Throws the reason when ssh exits or the port stays closed.
     /// A call while the tunnel is already starting or running returns at once.
     ///

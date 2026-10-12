@@ -373,6 +373,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
             queued: false,
         });
         emit(EventBody::MessageAssistant {
@@ -401,6 +402,7 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
+            via_button: false,
             queued,
         }
     }
@@ -494,6 +496,7 @@ mod tests {
                             reply_to: None,
                             attachments: Vec::new(),
                             mentions: Vec::new(),
+                            via_button: false,
                             queued: false,
                         },
                     )

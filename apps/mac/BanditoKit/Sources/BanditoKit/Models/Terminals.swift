@@ -47,4 +47,42 @@ public struct TermInfo: Codable, Sendable, Identifiable, Hashable {
     public var state: TermState
     /// Total bytes of output so far (not only the retained part).
     public var offset: UInt64
+    /// The workspace it runs in: `shared`, or the id of a container workspace. An older daemon sends none: shared.
+    public var workspace: String
+
+    public init(
+        id: String, title: String, cwd: String, command: [String], pid: Int, cols: Int, rows: Int,
+        createdAt: Int64, state: TermState, offset: UInt64, workspace: String = Workspace.sharedID
+    ) {
+        self.id = id
+        self.title = title
+        self.cwd = cwd
+        self.command = command
+        self.pid = pid
+        self.cols = cols
+        self.rows = rows
+        self.createdAt = createdAt
+        self.state = state
+        self.offset = offset
+        self.workspace = workspace
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, cwd, command, pid, cols, rows, createdAt, state, offset, workspace
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        cwd = try c.decode(String.self, forKey: .cwd)
+        command = try c.decode([String].self, forKey: .command)
+        pid = try c.decode(Int.self, forKey: .pid)
+        cols = try c.decode(Int.self, forKey: .cols)
+        rows = try c.decode(Int.self, forKey: .rows)
+        createdAt = try c.decode(Int64.self, forKey: .createdAt)
+        state = try c.decode(TermState.self, forKey: .state)
+        offset = try c.decode(UInt64.self, forKey: .offset)
+        workspace = try c.decodeIfPresent(String.self, forKey: .workspace) ?? Workspace.sharedID
+    }
 }
