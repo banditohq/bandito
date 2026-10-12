@@ -1775,7 +1775,6 @@
 "onboarding.welcome.askText" = "Push, despliegues y borrados solo con tu sí. Responde desde el Mac, desde una notificación o desde un iPhone.";
 "onboarding.welcome.askTitle" = "Preguntan antes de lo arriesgado";
 "onboarding.welcome.footer" = "Código abierto · tu código y tus claves nunca salen de tus servidores";
-"onboarding.welcome.hasAccount" = "Ya tengo una cuenta";
 "onboarding.welcome.serverText" = "Archivos, terminales, navegador y pantalla del servidor en una sola ventana. Más fácil que SSH, y los agentes ven lo que tú ves.";
 "onboarding.welcome.serverTitle" = "Todo el servidor a mano";
 "onboarding.welcome.signIn" = "Iniciar sesión";

@@ -1,8 +1,8 @@
 import AppKit
-import BanditoDesign
 import SwiftUI
 import Testing
 
+@testable import BanditoDesign
 @testable import BanditoUI
 
 /// Pictures of the Welcome screen for review: the raccoon of points of light in the middle and at the end of its

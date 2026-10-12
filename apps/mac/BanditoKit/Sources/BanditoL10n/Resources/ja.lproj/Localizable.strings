@@ -1775,7 +1775,6 @@
 "onboarding.welcome.askText" = "push、デプロイ、削除はあなたが「はい」と答えた場合のみ。Mac、通知、iPhone のどこからでも答えられます。";
 "onboarding.welcome.askTitle" = "危険な操作の前に確認します";
 "onboarding.welcome.footer" = "オープンソース · コードとキーはあなたのサーバーから出ません";
-"onboarding.welcome.hasAccount" = "すでにアカウントを持っています";
 "onboarding.welcome.serverText" = "ファイル、ターミナル、ブラウザ、サーバーの画面を1つのウィンドウで。SSH より簡単で、エージェントもあなたが見ている画面を見られます。";
 "onboarding.welcome.serverTitle" = "サーバー全体がすぐ手元に";
 "onboarding.welcome.signIn" = "サインイン";

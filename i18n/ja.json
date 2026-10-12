@@ -734,7 +734,6 @@
   "serverUpdate.banner.title": "サーバー「{name}」でバージョン {version} を利用できます",
   "onboarding.welcome.serverTitle": "サーバー全体がすぐ手元に",
   "onboarding.welcome.serverText": "ファイル、ターミナル、ブラウザ、サーバーの画面を1つのウィンドウで。SSH より簡単で、エージェントもあなたが見ている画面を見られます。",
-  "onboarding.welcome.hasAccount": "すでにアカウントを持っています",
   "onboarding.steps.intro": "はじめに",
   "onboarding.steps.account": "アカウント",
   "onboarding.steps.server": "サーバー",

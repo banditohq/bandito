@@ -1775,7 +1775,6 @@
 "onboarding.welcome.askText" = "push, 배포, 삭제는 사용자가 승인해야만 해요. Mac, 알림, iPhone 어디서든 답할 수 있어요.";
 "onboarding.welcome.askTitle" = "위험한 작업 전에는 먼저 물어요";
 "onboarding.welcome.footer" = "오픈 소스 · 코드와 키는 서버 밖으로 나가지 않아요";
-"onboarding.welcome.hasAccount" = "이미 계정이 있어요";
 "onboarding.welcome.serverText" = "파일, 터미널, 브라우저, 서버 화면을 한 창에서 쓸 수 있어요. SSH보다 편하고, 에이전트도 내가 보는 화면을 함께 봐요.";
 "onboarding.welcome.serverTitle" = "서버 전체를 손안에";
 "onboarding.welcome.signIn" = "로그인";

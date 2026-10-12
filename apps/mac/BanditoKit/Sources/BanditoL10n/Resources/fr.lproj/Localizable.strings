@@ -1775,7 +1775,6 @@
 "onboarding.welcome.askText" = "Push, déploiements, suppressions : seulement avec votre accord. Répondez depuis le Mac, une notification ou un iPhone.";
 "onboarding.welcome.askTitle" = "Ils demandent avant toute action risquée";
 "onboarding.welcome.footer" = "Open source · votre code et vos clés ne quittent jamais vos serveurs";
-"onboarding.welcome.hasAccount" = "J’ai déjà un compte";
 "onboarding.welcome.serverText" = "Fichiers, terminaux, navigateur et écran du serveur dans une seule fenêtre. Plus simple que SSH, et les agents voient ce que vous voyez.";
 "onboarding.welcome.serverTitle" = "Tout le serveur à portée de main";
 "onboarding.welcome.signIn" = "Se connecter";

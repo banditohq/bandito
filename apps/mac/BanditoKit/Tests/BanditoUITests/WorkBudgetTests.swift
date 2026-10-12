@@ -1,5 +1,6 @@
 #if os(macOS) && DEBUG
 import AppKit
+import BanditoDesign
 import BanditoKit
 import Foundation
 import Testing
@@ -33,6 +34,47 @@ extension ScreenWorkSuites {
             for message in WorkBudget.excesses(counts, budgets, scenario: scenario) {
                 Issue.record(Comment(rawValue: message), sourceLocation: sourceLocation)
             }
+        }
+
+        static let raccoon = "the Mac host's layout (Onboarding/RaccoonLightsHost.swift) and the layer's build (BanditoDesign/RaccoonLightsLayer.swift): a resize must not build the figure again"
+
+        /// A change of theme or Reduce Motion reaches the open Welcome: the figure is built again once, not per change.
+        @Test func aThemeChangeRebuildsTheRaccoonOnce() {
+            let host = RaccoonLightsNSView(reduceMotion: false, dark: true)
+            host.frame = NSRect(x: 0, y: 0, width: 240, height: 240)
+            host.layoutSubtreeIfNeeded()
+            let lights = host.layer as? RaccoonLightsLayer
+            let before = lights?.buildCount ?? -1
+            host.apply(reduceMotion: false, dark: true)
+            host.layoutSubtreeIfNeeded()
+            #expect(lights?.buildCount == before, "the same appearance builds nothing")
+            host.apply(reduceMotion: false, dark: false)
+            host.layoutSubtreeIfNeeded()
+            #expect(lights?.buildCount == before + 1, "a new appearance builds the figure again, once")
+            host.apply(reduceMotion: true, dark: false)
+            host.layoutSubtreeIfNeeded()
+            #expect(lights?.buildCount == before + 2, "Reduce Motion builds the finished figure, once")
+        }
+
+        /// The Welcome's raccoon is built at its first layout and kept on every resize of its window.
+        @Test func theRaccoonIsBuiltOnceAndKeptOnResize() {
+            PerfCounters.reset()
+            PerfCounters.counting = true
+            defer { PerfCounters.counting = false }
+            let host = RaccoonLightsNSView(reduceMotion: false, dark: true)
+            let window = NSWindow(
+                contentRect: NSRect(x: -20000, y: -20000, width: 240, height: 240),
+                styleMask: .borderless, backing: .buffered, defer: false)
+            window.alphaValue = 0
+            window.ignoresMouseEvents = true
+            window.contentView = host
+            for side: CGFloat in [240, 300, 200, 420] {
+                host.frame = NSRect(x: 0, y: 0, width: side, height: side)
+                host.layoutSubtreeIfNeeded()
+            }
+            let counts = PerfCounters.snapshot()
+            #expect(counts["RaccoonLights.build"] == 1, "the figure is built once, at the first layout: \(counts)")
+            check(counts, [Self.budget("RaccoonLights.build", 1, Self.raccoon)], "the raccoon on resize")
         }
 
         @Test func mainScreensStayWithinTheirWork() async throws {

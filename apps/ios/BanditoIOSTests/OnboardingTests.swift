@@ -1,6 +1,8 @@
-import BanditoDesign
 import Foundation
 import Testing
+import UIKit
+
+@testable import BanditoDesign
 
 // The module of the app is named after its product (PRODUCT_NAME), not after its target.
 @testable import Bandito
@@ -148,7 +150,7 @@ import Testing
 @MainActor
 @Suite struct RaccoonLightsViewTests {
     /// Building the figure (one layer per light, one grouped animation each) happens on the main thread once per
-    /// appearance; it must stay well inside a frame. The measured time is printed for the review.
+    /// appearance; it must stay well inside a frame.
     @Test func buildingTheFigureStaysWellInsideAFrame() {
         // The figure is made once per launch (a static): made here first, so the time below is the view's alone.
         let count = RaccoonLights.figure.lights.count
@@ -157,23 +159,26 @@ import Testing
         let start = ContinuousClock.now
         view.layoutIfNeeded()
         let elapsed = ContinuousClock.now - start
-        print("RaccoonLights build (\(count) lights): \(elapsed)")
         #expect(elapsed < .milliseconds(250))
     }
 
-    /// The raccoon stands as the logo does: its ears are above its eyes on the screen. A UIKit view is y-down from its top,
-    /// so the layer's y is the screen's y (the Mac host is flipped to match; its test is in BanditoUITests).
+    /// The raccoon stands as the logo does: its ears are above its eyes on the screen. The shared layer's contents run
+    /// down from the top on iPhone, so the figure's y is the layer's y (the Mac's answer is in BanditoUITests).
     @Test func earsAreAboveTheEyesOnTheScreen() throws {
         let side: CGFloat = 280
         let view = RaccoonLightsView(frame: CGRect(x: 0, y: 0, width: side, height: side))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: side, height: side))
+        window.addSubview(view)
         view.layoutIfNeeded()
         let lights = try #require(view.layer as? RaccoonLightsLayer)
         lights.layoutIfNeeded()
         lights.show(at: 2.4)
         let figure = RaccoonLights.figure
-        let discs = Array((lights.sublayers ?? []).prefix(figure.lights.count))
+        let discs = Array((lights.figureLayer.sublayers ?? []).prefix(figure.lights.count))
         let ear = try #require(zip(discs, figure.lights).filter { $0.1.region == .fur }.min { $0.1.y < $1.1.y })
-        let eyeY = try #require(figure.eyeCentres.first).y * Double(side)
-        #expect(ear.0.position.y < CGFloat(eyeY), "the ears are above the eyes on the screen")
+        let eye = try #require(figure.eyeCentres.first)
+        let earY = ear.0.position.y
+        let eyeY = CGFloat(eye.y) * RaccoonLightsLayer.referenceSide
+        #expect(earY < eyeY, "the ears are above the eyes: ear \(earY), eye \(eyeY)")
     }
 }
