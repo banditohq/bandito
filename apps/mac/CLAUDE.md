@@ -38,7 +38,8 @@ The bar: 120 fps on a 120 Hz Mac (each frame's work under 8.3 ms), never under 6
 scrolling, typing or streaming, none over 100 ms anywhere. It holds for new work too. Before a new page, panel, sheet,
 list or animation is done:
 1. Build it from the fast parts that exist: `ThreadList`/`NativeRow` for chat-like lists, lazy stacks or an AppKit
-   table for long lists, `FirstFit` instead of `ViewThatFits`, `LayerMotion` for repeating motion, `Equatable` rows
+   table for long lists, `FirstFit` instead of `ViewThatFits` in headers and toolbars, `LayerMotion` for repeating
+   motion, `Equatable` rows
    keyed by the facts they show, state written only on change, heavy work (parsing, sizing, images) off the main thread.
 2. Add a scenario (or a part) for it to the smoothness check (`Perf/PerfScenarios.swift`) on the demo daemons.
 3. Run it in a speed build (`-O`) in the QA VM and compare with the page next to it; a page under the bar is not done.
@@ -68,7 +69,7 @@ list or animation is done:
 - Never pass a `Binding(get:set:)` that reads an `@Observable` into a child (`Composer` used to take one from `ThreadView`): the parent reads it while it builds the child, so each typed letter rebuilt the whole thread. The child reads and writes the model itself.
 - Per-row work that repeats on every redraw (regex, `DateFormatter`, `ByteCountFormatter`, `NSRegularExpression(pattern:)`) is made once and kept (`PlainLineCache`, `DateFormatterCache`, static regexes in `ChatLinks`).
 - A view that reads `server.thread(for:)` is rebuilt at every streamed token: read it in the row (`ThreadReader`), not in the list that holds the rows.
-- A Marketplace shelf is a horizontal `ScrollView` with a `LazyHStack`: every card has one fixed width and the shelf one fixed height (a lazy row cannot ask unbuilt cards how tall they are), cards are `Equatable`, and the shelves sit in a plain `VStack` (a lazy stack of shelves moved heights while scrolling and spiked). The place of a row for its arrows comes from its `NSScrollView` (`onScrollGeometryChange` and `ScrollPosition` need macOS 15, the app runs on 14) into a model that writes its flags only when they change.
+- A Marketplace shelf is a horizontal `ScrollView` with a `LazyHStack`: every card has one fixed width and the shelf one fixed height (a lazy row cannot ask unbuilt cards how tall they are), cards are `Equatable`, and the shelves sit in a plain `VStack` (a lazy stack of shelves moved heights while scrolling and spiked). The place of a row for its arrows comes from its `NSScrollView` (`onScrollGeometryChange` and `ScrollPosition` need macOS 15, the app runs on 14) into a model that writes its flags only when they change. The first four shelves of a page are built with it, each one below a frame later (`MarketShelfReveal`, a space of its height until then): all the shelves in the first frame cost 170 ms for Bots without a GPU.
 - Polling that only feeds a screen skips its tick while the app is not active (`AppActivity.isActive`).
 - Repeating motion (an avatar's mood, a pulsing dot, a loading sweep, the typing dots) is a Core Animation layer (`LayerMotion`), never a SwiftUI `repeatForever` or `TimelineView`: each SwiftUI animation frame updates the whole window's graph, about 5 ms a frame at rest for the sidebar's avatars. A layer view stays while it scrolls away; only its animation stops.
 - A window's content root is `.windowRoot(minWidth:minHeight:)`, never `.frame(minWidth:minHeight:)`: the hosting view asks the content for its smallest and largest size at every layout, and a frame passed that down every row of every list (30 % of the main thread while scrolling the Services page).
@@ -83,13 +84,30 @@ list or animation is done:
 - A horizontal `ScrollView` per element is expensive (code blocks): only where the content needs it (`CodeBlockLayout`).
 - `ViewThatFits` measures all its candidates again at every layout of the window: a header or a toolbar with a field
   and menus in its candidates cost 100–200 ms at each change of the page under it. Use `FirstFit` (candidates measured
-  once out of sight, the choice from their widths) or a rule over measured widths (`MarketHeaderFit`).
+  once out of sight, the choice from their widths) or a rule over measured widths (`MarketHeaderFit`). Only for a
+  header or a toolbar: in a row that is made often (action rows, settings rows, card feet) `FirstFit` builds its
+  candidates twice in its first frame and made pages open slower (a settings page 65 → 108 ms); rows keep a small
+  `ViewThatFits` of the words. A toolbar made again at each visit gives `FirstFit` a `memory` key (and `persists` for
+  the first visit after a launch): the widths are kept (`FirstFitMemory`) and nothing is measured again (Files' toolbar
+  and trail, 30 ms a visit). A `ViewThatFits` next to a `Spacer` in an `HStack` (the Journal's header) still costs about
+  40 ms a layout; replacing it changes where it switches, so it waits for a decision.
 - A page's header that does not change with the page is an `Equatable` view of its own (`MarketHeader`), and a search
   text lives in a reference that only the field and the results read (`MarketSearch`): a category or a letter rebuilt
   and measured the header with the page.
+- Team mode and its sidebar stay built under the other modes, for the last two servers (`KeptMode`,
+  `Router.teamServers`): building them again cost 70–130 ms at each return. Kept out of sight they are faded, disabled
+  (no shortcuts, no focus), out of hit testing, VoiceOver and the tour; AppKit views in them are hidden by hand (a fade
+  leaves pointer shapes and hover live: `ThreadList.hidden`); they read none of the router's choices (`TeamModeShown`),
+  or a home opened or an agent chosen elsewhere rebuilds them unseen; the composer gives up the focus and takes it back.
+  A chat with its workbench panel open is not kept (a terminal or a browser would go on running). The chat stays built
+  under the team home too. Other modes are made at each visit: they hold live views (terminals, the screen, the
+  browser) or poll.
+- A side list that reads things from the server at each visit starts from what the last visit read (`FilesSidebarExtras`)
+  and writes a value only when it changed: the places and the disk came in one by one, each a new layout.
+- A symbol drawn tinted in an AppKit row is made once (`NativeSymbols`), not tinted at each draw.
 - An agent switch needs the chosen agent only: `TeamSelection.shownAgentID` does not sort the team when the chosen one
   is there (the sort read every agent's state).
-- Measure with the smoothness check: Help → ⌥ Smoothness check… (release builds too) runs every page on demo daemons (`DemoDaemonTransport`, `PerfDemoWorld`) in a window of its own and shows the table. In a QA copy, `perf <scenario>` runs one page in that window and `perf check` all of them (`PerfScenarios.swift`; JSON in `~/.cache/bandito-qa/`: frames, the main thread's work and processor time per frame, stretches over 100 ms, `bodies` in debug builds, a verdict per page and part). A build for speed: `BANDITO_XCODE_EXTRA="SWIFT_OPTIMIZATION_LEVEL=-O" scripts/build.sh`. On anyone's Mac without touching their Bandito: `scripts/perf-build.sh` makes "Bandito Perf" (Release, its own id `dev.bandito.mac.perf`, ad hoc, no daemon), and `"Bandito Perf.app/Contents/MacOS/Bandito" --perf-check` runs only the check (`PerfStandalone`: no saved servers, pairing, Keychain, account, statistics or updates) and saves the JSON in `~/Library/Application Support/dev.bandito.mac.perf/`. A build setting on the `xcodebuild` command line reaches every target: never pass the bundle id there (resource bundles with the app's id lose their colours). Hangs of the main thread of 250 ms or more are logged by `HangMonitor` (`dev.bandito` / `perf`) and counted as `perf.hang.<screen>`. An AppKit sheet slides in a run loop of its own that no observer sees: in a stretch where a sheet came or went, only the main thread's processor time counts as work (`SheetSlideRule`), and the slide's gap is counted apart (`sheetSlides`), not as a late frame.
+- Measure with the smoothness check: Help → ⌥ Smoothness check… (release builds too) runs every page on demo daemons (`DemoDaemonTransport`, `PerfDemoWorld`) in a window of its own and shows the table. In a QA copy, `perf <scenario>` runs one page in that window and `perf check` all of them (`PerfScenarios.swift`; JSON in `~/.cache/bandito-qa/`: frames, the main thread's work and processor time per frame, stretches over 100 ms, `bodies` in debug builds, a verdict per page and part). A build for speed: `BANDITO_XCODE_EXTRA="SWIFT_OPTIMIZATION_LEVEL=-O" scripts/build.sh`. On anyone's Mac without touching their Bandito: `scripts/perf-build.sh` makes "Bandito Perf" (Release, its own id `dev.bandito.mac.perf`, ad hoc, no daemon), and `"Bandito Perf.app/Contents/MacOS/Bandito" --perf-check` runs only the check (`PerfStandalone`: no saved servers, pairing, Keychain, account, statistics or updates) and saves the JSON in `~/Library/Application Support/dev.bandito.mac.perf/`. A build setting on the `xcodebuild` command line reaches every target: never pass the bundle id there (resource bundles with the app's id lose their colours). Hangs of the main thread of 250 ms or more are logged by `HangMonitor` (`dev.bandito` / `perf`) and counted as `perf.hang.<screen>`. An AppKit sheet slides in a run loop of its own that no observer sees: in a stretch where a sheet came or went, only the main thread's processor time counts as work (`SheetSlideRule`), and the slide's gap is counted apart (`sheetSlides`), not as a late frame. A frame can come right after the slide, before the stretch ends: the stretch in progress already counts as a slide then (`SheetSlideRule.part`); the sheets' 345–395 ms "frames" were that. Each part of the JSON lists its frames over 50 ms (`longFrames`: gap, work, processor time, slide).
 
 ## Decoding replies
 

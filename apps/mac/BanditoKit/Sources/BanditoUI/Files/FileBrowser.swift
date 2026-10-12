@@ -520,7 +520,8 @@ struct FilesToolbar: View {
     @State private var searchPopover = false
 
     var body: some View {
-        FirstFit(count: 2) { index, measuring in
+        // The measured copies have no path and no field: the widths are the same in every folder.
+        FirstFit(count: 2, memory: "files.toolbar", persists: true) { index, measuring in
             layout(search: index == 0 ? .field : .loupe, measuring: measuring)
         }
         .padding(.horizontal, 14)
@@ -710,7 +711,7 @@ private struct CrumbTrailView: View {
 
     var body: some View {
         let layouts = CrumbTrail.layouts(count: crumbs.count)
-        FirstFit(count: layouts.count) { index, _ in
+        FirstFit(count: layouts.count, memory: "files.trail|" + crumbs.map(\.title).joined(separator: "/")) { index, _ in
             trail(layouts[index])
         }
     }

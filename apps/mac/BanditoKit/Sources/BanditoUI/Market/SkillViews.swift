@@ -101,7 +101,8 @@ struct SkillsPage: View {
                 }
                 .padding(.bottom, MarketShelfMetrics.shelfGap)
             }
-            ForEach(groups) { group in
+            let first = OwnSkillsLogic.showsSection(model.own, query: "", filter: .all) ? 1 : 0
+            ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                 MarketShelfView(
                     title: MarketCategory.title(group.category), symbol: MarketCategory.symbol(group.category),
                     count: group.items.count, items: group.items, cardHeight: MarketShelfMetrics.skillCardHeight,
@@ -110,6 +111,7 @@ struct SkillsPage: View {
                     skillCard(skill, compact: true)
                 }
                 .padding(.bottom, MarketShelfMetrics.shelfGap)
+                .environment(\.marketShelfOrder, first + index)
             }
             if groups.isEmpty {
                 emptyOrFailed.padding(.horizontal, MarketGridLayout.sidePadding)

@@ -101,6 +101,24 @@ extension MarketShelfView where Accessory == EmptyView {
     }
 }
 
+/// When the cards of a shelf are built. A page of shelves is a plain stack (see `MarketView.servicesContent`), so all its
+/// shelves were built in the page's first frame, those far below the window too (150–200 ms for the Bots page without
+/// a GPU). The first shelves come at once; each one after them a frame later than the one above, its place kept by a
+/// space of its height, long before a scroll can reach it.
+enum MarketShelfReveal {
+    /// Shelves built with the page: more than a tall window shows.
+    static let atOnceCount = 4
+
+    static func atOnce(_ order: Int) -> Bool { order < atOnceCount }
+
+    static func delay(_ order: Int) -> Duration { .milliseconds(17 * max(1, order - atOnceCount + 1)) }
+}
+
+extension EnvironmentValues {
+    /// The place of a shelf on its page, from the top (`MarketShelfReveal`).
+    @Entry var marketShelfOrder = 0
+}
+
 /// The row of cards. It is lazy sideways: only the cards near the window are built. It snaps to a card (`viewAligned`),
 /// has the page margin as a content margin (so the cards pass under the edge of the window, not under the margin), and
 /// the two arrows of `MarketShelfArrows`.
@@ -111,8 +129,25 @@ struct MarketShelfLane<Item: Identifiable, Card: View>: View {
 
     /// Where the row is. The lane never reads it: only the arrows do, so a change of it redraws them and not the cards.
     @State private var scroll = MarketShelfScrollModel()
+    /// The shelf's place on its page (`MarketShelfReveal`).
+    @Environment(\.marketShelfOrder) private var order
+    @State private var revealed = false
 
     var body: some View {
+        if revealed || MarketShelfReveal.atOnce(order) {
+            lane
+        } else {
+            // Below the first screen: its cards come a few frames after the page, not in its first frame.
+            Color.clear
+                .frame(height: MarketShelfMetrics.laneHeight(card: cardHeight))
+                .task {
+                    try? await Task.sleep(for: MarketShelfReveal.delay(order))
+                    if !Task.isCancelled { revealed = true }
+                }
+        }
+    }
+
+    private var lane: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: MarketShelfMetrics.gap) {

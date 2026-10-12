@@ -118,6 +118,57 @@ import Testing
         #expect(!disclosure.isOpen("tools-a"))
     }
 
+    @Test func teamModeIsKeptForTheLastTwoServers() {
+        var kept: [String] = []
+        kept = TeamKeeping.kept(kept, adding: "a", limit: 2)
+        kept = TeamKeeping.kept(kept, adding: "b", limit: 2)
+        #expect(kept == ["a", "b"])
+        // Back to the first: it moves to the end, nothing is dropped.
+        kept = TeamKeeping.kept(kept, adding: "a", limit: 2)
+        #expect(kept == ["b", "a"])
+        // A third: the oldest goes.
+        kept = TeamKeeping.kept(kept, adding: "c", limit: 2)
+        #expect(kept == ["a", "c"])
+        // In the window: the kept ones, and the one in front while Team mode shows (before it joins them).
+        #expect(TeamKeeping.built(kept: ["a"], front: "b", teamShown: true) == ["a", "b"])
+        #expect(TeamKeeping.built(kept: ["a"], front: "b", teamShown: false) == ["a"])
+        #expect(TeamKeeping.built(kept: ["a", "b"], front: "b", teamShown: true) == ["a", "b"])
+        // No server: Team mode's empty state.
+        #expect(TeamKeeping.built(kept: [], front: nil, teamShown: true) == [nil])
+    }
+
+    @MainActor @Test func firstFitWidthsOutliveTheView() {
+        let key = "test.\(UUID().uuidString)"
+        #expect(FirstFitMemory.entry(key, locale: "en") == nil)
+        FirstFitMemory.keep(key, locale: "en", widths: [0: 300, 1: 120], available: 500)
+        let entry = FirstFitMemory.entry(key, locale: "en")
+        #expect(entry?.widths == [0: 300, 1: 120] && entry?.available == 500)
+        // Per language: another language measures again.
+        #expect(FirstFitMemory.entry(key, locale: "de") == nil)
+        // Chosen from the kept widths.
+        #expect(FirstFitRule.index(available: 250, widths: entry?.widths ?? [:], count: 2) == 1)
+    }
+
+    @Test func shelvesBelowTheFirstScreenComeAFrameApart() {
+        #expect(MarketShelfReveal.atOnce(0) && MarketShelfReveal.atOnce(MarketShelfReveal.atOnceCount - 1))
+        #expect(!MarketShelfReveal.atOnce(MarketShelfReveal.atOnceCount))
+        let first = MarketShelfReveal.delay(MarketShelfReveal.atOnceCount)
+        let next = MarketShelfReveal.delay(MarketShelfReveal.atOnceCount + 1)
+        #expect(first > .zero && next > first && next < .milliseconds(100))
+    }
+
+    @Test func longFramesSayWhereAHitchCameFrom() {
+        let stats = FrameStats.compute(
+            intervals: [0.0167, 0.12, 0.0167, 0.38], work: [0.002, 0.11, 0.06, 0.04], cpu: [0.002, 0.1, 0.05, 0.04],
+            frameDuration: 1.0 / 60, slides: [false, false, false, true])
+        let long = stats.longFrames ?? []
+        // Worst first; a short frame with long work is one too; a slide is marked.
+        #expect(long.map(\.index) == [3, 1, 2])
+        #expect(long[0].slide && !long[1].slide)
+        #expect(abs(long[1].workMs - 110) < 0.01 && abs(long[1].cpuMs - 100) < 0.01)
+        #expect(FrameStats.compute(intervals: [0.0167], work: [0.002], frameDuration: 1.0 / 60).longFrames == nil)
+    }
+
     @Test func aSheetSlideIsNotAFreeze() {
         let ms: UInt64 = 1_000_000
         // 380 ms in AppKit's loop while a sheet moved, 40 ms of it on the processor: 40 ms of work.
@@ -127,6 +178,10 @@ import Testing
         // No sheet moving in it: the whole stretch, waiting or not (a wait on a lock is a freeze).
         #expect(SheetSlideRule.busy(start: 0, end: 380 * ms, cpu: 40 * ms, sheetMovedAt: nil) == 380 * ms)
         #expect(SheetSlideRule.busy(start: 100 * ms, end: 380 * ms, cpu: 40 * ms, sheetMovedAt: 50 * ms) == 280 * ms)
+        // A frame that comes right after a slide, before its stretch ends, counts only the processor time in it.
+        #expect(SheetSlideRule.part(from: 0, to: 380 * ms, cpu: 60 * ms, sheetMoved: true) == 60 * ms)
+        #expect(SheetSlideRule.part(from: 0, to: 380 * ms, cpu: 60 * ms, sheetMoved: false) == 380 * ms)
+        #expect(SheetSlideRule.part(from: 10 * ms, to: 5 * ms, cpu: 60 * ms, sheetMoved: false) == 0)
         // Its frame is counted apart, not as a late frame.
         let stats = FrameStats.compute(
             intervals: [0.0167, 0.38, 0.0167], work: [0.002, 0.04, 0.002], frameDuration: 1.0 / 60,

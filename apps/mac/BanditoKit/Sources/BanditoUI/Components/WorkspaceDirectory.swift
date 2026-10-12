@@ -80,6 +80,11 @@ final class WorkspaceDirectories {
     static let shared = WorkspaceDirectories()
     private var directories: [UUID: WorkspaceDirectory] = [:]
 
+    /// The directory of `server` if one was made already (nothing is made here).
+    func known(for server: ServerModel) -> WorkspaceDirectory? {
+        directories[server.id]
+    }
+
     func directory(for server: ServerModel) -> WorkspaceDirectory {
         if let directory = directories[server.id] { return directory }
         let directory = WorkspaceDirectory(server: server)

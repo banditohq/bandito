@@ -25,6 +25,17 @@ private struct FilesSidebarContent: View {
     @State private var projectsRoot: String?
     @State private var home: String?
     @State private var disk: HostDisk?
+
+    /// Starts with what the last visit read (`FilesSidebarExtras`): the places and the disk show at once instead of
+    /// coming in one by one after the requests (each a new layout of the sidebar).
+    init(server: ServerModel) {
+        self.server = server
+        let known = FilesSidebarExtras.known[server.id]
+        _home = State(initialValue: known?.home)
+        _projectsRoot = State(initialValue: known?.projectsRoot)
+        _disk = State(initialValue: known?.disk)
+        _directory = State(initialValue: WorkspaceDirectories.shared.known(for: server))
+    }
     /// Shows that a folder is about to be dropped on Favorites.
     @State private var favoritesTargeted = false
 
@@ -162,7 +173,7 @@ private struct FilesSidebarContent: View {
         .task(id: "\(server.id.uuidString) \(server.supports("workspaces"))") {
             guard server.supports("workspaces") else { return }
             let directory = WorkspaceDirectories.shared.directory(for: server)
-            self.directory = directory
+            if self.directory !== directory { self.directory = directory }
             while !Task.isCancelled {
                 if directory.shouldPoll { await directory.refresh() }
                 try? await Task.sleep(for: .seconds(8))
@@ -258,15 +269,28 @@ private struct FilesSidebarContent: View {
     }
 
     /// The home folder is needed to show absolute paths, the projects place, and the disk.
+    /// Each value is written only when it changed (the last visit's values are already shown).
     private func loadExtras() async {
-        home = try? await server.stat("~").path
+        let readHome = try? await server.stat("~").path
+        if readHome != home { home = readHome }
         if let projects = try? await server.projects(limit: 50) {
-            projectsRoot = ProjectsRoot.pick(projects)
+            let root = ProjectsRoot.pick(projects)
+            if root != projectsRoot { projectsRoot = root }
         }
         if server.supports("host"), let stats = try? await server.hostStats() {
-            disk = stats.primaryDisk
+            if stats.primaryDisk != disk { disk = stats.primaryDisk }
         }
+        FilesSidebarExtras.known[server.id] = FilesSidebarExtras(home: home, projectsRoot: projectsRoot, disk: disk)
     }
+}
+
+/// What the Files sidebar read of a server last time: the home folder, the projects folder and the disk.
+struct FilesSidebarExtras {
+    var home: String?
+    var projectsRoot: String?
+    var disk: HostDisk?
+
+    @MainActor static var known: [UUID: FilesSidebarExtras] = [:]
 }
 
 /// A favorite place in the list: icon and name. The full path is in the tooltip, not in the row.

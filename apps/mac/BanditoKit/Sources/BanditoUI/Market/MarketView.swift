@@ -433,9 +433,10 @@ struct MarketView: View {
             Color.clear.frame(height: MarketShelfMetrics.topInset)
             switch content {
             case .shelves(let shelves):
-                ForEach(shelves) { shelf in
+                ForEach(Array(shelves.enumerated()), id: \.element.id) { index, shelf in
                     shelfView(shelf, actions: actions, recommendation: recommendation)
                         .padding(.bottom, MarketShelfMetrics.shelfGap)
+                        .environment(\.marketShelfOrder, index)
                 }
             case .page(let kind, let items, let empty):
                 MarketPageHeader(

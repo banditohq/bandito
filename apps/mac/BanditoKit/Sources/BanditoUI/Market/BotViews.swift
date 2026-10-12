@@ -128,7 +128,8 @@ struct BotsPage: View {
                 }
                 .padding(.bottom, MarketShelfMetrics.shelfGap)
             }
-            ForEach(groups) { group in
+            let first = model.bundles.isEmpty ? 0 : 1
+            ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                 MarketShelfView(
                     title: MarketCategory.title(group.category), symbol: MarketCategory.symbol(group.category),
                     count: group.items.count, items: group.items, cardHeight: MarketShelfMetrics.botCardHeight,
@@ -137,6 +138,7 @@ struct BotsPage: View {
                     botCard(template)
                 }
                 .padding(.bottom, MarketShelfMetrics.shelfGap)
+                .environment(\.marketShelfOrder, first + index)
             }
             if groups.isEmpty {
                 emptyOrFailed.padding(.horizontal, MarketGridLayout.sidePadding)
