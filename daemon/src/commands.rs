@@ -412,6 +412,7 @@ impl Prepared {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
         }
     }
 }

@@ -237,6 +237,7 @@ async fn crew_lists_the_browser_tools_after_the_crew_tools() {
             "request_connection",
             "react",
             "reply_buttons",
+            "nothing_to_report",
             "screen_screenshot",
             "screen_click",
             "screen_move",

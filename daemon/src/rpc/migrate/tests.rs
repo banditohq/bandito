@@ -174,6 +174,7 @@ fn make_history(s: &Server, id: &str) -> (i64, i64) {
             attachments,
             mentions: vec![],
             via_button: false,
+            schedule: None,
             queued,
         }
     };

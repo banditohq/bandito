@@ -166,6 +166,42 @@ pub async fn dispatch(app: &App, _peer: &Peer, method: &str, p: Value) -> RpcRes
             );
             ok(json!({ "shown": shown }))
         }
+        "messages.agent.nothing_to_report" => {
+            // `agent_id` is the agent the session's token names (filled in by `bind_to_agent`).
+            let agent_id = p
+                .get("agent_id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| RpcError::new(INVALID_PARAMS, "no agent"))?
+                .to_string();
+            let reason = match p.get("reason") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(text)) if text.chars().count() <= 200 => {
+                    Some(text.trim()).filter(|t| !t.is_empty()).map(str::to_string)
+                }
+                Some(_) => {
+                    return Err(RpcError::new(
+                        INVALID_PARAMS,
+                        "reason must be text of at most 200 characters",
+                    ));
+                }
+            };
+            let store = &app.sup.hub().store;
+            let (started, turn_id) = store
+                .open_turn(&agent_id)
+                .map_err(server)?
+                .ok_or_else(|| RpcError::new(INVALID_PARAMS, "no turn is running"))?;
+            // Once per turn: a second call finds the mark and adds nothing.
+            let marked = store
+                .last_event_of_kind(&agent_id, "turn.quiet")
+                .map_err(server)?
+                .is_some_and(|q| {
+                    q.seq > started && matches!(&q.body, EventBody::TurnQuiet { turn_id: t, .. } if *t == turn_id)
+                });
+            if !marked {
+                app.sup.hub().emit(&agent_id, EventBody::TurnQuiet { turn_id, reason });
+            }
+            ok(json!({ "quiet": true }))
+        }
         "attachments.upload" => {
             let u: UploadParams = params(p)?;
             let store = &app.sup.hub().store;
@@ -824,6 +860,7 @@ mod tests {
                     attachments: Vec::new(),
                     mentions: Vec::new(),
                     via_button: false,
+                    schedule: None,
                     queued: false,
                 },
             )
@@ -868,6 +905,7 @@ mod tests {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
             queued,
         };
         let turn = |message_seq| EventBody::TurnStarted {
