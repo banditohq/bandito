@@ -1,0 +1,84 @@
+name: BanditoIOS
+options:
+  bundleIdPrefix: dev.bandito
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  # The shared core of the Apple clients (apps/mac/BanditoKit): models, RPC, the demo daemon, tokens, strings.
+  BanditoKit:
+    path: ../mac/BanditoKit
+targets:
+  BanditoIOS:
+    type: application
+    platform: iOS
+    sources:
+      - Bandito
+    dependencies:
+      - package: BanditoKit
+        product: BanditoKit
+      - package: BanditoKit
+        product: BanditoDesign
+      - package: BanditoKit
+        product: BanditoL10n
+    # xcodegen rewrites the file at `path` from these properties on every `generate`, so they live here, not in the file.
+    info:
+      path: Bandito/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, ru]
+        CFBundleDisplayName: Bandito
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.bandito.ios.link
+            CFBundleURLSchemes: [bandito]
+        ITSAppUsesNonExemptEncryption: false
+        LSRequiresIPhoneOS: true
+        NSCameraUsageDescription: Bandito uses the camera only to scan a server's pairing QR code.
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_NAME: Bandito
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.ios
+        MARKETING_VERSION: 0.1.14
+        CURRENT_PROJECT_VERSION: 1
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        # Simulator builds only for now: no signing (the build script passes CODE_SIGNING_ALLOWED=NO as well).
+        CODE_SIGN_STYLE: Automatic
+  BanditoIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - BanditoIOSTests
+    dependencies:
+      - target: BanditoIOS
+      - package: BanditoKit
+        product: BanditoKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        # Hosted in the app, so the tests run the app's own code (the demo world) on the simulator.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Bandito.app/Bandito"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  BanditoIOS:
+    build:
+      targets:
+        BanditoIOS: all
+        BanditoIOSTests: [test]
+    test:
+      targets:
+        - BanditoIOSTests

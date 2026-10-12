@@ -3064,5 +3064,11 @@
   "readyTeam.chooseFolder": "选择项目文件夹…",
   "readyTeam.create": "创建团队",
   "readyTeam.creating": "正在创建…",
-  "readyTeam.connectServices": "请在市场中连接 {names}，智能体才能使用。"
+  "readyTeam.connectServices": "请在市场中连接 {names}，智能体才能使用。",
+  "ios.welcome.title": "欢迎使用 Bandito",
+  "ios.connect.placeholder": "从 iPhone 连接服务器的功能即将推出。",
+  "ios.tab.crew": "团队",
+  "ios.tab.inbox": "收件箱",
+  "ios.tab.activity": "动态",
+  "ios.tab.comingSoon": "即将推出"
 }

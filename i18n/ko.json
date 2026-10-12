@@ -3064,5 +3064,11 @@
   "readyTeam.chooseFolder": "프로젝트 폴더 선택…",
   "readyTeam.create": "팀 만들기",
   "readyTeam.creating": "만드는 중…",
-  "readyTeam.connectServices": "에이전트가 쓸 수 있도록 마켓플레이스에서 {names}을(를) 연결해 주세요."
+  "readyTeam.connectServices": "에이전트가 쓸 수 있도록 마켓플레이스에서 {names}을(를) 연결해 주세요.",
+  "ios.welcome.title": "Bandito에 오신 것을 환영합니다",
+  "ios.connect.placeholder": "iPhone에서 서버를 연결하는 기능은 곧 나옵니다.",
+  "ios.tab.crew": "크루",
+  "ios.tab.inbox": "받은 편지함",
+  "ios.tab.activity": "활동",
+  "ios.tab.comingSoon": "곧 제공"
 }

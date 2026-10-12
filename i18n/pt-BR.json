@@ -3103,5 +3103,11 @@
   "readyTeam.chooseFolder": "Escolha a pasta do projeto…",
   "readyTeam.create": "Criar equipe",
   "readyTeam.creating": "Criando…",
-  "readyTeam.connectServices": "Conecte {names} no Marketplace para que os agentes possam usá-los."
+  "readyTeam.connectServices": "Conecte {names} no Marketplace para que os agentes possam usá-los.",
+  "ios.welcome.title": "Bem-vindo ao Bandito",
+  "ios.connect.placeholder": "Conectar um servidor pelo iPhone chegará em breve.",
+  "ios.tab.crew": "Equipe",
+  "ios.tab.inbox": "Caixa de entrada",
+  "ios.tab.activity": "Atividade",
+  "ios.tab.comingSoon": "Em breve"
 }

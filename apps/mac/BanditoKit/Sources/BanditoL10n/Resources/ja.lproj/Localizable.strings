@@ -925,6 +925,12 @@
 "integrations.status.unchecked" = "未確認";
 "integrations.title" = "連携";
 "integrations.toolsFound" = "ツール: %1$@";
+"ios.connect.placeholder" = "iPhone からのサーバー接続は近日対応予定です。";
+"ios.tab.activity" = "アクティビティ";
+"ios.tab.comingSoon" = "近日公開";
+"ios.tab.crew" = "クルー";
+"ios.tab.inbox" = "受信箱";
+"ios.welcome.title" = "Bandito へようこそ";
 "journal.copyAll" = "すべてコピー";
 "journal.empty" = "まだ記録はありません。";
 "journal.levelAll" = "すべて";

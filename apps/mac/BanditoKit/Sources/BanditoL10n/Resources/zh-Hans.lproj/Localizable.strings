@@ -925,6 +925,12 @@
 "integrations.status.unchecked" = "尚未检查";
 "integrations.title" = "集成";
 "integrations.toolsFound" = "工具：%1$@";
+"ios.connect.placeholder" = "从 iPhone 连接服务器的功能即将推出。";
+"ios.tab.activity" = "动态";
+"ios.tab.comingSoon" = "即将推出";
+"ios.tab.crew" = "团队";
+"ios.tab.inbox" = "收件箱";
+"ios.welcome.title" = "欢迎使用 Bandito";
 "journal.copyAll" = "全部复制";
 "journal.empty" = "还没有日志。";
 "journal.levelAll" = "全部";

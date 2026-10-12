@@ -925,6 +925,12 @@
 "integrations.status.unchecked" = "아직 확인 안 함";
 "integrations.title" = "연동";
 "integrations.toolsFound" = "도구: %1$@";
+"ios.connect.placeholder" = "iPhone에서 서버를 연결하는 기능은 곧 나옵니다.";
+"ios.tab.activity" = "활동";
+"ios.tab.comingSoon" = "곧 제공";
+"ios.tab.crew" = "크루";
+"ios.tab.inbox" = "받은 편지함";
+"ios.welcome.title" = "Bandito에 오신 것을 환영합니다";
 "journal.copyAll" = "모두 복사";
 "journal.empty" = "아직 기록이 없어요.";
 "journal.levelAll" = "전체";

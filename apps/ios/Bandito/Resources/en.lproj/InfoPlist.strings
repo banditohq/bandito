@@ -1,0 +1,2 @@
+/* Permission text shown by iOS. */
+"NSCameraUsageDescription" = "Bandito uses the camera only to scan a server's pairing QR code.";

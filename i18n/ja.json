@@ -3064,5 +3064,11 @@
   "readyTeam.chooseFolder": "プロジェクトフォルダを選択…",
   "readyTeam.create": "チームを作成",
   "readyTeam.creating": "作成中…",
-  "readyTeam.connectServices": "エージェントが使えるように、マーケットで {names} を接続してください。"
+  "readyTeam.connectServices": "エージェントが使えるように、マーケットで {names} を接続してください。",
+  "ios.welcome.title": "Bandito へようこそ",
+  "ios.connect.placeholder": "iPhone からのサーバー接続は近日対応予定です。",
+  "ios.tab.crew": "クルー",
+  "ios.tab.inbox": "受信箱",
+  "ios.tab.activity": "アクティビティ",
+  "ios.tab.comingSoon": "近日公開"
 }

@@ -925,6 +925,12 @@
 "integrations.status.unchecked" = "Pas encore vérifiée";
 "integrations.title" = "Intégrations";
 "integrations.toolsFound" = "Outils : %1$@";
+"ios.connect.placeholder" = "La connexion d'un serveur depuis l'iPhone arrive bientôt.";
+"ios.tab.activity" = "Activité";
+"ios.tab.comingSoon" = "Bientôt disponible";
+"ios.tab.crew" = "Équipe";
+"ios.tab.inbox" = "Boîte de réception";
+"ios.welcome.title" = "Bienvenue dans Bandito";
 "journal.copyAll" = "Tout copier";
 "journal.empty" = "Aucune entrée pour l’instant.";
 "journal.levelAll" = "Tous";

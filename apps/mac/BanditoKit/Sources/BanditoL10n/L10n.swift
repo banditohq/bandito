@@ -1337,6 +1337,24 @@ public enum L10n {
         }
     }
 
+    public enum Ios {
+
+        public enum Connect {
+            public static var placeholder: String { L10n.tr("ios.connect.placeholder") }
+        }
+
+        public enum Tab {
+            public static var activity: String { L10n.tr("ios.tab.activity") }
+            public static var comingSoon: String { L10n.tr("ios.tab.comingSoon") }
+            public static var crew: String { L10n.tr("ios.tab.crew") }
+            public static var inbox: String { L10n.tr("ios.tab.inbox") }
+        }
+
+        public enum Welcome {
+            public static var title: String { L10n.tr("ios.welcome.title") }
+        }
+    }
+
     public enum Journal {
         public static var copyAll: String { L10n.tr("journal.copyAll") }
         public static var empty: String { L10n.tr("journal.empty") }

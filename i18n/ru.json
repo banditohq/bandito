@@ -3184,5 +3184,11 @@
   "readyTeam.chooseFolder": "Выберите папку проекта…",
   "readyTeam.create": "Создать команду",
   "readyTeam.creating": "Создаю…",
-  "readyTeam.connectServices": "Подключите {names} в Маркетплейсе, чтобы агенты могли ими пользоваться."
+  "readyTeam.connectServices": "Подключите {names} в Маркетплейсе, чтобы агенты могли ими пользоваться.",
+  "ios.welcome.title": "Добро пожаловать",
+  "ios.connect.placeholder": "Подключение сервера с iPhone появится скоро.",
+  "ios.tab.crew": "Команда",
+  "ios.tab.inbox": "Входящие",
+  "ios.tab.activity": "Активность",
+  "ios.tab.comingSoon": "Скоро"
 }

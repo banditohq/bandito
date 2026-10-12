@@ -925,6 +925,12 @@
 "integrations.status.unchecked" = "Ещё не проверена";
 "integrations.title" = "Интеграции";
 "integrations.toolsFound" = "Инструменты: %1$@";
+"ios.connect.placeholder" = "Подключение сервера с iPhone появится скоро.";
+"ios.tab.activity" = "Активность";
+"ios.tab.comingSoon" = "Скоро";
+"ios.tab.crew" = "Команда";
+"ios.tab.inbox" = "Входящие";
+"ios.welcome.title" = "Добро пожаловать";
 "journal.copyAll" = "Скопировать всё";
 "journal.empty" = "Записей пока нет.";
 "journal.levelAll" = "Все";

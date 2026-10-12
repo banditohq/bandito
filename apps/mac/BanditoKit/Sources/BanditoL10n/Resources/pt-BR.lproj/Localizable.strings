@@ -925,6 +925,12 @@
 "integrations.status.unchecked" = "Ainda não verificada";
 "integrations.title" = "Integrações";
 "integrations.toolsFound" = "Ferramentas: %1$@";
+"ios.connect.placeholder" = "Conectar um servidor pelo iPhone chegará em breve.";
+"ios.tab.activity" = "Atividade";
+"ios.tab.comingSoon" = "Em breve";
+"ios.tab.crew" = "Equipe";
+"ios.tab.inbox" = "Caixa de entrada";
+"ios.welcome.title" = "Bem-vindo ao Bandito";
 "journal.copyAll" = "Copiar tudo";
 "journal.empty" = "Nenhuma linha ainda.";
 "journal.levelAll" = "Todos";
