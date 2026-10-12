@@ -1,0 +1,223 @@
+name: release-flow
+
+# Merging a release PR (made by scripts/release.sh: branch release/X, title "release: Bandito X") releases the server
+# and starts the app release:
+#   1. prepare  - checks that the three version files say X, tags the merge commit vX, makes a draft GitHub release
+#                 whose notes are the PR description
+#   2. server   - release.yml builds and signs the daemon binaries into the draft
+#   3. publish  - publishes the release (marked latest for a stable version)
+#   4. app      - dispatches release-app.yml; its run waits for the owner's approval (environment `stable`)
+# Every step is safe to run again. If a step failed, fix the cause and run this workflow by hand with the version:
+# it carries on from where the release stopped. See docs/RELEASING.md.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version of a release PR that is already merged (X.Y.Z or X.Y.Z-beta.N)"
+        required: true
+        type: string
+      start_app:
+        description: "Also start release-app.yml after publishing"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# One flow per version at a time; a second one waits instead of racing for the same tag and release.
+concurrency:
+  group: release-flow-${{ github.event.inputs.version && format('release/{0}', github.event.inputs.version) || github.event.pull_request.head.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: tag and draft
+    # A pull request that is not a merged release PR from this repository ends here (the other jobs are skipped).
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch'
+          || (github.event.pull_request.merged == true
+              && github.event.pull_request.head.repo.full_name == github.repository
+              && startsWith(github.event.pull_request.head.ref, 'release/')
+              && startsWith(github.event.pull_request.title, 'release: Bandito ')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      channel: ${{ steps.resolve.outputs.channel }}
+      published: ${{ steps.draft.outputs.published }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EVENT_NAME: ${{ github.event_name }}
+      INPUT_VERSION: ${{ github.event.inputs.version }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_REF: ${{ github.event.pull_request.head.ref }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+    steps:
+      - name: Work out the version, the merge commit and the notes
+        id: resolve
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*"; exit 1; }
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            version="$INPUT_VERSION"
+            printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$' \
+              || fail "version must look like 0.1.14 or 0.2.0-beta.1 (got '$version')"
+            PR_NUMBER="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "release/$version" --state merged \
+              --json number --jq '.[0].number // empty')"
+            [ -n "$PR_NUMBER" ] || fail "no merged pull request from branch release/$version"
+            PR_TITLE="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title --jq .title)"
+            PR_SHA="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json mergeCommit --jq .mergeCommit.oid)"
+            gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/notes.md"
+          else
+            version="${PR_REF#release/}"
+            gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/notes.md"
+          fi
+          printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$' \
+            || fail "branch release/$version does not carry a version"
+          [ "$PR_TITLE" = "release: Bandito $version" ] \
+            || fail "the pull request title '$PR_TITLE' does not match 'release: Bandito $version'"
+          [ -n "$PR_SHA" ] || fail "the pull request has no merge commit"
+          [ -s "$RUNNER_TEMP/notes.md" ] || echo "Bandito $version" > "$RUNNER_TEMP/notes.md"
+          case "$version" in *-beta.*) channel=beta ;; *) channel=stable ;; esac
+          {
+            echo "version=$version"
+            echo "tag=v$version"
+            echo "channel=$channel"
+            echo "sha=$PR_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.resolve.outputs.sha }}
+          fetch-depth: 1
+
+      - name: Check that the version files say the version
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: bash scripts/bump-version.sh "$VERSION" --check
+
+      - name: Tag the merge commit
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+          SHA: ${{ steps.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet --tags origin
+          if git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
+            [ "$(git rev-parse "$TAG^{commit}")" = "$SHA" ] \
+              || { echo "::error::tag $TAG already exists on another commit"; exit 1; }
+            echo "Tag $TAG is already on $SHA."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            tag -a "$TAG" -m "Bandito $VERSION" "$SHA"
+          git push origin "refs/tags/$TAG"
+
+      - name: Make the draft release (or find the published one)
+        id: draft
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+          CHANNEL: ${{ steps.resolve.outputs.channel }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            if [ "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = false ]; then
+              echo "Release $TAG is already published."
+              echo "published=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            flags=()
+            if [ "$CHANNEL" = beta ]; then flags+=(--prerelease); fi
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+              --title "Bandito $VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
+          fi
+          echo "published=false" >> "$GITHUB_OUTPUT"
+
+  server:
+    name: server binaries
+    needs: prepare
+    if: ${{ needs.prepare.outputs.published != 'true' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit
+
+  publish:
+    name: publish
+    needs: [prepare, server]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+    steps:
+      - name: Check the server assets
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for name in bandito-aarch64-apple-darwin.tar.gz bandito-x86_64-apple-darwin.tar.gz \
+              bandito-aarch64-unknown-linux-gnu.tar.gz bandito-x86_64-unknown-linux-gnu.tar.gz \
+              install.sh SHA256SUMS SHA256SUMS.sig; do
+            grep -qxF "$name" <<< "$assets" || { echo "::error::release $TAG has no $name"; exit 1; }
+          done
+
+      # Published with the workflow token, so release.yml's `release: published` trigger does not fire a second build.
+      - name: Publish
+        run: |
+          set -euo pipefail
+          if [ "$CHANNEL" = beta ]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          else
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          fi
+
+  app:
+    name: start the app release
+    needs: [prepare, publish]
+    # Also runs when the release was already published (publish skipped), so a rerun still reaches the app.
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success'
+          && (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+          && github.event.inputs.start_app != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+    steps:
+      - name: Dispatch release-app
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
+              | grep -qxF "Bandito-$VERSION.zip"; then
+            echo "Release $TAG already has the app zip; not starting release-app again."
+            exit 0
+          fi
+          gh workflow run release-app.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f "version=$VERSION" -f "channel=$CHANNEL"
+          echo "Started release-app for $VERSION ($CHANNEL). Approve it in the Actions tab (environment $CHANNEL)." \
+            | tee -a "$GITHUB_STEP_SUMMARY"

@@ -2,7 +2,9 @@ name: release-app
 
 # Builds, signs, notarizes and publishes the Mac app of one version. Run it after the server release of the same
 # version (release.yml) is published. The job runs in the environment named after the channel: `stable` needs the
-# owner's approval (set up in the repository settings). See docs/RELEASING.md.
+# owner's approval (set up in the repository settings). It is normally started by release-flow.yml after the server
+# release is published. At the end it opens the appcast PR in banditohq/platform and merges it once that repo's checks
+# are green, with a short-lived token of the Bandito Bot GitHub App. See docs/RELEASING.md.
 
 on:
   workflow_dispatch:
@@ -37,7 +39,6 @@ jobs:
       CHANNEL: ${{ inputs.channel }}
       TAG: v${{ inputs.version }}
       GH_TOKEN: ${{ github.token }}
-      HAS_PLATFORM_TOKEN: ${{ secrets.PLATFORM_TOKEN != '' }}
     steps:
       # runner.temp is not available in a job's env, so the folder is set by the first step.
       - name: Set paths
@@ -125,18 +126,25 @@ jobs:
           tar -xJf "$RUNNER_TEMP/sparkle-dl/Sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle" ./bin/sign_update
           test -x "$RUNNER_TEMP/sparkle/bin/sign_update"
 
+      # Installation tokens last one hour, so one is made here (read the platform repo) and another at the end (push,
+      # open and merge the PR): the build in between can take longer than that. Needs the App installed on
+      # banditohq/platform with Contents: read and write, Pull requests: read and write.
+      - name: Token for the platform repo (read)
+        id: platform-read
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.BANDITO_BOT_APP_ID }}
+          private-key: ${{ secrets.BANDITO_BOT_PRIVATE_KEY }}
+          owner: banditohq
+          repositories: platform
+          permission-contents: read
+
       - name: Get the current appcast (the base the new item is added to)
         env:
-          PLATFORM_TOKEN: ${{ secrets.PLATFORM_TOKEN }}
+          GH_TOKEN: ${{ steps.platform-read.outputs.token }}
         run: |
           set -euo pipefail
-          if [ -n "$PLATFORM_TOKEN" ]; then
-            GH_TOKEN="$PLATFORM_TOKEN" gh repo clone banditohq/platform "$PLATFORM_DIR" -- --depth 1
-          else
-            echo "::warning::PLATFORM_TOKEN is not set: the base is the feed served now (bandito.dev/appcast.xml) and no PR is opened"
-            mkdir -p "$PLATFORM_DIR/public"
-            curl -fsSL -o "$PLATFORM_DIR/public/appcast.xml" https://bandito.dev/appcast.xml
-          fi
+          gh repo clone banditohq/platform "$PLATFORM_DIR" -- --depth 1
           test -f "$PLATFORM_DIR/public/appcast.xml"
 
       - name: Create a temporary keychain with the Developer ID certificate
@@ -211,10 +219,20 @@ jobs:
           path: ${{ runner.temp }}/release-out/appcast.xml
           if-no-files-found: error
 
-      - name: Open the appcast PR in banditohq/platform
-        if: ${{ env.HAS_PLATFORM_TOKEN == 'true' }}
+      - name: Token for the platform repo (push, open and merge the PR)
+        id: platform-write
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.BANDITO_BOT_APP_ID }}
+          private-key: ${{ secrets.BANDITO_BOT_PRIVATE_KEY }}
+          owner: banditohq
+          repositories: platform
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open the appcast PR in banditohq/platform and merge it when its checks pass
         env:
-          GH_TOKEN: ${{ secrets.PLATFORM_TOKEN }}
+          GH_TOKEN: ${{ steps.platform-write.outputs.token }}
           BRANCH: appcast-${{ inputs.version }}
         run: |
           set -euo pipefail
@@ -226,17 +244,45 @@ jobs:
             echo "The appcast already has this item; nothing to open."
             exit 0
           fi
-          git -c user.name="github-actions[bot]" \
+          git -c user.name="bandito-bot[bot]" \
             -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "Add Bandito $VERSION to the appcast"
           # A new run for the same version replaces the branch of the previous one (it is always cut from the default branch).
           git -c credential.helper= -c "credential.helper=!gh auth git-credential" push --force origin "$BRANCH"
           base="$(gh repo view banditohq/platform --json defaultBranchRef --jq .defaultBranchRef.name)"
-          if [ -z "$(gh pr list --repo banditohq/platform --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
-            gh pr create --repo banditohq/platform --base "$base" --head "$BRANCH" \
+          pr="$(gh pr list --repo banditohq/platform --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$pr" ]; then
+            url="$(gh pr create --repo banditohq/platform --base "$base" --head "$BRANCH" \
               --title "Add Bandito $VERSION to the appcast" \
-              --body "Appcast item for Bandito $VERSION ($CHANNEL), built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Merge it after the release is checked."
+              --body "Appcast item for Bandito $VERSION ($CHANNEL), built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Merged automatically when the checks of this repository pass.")"
+            pr="${url##*/}"
           fi
+          echo "Appcast PR: banditohq/platform#$pr"
+          # Wait for the PR's checks (the repo has no auto-merge): they register a little after the push, so an empty
+          # list is waited out for 3 minutes, then treated as a problem rather than merged unchecked.
+          waited=0
+          while :; do
+            checks="$(gh pr checks "$pr" --repo banditohq/platform --json bucket --jq '[.[].bucket] | join(" ")' 2>/dev/null || true)"
+            if [ -z "$checks" ]; then
+              if [ "$waited" -ge 180 ]; then
+                echo "::error::banditohq/platform#$pr has no checks after 3 minutes; merge it by hand (docs/RELEASING.md)"
+                exit 1
+              fi
+            elif grep -Eqw 'fail|cancel' <<< "$checks"; then
+              echo "::error::checks failed on banditohq/platform#$pr; fix it there and merge by hand (docs/RELEASING.md)"
+              exit 1
+            elif ! grep -qw pending <<< "$checks"; then
+              break
+            fi
+            if [ "$waited" -ge 1800 ]; then
+              echo "::error::checks on banditohq/platform#$pr still pending after 30 minutes"
+              exit 1
+            fi
+            sleep 20
+            waited=$((waited + 20))
+          done
+          gh pr merge "$pr" --repo banditohq/platform --squash --delete-branch
+          echo "Merged banditohq/platform#$pr: the appcast item for $VERSION is on the default branch." | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Remove the signing keychain and the keys
         if: always()
