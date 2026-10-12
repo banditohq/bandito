@@ -66,7 +66,7 @@ struct MarketView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // The ground takes no clicks, so the title band behind the mode gets the empty space (double-click zooms).
-        .background { Color.Bandito.bg.allowsHitTesting(false) }
+        .modeGround()
         .overlay { panelOverlay }
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: panel)
         .task(id: loadKey) {
@@ -374,6 +374,8 @@ struct MarketView: View {
                 .opacity(onShelves ? 1 : 0)
                 .allowsHitTesting(onShelves)
                 .accessibilityHidden(!onShelves)
+                // Shown or put away at once: an animated height would lay the shelves out at every frame.
+                .transaction { $0.animation = nil }
             }
             if !onShelves {
                 ScrollView {
@@ -396,8 +398,11 @@ struct MarketView: View {
                 }
                 .id(pageKey)
                 .scrollIndicators(.automatic)
+                // A tab, a category or a search fades in and out (the page changed at once).
+                .transition(.opacity)
             }
         }
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: pageKey)
         .environment(\.marketColumns, columns)
         .onGeometryChange(for: Int.self) { MarketGridLayout.columns(scrollWidth: $0.size.width) } action: { new in
             if columns != new { columns = new }

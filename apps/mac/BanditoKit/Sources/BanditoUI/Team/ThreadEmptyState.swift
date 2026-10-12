@@ -55,7 +55,7 @@ struct ThreadEmptyState: View {
         .offset(y: appeared ? 0 : 10)
         .banditoAnimation(.spring(response: 0.5, dampingFraction: 0.85), value: appeared)
         .opacity(appeared ? 1 : 0)
-        .animation(.easeOut(duration: 0.35), value: appeared)
+        .banditoAnimation(.easeOut(duration: BanditoMotion.slow), value: appeared)
         .onAppear { appeared = true }
     }
 

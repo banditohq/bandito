@@ -61,4 +61,6 @@ public enum BanditoMotion {
     public static let base = 0.2
     public static let slow = 0.32
     public static let ease = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: base)
+    /// The spring of a surface that moves in and out (a panel, a toast).
+    public static let slide = Animation.spring(response: 0.36, dampingFraction: 0.9)
 }

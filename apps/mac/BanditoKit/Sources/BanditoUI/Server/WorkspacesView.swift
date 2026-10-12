@@ -599,7 +599,7 @@ private struct DemoWorkspaceCard: View {
                             style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
                 .dropDestination(for: String.self) { items, _ in
                     guard let name = items.first else { return false }
-                    withAnimation(.easeInOut(duration: 0.2)) { onDrop(name) }
+                    withBanditoAnimation(BanditoMotion.ease) { onDrop(name) }
                     return true
                 } isTargeted: { targeted = $0 }
             }
