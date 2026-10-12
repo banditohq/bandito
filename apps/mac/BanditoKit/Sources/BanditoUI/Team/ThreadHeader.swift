@@ -34,6 +34,7 @@ struct ThreadHeader: View {
     var onShowBrowser: () -> Void = {}
 
     var body: some View {
+        let _ = PerfCounters.hit("ThreadHeader")
         // Centered when there is room; on a narrow window the capsule sits on the left and gives up its caption, and
         // never runs under the buttons.
         HStack(spacing: 10) {

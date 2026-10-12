@@ -129,6 +129,7 @@ struct ThreadList: NSViewRepresentable {
     var hidden = false
 
     func makeNSView(context: Context) -> ThreadListHost {
+        PerfCounters.hit("ThreadList.make")
         let host = ThreadListHost()
         updateNSView(host, context: context)
         return host
@@ -154,6 +155,7 @@ final class ThreadListHost: NSView {
         if let index = lists.firstIndex(where: { $0.agentID == agentID }) {
             lists.append(lists.remove(at: index))
         } else {
+            PerfCounters.hit("ThreadList.newList")
             let view = ThreadListView()
             view.frame = bounds
             view.autoresizingMask = [.width, .height]
@@ -354,6 +356,7 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
     private func measure(_ cell: any ThreadListRowCell, line: ThreadListLine, row: Int) {
         let width = table.bounds.width
         guard width > 0 else { return }
+        PerfCounters.hit("ThreadList.measure")
         let measured = cell.height(forWidth: width)
         let before = height(ofRow: row)
         heights[line.id] = measured
@@ -418,6 +421,7 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard lines.indices.contains(row) else { return nil }
+        PerfCounters.hit("ThreadList.viewFor")
         let line = lines[row]
         if let native = NativeRow.of(line), let context {
             let cell = (tableView.makeView(withIdentifier: NativeRowCell.identifier, owner: nil) as? NativeRowCell)
@@ -551,6 +555,7 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
             // Another width makes every height wrong. The rows on screen are measured at once at the new width (they
             // must not stand at a guess); the others again as they are drawn.
             measuredWidth = width
+            PerfCounters.hit("ThreadList.widthChange")
             var kept: [String: CGFloat] = [:]
             if width > 0 {
                 let visible = table.rows(in: contentView.bounds)
@@ -742,6 +747,7 @@ final class ThreadListCell: NSTableCellView {
     func show(_ line: ThreadListLine, context: ThreadListContext) {
         // An equal line keeps its views: no new rootView, nothing is built.
         if shown == line { return }
+        PerfCounters.hit("ThreadList.swiftUIRowShown")
         shown = line
         host.rootView = ThreadListLineView(
             line: line, context: context,

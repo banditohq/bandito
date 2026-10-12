@@ -36,6 +36,7 @@ final class NativeRowCell: NSTableCellView {
         self.context = context
         message.context = context
         guard row != self.row else { return }
+        PerfCounters.hit("ThreadList.nativeRowShown")
         self.row = row
         tools.isHidden = true
         switch row {
