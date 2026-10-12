@@ -4,7 +4,7 @@ import Testing
 @testable import BanditoUI
 
 /// Pure formats of the changes header and file list: the stats line, the footer layout and the icon of a changed file.
-@Suite struct ChangesSummaryTests {
+@Suite(.language("en")) struct ChangesSummaryTests {
     @Test func chipsCarrySignAndCount() {
         #expect(ChangesChips.additions(0) == "+0")
         #expect(ChangesChips.additions(412) == "+412")

@@ -6,7 +6,7 @@ import Testing
 @testable import BanditoUI
 
 /// The limit windows of a runtime: their names, their order, their reset times.
-@Suite struct UsageWindowsTests {
+@Suite(.language("en")) struct UsageWindowsTests {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     private func window(_ name: String, _ utilization: Double = 0.2, resetsIn seconds: Int64? = nil) -> LimitWindow {
