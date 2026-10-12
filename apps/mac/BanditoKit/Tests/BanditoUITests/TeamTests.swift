@@ -1,9 +1,10 @@
+
+import BanditoDesign
 @testable import BanditoKit
+@testable import BanditoUI
 import Foundation
 import SwiftUI
 import Testing
-
-@testable import BanditoUI
 
 /// Logic behind the Team mode: avatar moods, thread rows, context share, effort levels, pins.
 @Suite struct TeamLogicTests {

@@ -123,6 +123,45 @@ import Testing
         }
     }
 
+    // MARK: Names
+
+    @Test func aNameLosesWhatCouldReorderOrHideText() {
+        // U+202E (right-to-left override) would show the rest of the line backwards.
+        #expect(ServerNameRules.clean("Mac\u{202E}gpj.exe") == "Macgpj.exe")
+        // U+200B (zero width space), U+200D, U+FEFF, U+2066..2069 (isolates), U+2028 / U+2029, and controls.
+        #expect(ServerNameRules.clean("a\u{200B}b\u{200D}c\u{FEFF}d\u{2066}e\u{2069}f\u{2028}g\u{2029}h\u{0007}i\u{0000}j") == "abcdefghij")
+        #expect(ServerNameRules.clean("  Studio \n Mac  ") == "Studio  Mac", "a line break is dropped like any control")
+        #expect(ServerNameRules.clean("\u{202E}\u{200B}", fallback: "10.0.0.2") == "10.0.0.2", "nothing left falls back")
+        #expect(ServerNameRules.clean("", fallback: "\u{202E}") == "")
+    }
+
+    @Test func aNameKeepsRealTextAndIsCutByScalars() {
+        #expect(ServerNameRules.clean("Дом, Köln, 東京 🦝") == "Дом, Köln, 東京 🦝")
+        // A letter with a combining accent is two scalars and both stay; many accents are cut at 64 scalars.
+        #expect(ServerNameRules.clean("e\u{0301}") == "e\u{0301}")
+        let stacked = "e" + String(repeating: "\u{0301}", count: 500)
+        #expect(ServerNameRules.clean(stacked).unicodeScalars.count == 64)
+        #expect(ServerNameRules.clean(String(repeating: "x", count: 200)).count == 64)
+        // A cut never leaves a trailing space.
+        #expect(ServerNameRules.clean(String(repeating: "x", count: 63) + " yyyy") == String(repeating: "x", count: 63))
+    }
+
+    @Test func aLinkNameIsCleanedToo() throws {
+        let request = try PairInput.parseLink(Self.link(name: "Mac%E2%80%AEgpj%E2%80%8B"))
+        #expect(request.name == "Macgpj")
+        #expect(!request.nameIsGuess)
+        #expect(try PairInput.parseManual(address: "mac.local", code: Self.code, fingerprint: "").nameIsGuess)
+    }
+
+    @Test func tailscaleAddressesAreRecognised() {
+        for yes in ["100.64.0.1", "100.100.100.100", "100.127.255.255", "fd7a:115c:a1e0::1", "[fd7a:115c:a1e0:ab12::9]:7879"] {
+            #expect(DirectHost.parse(yes)?.isTailscale == true, "\(yes)")
+        }
+        for no in ["100.63.255.255", "100.128.0.1", "192.168.1.5", "10.0.0.2", "mac.local", "fd7a:115d:a1e0::1", "::1"] {
+            #expect(DirectHost.parse(no)?.isTailscale == false, "\(no)")
+        }
+    }
+
     // MARK: Fingerprints
 
     @Test func fingerprintsNormalizeAndDisplay() {

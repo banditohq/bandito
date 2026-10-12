@@ -11,13 +11,19 @@ struct ConnectServerView: View {
     let session: ServerSession
     /// A `bandito://pair` link opened from outside; handled once and cleared.
     @Binding var incomingLink: String?
+    /// The way the person chose before the sheet opened (the onboarding's last step).
+    let start: OnboardingConnectMode
     let onClose: () -> Void
 
     @State private var model: PairModel
 
-    init(session: ServerSession, incomingLink: Binding<String?>, onClose: @escaping () -> Void) {
+    init(
+        session: ServerSession, incomingLink: Binding<String?>, start: OnboardingConnectMode = .scanCode,
+        onClose: @escaping () -> Void
+    ) {
         self.session = session
         _incomingLink = incomingLink
+        self.start = start
         self.onClose = onClose
         _model = State(initialValue: PairModel(session: session))
     }
@@ -30,8 +36,8 @@ struct ConnectServerView: View {
                     ChooseStep(model: model)
                 case .manual:
                     ManualStep(model: model)
-                case .confirmLink(let request):
-                    ConfirmLinkStep(request: request, model: model)
+                case .confirmLink(let request, let origin):
+                    ConfirmLinkStep(request: request, origin: origin, model: model)
                 case .trust(let request, let fingerprint):
                     TrustStep(request: request, fingerprint: fingerprint, model: model)
                 case .working:
@@ -61,6 +67,10 @@ struct ConnectServerView: View {
                     }
                 }
             }
+        }
+        .task {
+            // "Type an address" on the onboarding goes straight to the form; a link from outside has its own way in.
+            if start == .typeAddress, incomingLink == nil { model.showManual() }
         }
         .task(id: incomingLink) {
             guard let link = incomingLink else { return }
@@ -99,13 +109,7 @@ private struct ChooseStep: View {
                     Text(L10n.Ios.Connect.Paste.hint)
                         .font(BanditoFont.text(size: 13))
                         .foregroundStyle(Color.Bandito.text3)
-                    PasteButton(payloadType: String.self) { strings in
-                        let text = strings.joined(separator: " ")
-                        Task { @MainActor in model.submitLink(text, origin: .paste) }
-                    }
-                    .buttonBorderShape(.capsule)
-                    .labelStyle(.titleAndIcon)
-                    .accessibilityIdentifier("connect.paste")
+                    BrandPasteButton { text in model.submitLink(text, origin: .paste) }
                     Button(L10n.Ios.Connect.Manual.button) { model.showManual() }
                         .buttonStyle(QuietButtonStyle())
                         .accessibilityIdentifier("connect.manualButton")
@@ -267,6 +271,7 @@ private struct ManualStep: View {
 /// A link from outside (pasted or opened): who it says it is, and a button.
 private struct ConfirmLinkStep: View {
     let request: PairRequest
+    let origin: LinkOrigin
     let model: PairModel
 
     var body: some View {
@@ -275,7 +280,11 @@ private struct ConfirmLinkStep: View {
                 .font(BanditoFont.display(size: 20, weight: 700))
                 .foregroundStyle(Color.Bandito.text)
                 .multilineTextAlignment(.center)
-            Text(L10n.Ios.Connect.Confirm.body(address: request.hosts.joined(separator: ", ")))
+            Text(
+                origin == .scan
+                    ? L10n.Ios.Connect.Confirm.bodyScan(address: request.hosts.joined(separator: ", "))
+                    : L10n.Ios.Connect.Confirm.body(address: request.hosts.joined(separator: ", "))
+            )
                 .font(BanditoFont.text(size: 14))
                 .foregroundStyle(Color.Bandito.text2)
                 .multilineTextAlignment(.center)
@@ -435,15 +444,34 @@ private struct StepCard<Content: View, Actions: View>: View {
     }
 }
 
-/// The secondary action: an outlined capsule. A small copy here until the button styles move into `BanditoDesign`.
-struct QuietButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(BanditoFont.display(size: 14, weight: 600))
-            .foregroundStyle(Color.Bandito.text)
-            .padding(.horizontal, 22)
-            .frame(minHeight: 46)
-            .background(Capsule().stroke(Color.Bandito.lineStrong, lineWidth: 1))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+/// The system's paste button (it reads the clipboard without the "Allow paste" question), dressed as the brand's capsule:
+/// the system button sits over the drawn one, invisible, and takes the touch.
+private struct BrandPasteButton: View {
+    let onPaste: @MainActor (String) -> Void
+
+    var body: some View {
+        HStack(spacing: BanditoSpace.s2) {
+            Image(systemName: "doc.on.clipboard")
+            Text(L10n.Ios.Connect.Paste.action)
+        }
+        .font(BanditoFont.display(size: 14, weight: 600))
+        .foregroundStyle(Color.Bandito.text)
+        .padding(.horizontal, 22)
+        .frame(minHeight: 46)
+        .background(Capsule().fill(Color.Bandito.surface2))
+        .overlay(Capsule().stroke(Color.Bandito.text.opacity(0.14), lineWidth: 1))
+        .accessibilityHidden(true)
+        .overlay {
+            PasteButton(payloadType: String.self) { strings in
+                let text = strings.joined(separator: " ")
+                Task { @MainActor in onPaste(text) }
+            }
+            .labelStyle(.titleOnly)
+            .buttonBorderShape(.capsule)
+            .opacity(0.015)
+            .accessibilityLabel(L10n.Ios.Connect.Paste.action)
+            .accessibilityIdentifier("connect.paste")
+        }
+        .contentShape(Capsule())
     }
 }

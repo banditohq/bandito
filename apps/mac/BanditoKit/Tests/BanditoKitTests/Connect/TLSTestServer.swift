@@ -32,6 +32,7 @@ final class TLSTestServer: @unchecked Sendable {
     private let lock = NSLock()
     private var connections: [NWConnection] = []
     private var redeemCalls = 0
+    private var revokeCalls = 0
 
     /// The port the listener got.
     private(set) var port = 0
@@ -75,6 +76,13 @@ final class TLSTestServer: @unchecked Sendable {
         _ = ready.wait(timeout: .now() + 5)
         guard let port = listener.port?.rawValue else { throw URLError(.cannotConnectToHost) }
         self.port = Int(port)
+    }
+
+    /// How many `devices.revoke` calls came in.
+    var revokes: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return revokeCalls
     }
 
     var address: String { "127.0.0.1:\(port)" }
@@ -124,6 +132,13 @@ final class TLSTestServer: @unchecked Sendable {
             } else {
                 reply["error"] = ["code": -32001, "message": "invalid or expired code"]
             }
+        case "devices.list":
+            reply["result"] = [["id": "dev-1", "name": "iPhone", "created_at": 1, "current": true]]
+        case "devices.revoke":
+            lock.lock()
+            revokeCalls += 1
+            lock.unlock()
+            reply["result"] = ["revoked": true]
         default:
             reply["error"] = ["code": -32601, "message": "unknown method"]
         }

@@ -1,3 +1,4 @@
+import BanditoKit
 import BanditoL10n
 import Foundation
 import UserNotifications

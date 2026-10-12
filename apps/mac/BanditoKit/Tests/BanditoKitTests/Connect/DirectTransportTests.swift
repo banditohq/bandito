@@ -191,6 +191,49 @@ import Testing
         #expect(impostor.redeems == 0, "the one-time code stayed on the phone")
     }
 
+    @Test(.enabled(if: TLSTestServer.isSupported))
+    func anAddressTypedByHandTakesTheNameOfTheServer() async throws {
+        let server = try TLSTestServer()
+        defer { server.stop() }
+        let request = try PairInput.parseManual(address: server.address, code: TLSTestServer.validCode, fingerprint: "")
+        #expect(request.name == "127.0.0.1", "the typed address is only a guess")
+        let paired = try await DevicePairing.redeem(
+            request, fingerprint: TLSTestServer.fingerprintA, deviceName: "x", hostTimeout: .milliseconds(700), memory: memory())
+        #expect(paired.config.name == "fake", "the daemon's host name, not 127.0.0.1")
+        // A name from a link is the person's own choice at the Mac: it is kept.
+        let linked = try await DevicePairing.redeem(
+            PairRequest(code: TLSTestServer.validCode, fingerprint: TLSTestServer.fingerprintA, name: "Studio", hosts: [server.address]),
+            fingerprint: TLSTestServer.fingerprintA, deviceName: "x", hostTimeout: .milliseconds(700), memory: memory())
+        #expect(linked.config.name == "Studio")
+    }
+
+    @Test(.enabled(if: TLSTestServer.isSupported))
+    func disconnectingAsksTheServerToForgetThisDevice() async throws {
+        let server = try TLSTestServer()
+        defer { server.stop() }
+        let config = ServerConfig(
+            name: "Mac", endpoint: .direct(hosts: [server.address], fingerprint: TLSTestServer.fingerprintA), token: "tok")
+        #expect(await DevicePairing.revokeSelf(config: config, timeout: .seconds(4)))
+        #expect(server.revokes == 1)
+        server.stop()
+        #expect(!(await DevicePairing.revokeSelf(config: config, timeout: .seconds(2))), "an unreachable server is reported, not thrown")
+    }
+
+    @Test func aRedirectIsNeverFollowed() async {
+        let delegate = PinDelegate(expected: String(repeating: "a", count: 64))
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        let url = URL(string: "https://127.0.0.1:1/")!
+        let task = session.dataTask(with: url)
+        let response = HTTPURLResponse(url: url, statusCode: 302, httpVersion: nil, headerFields: ["Location": "https://elsewhere.example/"])!
+        let followed: URLRequest?? = await withCheckedContinuation { continuation in
+            delegate.urlSession(session, task: task, willPerformHTTPRedirection: response, newRequest: URLRequest(url: URL(string: "https://elsewhere.example/")!)) {
+                continuation.resume(returning: .some($0))
+            }
+        }
+        #expect(followed == .some(nil), "the delegate answers nil: the redirect is refused")
+    }
+
     @Test func aBadFingerprintStopsBeforeAnyConnection() async {
         let request = PairRequest(code: TLSTestServer.validCode, fingerprint: nil, name: "x", hosts: ["127.0.0.1:1"])
         await #expect(throws: PairInputError.badFingerprint) {

@@ -11,8 +11,8 @@ enum PairProblem: Equatable {
     case saveKey
 }
 
-/// Where a link came from. A scanned code is meant (the person pointed the camera at it); a pasted or opened one is
-/// shown first, so a link from a web page or a message cannot connect the phone to a server unasked.
+/// Where a link came from. Every one is shown and confirmed before anything is sent (a code on a poster, or a link
+/// from a web page or a message, cannot connect the phone to a server unasked); the screen words a scan as a code.
 enum LinkOrigin {
     case scan, paste, url
 }
@@ -26,7 +26,7 @@ final class PairModel {
         case choose
         case manual
         /// A link that came from outside: the server's name and addresses, and a button.
-        case confirmLink(PairRequest)
+        case confirmLink(PairRequest, origin: LinkOrigin)
         /// An address typed without a fingerprint: the one the server presents, to compare with the Mac's.
         case trust(PairRequest, fingerprint: String)
         case working
@@ -81,13 +81,8 @@ final class PairModel {
             lastIgnored = (text, Date())
         }
         do {
-            let request = try PairInput.parseLink(text)
-            switch origin {
-            case .scan:
-                start(request, back: .choose)
-            case .paste, .url:
-                phase = .confirmLink(request)
-            }
+            // Whatever its way in, a link is shown first: the name and the addresses it brings, and one button.
+            phase = .confirmLink(try PairInput.parseLink(text), origin: origin)
         } catch let error as PairInputError {
             phase = .failed(.input(error), back: .choose)
         } catch {
@@ -148,7 +143,7 @@ final class PairModel {
 
     /// "Connect" on a link that came from outside.
     func confirmLink() {
-        guard case .confirmLink(let request) = phase, let pin = request.fingerprint else { return }
+        guard case .confirmLink(let request, _) = phase, let pin = request.fingerprint else { return }
         start(request, fingerprint: pin, back: .choose)
     }
 

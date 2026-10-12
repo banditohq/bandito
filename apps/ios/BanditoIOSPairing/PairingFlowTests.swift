@@ -20,12 +20,14 @@ final class PairingFlowTests: XCTestCase {
 
     private func openTypedForm() {
         app.launch()
-        let connect = app.buttons["Connect a server"]
-        XCTAssertTrue(connect.waitForExistence(timeout: 15), "the welcome screen has the connect button")
-        connect.tap()
-        let manual = app.buttons["connect.manualButton"]
-        XCTAssertTrue(manual.waitForExistence(timeout: 10))
-        manual.tap()
+        // The first run: "I already have a server", then "Type an address" opens the connect sheet on the form.
+        let haveServer = app.buttons["onboarding.welcome.haveServer"]
+        XCTAssertTrue(haveServer.waitForExistence(timeout: 15), "the onboarding starts")
+        haveServer.tap()
+        let type = app.buttons["onboarding.connect.type"]
+        XCTAssertTrue(type.waitForExistence(timeout: 10))
+        type.tap()
+        XCTAssertTrue(app.textFields["connect.manual.address"].waitForExistence(timeout: 10), "the sheet opens on the typed form")
     }
 
     private func type(_ text: String, into id: String) {
@@ -52,8 +54,11 @@ final class PairingFlowTests: XCTestCase {
         if app.menuItems["Select All"].waitForExistence(timeout: 2) { app.menuItems["Select All"].tap() }
         name.typeText("Studio")
         app.buttons["connect.done.action"].tap()
-        // The sheet is gone and the welcome screen with it: the Crew screen belongs to the server now.
-        XCTAssertFalse(app.buttons["Connect a server"].waitForExistence(timeout: 5))
+        // The reason for notifications comes after the first server; the onboarding is gone and the Crew has its server.
+        let later = app.buttons["notifications.ask.later"]
+        if later.waitForExistence(timeout: 10) { later.tap() }
+        XCTAssertFalse(app.buttons["onboarding.welcome.haveServer"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.tabBars.buttons.firstMatch.waitForExistence(timeout: 10))
     }
 
     func testTypedAddressWithoutFingerprintAsksToCompareFirst() throws {

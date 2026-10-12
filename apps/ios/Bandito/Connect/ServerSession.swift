@@ -8,27 +8,37 @@ import Observation
 @MainActor
 @Observable
 final class ServerSession {
+    /// The one session of the app: the views, the notifications and the background check all use it.
+    static let shared = ServerSession()
+
     /// The launch argument that forgets every saved server first (UI tests start from nothing).
     static let resetArgument = "-resetServers"
-    static let configsKey = "servers.v1"
     static let keychainService = "dev.bandito.ios.server-token"
 
+    /// The servers this iPhone is paired with.
     private(set) var servers: [ServerModel] = []
+    /// The servers of the `-demo` launch (nothing is saved for them). Empty otherwise.
+    private(set) var demo: [ServerModel] = []
     private(set) var loaded = false
 
-    /// The server the Crew screen shows. One for now: the first.
-    var active: ServerModel? { servers.first }
+    /// What the screens show: the demo world when there is one, else the paired servers.
+    var current: [ServerModel] { demo.isEmpty ? servers : demo }
 
-    @ObservationIgnored private let defaults: UserDefaults
+    /// The server the Crew screen shows. One for now: the first.
+    var active: ServerModel? { current.first }
+
+    @ObservationIgnored private let store: ServerStore
     @ObservationIgnored private let secrets: SecretStore
     /// Connects a new model. Replaced in tests, so no network is touched.
     @ObservationIgnored private let connect: @MainActor (ServerModel) -> Void
+    /// Asks a server to forget this device. Replaced in tests.
+    @ObservationIgnored var revokeSelf: @Sendable (ServerConfig) async -> Bool = { await DevicePairing.revokeSelf(config: $0) }
 
     init(
-        defaults: UserDefaults = .standard, secrets: SecretStore = ServerSession.deviceSecrets(),
+        store: ServerStore = ServerStore(), secrets: SecretStore = ServerSession.deviceSecrets(),
         connect: @escaping @MainActor (ServerModel) -> Void = { model in Task { await model.connect() } }
     ) {
-        self.defaults = defaults
+        self.store = store
         self.secrets = secrets
         self.connect = connect
     }
@@ -54,7 +64,7 @@ final class ServerSession {
         guard !loaded else { return }
         loaded = true
         if arguments.contains(Self.resetArgument) { reset() }
-        for config in savedConfigs() {
+        for config in store.load() {
             guard let token = (try? secrets.load(account: config.id.uuidString)).flatMap({ $0 }).flatMap({ String(data: $0, encoding: .utf8) }),
                 !token.isEmpty
             else { continue }
@@ -88,11 +98,50 @@ final class ServerSession {
         save()
     }
 
+    /// Renames a server. The name is cleaned like every name (`ServerNameRules`); one with nothing left changes nothing.
     func rename(_ id: UUID, to name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let server = servers.first(where: { $0.id == id }) else { return }
-        server.changeConfig { $0.name = String(trimmed.prefix(64)) }
+        let cleaned = ServerNameRules.clean(name)
+        guard !cleaned.isEmpty, let server = servers.first(where: { $0.id == id }) else { return }
+        server.changeConfig { $0.name = cleaned }
         save()
+    }
+
+    /// What disconnecting a server came to.
+    enum Disconnected: Equatable {
+        /// Gone from this iPhone; `revokedOnServer` says whether the server was reached and forgot this device too.
+        case removed(revokedOnServer: Bool)
+        /// The Keychain refused to give up the token: nothing changed.
+        case keychainRefused
+        /// No such server here (a demo server).
+        case unknown
+    }
+
+    /// Disconnects a server: asks it to forget this device (best effort, it may be off), then removes the token, the
+    /// record and the remembered address. The token goes first of the local steps: when the Keychain refuses, nothing
+    /// is removed.
+    func disconnect(_ id: UUID) async -> Disconnected {
+        guard let server = servers.first(where: { $0.id == id }) else { return .unknown }
+        let config = server.config
+        var revoked = false
+        if case .direct = config.endpoint {
+            var withToken = config
+            withToken.token = (try? secrets.load(account: id.uuidString)).flatMap { $0 }.flatMap { String(data: $0, encoding: .utf8) }
+            revoked = await revokeSelf(withToken)
+        }
+        do {
+            try secrets.save(nil, account: id.uuidString)
+        } catch {
+            return .keychainRefused
+        }
+        if case .direct(_, let fingerprint) = config.endpoint { DirectHostMemory.shared.forget(fingerprint) }
+        drop(id)
+        save()
+        return .removed(revokedOnServer: revoked)
+    }
+
+    /// Shows the demo world's servers (the `-demo` launch). They are not saved and not connected here.
+    func installDemo(_ models: [ServerModel]) {
+        demo = models
     }
 
     /// Forgets a server and its key on this iPhone. (The daemon keeps the device until it is disconnected there.)
@@ -113,10 +162,10 @@ final class ServerSession {
 
     /// Forgets everything.
     func reset() {
-        for config in savedConfigs() { try? secrets.save(nil, account: config.id.uuidString) }
+        for config in store.load() { try? secrets.save(nil, account: config.id.uuidString) }
         for server in servers { Task { await server.disconnect() } }
         servers = []
-        defaults.removeObject(forKey: Self.configsKey)
+        store.clear()
     }
 
     enum SessionError: Error, Equatable {
@@ -131,14 +180,8 @@ final class ServerSession {
         connect(model)
     }
 
-    private func savedConfigs() -> [ServerConfig] {
-        guard let data = defaults.data(forKey: Self.configsKey) else { return [] }
-        return (try? JSONDecoder().decode([ServerConfig].self, from: data)) ?? []
-    }
-
     private func save() {
-        let configs = servers.map(\.config)
-        defaults.set(try? JSONEncoder().encode(configs), forKey: Self.configsKey)
+        store.save(servers.map(\.config))
     }
 
     private static func fingerprint(of config: ServerConfig) -> String? {

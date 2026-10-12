@@ -3,6 +3,31 @@ import Foundation
 // Pairing an iPhone (or any app) with a daemon's phone listener: the request that comes from the link, the QR code or
 // the typed address, and the exchange of its one-time code for a device token (docs/ARCHITECTURE.md#phone-access).
 
+/// A server's name as the app shows it. A name comes from the other side of the network (a link, a daemon's host name),
+/// so it is cleaned: control characters, format characters (bidi overrides, zero-width marks) and line or paragraph
+/// separators are dropped, so a name cannot reorder or hide the text around it. At most 64 Unicode scalars.
+public enum ServerNameRules {
+    public static let maxScalars = 64
+
+    /// The cleaned name, or `fallback` (cleaned the same way) when nothing is left.
+    public static func clean(_ name: String, fallback: String = "") -> String {
+        let cleaned = scrub(name)
+        return cleaned.isEmpty ? scrub(fallback) : cleaned
+    }
+
+    private static let dropped: Set<Unicode.GeneralCategory> = [.control, .format, .lineSeparator, .paragraphSeparator]
+
+    private static func scrub(_ text: String) -> String {
+        let kept = text.unicodeScalars.filter { !dropped.contains($0.properties.generalCategory) }
+        var scalars = String.UnicodeScalarView()
+        scalars.append(contentsOf: kept.prefix(maxScalars + 64))
+        let trimmed = String(scalars).trimmingCharacters(in: .whitespacesAndNewlines)
+        var out = String.UnicodeScalarView()
+        out.append(contentsOf: trimmed.unicodeScalars.prefix(maxScalars))
+        return String(out).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 /// What the person gave: where the server is, the one-time code, and the certificate fingerprint to trust.
 public struct PairRequest: Sendable, Hashable {
     /// Six words joined by `-`.
@@ -14,12 +39,15 @@ public struct PairRequest: Sendable, Hashable {
     public var name: String
     /// `host:port` addresses, the best first. At least one.
     public var hosts: [String]
+    /// The name is only the address the person typed: the pairing asks the server for its own name instead.
+    public var nameIsGuess: Bool
 
-    public init(code: String, fingerprint: String?, name: String, hosts: [String]) {
+    public init(code: String, fingerprint: String?, name: String, hosts: [String], nameIsGuess: Bool = false) {
         self.code = code
         self.fingerprint = fingerprint
         self.name = name
         self.hosts = hosts
+        self.nameIsGuess = nameIsGuess
     }
 }
 
@@ -73,7 +101,9 @@ public enum PairInput {
             if let host = DirectHost.parse(text)?.text, !hosts.contains(host) { hosts.append(host) }
         }
         guard !hosts.isEmpty else { throw PairInputError.noAddress }
-        return PairRequest(code: parsed.code, fingerprint: parsed.fingerprint, name: cleanName(parsed.name, fallback: hosts[0]), hosts: hosts)
+        return PairRequest(
+            code: parsed.code, fingerprint: parsed.fingerprint, name: ServerNameRules.clean(parsed.name, fallback: hosts[0]),
+            hosts: hosts)
     }
 
     /// Reads what was typed: an address (`host`, `host:port`, `[v6]:port`), the six-word code, and the fingerprint if the
@@ -87,7 +117,7 @@ public enum PairInput {
             guard let normalized = PinnedFingerprint.normalize(fingerprint) else { throw PairInputError.badFingerprint }
             pin = normalized
         }
-        return PairRequest(code: code, fingerprint: pin, name: host.host, hosts: [host.text])
+        return PairRequest(code: code, fingerprint: pin, name: host.host, hosts: [host.text], nameIsGuess: true)
     }
 
     /// `Otter Lava, mint-orbit crane  fig` → `otter-lava-mint-orbit-crane-fig`. nil unless it is six words of letters.
@@ -98,12 +128,6 @@ public enum PairInput {
             return nil
         }
         return words.joined(separator: "-")
-    }
-
-    private static func cleanName(_ name: String, fallback: String) -> String {
-        let cleaned = String(name.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.map(Character.init))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return String((cleaned.isEmpty ? fallback : cleaned).prefix(PhonePairLink.maxNameCharacters))
     }
 }
 
@@ -160,6 +184,16 @@ public enum DevicePairing {
         let client = RPCClient(transport: transport)
         try await client.start()
         defer { Task { await client.close() } }
+        // An address typed by hand gives no name: ask the daemon for its host name (an anonymous call it answers).
+        var name = request.name
+        if request.nameIsGuess {
+            struct Hello: Decodable { var hostname: String? }
+            if let hello = try? await client.call("daemon.hello", NoParams(), as: Hello.self, timeout: .seconds(5)),
+                let hostname = hello.hostname
+            {
+                name = ServerNameRules.clean(hostname, fallback: request.name)
+            }
+        }
         struct Params: Encodable {
             var code: String
             var deviceName: String
@@ -173,7 +207,7 @@ public enum DevicePairing {
             hosts.insert(worked, at: 0)
         }
         let config = ServerConfig(
-            name: request.name, endpoint: .direct(hosts: hosts, fingerprint: pin), token: paired.token)
+            name: name, endpoint: .direct(hosts: hosts, fingerprint: pin), token: paired.token)
         return PairedDevice(config: config, deviceID: paired.device.id)
     }
 
@@ -187,5 +221,27 @@ public enum DevicePairing {
         struct Params: Encodable { var id: String }
         try? await client.call("devices.revoke", Params(id: device.deviceID), timeout: .seconds(10))
         await client.close()
+    }
+}
+
+extension DevicePairing {
+    /// Disconnects this device from a server it is paired with: asks the server to forget the device (the one whose key
+    /// this is: `devices.list` marks it `current`), over a connection of its own with the stored token. False when the
+    /// server could not be reached or refused (the caller forgets the server on this device either way).
+    public static func revokeSelf(config: ServerConfig, timeout: Duration = .seconds(10)) async -> Bool {
+        guard case .direct(let hosts, let fingerprint) = config.endpoint, let token = config.token else { return false }
+        let transport = DirectTransport(hosts: hosts, fingerprint: fingerprint, token: token, hostTimeout: timeout)
+        let client = RPCClient(transport: transport)
+        defer { Task { await client.close() } }
+        do {
+            try await client.start()
+            let devices = try await client.call("devices.list", NoParams(), as: [Device].self, timeout: timeout)
+            guard let me = devices.first(where: { $0.current == true }) else { return false }
+            struct Params: Encodable { var id: String }
+            try await client.call("devices.revoke", Params(id: me.id), timeout: timeout)
+            return true
+        } catch {
+            return false
+        }
     }
 }

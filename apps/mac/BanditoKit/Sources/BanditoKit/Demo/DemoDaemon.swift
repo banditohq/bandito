@@ -64,10 +64,56 @@ public actor DemoDaemonTransport: RPCTransport {
         switch answer(method, params) {
         case .success(let result):
             continuation.yield("{\"jsonrpc\":\"2.0\",\"id\":\(id),\"result\":\(result)}")
+            followUp(method, params)
         case .failure(let error):
             var body: [String: Any] = ["code": error.code, "message": error.message]
             if let reason = error.data?["reason"]?.string { body["data"] = ["reason": reason] }
             continuation.yield("{\"jsonrpc\":\"2.0\",\"id\":\(id),\"error\":\(DemoJSON.text(body))}")
+        }
+    }
+
+    /// Which agent an approval, a form or a connect request belongs to: the events the daemon sends after an answer name
+    /// the agent. The app's demo registers its requests here (`link`).
+    private var owners: [String: String] = [:]
+
+    /// Names the agent a request belongs to, so the answer to it can come back as the agent's event.
+    public func link(_ objectID: String, toAgent agentID: String) {
+        owners[objectID] = agentID
+    }
+
+    /// The events the daemon sends after an answer: the request ends, and a message the person sent reaches the agent.
+    /// They carry no `seq` (a live event the model applies at once); the demo's seqs belong to its seeded threads.
+    private func followUp(_ method: String, _ params: [String: Any]) {
+        switch method {
+        case "approvals.resolve":
+            guard let id = params["approval_id"] as? String, let agent = owners[id] else { return }
+            emitEvent(
+                agentID: agent, kind: "approval.resolved",
+                payload: [
+                    "approval_id": id, "decision": params["decision"] ?? "deny", "by": "user",
+                    "remember": params["remember"] ?? false,
+                ],
+                persisted: false)
+        case "forms.answer":
+            guard let id = params["form_id"] as? String, let agent = owners[id] else { return }
+            var payload: [String: Any] = ["form_id": id, "action": params["action"] ?? "expired"]
+            for key in ["values", "comment", "message"] {
+                if let value = params[key] { payload[key] = value }
+            }
+            emitEvent(agentID: agent, kind: "form_answered", payload: payload, persisted: false)
+        case "integrations.request_decline":
+            guard let id = params["request_id"] as? String, let agent = owners[id] else { return }
+            emitEvent(
+                agentID: agent, kind: "integration_request_ended", payload: ["request_id": id, "status": "declined"],
+                persisted: false)
+        case "agents.send":
+            guard let agent = params["agent_id"] as? String, let text = params["text"] as? String else { return }
+            emitEvent(
+                agentID: agent, kind: "message.user",
+                payload: ["text": text, "source": "user", "via_button": params["via_button"] ?? false], persisted: false)
+            emitEvent(agentID: agent, kind: "agent.status", payload: ["status": "working"], persisted: false)
+        default:
+            return
         }
     }
 
@@ -213,6 +259,9 @@ public actor DemoDaemonTransport: RPCTransport {
             return .success(DemoJSON.text(setupStatus))
         case "browser.status":
             return .success("{\"cdp\":null,\"controller\":null,\"pid\":null,\"running\":false,\"started_at\":null}")
+        case "approvals.resolve", "forms.answer", "integrations.request_decline", "agents.send":
+            // The answer is accepted; the event that follows (`followUp`) is what the app folds in.
+            return .success("{}")
         case "screen.status":
             return .failure(
                 RPCError(

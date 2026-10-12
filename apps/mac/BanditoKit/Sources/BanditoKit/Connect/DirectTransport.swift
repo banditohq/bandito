@@ -93,6 +93,21 @@ public struct DirectHost: Sendable, Hashable {
     /// `host:port`, with an IPv6 address in brackets: the form the daemon's link uses.
     public var text: String { host.contains(":") ? "[\(host)]:\(port)" : "\(host):\(port)" }
 
+    /// Whether the address is one of Tailscale's: `100.64.0.0/10` or `fd7a:115c:a1e0::/48`.
+    public var isTailscale: Bool {
+        var v4 = in_addr()
+        if host.withCString({ inet_pton(AF_INET, $0, &v4) }) == 1 {
+            let bytes = withUnsafeBytes(of: &v4) { Array($0) }
+            return bytes[0] == 100 && bytes[1] & 0xC0 == 64
+        }
+        var v6 = in6_addr()
+        if host.withCString({ inet_pton(AF_INET6, $0, &v6) }) == 1 {
+            let bytes = withUnsafeBytes(of: &v6) { Array($0) }
+            return bytes[0] == 0xfd && bytes[1] == 0x7a && bytes[2] == 0x11 && bytes[3] == 0x5c && bytes[4] == 0xa1 && bytes[5] == 0xe0
+        }
+        return false
+    }
+
     /// `wss://host:port/v1/rpc`.
     public var rpcURL: URL? { URL(string: "wss://\(text)/v1/rpc") }
 
@@ -145,7 +160,7 @@ public final class DirectHostMemory: @unchecked Sendable {
 /// Accepts the server certificate whose fingerprint is `expected`, refuses every other one. With `expected == nil` it
 /// accepts any certificate and only records its fingerprint (`FingerprintProbe`: the person is shown it and decides).
 // @unchecked: the state is guarded by `lock`.
-final class PinDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
+final class PinDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let expected: String?
     private let lock = NSLock()
     private var wasMismatch = false
@@ -189,6 +204,15 @@ final class PinDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
         } else {
             completionHandler(.cancelAuthenticationChallenge, nil)
         }
+    }
+
+    /// No redirects: a server that answers "go to another address" is not followed (another address would present another
+    /// certificate, and the pin was given for this one).
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
     }
 
     /// Compares without stopping at the first different digit.

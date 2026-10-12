@@ -1,6 +1,7 @@
+import BanditoDesign
 import BanditoKit
-import Foundation
 import BanditoL10n
+import Foundation
 
 /// What the "Only about risky / About everything / About nothing" control means, in the words of the approval policy.
 public enum ApprovalChoice: CaseIterable, Sendable {
