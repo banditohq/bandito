@@ -41,6 +41,14 @@ public actor DemoDaemonTransport: RPCTransport {
     private var terminalSizes: [String: (cols: Int, rows: Int)] = [:]
     private var closed = false
     private var lineCounter = 0
+    /// The agents the daemon holds, in wire form (`agents.create`, the app's own agents through `remember`).
+    var demoAgents: [[String: Any]] = []
+    /// The schedules the daemon holds, in wire form (`schedules.create`, `rememberSchedule`).
+    var demoSchedules: [[String: Any]] = []
+    /// The folders `fs.mkdir` made, by path: a name taken answers `exists`, and the folder is listed from then on.
+    var demoFolders: [String] = []
+    /// The templates `agents.create_bundle` answers with an `error` (see `failBundleEntry`).
+    var demoBundleFailures: Set<String> = []
 
     public init(setup: DemoDaemonSetup = DemoDaemonSetup()) {
         self.setup = setup
@@ -171,12 +179,12 @@ public actor DemoDaemonTransport: RPCTransport {
 
     private func answer(_ method: String, _ params: [String: Any]) -> Result<String, RPCError> {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
+        if let reply = answerAgents(method, params, now: now) {
+            return reply
+        }
         switch method {
         case "daemon.hello", "daemon.info":
             return .success(DemoJSON.text(daemonInfo(now: now)))
-        case "agents.list":
-            // The app installs the demo agents itself, with their threads (see `ServerModel.installSyntheticAgent`).
-            return .success("[]")
         case "events.subscribe":
             return .success("{\"last_seq\":\(eventSeq)}")
         case "events.page", "events.since", "history.search", "history.day":
@@ -198,12 +206,14 @@ public actor DemoDaemonTransport: RPCTransport {
         case "integrations.list":
             return .success(DemoJSON.text(integrations(now: now)))
         case "integrations.call_stats", "integrations.recommend", "commands.list", "forms.list", "rules.list",
-            "schedules.list", "schedules.agent.list", "approvals.list", "secrets.list", "crew.list", "team.list":
+            "schedules.agent.list", "approvals.list", "secrets.list", "crew.list", "team.list":
             return .success("[]")
         case "fs.list":
             return listing(params["path"] as? String ?? "~", now: now)
         case "fs.stat":
             return stat(params["path"] as? String ?? "", now: now)
+        case "fs.mkdir":
+            return mkdir(params["path"] as? String ?? "", now: now)
         case "fs.read":
             return read(params["path"] as? String ?? "", now: now)
         case "fs.projects":
@@ -422,18 +432,36 @@ public actor DemoDaemonTransport: RPCTransport {
 
     private func listing(_ raw: String, now: Int64) -> Result<String, RPCError> {
         let path = raw == "~" || raw.isEmpty ? DemoDaemonFiles.home : raw.replacingOccurrences(of: "~", with: DemoDaemonFiles.home)
-        guard let entries = children(of: path, now: now) else {
+        guard var entries = children(of: path, now: now) else {
             return .failure(
                 RPCError(code: RPCError.fileError, message: "not found", data: .object(["reason": .string("not_found")])))
         }
+        // The folders the app made here are listed beside the tree.
+        entries += demoFolders.filter { ($0 as NSString).deletingLastPathComponent == path }
+            .map { entry($0, kind: "dir", size: 0, modified: now) }
         let parent: Any = path == "/" ? NSNull() : (path as NSString).deletingLastPathComponent
         return .success(
             DemoJSON.text(["path": path, "parent": parent, "entries": entries, "truncated": false, "skipped": 0]))
     }
 
-    private func stat(_ path: String, now: Int64) -> Result<String, RPCError> {
+    private func stat(_ raw: String, now: Int64) -> Result<String, RPCError> {
+        // `~` is the home folder the server's user has, as a real server answers it.
+        let path = raw == "~" ? DemoDaemonFiles.home : raw
         let isDir = (path as NSString).pathExtension.isEmpty && children(of: path, now: now) != nil
         return .success(DemoJSON.text(entry(path, kind: isDir ? "dir" : "file", size: 52_000, modified: now - 100_000)))
+    }
+
+    /// Makes a folder (`fs.mkdir`), as the server does: a name that is taken answers `exists`, and the new folder is
+    /// listed in its parent from then on.
+    private func mkdir(_ raw: String, now: Int64) -> Result<String, RPCError> {
+        let path = raw == "~" || raw.hasPrefix("~/") ? DemoDaemonFiles.home + raw.dropFirst() : raw
+        let parent = (path as NSString).deletingLastPathComponent
+        let inTree = children(of: parent, now: now)?.contains { ($0["path"] as? String) == path } ?? false
+        guard !inTree, !demoFolders.contains(path) else {
+            return .failure(RPCError(code: RPCError.fileError, message: "already exists", data: .object(["reason": .string("exists")])))
+        }
+        demoFolders.append(path)
+        return .success(DemoJSON.text(entry(path, kind: "dir", size: 0, modified: now)))
     }
 
     private func read(_ path: String, now: Int64) -> Result<String, RPCError> {
@@ -636,7 +664,7 @@ public enum DemoDaemon {
         "changes", "secrets", "host", "setup", "commands", "skills", "workspaces", "browser", "backups", "pause", "logs",
         "agent_own_folder", "runtime_models", "forms", "form_reply", "reactions", "attachments", "integrations",
         "template_updates", "tool_permissions", "integrations_calls", "avatar_pictures", "lead", "mentions",
-        "agent_templates", "agent_bundles", "telegram", "agent_connect", "server_settings",
+        "agent_templates", "agent_bundles", "bundle_schedules", "telegram", "agent_connect", "server_settings",
     ]
 
     /// A server for the demo daemon: a fixed id (what the app keeps per server stays under it), a loopback address nobody listens on (never dialled: the

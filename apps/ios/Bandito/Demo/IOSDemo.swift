@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import Foundation
 
 /// The demo world of the `-demo` launch argument: BanditoKit's demo daemons, with a small team on the first and an empty
@@ -86,6 +87,11 @@ enum IOSDemo {
     /// the connect reads the agents of the daemon, which has none of its own. Forge asks for an approval, so the Crew
     /// shows a card; Scout gets one reply after the first look, so it shows an unread badge.
     static func start(withTeam: Bool = true) async -> ServerModel {
+        await startWithTransport(withTeam: withTeam).0
+    }
+
+    /// The demo server with the daemon behind it: the tests answer their own requests through the transport.
+    static func startWithTransport(withTeam: Bool = true) async -> (ServerModel, DemoDaemonTransport) {
         let members = withTeam ? team : []
         let ids = members.indices.map { "ios-demo-\($0 + 1)" }
         let (server, transport) = DemoDaemon.server(
@@ -113,6 +119,16 @@ enum IOSDemo {
                     : .assistant(id: id, text: turn.text, ts: ts)
             }
             server.installSyntheticAgent(agent, items: items)
+            // The daemon knows the agent too, so that editing and deleting it answer as a real server does.
+            await transport.remember(agent)
+            if member.name == "Watch" {
+                await transport.rememberSchedule(
+                    id: "ios-demo-schedule-1", agentID: ids[index], cron: "0 22 * * *", tz: "Asia/Vladivostok",
+                    prompt: L10n.Ios.Demo.Schedule.nightly, title: nil, enabled: true)
+                await transport.rememberSchedule(
+                    id: "ios-demo-schedule-2", agentID: ids[index], cron: "0 9 * * 1", tz: "Asia/Vladivostok",
+                    prompt: L10n.Ios.Demo.Schedule.weekly, title: nil, enabled: false)
+            }
         }
         // What the team has read so far: every chat is read to its last message.
         for id in ids {
@@ -171,7 +187,7 @@ enum IOSDemo {
         if let scout = agent(named: "Scout") {
             deliver(.messageAssistant(text: unreadReply), to: scout)
         }
-        return server
+        return (server, transport)
     }
 
     /// A second demo server with no agent, connected.

@@ -17,7 +17,12 @@ struct RootView: View {
     @State private var incomingLink: String?
     /// The explanation before the system's notification question, shown after the first server is connected.
     @State private var asksNotifications = false
+    #if DEBUG
+    /// `-tab <name>` opens a tab at launch (the screenshots); release builds always open Crew.
     @State private var tab = AppTab.requested(in: ProcessInfo.processInfo.arguments)
+    #else
+    @State private var tab = AppTab.crew
+    #endif
     @State private var settings = IOSSettings()
     @State private var appLock = AppLock()
     /// The approval item the Inbox opens (a notification's route), cleared by the Inbox once it is open.
@@ -197,11 +202,13 @@ enum AppTab: String, CaseIterable, Hashable {
     case activity
     case settings
 
+    #if DEBUG
     static func requested(in arguments: [String]) -> AppTab {
         guard let index = arguments.firstIndex(of: "-tab"), arguments.indices.contains(index + 1),
               let tab = AppTab(rawValue: arguments[index + 1]) else { return .crew }
         return tab
     }
+    #endif
 }
 
 struct ComingSoonTab: View {

@@ -937,6 +937,9 @@
 "ios.activity.filter.unread" = "Unread";
 "ios.activity.finished" = "%1$@ finished";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "Delete agent";
+"ios.agent.error" = "Could not save: %1$@";
+"ios.agent.noSchedules" = "No schedules yet.";
 "ios.connect.camera.allow" = "Allow camera";
 "ios.connect.camera.denied" = "The camera is off for Bandito. Turn it on in Settings, or paste the link or type the address instead.";
 "ios.connect.camera.openSettings" = "Open Settings";
@@ -984,7 +987,6 @@
 "ios.connect.working" = "Connecting…";
 "ios.crew.chatSoon" = "The chat with %1$@ is coming soon.";
 "ios.crew.createAgent" = "Create agent";
-"ios.crew.createSoon" = "Creating agents from the iPhone is coming soon.";
 "ios.crew.emptyMessage" = "This server has no agents. Create the first one to put the crew to work.";
 "ios.crew.emptyTitle" = "No agents yet";
 "ios.crew.lead" = "Lead";
@@ -996,6 +998,8 @@
 "ios.crew.waitingAnswer" = "%1$@ is waiting for you";
 "ios.crew.waitingForm" = "%1$@ is waiting for a form";
 "ios.crew.wantsToRun" = "%1$@ wants to run %2$@";
+"ios.demo.schedule.nightly" = "Check the disk and tell me only when it is above 80%%.";
+"ios.demo.schedule.weekly" = "Summarize the week's disk usage.";
 "ios.inbox.command" = "What it runs";
 "ios.inbox.connect" = "%1$@ wants to connect %2$@";
 "ios.inbox.connectOnMac" = "Connecting a service is done on your Mac for now.";
@@ -1017,6 +1021,10 @@
 "ios.intent.ask.sent" = "Sent to %1$@";
 "ios.intent.needsMe.none" = "Nothing needs you";
 "ios.intent.open.inbox" = "Open Inbox";
+"ios.newAgent.installTimedOut" = "The install is still running. Try again in a moment.";
+"ios.newAgent.tabOne" = "One agent";
+"ios.newAgent.tabTeams" = "Ready teams";
+"ios.newAgent.teamsEmpty" = "This server has no ready teams yet.";
 "ios.notifications.ask.body" = "Bandito can tell you when an agent asks for approval, has a question or fails. Nothing else. You can change this in Settings.";
 "ios.notifications.ask.later" = "Not now";
 "ios.notifications.ask.title" = "Want to know when your crew needs you?";

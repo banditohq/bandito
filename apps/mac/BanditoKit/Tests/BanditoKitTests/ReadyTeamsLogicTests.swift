@@ -2,7 +2,7 @@ import BanditoKit
 import Foundation
 import Testing
 
-@testable import BanditoUI
+@testable import BanditoKit
 
 /// The rules of the ready teams: which are offered, the preview's lists and the request that makes the team.
 @Suite struct ReadyTeamsLogicTests {

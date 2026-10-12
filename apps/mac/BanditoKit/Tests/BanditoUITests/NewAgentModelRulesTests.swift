@@ -1,4 +1,3 @@
-import BanditoKit
 import Testing
 
 @testable import BanditoKit

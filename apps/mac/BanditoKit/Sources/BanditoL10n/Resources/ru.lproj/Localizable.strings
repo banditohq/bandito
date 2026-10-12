@@ -937,6 +937,9 @@
 "ios.activity.filter.unread" = "Непрочитанные";
 "ios.activity.finished" = "%1$@ закончил";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "Удалить агента";
+"ios.agent.error" = "Не сохранилось: %1$@";
+"ios.agent.noSchedules" = "Расписаний пока нет.";
 "ios.connect.camera.allow" = "Разрешить камеру";
 "ios.connect.camera.denied" = "Камера для Bandito выключена. Включите её в Настройках, либо вставьте ссылку или введите адрес.";
 "ios.connect.camera.openSettings" = "Открыть Настройки";
@@ -984,7 +987,6 @@
 "ios.connect.working" = "Подключаюсь…";
 "ios.crew.chatSoon" = "Чат с %1$@ появится скоро.";
 "ios.crew.createAgent" = "Создать агента";
-"ios.crew.createSoon" = "Создание агентов с iPhone появится скоро.";
 "ios.crew.emptyMessage" = "На этом сервере нет агентов. Создайте первого, чтобы команда начала работать.";
 "ios.crew.emptyTitle" = "Агентов пока нет";
 "ios.crew.lead" = "Главный";
@@ -996,6 +998,8 @@
 "ios.crew.waitingAnswer" = "%1$@ ждёт вас";
 "ios.crew.waitingForm" = "%1$@ ждёт заполненную форму";
 "ios.crew.wantsToRun" = "%1$@ хочет выполнить %2$@";
+"ios.demo.schedule.nightly" = "Проверь диск и сообщи, только если он заполнен больше чем на 80%%.";
+"ios.demo.schedule.weekly" = "Подведи итоги использования диска за неделю.";
 "ios.inbox.command" = "Что будет выполнено";
 "ios.inbox.connect" = "%1$@ хочет подключить %2$@";
 "ios.inbox.connectOnMac" = "Пока подключать сервисы можно на Mac.";
@@ -1017,6 +1021,10 @@
 "ios.intent.ask.sent" = "Отправлено: %1$@";
 "ios.intent.needsMe.none" = "Ничего не ждёт";
 "ios.intent.open.inbox" = "Открыть входящие";
+"ios.newAgent.installTimedOut" = "Установка всё ещё идёт. Попробуйте позже.";
+"ios.newAgent.tabOne" = "Один агент";
+"ios.newAgent.tabTeams" = "Готовые команды";
+"ios.newAgent.teamsEmpty" = "На этом сервере пока нет готовых команд.";
 "ios.notifications.ask.body" = "Bandito может сообщать, когда агент просит одобрения, задаёт вопрос или падает с ошибкой. Больше ничего. Это можно изменить в Настройках.";
 "ios.notifications.ask.later" = "Не сейчас";
 "ios.notifications.ask.title" = "Хотите знать, когда вы нужны команде?";

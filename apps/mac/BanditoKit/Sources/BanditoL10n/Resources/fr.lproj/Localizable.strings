@@ -928,7 +928,7 @@
 "integrations.toolsFound" = "Outils : %1$@";
 "ios.activity.chatSoon" = "Le chat avec %1$@ s'ouvrira ici bientôt. Événement %2$@.";
 "ios.activity.emptyErrors" = "Aucune erreur.";
-"ios.activity.emptyMessage" = "Ici apparaissent les réponses terminées et les exécutions planifiées qui ont dit quelque chose.";
+"ios.activity.emptyMessage" = "Ici apparaissent les réponses terminées et les exécutions planifiées qui avaient quelque chose à dire.";
 "ios.activity.emptyTitle" = "Rien pour l'instant";
 "ios.activity.emptyUnread" = "Rien de non lu.";
 "ios.activity.failed" = "%1$@ : erreur";
@@ -937,6 +937,9 @@
 "ios.activity.filter.unread" = "Non lus";
 "ios.activity.finished" = "%1$@ a terminé";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "Supprimer l'agent";
+"ios.agent.error" = "Échec de l'enregistrement : %1$@";
+"ios.agent.noSchedules" = "Aucune planification pour l'instant.";
 "ios.connect.camera.allow" = "Autoriser la caméra";
 "ios.connect.camera.denied" = "La caméra est désactivée pour Bandito. Active-la dans Réglages, ou colle le lien ou saisis l’adresse.";
 "ios.connect.camera.openSettings" = "Ouvrir les Réglages";
@@ -984,7 +987,6 @@
 "ios.connect.working" = "Connexion…";
 "ios.crew.chatSoon" = "Le chat avec %1$@ arrive bientôt.";
 "ios.crew.createAgent" = "Créer un agent";
-"ios.crew.createSoon" = "La création d'agents depuis l'iPhone arrive bientôt.";
 "ios.crew.emptyMessage" = "Ce serveur n'a pas d'agent. Créez le premier pour que l'équipe se mette au travail.";
 "ios.crew.emptyTitle" = "Aucun agent pour l'instant";
 "ios.crew.lead" = "Chef";
@@ -996,12 +998,14 @@
 "ios.crew.waitingAnswer" = "%1$@ vous attend";
 "ios.crew.waitingForm" = "%1$@ attend un formulaire";
 "ios.crew.wantsToRun" = "%1$@ veut exécuter %2$@";
+"ios.demo.schedule.nightly" = "Vérifie le disque et préviens-moi seulement s'il dépasse 80 %%.";
+"ios.demo.schedule.weekly" = "Résume l'usage du disque de la semaine.";
 "ios.inbox.command" = "Ce qui sera exécuté";
 "ios.inbox.connect" = "%1$@ veut connecter %2$@";
 "ios.inbox.connectOnMac" = "Pour l'instant, on connecte les services depuis le Mac.";
 "ios.inbox.empty" = "Rien ne vous attend";
 "ios.inbox.emptyMessage" = "Les approbations, questions et formulaires de vos agents apparaissent ici.";
-"ios.inbox.faceIDHint" = "Autoriser demande Face ID.";
+"ios.inbox.faceIDHint" = "Pour autoriser, Face ID vous sera demandé.";
 "ios.inbox.faceIDReason" = "Approuver une action risquée dans Bandito";
 "ios.inbox.failed" = "Impossible d'envoyer votre réponse. Vérifiez la connexion et réessayez.";
 "ios.inbox.form" = "%1$@ vous demande de remplir un formulaire";
@@ -1017,6 +1021,10 @@
 "ios.intent.ask.sent" = "Envoyé à %1$@";
 "ios.intent.needsMe.none" = "Rien ne vous attend";
 "ios.intent.open.inbox" = "Ouvrir la boîte de réception";
+"ios.newAgent.installTimedOut" = "L'installation est toujours en cours. Réessayez plus tard.";
+"ios.newAgent.tabOne" = "Un agent";
+"ios.newAgent.tabTeams" = "Équipes prêtes";
+"ios.newAgent.teamsEmpty" = "Ce serveur n'a pas encore d'équipes prêtes.";
 "ios.notifications.ask.body" = "Bandito peut te prévenir quand un agent demande une approbation, a une question ou échoue. Rien d’autre. Tu peux changer cela dans les Réglages.";
 "ios.notifications.ask.later" = "Pas maintenant";
 "ios.notifications.ask.title" = "Veux-tu savoir quand ton équipe a besoin de toi ?";
@@ -1030,7 +1038,7 @@
 "ios.onboarding.features.approval.title" = "Rien de risqué sans vous";
 "ios.onboarding.features.crew.text" = "Chaque agent a un nom, un rôle et une humeur. Vous voyez qui travaille et qui vous attend.";
 "ios.onboarding.features.crew.title" = "Une équipe, pas un chat";
-"ios.onboarding.features.night.event1" = "22:40 · Forge a clôturé la branche, les tests sont verts";
+"ios.onboarding.features.night.event1" = "22:40 · Forge a clôturé la branche, les tests passent";
 "ios.onboarding.features.night.event2" = "01:20 · Scout a rassemblé trois sources";
 "ios.onboarding.features.night.event3" = "03:05 · Watch : le disque du serveur est normal";
 "ios.onboarding.features.night.event4" = "07:30 · Quill a rédigé le changelog";
@@ -1077,11 +1085,11 @@
 "ios.settings.security.enableReason" = "Activer le verrouillage Face ID";
 "ios.settings.security.faceIDLock" = "Verrouillage Face ID";
 "ios.settings.security.faceIDLockHint" = "Demander Face ID au retour dans Bandito après une pause.";
-"ios.settings.security.failed" = "Face ID n'a pas confirmé. Le verrouillage reste désactivé.";
+"ios.settings.security.failed" = "La vérification Face ID a échoué. Le verrouillage reste désactivé.";
 "ios.settings.security.lockAfter" = "Verrouiller après";
 "ios.settings.security.lockedTitle" = "Bandito est verrouillé";
-"ios.settings.security.riskyFaceID" = "Actions risquées avec Face ID seulement";
-"ios.settings.security.riskyFaceIDHint" = "Les envois, déploiements et suppressions se valident avec Face ID.";
+"ios.settings.security.riskyFaceID" = "Actions risquées : Face ID requis";
+"ios.settings.security.riskyFaceIDHint" = "Les envois, déploiements et suppressions demandent Face ID.";
 "ios.settings.security.unavailable" = "Configurez Face ID ou un code dans les réglages iOS pour utiliser le verrouillage.";
 "ios.settings.security.unlock" = "Déverrouiller";
 "ios.settings.security.unlockReason" = "Déverrouiller Bandito";

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import BanditoKit
 @testable import BanditoUI
 
 /// The agent's own folder in the new agent sheet: its name, the agents folder it goes into, and the free name it gets.

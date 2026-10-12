@@ -937,6 +937,9 @@
 "ios.activity.filter.unread" = "未読";
 "ios.activity.finished" = "%1$@が完了";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "エージェントを削除";
+"ios.agent.error" = "保存できませんでした: %1$@";
+"ios.agent.noSchedules" = "スケジュールはまだありません。";
 "ios.connect.camera.allow" = "カメラを許可";
 "ios.connect.camera.denied" = "Bandito のカメラがオフです。設定でオンにするか、リンクを貼り付けるかアドレスを入力してください。";
 "ios.connect.camera.openSettings" = "設定を開く";
@@ -984,7 +987,6 @@
 "ios.connect.working" = "接続中…";
 "ios.crew.chatSoon" = "%1$@ とのチャットは近日対応予定です。";
 "ios.crew.createAgent" = "エージェントを作成";
-"ios.crew.createSoon" = "iPhone からのエージェント作成は近日対応予定です。";
 "ios.crew.emptyMessage" = "このサーバーにはエージェントがいません。最初のエージェントを作って、チームを動かしましょう。";
 "ios.crew.emptyTitle" = "まだエージェントがいません";
 "ios.crew.lead" = "リーダー";
@@ -996,6 +998,8 @@
 "ios.crew.waitingAnswer" = "%1$@ があなたを待っています";
 "ios.crew.waitingForm" = "%1$@ がフォームの入力を待っています";
 "ios.crew.wantsToRun" = "%1$@ が %2$@ を実行しようとしています";
+"ios.demo.schedule.nightly" = "ディスクを確認し、80%%を超えた時だけ知らせて。";
+"ios.demo.schedule.weekly" = "今週のディスク使用量をまとめて。";
 "ios.inbox.command" = "実行される内容";
 "ios.inbox.connect" = "%1$@ が %2$@ の接続を求めています";
 "ios.inbox.connectOnMac" = "サービスの接続は、今のところ Mac で行います。";
@@ -1017,6 +1021,10 @@
 "ios.intent.ask.sent" = "%1$@に送信しました";
 "ios.intent.needsMe.none" = "あなたを待っているものはありません";
 "ios.intent.open.inbox" = "受信トレイを開く";
+"ios.newAgent.installTimedOut" = "インストールがまだ続いています。しばらくしてからもう一度お試しください。";
+"ios.newAgent.tabOne" = "エージェント1つ";
+"ios.newAgent.tabTeams" = "すぐに使えるチーム";
+"ios.newAgent.teamsEmpty" = "このサーバーにはまだ用意済みのチームがありません。";
 "ios.notifications.ask.body" = "エージェントが承認を求めたとき、質問があるとき、失敗したときに Bandito がお知らせします。それ以外は通知しません。設定でいつでも変更できます。";
 "ios.notifications.ask.later" = "今はしない";
 "ios.notifications.ask.title" = "チームがあなたを必要とするときに知りたいですか？";

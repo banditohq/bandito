@@ -937,6 +937,9 @@
 "ios.activity.filter.unread" = "No leídos";
 "ios.activity.finished" = "%1$@ terminó";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "Eliminar agente";
+"ios.agent.error" = "No se pudo guardar: %1$@";
+"ios.agent.noSchedules" = "Todavía no hay horarios.";
 "ios.connect.camera.allow" = "Permitir la cámara";
 "ios.connect.camera.denied" = "La cámara está desactivada para Bandito. Actívala en Ajustes, o pega el enlace o escribe la dirección.";
 "ios.connect.camera.openSettings" = "Abrir Ajustes";
@@ -984,7 +987,6 @@
 "ios.connect.working" = "Conectando…";
 "ios.crew.chatSoon" = "El chat con %1$@ llegará pronto.";
 "ios.crew.createAgent" = "Crear agente";
-"ios.crew.createSoon" = "Crear agentes desde el iPhone llegará pronto.";
 "ios.crew.emptyMessage" = "Este servidor no tiene agentes. Crea el primero para que el equipo empiece a trabajar.";
 "ios.crew.emptyTitle" = "Aún no hay agentes";
 "ios.crew.lead" = "Líder";
@@ -996,6 +998,8 @@
 "ios.crew.waitingAnswer" = "%1$@ te espera";
 "ios.crew.waitingForm" = "%1$@ espera un formulario";
 "ios.crew.wantsToRun" = "%1$@ quiere ejecutar %2$@";
+"ios.demo.schedule.nightly" = "Revisa el disco y avísame solo si supera el 80 %%.";
+"ios.demo.schedule.weekly" = "Resume el uso del disco de la semana.";
 "ios.inbox.command" = "Lo que ejecutará";
 "ios.inbox.connect" = "%1$@ quiere conectar %2$@";
 "ios.inbox.connectOnMac" = "Por ahora, los servicios se conectan desde el Mac.";
@@ -1017,6 +1021,10 @@
 "ios.intent.ask.sent" = "Enviado a %1$@";
 "ios.intent.needsMe.none" = "Nada te necesita";
 "ios.intent.open.inbox" = "Abrir bandeja";
+"ios.newAgent.installTimedOut" = "La instalación sigue en curso. Inténtalo más tarde.";
+"ios.newAgent.tabOne" = "Un agente";
+"ios.newAgent.tabTeams" = "Equipos listos";
+"ios.newAgent.teamsEmpty" = "Este servidor aún no tiene equipos listos.";
 "ios.notifications.ask.body" = "Bandito puede avisarte cuando un agente pide aprobación, tiene una pregunta o falla. Nada más. Puedes cambiarlo en Ajustes.";
 "ios.notifications.ask.later" = "Ahora no";
 "ios.notifications.ask.title" = "¿Quieres saber cuándo te necesita tu equipo?";

@@ -295,7 +295,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>other</key>
-			<string>已用于 %1$lld 个智能体</string>
+			<string>已用于 %1$lld 个代理</string>
 		</dict>
 	</dict>
 	<key>memory.filesMeta</key>
@@ -365,7 +365,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>other</key>
-			<string>%1$lld 个智能体需要处理</string>
+			<string>%1$lld 个代理需要处理</string>
 		</dict>
 	</dict>
 	<key>onboarding.server.minutes</key>

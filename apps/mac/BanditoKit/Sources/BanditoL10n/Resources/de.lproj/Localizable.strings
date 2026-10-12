@@ -937,6 +937,9 @@
 "ios.activity.filter.unread" = "Ungelesen";
 "ios.activity.finished" = "%1$@ hat beendet";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "Agent löschen";
+"ios.agent.error" = "Nicht gespeichert: %1$@";
+"ios.agent.noSchedules" = "Noch keine Zeitpläne.";
 "ios.connect.camera.allow" = "Kamera erlauben";
 "ios.connect.camera.denied" = "Die Kamera ist für Bandito aus. Schalte sie in den Einstellungen ein oder füge den Link ein oder tippe die Adresse.";
 "ios.connect.camera.openSettings" = "Einstellungen öffnen";
@@ -984,7 +987,6 @@
 "ios.connect.working" = "Verbinde …";
 "ios.crew.chatSoon" = "Der Chat mit %1$@ kommt bald.";
 "ios.crew.createAgent" = "Agent anlegen";
-"ios.crew.createSoon" = "Agenten auf dem iPhone anlegen kommt bald.";
 "ios.crew.emptyMessage" = "Auf diesem Server gibt es keine Agenten. Legen Sie den ersten an, damit die Crew loslegt.";
 "ios.crew.emptyTitle" = "Noch keine Agenten";
 "ios.crew.lead" = "Leitung";
@@ -996,6 +998,8 @@
 "ios.crew.waitingAnswer" = "%1$@ wartet auf Sie";
 "ios.crew.waitingForm" = "%1$@ wartet auf ein Formular";
 "ios.crew.wantsToRun" = "%1$@ möchte %2$@ ausführen";
+"ios.demo.schedule.nightly" = "Prüfe die Festplatte und melde dich nur, wenn sie zu mehr als 80 %% voll ist.";
+"ios.demo.schedule.weekly" = "Fasse die Festplattennutzung der Woche zusammen.";
 "ios.inbox.command" = "Was ausgeführt wird";
 "ios.inbox.connect" = "%1$@ möchte %2$@ verbinden";
 "ios.inbox.connectOnMac" = "Dienste verbinden Sie vorerst auf dem Mac.";
@@ -1017,6 +1021,10 @@
 "ios.intent.ask.sent" = "An %1$@ gesendet";
 "ios.intent.needsMe.none" = "Nichts wartet auf Sie";
 "ios.intent.open.inbox" = "Posteingang öffnen";
+"ios.newAgent.installTimedOut" = "Die Installation läuft noch. Versuchen Sie es später erneut.";
+"ios.newAgent.tabOne" = "Ein Agent";
+"ios.newAgent.tabTeams" = "Fertige Teams";
+"ios.newAgent.teamsEmpty" = "Auf diesem Server gibt es noch keine fertigen Teams.";
 "ios.notifications.ask.body" = "Bandito kann dir sagen, wenn ein Agent um Freigabe bittet, eine Frage hat oder scheitert. Sonst nichts. Du kannst das in den Einstellungen ändern.";
 "ios.notifications.ask.later" = "Nicht jetzt";
 "ios.notifications.ask.title" = "Möchtest du wissen, wann dich dein Team braucht?";

@@ -3159,8 +3159,8 @@
   "ios.crew.emptyTitle": "아직 에이전트가 없어요",
   "ios.crew.emptyMessage": "이 서버에는 에이전트가 없어요. 첫 에이전트를 만들어 팀을 시작하세요.",
   "ios.crew.createAgent": "에이전트 만들기",
-  "ios.crew.createSoon": "iPhone에서 에이전트 만들기는 곧 지원돼요.",
   "ios.crew.chatSoon": "{name}와(과)의 대화는 곧 지원돼요.",
+  "ios.newAgent.installTimedOut": "설치가 아직 진행 중입니다. 잠시 후 다시 시도하세요.",
   "ios.settings.header.servers": "서버",
   "ios.settings.header.notifications": "알림",
   "ios.settings.header.security": "보안",
@@ -3311,5 +3311,13 @@
   "shortcut.phrase.askAgent": "${applicationName}에서 ${agent}에게 묻기",
   "shortcut.phrase.openAgent": "${applicationName}에서 ${agent} 열기",
   "shortcut.title.openInbox": "받은 편지함 열기",
-  "ios.intent.ask.failed": "{name}에게 보내지 못했어요. 다시 시도하세요."
+  "ios.intent.ask.failed": "{name}에게 보내지 못했어요. 다시 시도하세요.",
+  "ios.agent.delete.button": "에이전트 삭제",
+  "ios.agent.error": "저장하지 못했습니다: {message}",
+  "ios.agent.noSchedules": "아직 예약된 실행이 없습니다.",
+  "ios.newAgent.tabTeams": "바로 쓸 수 있는 팀",
+  "ios.newAgent.tabOne": "에이전트 하나",
+  "ios.newAgent.teamsEmpty": "이 서버에는 아직 준비된 팀이 없습니다.",
+  "ios.demo.schedule.nightly": "디스크를 확인하고 80%를 넘을 때만 알려 줘.",
+  "ios.demo.schedule.weekly": "이번 주 디스크 사용량을 요약해 줘."
 }

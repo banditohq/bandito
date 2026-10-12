@@ -1357,6 +1357,15 @@ public enum L10n {
             }
         }
 
+        public enum Agent {
+            public static func error(message: String) -> String { L10n.tr("ios.agent.error", message) }
+            public static var noSchedules: String { L10n.tr("ios.agent.noSchedules") }
+
+            public enum Delete {
+                public static var button: String { L10n.tr("ios.agent.delete.button") }
+            }
+        }
+
         public enum Connect {
             public static var fingerprint: String { L10n.tr("ios.connect.fingerprint") }
             public static var placeholder: String { L10n.tr("ios.connect.placeholder") }
@@ -1432,7 +1441,6 @@ public enum L10n {
         public enum Crew {
             public static func chatSoon(name: String) -> String { L10n.tr("ios.crew.chatSoon", name) }
             public static var createAgent: String { L10n.tr("ios.crew.createAgent") }
-            public static var createSoon: String { L10n.tr("ios.crew.createSoon") }
             public static var emptyMessage: String { L10n.tr("ios.crew.emptyMessage") }
             public static var emptyTitle: String { L10n.tr("ios.crew.emptyTitle") }
             public static var lead: String { L10n.tr("ios.crew.lead") }
@@ -1444,6 +1452,14 @@ public enum L10n {
             public static func waitingAnswer(name: String) -> String { L10n.tr("ios.crew.waitingAnswer", name) }
             public static func waitingForm(name: String) -> String { L10n.tr("ios.crew.waitingForm", name) }
             public static func wantsToRun(name: String, command: String) -> String { L10n.tr("ios.crew.wantsToRun", name, command) }
+        }
+
+        public enum Demo {
+
+            public enum Schedule {
+                public static var nightly: String { L10n.tr("ios.demo.schedule.nightly") }
+                public static var weekly: String { L10n.tr("ios.demo.schedule.weekly") }
+            }
         }
 
         public enum Inbox {
@@ -1482,6 +1498,13 @@ public enum L10n {
             public enum Open {
                 public static var inbox: String { L10n.tr("ios.intent.open.inbox") }
             }
+        }
+
+        public enum NewAgent {
+            public static var installTimedOut: String { L10n.tr("ios.newAgent.installTimedOut") }
+            public static var tabOne: String { L10n.tr("ios.newAgent.tabOne") }
+            public static var tabTeams: String { L10n.tr("ios.newAgent.tabTeams") }
+            public static var teamsEmpty: String { L10n.tr("ios.newAgent.teamsEmpty") }
         }
 
         public enum Notifications {
