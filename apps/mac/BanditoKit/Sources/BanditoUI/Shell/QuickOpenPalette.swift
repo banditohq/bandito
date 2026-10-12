@@ -49,13 +49,18 @@ struct QuickOpenPalette: View {
     // MARK: Panel
 
     private var panel: some View {
-        VStack(spacing: 0) {
+        // The rows are made once a body: each row asked for its place in a list it made again (every agent ranked,
+        // every port), so opening the palette over forty agents cost about 130 ms.
+        let rows = self.rows
+        var places: [String: Int] = [:]
+        for (index, row) in rows.enumerated() where places[row.id] == nil { places[row.id] = index }
+        return VStack(spacing: 0) {
             searchBar
             Rectangle().fill(Color.Bandito.line).frame(height: 1)
             ScrollView {
                 // Lazy: a palette over forty agents built every row (avatar and all) before it could show.
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(sections, id: \.title) { section in
+                    ForEach(Self.sections(of: rows), id: \.title) { section in
                         Text(section.title)
                             .font(BanditoFont.text(size: 10.5, weight: 600))
                             .tracking(0.8)
@@ -64,7 +69,7 @@ struct QuickOpenPalette: View {
                             .padding(.top, 10)
                             .padding(.bottom, 4)
                         ForEach(section.rows) { row in
-                            rowView(row, index: rowIndex(of: row))
+                            rowView(row, index: places[row.id] ?? 0)
                         }
                     }
                     if rows.isEmpty {
@@ -189,7 +194,7 @@ struct QuickOpenPalette: View {
         .banditoButton(.row(cornerRadius: 12))
         .disabled(!row.enabled)
         .onHover { hovering in
-            if hovering, let index = rows.firstIndex(where: { $0.id == row.id }) { selected = index }
+            if hovering, selected != index { selected = index }
         }
     }
 
@@ -200,8 +205,7 @@ struct QuickOpenPalette: View {
         let rows: [PaletteRow]
     }
 
-    private var sections: [Section] {
-        let all = rows
+    private static func sections(of all: [PaletteRow]) -> [Section] {
         var result: [Section] = []
         for section in PaletteRow.Kind.allCases {
             let inSection = all.filter { $0.kind == section }
@@ -217,10 +221,6 @@ struct QuickOpenPalette: View {
         agentRows + actionRows + fileRows + terminalRows + portRows
     }
 
-    private func rowIndex(of row: PaletteRow) -> Int {
-        rows.firstIndex { $0.id == row.id } ?? 0
-    }
-
     private var allAgents: [(server: ServerModel, agent: Agent)] {
         app.servers.flatMap { server in server.agents.map { (server: server, agent: $0) } }
     }
@@ -230,7 +230,8 @@ struct QuickOpenPalette: View {
         return matches.map { ranked in
             let entry = ranked.item
             let folder = FolderPickerLogic.name(of: entry.agent.cwd)
-            let status = entry.server.thread(for: entry.agent.id).status
+            // The summary, not the thread: a streamed token must not remake the palette.
+            let status = entry.server.threadSummary(for: entry.agent.id).loadedStatus
             return PaletteRow(
                 id: "agent-\(entry.server.id)-\(entry.agent.id)",
                 kind: .agents,
