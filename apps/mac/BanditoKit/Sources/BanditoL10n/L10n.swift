@@ -1464,6 +1464,26 @@ public enum L10n {
             public static var service: String { L10n.tr("ios.inbox.service") }
         }
 
+        public enum Intent {
+
+            public enum Ask {
+                public static var empty: String { L10n.tr("ios.intent.ask.empty") }
+                public static func failed(name: String) -> String { L10n.tr("ios.intent.ask.failed", name) }
+                public static func notConnected(name: String) -> String { L10n.tr("ios.intent.ask.notConnected", name) }
+                public static func sent(name: String) -> String { L10n.tr("ios.intent.ask.sent", name) }
+            }
+
+            public enum NeedsMe {
+                public static func countOnly(count: Int) -> String { L10n.tr("ios.intent.needsMe.countOnly", count) }
+                public static var none: String { L10n.tr("ios.intent.needsMe.none") }
+                public static func waiting(count: Int, names: String) -> String { L10n.tr("ios.intent.needsMe.waiting", count, names) }
+            }
+
+            public enum Open {
+                public static var inbox: String { L10n.tr("ios.intent.open.inbox") }
+            }
+        }
+
         public enum Notifications {
 
             public enum Ask {

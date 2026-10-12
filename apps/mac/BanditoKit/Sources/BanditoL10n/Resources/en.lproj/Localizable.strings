@@ -1011,6 +1011,12 @@
 "ios.inbox.risky" = "Risky";
 "ios.inbox.send" = "Send";
 "ios.inbox.service" = "Service";
+"ios.intent.ask.empty" = "The message is empty.";
+"ios.intent.ask.failed" = "Could not send to %1$@. Try again.";
+"ios.intent.ask.notConnected" = "%1$@ is not reachable right now. Open Bandito and try again.";
+"ios.intent.ask.sent" = "Sent to %1$@";
+"ios.intent.needsMe.none" = "Nothing needs you";
+"ios.intent.open.inbox" = "Open Inbox";
 "ios.notifications.ask.body" = "Bandito can tell you when an agent asks for approval, has a question or fails. Nothing else. You can change this in Settings.";
 "ios.notifications.ask.later" = "Not now";
 "ios.notifications.ask.title" = "Want to know when your crew needs you?";

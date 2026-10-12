@@ -17,7 +17,7 @@ import Testing
             generatedAt: now, pending: 2,
             agents: [WidgetSnapshot.Agent(server: "S1", id: "forge", name: "Forge", status: .needsYou, mood: .needsYou)])
         let json = try #require(String(data: snapshot.encoded(), encoding: .utf8))
-        for key in ["\"generatedAt\"", "\"pending\"", "\"agents\"", "\"waiting\"", "\"waitingCount\"", "\"server\"", "\"id\"", "\"name\"", "\"status\"", "\"mood\""] {
+        for key in ["\"generatedAt\"", "\"pending\"", "\"agents\"", "\"waiting\"", "\"waitingCount\"", "\"server\"", "\"id\"", "\"name\"", "\"status\"", "\"mood\"", "\"directory\""] {
             #expect(json.contains(key), "the file has \(key)")
         }
         // No address and no token can be in it: the file holds only ids, names and states.
@@ -205,3 +205,45 @@ import Testing
         #expect(reloads == 0)
     }
 }
+
+/// The directory the intents and Spotlight read: the names of the agents, capped, kept with the picture, and read from
+/// the files written before it existed.
+@Suite struct WidgetSnapshotDirectoryTests {
+    private let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+    private func listing(_ id: String, server: String = "S1", role: String = "Coder") -> WidgetSnapshot.Listing {
+        WidgetSnapshot.Listing(server: server, id: id, name: id.capitalized, role: role)
+    }
+
+    @Test func aDirectoryHoldsAtMostFiftyAgentsInItsOrder() {
+        let many = (1...60).map { listing("a\($0)") }
+        let snapshot = WidgetSnapshot(generatedAt: now, pending: 0, agents: [], directory: many)
+        #expect(snapshot.directory.count == WidgetSnapshot.directoryLimit)
+        #expect(snapshot.directory.first?.id == "a1" && snapshot.directory.last?.id == "a50")
+    }
+
+    @Test func aChangedDirectoryIsANewContent() {
+        let base = WidgetSnapshot(generatedAt: now, pending: 0, agents: [], directory: [listing("forge")])
+        let renamed = WidgetSnapshot(generatedAt: now, pending: 0, agents: [], directory: [listing("forge", role: "Ops")])
+        let added = WidgetSnapshot(generatedAt: now, pending: 0, agents: [], directory: [listing("forge"), listing("watch")])
+        #expect(!base.hasSameContent(as: renamed))
+        #expect(!base.hasSameContent(as: added))
+        let later = WidgetSnapshot(generatedAt: now.addingTimeInterval(60), pending: 0, agents: [], directory: [listing("forge")])
+        #expect(base.hasSameContent(as: later))
+    }
+
+    @Test func aFileWithoutTheDirectoryReadsAsAnEmptyOne() throws {
+        let old = """
+        {"generatedAt":1700000000,"pending":2,"agents":[],"waiting":[],"waitingCount":0}
+        """
+        let decoded = try WidgetSnapshot.decoded(from: Data(old.utf8))
+        #expect(decoded.pending == 2)
+        #expect(decoded.directory.isEmpty)
+    }
+
+    @Test func theDirectoryRoundTripsThroughTheFile() throws {
+        let snapshot = WidgetSnapshot(generatedAt: now, pending: 0, agents: [], directory: [listing("forge"), listing("watch", server: "S2")])
+        #expect(try WidgetSnapshot.decoded(from: snapshot.encoded()) == snapshot)
+    }
+}
+

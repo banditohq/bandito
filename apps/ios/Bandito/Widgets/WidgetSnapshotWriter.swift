@@ -22,6 +22,9 @@ final class WidgetSnapshotWriter {
     private(set) var written: WidgetSnapshot?
     private var scheduled: Task<Void, Never>?
     private var source: (@MainActor () -> [ServerModel])?
+    /// Told every picture the writer builds, each time it is built (a change of the servers, after the one-second delay).
+    /// The Spotlight index follows the directory and changes only what differs; it is called with or without a store.
+    var onPicture: (@MainActor (WidgetSnapshot) -> Void)?
 
     init(store: WidgetSnapshotStore?, reload: @escaping @MainActor () -> Void) {
         self.store = store
@@ -73,7 +76,9 @@ final class WidgetSnapshotWriter {
 
     private func commit() {
         guard let source else { return }
-        commitIfChanged(WidgetSnapshotBuilder.make(servers: source()))
+        let snapshot = WidgetSnapshotBuilder.make(servers: source())
+        onPicture?(snapshot)
+        commitIfChanged(snapshot)
     }
 
     /// Reads what the snapshot reads, so Observation calls back on the next change; then schedules a write and re-arms.

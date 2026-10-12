@@ -1011,6 +1011,12 @@
 "ios.inbox.risky" = "有风险";
 "ios.inbox.send" = "发送";
 "ios.inbox.service" = "服务";
+"ios.intent.ask.empty" = "消息为空。";
+"ios.intent.ask.failed" = "无法发送给 %1$@，请重试。";
+"ios.intent.ask.notConnected" = "%1$@ 当前无法连接。请打开 Bandito 后重试。";
+"ios.intent.ask.sent" = "已发送给 %1$@";
+"ios.intent.needsMe.none" = "没有需要你处理的事";
+"ios.intent.open.inbox" = "打开收件箱";
 "ios.notifications.ask.body" = "当智能体请求批准、提出问题或失败时，Bandito 可以通知你，仅此而已。你可以在设置中更改。";
 "ios.notifications.ask.later" = "暂不";
 "ios.notifications.ask.title" = "想在团队需要你时收到通知吗？";

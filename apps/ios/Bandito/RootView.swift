@@ -1,6 +1,7 @@
 import BanditoDesign
 import BanditoKit
 import BanditoL10n
+import CoreSpotlight
 import SwiftUI
 
 /// The four tabs of the app: Crew (home), Inbox, Activity and Settings (docs/IOS_APP.md).
@@ -86,6 +87,19 @@ struct RootView: View {
                 openLink(link)
             }
         }
+        // A Siri or Shortcuts intent asks for a screen (AppIntentHub), and a Spotlight result opens its agent.
+        .onChange(of: AppIntentHub.shared.pendingLink) { _, link in
+            guard let link else { return }
+            AppIntentHub.shared.consumeLink()
+            openLink(link)
+        }
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            guard let link = SpotlightAgents.link(from: activity) else { return }
+            openLink(link)
+        }
+        .onChange(of: session.current.map(\.id)) { _, ids in
+            SpotlightAgentIndex.shared.keepOnly(serverIDs: Set(ids.map(\.uuidString)))
+        }
         .onChange(of: session.current.isEmpty, initial: true) { _, isEmpty in
             if !isEmpty { onboarding.markCompleted() }
         }
@@ -100,6 +114,8 @@ struct RootView: View {
             let arguments = ProcessInfo.processInfo.arguments
             notifications.settings = settings
             notifications.source = SessionNotificationSource(session: session)
+            AppIntentHub.shared.liveServers = { ServerSession.shared.current }
+            WidgetSnapshotWriter.shared.onPicture = { SpotlightAgentIndex.shared.sync($0.directory) }
             WidgetSnapshotWriter.shared.watch { ServerSession.shared.current }
             if IOSDemo.isRequested(in: arguments) {
                 guard session.current.isEmpty else { return }

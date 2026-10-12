@@ -33,7 +33,20 @@ enum WidgetSnapshotBuilder {
             pending: InboxRules.badge(of: servers),
             agents: WidgetAgentPicker.pick(agents),
             waiting: waiting,
-            waitingCount: waiting.count)
+            waitingCount: waiting.count,
+            directory: directory(servers: servers))
+    }
+
+    /// The names the intents and Spotlight know: the agents of every server the app has, connected or not (a server
+    /// that is down still has its agents; asking one says it is not reachable). At most `directoryLimit` of them.
+    static func directory(servers: [ServerModel]) -> [WidgetSnapshot.Listing] {
+        servers.flatMap { server in
+            server.sortedAgents.map { agent in
+                WidgetSnapshot.Listing(server: server.id.uuidString, id: agent.id, name: agent.name, role: agent.role)
+            }
+        }
+        .prefix(WidgetSnapshot.directoryLimit)
+        .map { $0 }
     }
 
     /// A paused agent is not reachable for the widget: it reads as offline (the raccoon sleeps).

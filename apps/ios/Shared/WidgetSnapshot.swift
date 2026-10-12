@@ -28,11 +28,14 @@ enum WidgetMood: String, Codable, CaseIterable, Sendable {
     case sleeping
 }
 
-/// The picture the widgets read: how many things wait for the person, and up to four agents for the crew widget.
+/// The picture the widgets read: how many things wait for the person, and up to four agents for the crew widget. The
+/// App Intents and Spotlight read the directory too: the names of up to 50 agents, for "Ask <agent>" and search.
 struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// The crew widget shows at most this many agents; the small widget names and draws at most this many waiting ones.
     static let agentLimit = 4
     static let waitingLimit = 3
+    /// The directory holds at most this many agents (the intents' picker and the Spotlight index).
+    static let directoryLimit = 50
 
     struct Agent: Codable, Equatable, Sendable {
         /// The server's id (a UUID string) for the deep link. Never its address.
@@ -43,6 +46,14 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         let mood: WidgetMood
     }
 
+    /// An agent as a name in a list: which server it belongs to, its id, its name and its role. No address, no token.
+    struct Listing: Codable, Equatable, Hashable, Sendable {
+        let server: String
+        let id: String
+        let name: String
+        let role: String
+    }
+
     var generatedAt: Date
     /// Everything that waits for the person on the connected servers (the Inbox's count).
     var pending: Int
@@ -51,13 +62,30 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     var waiting: [Agent]
     /// How many agents wait for the person in all (`waiting` holds at most `waitingLimit` of them).
     var waitingCount: Int
+    /// The agents of the paired servers, in the team's order, at most `directoryLimit`.
+    var directory: [Listing]
 
-    init(generatedAt: Date, pending: Int, agents: [Agent], waiting: [Agent] = [], waitingCount: Int? = nil) {
+    init(
+        generatedAt: Date, pending: Int, agents: [Agent], waiting: [Agent] = [], waitingCount: Int? = nil,
+        directory: [Listing] = []
+    ) {
         self.generatedAt = generatedAt
         self.pending = max(0, pending)
         self.agents = Array(agents.prefix(Self.agentLimit))
         self.waiting = Array(waiting.prefix(Self.waitingLimit))
         self.waitingCount = max(waitingCount ?? waiting.count, self.waiting.count)
+        self.directory = Array(directory.prefix(Self.directoryLimit))
+    }
+
+    /// A file written before the directory existed has none: it reads as an empty directory, not as a broken file.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        generatedAt = try container.decode(Date.self, forKey: .generatedAt)
+        pending = try container.decode(Int.self, forKey: .pending)
+        agents = try container.decode([Agent].self, forKey: .agents)
+        waiting = try container.decode([Agent].self, forKey: .waiting)
+        waitingCount = try container.decode(Int.self, forKey: .waitingCount)
+        directory = try container.decodeIfPresent([Listing].self, forKey: .directory) ?? []
     }
 
     /// The names on the small widget's line: at most two of the waiting agents.
@@ -73,7 +101,7 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// The same picture whatever the time of writing: the app writes a snapshot only when this is false.
     func hasSameContent(as other: WidgetSnapshot) -> Bool {
         pending == other.pending && agents == other.agents && waiting == other.waiting
-            && waitingCount == other.waitingCount
+            && waitingCount == other.waitingCount && directory == other.directory
     }
 
     func encoded() throws -> Data {
@@ -93,15 +121,15 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     static let sample: WidgetSnapshot = {
         let watch = Agent(server: "sample", id: "watch", name: "Watch", status: .needsYou, mood: .needsYou)
         let forge = Agent(server: "sample", id: "forge", name: "Forge", status: .needsYou, mood: .needsYou)
+        let scout = Agent(server: "sample", id: "scout", name: "Scout", status: .working, mood: .working)
+        let quill = Agent(server: "sample", id: "quill", name: "Quill", status: .idle, mood: .idle)
+        let agents = [watch, forge, scout, quill]
         return WidgetSnapshot(
             generatedAt: Date(timeIntervalSince1970: 0),
             pending: 2,
-            agents: [
-                watch, forge,
-                Agent(server: "sample", id: "scout", name: "Scout", status: .working, mood: .working),
-                Agent(server: "sample", id: "quill", name: "Quill", status: .idle, mood: .idle),
-            ],
-            waiting: [watch, forge])
+            agents: agents,
+            waiting: [watch, forge],
+            directory: agents.map { Listing(server: $0.server, id: $0.id, name: $0.name, role: "") })
     }()
 }
 
