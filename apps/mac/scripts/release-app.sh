@@ -223,14 +223,50 @@ step "Zip the app for notarization"
 rm -f "$zip_path"
 (cd "$release" && ditto -c -k --keepParent "$app_name" "$zip_name")
 
+# retry <command...>: runs it up to 5 times for Apple network failures ("The network connection was lost" from stapler,
+# notarytool timeouts); waits 15, 30, 60 and 120 seconds between tries and prints why each try failed.
+retry() {
+    local attempt=1 delay err
+    local delays=(15 30 60 120)
+    err="$work/retry-err.txt"
+    while :; do
+        if "$@" 2> "$err"; then
+            cat "$err" >&2
+            return 0
+        fi
+        echo "attempt $attempt/5 failed: $* -> $(tr '\n' ' ' < "$err")" >&2
+        if [ "$attempt" -ge 5 ]; then
+            echo "error: giving up after 5 attempts: $*" >&2
+            return 1
+        fi
+        delay="${delays[$((attempt - 1))]}"
+        echo "retrying in ${delay}s" >&2
+        sleep "$delay"
+        attempt=$((attempt + 1))
+    done
+}
+
 # notarize <file>: submits it to Apple and waits. Anything but Accepted fails, with Apple's log.
 notarize() {
-    local file="$1" out status id
+    local file="$1" out status id attempt=1 err delay
+    local delays=(15 30 60 120)
     out="$work/notary-$(basename "$file").json"
+    err="$work/notary-err.txt"
     echo "submitting $(basename "$file") to the notary service (this can take a few minutes)"
-    xcrun notarytool submit "$file" "${notary_auth[@]}" --wait --output-format json > "$out" || true
-    status="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", ""))' < "$out" 2>/dev/null || true)"
-    id="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("id", ""))' < "$out" 2>/dev/null || true)"
+    while :; do
+        : > "$out"
+        xcrun notarytool submit "$file" "${notary_auth[@]}" --wait --output-format json > "$out" 2> "$err" || true
+        status="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", ""))' < "$out" 2>/dev/null || true)"
+        id="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("id", ""))' < "$out" 2>/dev/null || true)"
+        # A verdict from Apple (Accepted, Invalid, Rejected) is final; no status at all means the call itself failed.
+        [ -z "$status" ] || break
+        echo "attempt $attempt/5: notarytool gave no verdict: $(tr '\n' ' ' < "$err")" >&2
+        if [ "$attempt" -ge 5 ]; then break; fi
+        delay="${delays[$((attempt - 1))]}"
+        echo "retrying in ${delay}s" >&2
+        sleep "$delay"
+        attempt=$((attempt + 1))
+    done
     if [ "$status" != "Accepted" ]; then
         echo "error: notarization of $(basename "$file") ended with status '${status:-unknown}' (submission ${id:-none})" >&2
         [ -n "$id" ] && xcrun notarytool log "$id" "${notary_auth[@]}" >&2 || true
@@ -245,8 +281,8 @@ if [ "$dry_run" -eq 1 ]; then
 else
     step "Notarize the app"
     notarize "$zip_path"
-    xcrun stapler staple "$app"
-    xcrun stapler validate "$app"
+    retry xcrun stapler staple "$app"
+    retry xcrun stapler validate "$app"
 fi
 
 step "Final zip (with the staple inside the app)"
@@ -261,8 +297,8 @@ rm -f "$dmg_path"
 codesign --force --timestamp --sign "$IDENTITY" "$dmg_path"
 if [ "$dry_run" -eq 0 ]; then
     notarize "$dmg_path"
-    xcrun stapler staple "$dmg_path"
-    xcrun stapler validate "$dmg_path"
+    retry xcrun stapler staple "$dmg_path"
+    retry xcrun stapler validate "$dmg_path"
     step "Gatekeeper check"
     spctl_out="$(spctl -a -vvv -t exec "$app" 2>&1 || true)"
     echo "$spctl_out"

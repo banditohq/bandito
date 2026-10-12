@@ -234,8 +234,11 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.platform-write.outputs.token }}
           BRANCH: appcast-${{ inputs.version }}
+          BOT_SLUG: ${{ steps.platform-write.outputs.app-slug }}
         run: |
           set -euo pipefail
+          # The commit is attributed to the App: its bot user id is part of the noreply address.
+          bot_id="$(gh api "/users/${BOT_SLUG}%5Bbot%5D" --jq .id)"
           cp "$RUNNER_TEMP/release-out/appcast.xml" "$PLATFORM_DIR/public/appcast.xml"
           cd "$PLATFORM_DIR"
           git checkout -B "$BRANCH"
@@ -244,8 +247,8 @@ jobs:
             echo "The appcast already has this item; nothing to open."
             exit 0
           fi
-          git -c user.name="bandito-bot[bot]" \
-            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+          git -c user.name="${BOT_SLUG}[bot]" \
+            -c user.email="${bot_id}+${BOT_SLUG}[bot]@users.noreply.github.com" \
             commit -m "Add Bandito $VERSION to the appcast"
           # A new run for the same version replaces the branch of the previous one (it is always cut from the default branch).
           git -c credential.helper= -c "credential.helper=!gh auth git-credential" push --force origin "$BRANCH"
@@ -258,7 +261,7 @@ jobs:
             pr="${url##*/}"
           fi
           echo "Appcast PR: banditohq/platform#$pr"
-          # Wait for the PR's checks (the repo has no auto-merge): they register a little after the push, so an empty
+          # Wait for the PR's checks and for merge state CLEAN (the repo has no auto-merge): they register a little after the push, so an empty
           # list is waited out for 3 minutes, then treated as a problem rather than merged unchecked.
           waited=0
           while :; do
@@ -272,10 +275,17 @@ jobs:
               echo "::error::checks failed on banditohq/platform#$pr; fix it there and merge by hand (docs/RELEASING.md)"
               exit 1
             elif ! grep -qw pending <<< "$checks"; then
-              break
+              # Green checks are not enough: GitHub must also call the PR mergeable (no conflict, nothing blocking).
+              state="$(gh pr view "$pr" --repo banditohq/platform --json mergeStateStatus --jq .mergeStateStatus)"
+              [ "$state" != CLEAN ] || break
+              if [ "$state" = DIRTY ]; then
+                echo "::error::banditohq/platform#$pr has a merge conflict; resolve it by hand (docs/RELEASING.md)"
+                exit 1
+              fi
+              echo "checks are green, merge state is $state; waiting"
             fi
             if [ "$waited" -ge 1800 ]; then
-              echo "::error::checks on banditohq/platform#$pr still pending after 30 minutes"
+              echo "::error::banditohq/platform#$pr is not mergeable after 30 minutes (checks: ${checks:-none})"
               exit 1
             fi
             sleep 20

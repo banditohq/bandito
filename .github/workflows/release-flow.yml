@@ -192,11 +192,13 @@ jobs:
 
   app:
     name: start the app release
-    needs: [prepare, publish]
-    # Also runs when the release was already published (publish skipped), so a rerun still reaches the app.
+    needs: [prepare, server, publish]
+    # Runs after a successful publish, or when the release was already published before this run (server and publish
+    # skipped on purpose). A failed or cancelled server build never gets here.
     if: >-
       ${{ !cancelled() && needs.prepare.result == 'success'
-          && (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+          && (needs.publish.result == 'success'
+              || (needs.prepare.outputs.published == 'true' && needs.server.result == 'skipped' && needs.publish.result == 'skipped'))
           && github.event.inputs.start_app != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
