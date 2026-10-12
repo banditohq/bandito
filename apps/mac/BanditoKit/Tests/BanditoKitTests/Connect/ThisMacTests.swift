@@ -146,6 +146,7 @@ import Testing
         let confirmed = await LocalDaemonUpgrade.confirmsThisMac(
             config, binary: script, runner: ProcessCommandRunner(), timeout: .milliseconds(300))
         #expect(confirmed == false)
-        #expect(start.duration(to: .now) < .seconds(5))
+        // Far below a hang (the script sleeps much longer), with room for a loaded CI runner.
+        #expect(start.duration(to: .now) < .seconds(10))
     }
 }

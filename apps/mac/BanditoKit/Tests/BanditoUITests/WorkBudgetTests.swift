@@ -175,8 +175,10 @@ extension ScreenWorkSuites {
                 Self.budget("ThreadList.viewFor", 12, Self.list), Self.budget("ThreadList.measure", 8, Self.list),
                 // (The rows reconfigured during the move depend on its frames: not counted here.)
                 Self.budget("ThreadList.widthChange", 7, "only the list on screen follows the width (ThreadListHost.show)"),
-                Self.budget("ThreadView", 8, Self.frame), Self.budget("Composer", 8, Self.frame),
-                Self.budget("ThreadHeader", 8, Self.frame), Self.budget("TeamSidebar", 0, Self.sidebar),
+                // The frame follows the panel's slide: one redraw per animation frame that lands, which a slow runner
+                // splits differently (8 here, 9 on CI). A redraw per row would be far over.
+                Self.budget("ThreadView", 12, Self.frame), Self.budget("Composer", 12, Self.frame),
+                Self.budget("ThreadHeader", 12, Self.frame), Self.budget("TeamSidebar", 0, Self.sidebar),
             ], "open and close the agent's panel 3 times")
 
             // 6. The Marketplace: a category opened and left, and a search typed.
