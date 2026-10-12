@@ -142,7 +142,7 @@ public struct Command: Identifiable, Hashable, Sendable {
         command("team.dictate", L10n.Keys.dictate, .team, "d", .option, .command),
         command("team.workbench.toggle", L10n.Keys.workbenchToggle, .team, "j", .command),
         command("team.workbench.split", L10n.Keys.workbenchSplit, .team, "\\", .option, .command),
-        command("team.workbench.closeTab", L10n.Keys.workbenchCloseTab, .team, "w", .option, .command),
+        command("team.workbench.closeTab", L10n.Keys.workbenchCloseTab, .team, "w", .command),
         command("team.workbench.tab1", L10n.Keys.workbenchTab(number: "1"), .team, "1", .option, .command),
         command("team.workbench.tab2", L10n.Keys.workbenchTab(number: "2"), .team, "2", .option, .command),
         command("team.workbench.tab3", L10n.Keys.workbenchTab(number: "3"), .team, "3", .option, .command),

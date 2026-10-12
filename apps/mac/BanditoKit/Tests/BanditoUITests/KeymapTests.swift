@@ -30,6 +30,7 @@ import Testing
         #expect(keymap.binding(for: "team.previousAgent") == binding("↑", .option, .command))
         #expect(keymap.binding(for: "team.needsYou") == binding("a", .shift, .command))
         #expect(keymap.binding(for: "team.stop") == binding(".", .command))
+        #expect(keymap.binding(for: "team.workbench.closeTab") == binding("w", .command))
         #expect(keymap.binding(for: "terminals.collapse") == binding("↓", .shift, .command))
         #expect(keymap.binding(for: "files.copyPath") == binding("c", .option, .command))
         #expect(keymap.binding(for: "viewer.save") == binding("s", .command))

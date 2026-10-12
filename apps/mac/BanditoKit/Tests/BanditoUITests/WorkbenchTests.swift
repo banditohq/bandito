@@ -201,6 +201,50 @@ import Testing
         #expect(!WorkbenchRules.showsDetails(state))
     }
 
+    @Test func cmdWClosesTheSelectedTabOnlyWhileThePanelIsOpen() {
+        // Nothing open: ⌘W has no tab to close.
+        #expect(WorkbenchRules.shortcutCloseTab(in: WorkbenchState()) == nil)
+        // Open with the selected tab of the focused pane: that tab.
+        var state = WorkbenchRules.open(term1, in: WorkbenchState())
+        #expect(WorkbenchRules.shortcutCloseTab(in: state) == term1)
+        // A closed panel keeps its tabs, but ⌘W passes.
+        state.isOpen = false
+        #expect(!state.allTabs.isEmpty)
+        #expect(WorkbenchRules.shortcutCloseTab(in: state) == nil)
+    }
+
+    @Test func cmdWFollowsTheFocusedPaneAndPassesOnAnEmptyOne() {
+        // With the details open, a split adds an empty pane, and that pane is focused.
+        var state = WorkbenchRules.open(.details, in: WorkbenchState())
+        state = WorkbenchRules.open(term1, in: state)
+        state = WorkbenchRules.split(state)
+        // The new pane is empty: ⌘W does nothing, though the other pane has tabs.
+        #expect(state.isSplit)
+        #expect(WorkbenchRules.shortcutCloseTab(in: state) == nil)
+        // Selecting the tab focuses its pane, and ⌘W closes that tab.
+        state = WorkbenchRules.select(term1, in: state)
+        #expect(WorkbenchRules.shortcutCloseTab(in: state) == term1)
+    }
+
+    @MainActor @Test func cmdWWithAClosedPanelLeavesTheTabsOpen() {
+        let router = Router()
+        router.selectedAgentID = "forge"
+        router.updateWorkbench(for: "forge") { WorkbenchRules.open(term1, in: $0) }
+        router.updateWorkbench(for: "forge") { state in
+            var next = state
+            next.isOpen = false
+            return next
+        }
+        #expect(!router.hasShortcutCloseTab)
+        router.closeFocusedWorkbenchTab()
+        #expect(router.workbenchState(for: "forge").allTabs == [term1])
+        router.updateWorkbench(for: "forge") { WorkbenchRules.toggle($0) }
+        #expect(router.hasShortcutCloseTab)
+        router.closeFocusedWorkbenchTab()
+        #expect(router.workbenchState(for: "forge").allTabs.isEmpty)
+        #expect(!router.workbenchState(for: "forge").isOpen)
+    }
+
     // MARK: tab presentation
 
     @MainActor @Test func routerKeepsTheWorkbenchOfEachAgentApart() {

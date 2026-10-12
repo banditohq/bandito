@@ -222,6 +222,13 @@ enum WorkbenchRules {
         return next
     }
 
+    /// The ⌘W rule in Team mode: an open panel closes the selected tab of its focused pane. A closed panel, or a
+    /// focused pane with no tab, gives nothing: ⌘W then does nothing here, as before.
+    static func shortcutCloseTab(in state: WorkbenchState) -> WorkbenchTab? {
+        guard state.isOpen else { return nil }
+        return focusedPane(of: state)?.selected
+    }
+
     /// The agent details are on show: the panel is open and a pane has the details tab selected.
     static func showsDetails(_ state: WorkbenchState) -> Bool {
         state.isOpen && state.panes.contains { $0.selected == .details }

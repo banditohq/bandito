@@ -248,10 +248,10 @@ Splits the workbench panel into two panes, one above the other, or joins them ba
 ## Close the panel's tab (Закрыть вкладку панели)
 
 <!-- id: key-team-workbench-closetab; covers: command:team.workbench.closeTab -->
-Closes the selected tab of the focused pane of the workbench panel. A terminal keeps running on the server; the tab only stops showing it.
+Closes the selected tab of the focused pane of the workbench panel, as a browser closes a tab. It works while the panel is open and has a tab; closing the last tab closes the panel. A terminal keeps running on the server; the tab only stops showing it.
 Где: Agent → Close the panel's tab (Закрыть вкладку панели)
-1. In the Team mode, press ⌥⌘W on a tab of the panel.
-Хоткей: ⌥⌘W
+1. In the Team mode, with the panel open, press ⌘W.
+Хоткей: ⌘W
 
 ## Panel tab 1…9 (Вкладка панели 1…9)
 
