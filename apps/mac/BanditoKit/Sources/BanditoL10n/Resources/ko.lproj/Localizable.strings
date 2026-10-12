@@ -1776,15 +1776,11 @@
 "onboarding.welcome.askTitle" = "위험한 작업 전에는 먼저 물어요";
 "onboarding.welcome.footer" = "오픈 소스 · 코드와 키는 서버 밖으로 나가지 않아요";
 "onboarding.welcome.hasAccount" = "이미 계정이 있어요";
-"onboarding.welcome.haveAccount" = "이미 계정이 있나요?";
-"onboarding.welcome.headline" = "당신의 AI 팀.";
-"onboarding.welcome.headlineAccent" = "당신의 서버에서.";
 "onboarding.welcome.serverText" = "파일, 터미널, 브라우저, 서버 화면을 한 창에서 쓸 수 있어요. SSH보다 편하고, 에이전트도 내가 보는 화면을 함께 봐요.";
 "onboarding.welcome.serverTitle" = "서버 전체를 손안에";
 "onboarding.welcome.signIn" = "로그인";
 "onboarding.welcome.sleepText" = "에이전트는 사용자의 서버에서 돌아가요. Mac을 닫아도 계속 작업하고, 아침에 결과를 보내 줘요.";
 "onboarding.welcome.sleepTitle" = "자는 동안에도 작업";
-"onboarding.welcome.start" = "시작하기 — 3분 소요";
 "onboarding.welcome.subsText" = "Claude, ChatGPT(Codex), Grok 중 하나를 Bandito가 공식 프로그램으로 실행해요. 새 계정은 필요 없어요.";
 "onboarding.welcome.subsTitle" = "이미 가진 구독으로";
 "onboarding.welcome.subtitle" = "Claude Code, Codex, Grok 기반 에이전트에 역할과 일정을 줄 수 있어요. 노트북을 닫아도 계속 일하고, 위험한 작업 전에는 먼저 물어요.";

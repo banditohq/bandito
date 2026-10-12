@@ -1,3 +1,4 @@
+import BanditoDesign
 import Foundation
 import Testing
 
@@ -143,78 +144,20 @@ import Testing
     }
 }
 
-/// The figure of lights: the logo's head and its eyes, the places of the lights, and the timing of the flight.
+/// The figure of lights on iPhone: the geometry is tested in BanditoDesign (`RaccoonLightsTests`); here, the view's build.
 @MainActor
-@Suite struct RaccoonLightsTests {
-    private let lights = RaccoonLights.figure.lights
-
-    @Test func theFigureHasAboutTwoThousandLights() {
-        #expect((1500...2500).contains(lights.count), "got \(lights.count)")
-    }
-
-    @Test func theFigureIsTheSameEveryTime() {
-        #expect(RaccoonLights.make() == RaccoonLights.figure)
-    }
-
-    @Test func theHeadPathParsesAndSitsInTheLogo() throws {
-        #expect(SVGPath.parse(RaccoonHead.pathData) != nil, "the logo's head path is one the parser knows")
-        #expect(SVGPath.parse("M0 0 X1 1") == nil, "a command the logo does not use is refused")
-        let square = try #require(SVGPath.parse("M0 0 L10 0 L10 10 Z")).boundingBoxOfPath
-        #expect(square.width == 10 && square.height == 10)
-        let sample = try #require(RaccoonHead.sample())
-        #expect(RaccoonHead.viewBox.contains(sample.box), "the head is inside the logo's viewBox")
-    }
-
-    @Test func lightsRestInsideTheSquareAndStartOnARing() {
-        for light in lights {
-            #expect((0...1).contains(light.x) && (0...1).contains(light.y))
-            #expect(light.diameter > 0 && light.diameter < 0.05)
-            let distance = hypot(light.startX - 0.5, light.startY - 0.5)
-            #expect(distance >= 0.459 && distance <= 0.621, "lights start on a ring around the figure")
-        }
-    }
-
-    @Test func theEyesAreTwoGroupsOfLights() {
-        let figure = RaccoonLights.figure
-        #expect(figure.eyeCentres.count == 2)
-        for eye in figure.eyeCentres {
-            let near = lights.filter { $0.region == .eye && hypot($0.x - eye.x, $0.y - eye.y) < 0.06 }
-            #expect(near.count >= 10, "each eye has its own lights, got \(near.count)")
-        }
-        #expect(lights.contains { $0.region == .fur })
-    }
-
-    @Test func everyFlightEndsInsideTheAssembly() {
-        for light in lights {
-            #expect(light.delay >= 0)
-            #expect(light.delay + light.duration <= RaccoonLights.assemblyDuration + 1e-9)
-            #expect(light.alpha > 0 && light.alpha <= 1)
-        }
-    }
-
-    @Test func eyesArriveAfterTheFigure() {
-        let figureLast = lights.filter { $0.region != .eye }.map(\.delay).max() ?? 0
-        let eyesFirst = lights.filter { $0.region == .eye }.map(\.delay).min() ?? 0
-        #expect(eyesFirst > figureLast)
-    }
-
+@Suite struct RaccoonLightsViewTests {
     /// Building the figure (one layer per light, one grouped animation each) happens on the main thread once per
     /// appearance; it must stay well inside a frame. The measured time is printed for the review.
     @Test func buildingTheFigureStaysWellInsideAFrame() {
         // The figure is made once per launch (a static): made here first, so the time below is the view's alone.
-        _ = RaccoonLights.figure
+        let count = RaccoonLights.figure.lights.count
+        #expect((1500...2500).contains(count), "got \(count)")
         let view = RaccoonLightsView(frame: CGRect(x: 0, y: 0, width: 280, height: 280))
         let start = ContinuousClock.now
         view.layoutIfNeeded()
         let elapsed = ContinuousClock.now - start
-        print("RaccoonLights build (\(lights.count) lights): \(elapsed)")
+        print("RaccoonLights build (\(count) lights): \(elapsed)")
         #expect(elapsed < .milliseconds(250))
-    }
-
-    @Test func theNoiseStaysInRange() {
-        for seed in 0..<1000 {
-            let value = RaccoonLights.noise(seed, 3)
-            #expect(value >= 0 && value < 1)
-        }
     }
 }

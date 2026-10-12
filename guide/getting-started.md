@@ -7,10 +7,10 @@ Its steps are Welcome → Account → (Approval, only for a new device) → Serv
 ## Welcome
 
 <!-- id: gs-welcome; covers: onboarding:welcome -->
-The first screen: what Bandito is. Agents run on your own server, on the subscriptions you already have.
+The first screen: the raccoon of points of light assembles, then the title "Your crew is ready" and what Bandito is. Agents run on your own server, on the subscriptions you already have.
 Где: Help → Show the introduction again (Показать знакомство снова), or the first launch → Welcome
 1. Read the four points on the screen (agents work while the Mac is closed, they ask before risky steps, the server is at hand, the subscriptions are yours).
-2. Click Get started — takes 3 minutes to go to Account, or I already have an account (У меня есть аккаунт), which goes to the same step.
+2. Click Let's go (Поехали) to go to Account, or the link I already have a server (У меня уже есть сервер) below it, which goes to the same step.
 3. The language menu at the top right shows the language the interface is in now, in that language (for example Русский). To change it, pick another language; it applies after you restart Bandito.
 
 ## Account: sign in with GitHub or email

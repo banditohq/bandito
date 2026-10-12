@@ -1776,15 +1776,11 @@
 "onboarding.welcome.askTitle" = "They ask before anything risky";
 "onboarding.welcome.footer" = "Open source · your code and keys never leave your servers";
 "onboarding.welcome.hasAccount" = "I already have an account";
-"onboarding.welcome.haveAccount" = "Already have an account?";
-"onboarding.welcome.headline" = "Your AI team.";
-"onboarding.welcome.headlineAccent" = "On your server.";
 "onboarding.welcome.serverText" = "Files, terminals, browser and the server screen in one window. Easier than SSH, and agents see what you see.";
 "onboarding.welcome.serverTitle" = "The whole server at hand";
 "onboarding.welcome.signIn" = "Sign in";
 "onboarding.welcome.sleepText" = "Agents live on your server. Close your Mac and they keep going, then send you the result in the morning.";
 "onboarding.welcome.sleepTitle" = "Working while you sleep";
-"onboarding.welcome.start" = "Get started — takes 3 minutes";
 "onboarding.welcome.subsText" = "Claude, ChatGPT (Codex) or Grok — Bandito runs their official programs. No new accounts.";
 "onboarding.welcome.subsTitle" = "On subscriptions you already have";
 "onboarding.welcome.subtitle" = "Agents on Claude Code, Codex and Grok, with roles and schedules. They keep working when you close your laptop, and ask before anything risky.";

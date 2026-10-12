@@ -2,12 +2,14 @@ import BanditoDesign
 import BanditoL10n
 import SwiftUI
 
-/// Step 1 of 5: what Bandito is, a live demo of an agent, and the way on.
-/// Left: the promise, a carousel of four stories, two buttons. Right: the demo. Bottom: the five steps.
+/// Step 1 of 5: the raccoon of points of light, what Bandito is, and the way on.
+/// Left: the raccoon, the title and one line, a carousel of four stories, one button and a link. Right: the demo.
 struct WelcomeView: View {
-    /// Both buttons ("Start" and "I already have an account") go to the account step.
+    /// Both the button ("Let's go") and the link ("I already have a server") go to the account step.
     var onContinue: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
     @State private var demoStart = Date()
     @State private var storyAnchorIndex = 0
     @State private var storyAnchorTime = Date()
@@ -57,22 +59,28 @@ struct WelcomeView: View {
 
     private func intro(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: compact ? 14 : 22) {
+            // The raccoon of points of light: the hero of the screen, assembled on appear (static under Reduce Motion).
+            // A short window (the minimum) has no room for it beside the title, the story card and the buttons.
             if !compact {
-                RaccoonMark()
+                RaccoonLightsHost(reduceMotion: MotionLevel(stored: motionLevel).reducesMotion(systemReduceMotion: reduceMotion))
+                    .frame(width: 200, height: 200)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10n.Ios.Onboarding.Welcome.assembly)
+                    .accessibilityAddTraits(.isImage)
             }
-            // The headline is never cut: the first size whose two lines fit the column is used.
+            // The title is never cut: the first size whose line fits the column is used.
             if compact {
                 ViewThatFits(in: .horizontal) {
-                    headline(size: 44)
-                    headline(size: 40)
-                    headline(size: 36)
+                    title(size: 44)
+                    title(size: 40)
+                    title(size: 36)
                 }
             } else {
                 ViewThatFits(in: .horizontal) {
-                    headline(size: 62)
-                    headline(size: 52)
-                    headline(size: 44)
-                    headline(size: 36)
+                    title(size: 62)
+                    title(size: 52)
+                    title(size: 44)
+                    title(size: 36)
                 }
             }
             Text(L10n.Onboarding.Welcome.subtitle)
@@ -80,16 +88,10 @@ struct WelcomeView: View {
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(3)
             StoryCard(anchorIndex: $storyAnchorIndex, anchorTime: $storyAnchorTime, compact: compact)
-            // Side by side when there is room, one under the other otherwise. Labels never wrap.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 14) {
-                    startButton
-                    hasAccountButton
-                }
-                VStack(alignment: .leading, spacing: 12) {
-                    startButton
-                    hasAccountButton
-                }
+            // The button, and under it the link, in the same column.
+            VStack(alignment: .leading, spacing: 12) {
+                startButton
+                hasAccountButton
             }
             // Under the buttons, in the same column, so it lines up with them on every width.
             if !compact {
@@ -102,24 +104,18 @@ struct WelcomeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func headline(size: CGFloat) -> some View {
-        (Text(L10n.Onboarding.Welcome.headline)
-            + Text("\n")
-            + Text(L10n.Onboarding.Welcome.headlineAccent)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [AvatarColor.peach.color, Color.Bandito.signal, Color.Bandito.signalFillEnd],
-                        startPoint: .leading, endPoint: .trailing)))
+    private func title(size: CGFloat) -> some View {
+        Text(L10n.Ios.Onboarding.Welcome.title)
             .font(BanditoFont.text(size: size, weight: 600))
             .foregroundStyle(Color.Bandito.text)
-            .lineSpacing(-4)
+            .lineLimit(1)
             .fixedSize()
     }
 
     private var startButton: some View {
         Button(action: onContinue) {
             HStack(spacing: 10) {
-                Text(L10n.Onboarding.Welcome.start)
+                Text(L10n.Ios.Onboarding.Welcome.start)
                 Image(systemName: "arrow.right")
             }
             .fixedSize()
@@ -129,36 +125,9 @@ struct WelcomeView: View {
     }
 
     private var hasAccountButton: some View {
-        Button(L10n.Onboarding.Welcome.hasAccount, action: onContinue)
-            .banditoButton(.quiet(size: .large))
+        Button(L10n.Ios.Onboarding.Welcome.haveServer, action: onContinue)
+            .banditoButton(.link)
             .fixedSize()
-    }
-}
-
-/// The brand mark (72 pt raccoon tile) floating gently.
-private struct RaccoonMark: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
-
-    var body: some View {
-        let reduced = MotionLevel(stored: motionLevel).reducesMotion(systemReduceMotion: reduceMotion)
-        // Five-second cycle, like the design's bnd-float keyframes: up 8 pt and tilt -2°. A repeating animation, so
-        // nothing is redrawn while it floats.
-        RaccoonAvatar(name: "Bandito", color: .peach, size: 72)
-            .offset(y: up ? -8 : 0)
-            .rotationEffect(.degrees(up ? -2 : 0))
-            .onAppear { float(reduced) }
-            .onChange(of: reduced) { float(reduced) }
-    }
-
-    @State private var up = false
-
-    private func float(_ reduced: Bool) {
-        guard !reduced else {
-            up = false
-            return
-        }
-        withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) { up = true }
     }
 }
 

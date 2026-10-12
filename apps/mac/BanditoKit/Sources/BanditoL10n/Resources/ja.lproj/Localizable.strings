@@ -1776,15 +1776,11 @@
 "onboarding.welcome.askTitle" = "危険な操作の前に確認します";
 "onboarding.welcome.footer" = "オープンソース · コードとキーはあなたのサーバーから出ません";
 "onboarding.welcome.hasAccount" = "すでにアカウントを持っています";
-"onboarding.welcome.haveAccount" = "すでにアカウントをお持ちですか？";
-"onboarding.welcome.headline" = "あなたの AI チーム。";
-"onboarding.welcome.headlineAccent" = "あなたのサーバー上に。";
 "onboarding.welcome.serverText" = "ファイル、ターミナル、ブラウザ、サーバーの画面を1つのウィンドウで。SSH より簡単で、エージェントもあなたが見ている画面を見られます。";
 "onboarding.welcome.serverTitle" = "サーバー全体がすぐ手元に";
 "onboarding.welcome.signIn" = "サインイン";
 "onboarding.welcome.sleepText" = "エージェントはあなたのサーバーで動きます。Mac を閉じても作業を続け、結果を朝に届けます。";
 "onboarding.welcome.sleepTitle" = "寝ている間も作業";
-"onboarding.welcome.start" = "始める（所要 3 分）";
 "onboarding.welcome.subsText" = "Claude、ChatGPT（Codex）、Grok のいずれかを、Bandito が公式プログラムとして起動します。新しいアカウントは不要です。";
 "onboarding.welcome.subsTitle" = "お持ちのサブスクリプションで";
 "onboarding.welcome.subtitle" = "Claude Code、Codex、Grok で動くエージェント。役割とスケジュールを設定できます。ノートパソコンを閉じても動き続け、危険な操作の前には必ず確認します。";

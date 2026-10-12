@@ -1776,15 +1776,11 @@
 "onboarding.welcome.askTitle" = "有风险的操作前会先询问";
 "onboarding.welcome.footer" = "开源 · 代码和密钥永远不会离开服务器";
 "onboarding.welcome.hasAccount" = "我已有账户";
-"onboarding.welcome.haveAccount" = "已有账户？";
-"onboarding.welcome.headline" = "AI 团队。";
-"onboarding.welcome.headlineAccent" = "运行在服务器上。";
 "onboarding.welcome.serverText" = "文件、终端、浏览器和服务器屏幕都在一个窗口里。比 SSH 方便，代理看到的画面与此相同。";
 "onboarding.welcome.serverTitle" = "整台服务器尽在手边";
 "onboarding.welcome.signIn" = "登录";
 "onboarding.welcome.sleepText" = "代理运行在服务器上。合上 Mac 后它们会继续任务，并在早上把结果发送过来。";
 "onboarding.welcome.sleepTitle" = "睡觉时也在工作";
-"onboarding.welcome.start" = "开始使用，约需 3 分钟";
 "onboarding.welcome.subsText" = "Claude、ChatGPT（Codex）或 Grok——Bandito 运行它们的官方程序。无需新建账户。";
 "onboarding.welcome.subsTitle" = "使用已有的订阅";
 "onboarding.welcome.subtitle" = "基于 Claude Code、Codex 和 Grok 的代理，可设置角色和计划。合上笔记本后仍会继续工作，遇到有风险的操作会先询问。";
