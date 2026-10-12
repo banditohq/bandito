@@ -103,6 +103,10 @@ final class BrowserModel {
     private(set) var frameWaitExpired = false
     /// The timer of that wait (see `startFrameWait`).
     private var frameWait: Task<Void, Never>?
+    /// Screencast frames of the current connection so far. The first-frame check compares it with its start.
+    private var screencastFrames = 0
+    /// The check that asks one still picture when no screencast frame came in time (see `BrowserFirstFrameRule`).
+    private var firstFrameCheck: Task<Void, Never>?
     /// Counts up each time the address field is asked for the focus (a new tab's start page wants it at once).
     private(set) var addressFocusRequest = 0
 
@@ -606,6 +610,7 @@ final class BrowserModel {
         let box = next.screencastBox
         queueViewport(.stopScreencast, on: client)
         queueViewport(.startScreencast(maxWidth: box.width, maxHeight: box.height, quality: 70), on: client)
+        startFirstFrameCheck(client: client)
     }
 
     /// Sends one viewport command to `page`, after the viewport commands queued before it. All of them go through
@@ -669,6 +674,7 @@ final class BrowserModel {
             viewportSentAt = Date()
             if let viewport { queueViewport(.setViewport(viewport), on: client) }
             let box = viewport?.screencastBox ?? BrowserViewport.defaultScreencast
+            startFirstFrameCheck(client: client)
             _ = try await client.send(.startScreencast(maxWidth: box.width, maxHeight: box.height, quality: 70))
             // The page's events (navigation, load) come only after `Page.enable`. The address is read once now, because a
             // page opened before this connection sends no event for it. Not awaited: a page that does not answer must
@@ -704,6 +710,7 @@ final class BrowserModel {
             let image = await Task.detached(priority: .userInitiated) { Self.decodeJPEG(jpeg) }.value
             // The page may have changed while the picture was decoded.
             guard self.client === client else { return }
+            screencastFrames += 1
             if let image { setFrame(image) }
             // Written only when the value changes: every write wakes the views that read it.
             let size = CGSize(width: frame.deviceWidth, height: frame.deviceHeight)
@@ -764,6 +771,40 @@ final class BrowserModel {
         frameWait?.cancel()
         frameWait = nil
         frameWaitExpired = false
+    }
+
+    /// Called after each `Page.startScreencast` (a connection, a new picture size). If no screencast frame comes within
+    /// `BrowserFirstFrameRule.screencastWait`, asks the page for one still picture, once. A later start replaces it.
+    private func startFirstFrameCheck(client: CDPClient) {
+        firstFrameCheck?.cancel()
+        let framesAtStart = screencastFrames
+        firstFrameCheck = Task { [weak self] in
+            try? await Task.sleep(for: BrowserFirstFrameRule.screencastWait)
+            guard !Task.isCancelled, let self else { return }
+            guard BrowserFirstFrameRule.needsStill(
+                sawFrame: self.screencastFrames != framesAtStart, isCurrentClient: self.client === client)
+            else { return }
+            guard let result = try? await client.send(.captureScreenshot(quality: 70)),
+                  let jpeg = CDP.screenshot(from: result)
+            else { return }
+            let image = await Task.detached(priority: .userInitiated) { Self.decodeJPEG(jpeg) }.value
+            // A frame that came while the still was on its way is newer: it stays. So does a page that was replaced.
+            guard !Task.isCancelled, self.client === client, let image,
+                  BrowserFirstFrameRule.needsStill(
+                      sawFrame: self.screencastFrames != framesAtStart, isCurrentClient: true)
+            else { return }
+            self.setFrame(image)
+            // The still has the device pixels of the picture; the page size is in CSS pixels, as the frames give it.
+            let scale = CGFloat(self.viewport?.scale ?? 1)
+            let size = CGSize(width: CGFloat(image.width) / scale, height: CGFloat(image.height) / scale)
+            if self.pageSize != size { self.pageSize = size }
+            if self.isLoading { self.isLoading = false }
+        }
+    }
+
+    private func cancelFirstFrameCheck() {
+        firstFrameCheck?.cancel()
+        firstFrameCheck = nil
     }
 
     /// What the page area shows, decided from the tabs, the shown address and the picture (see `BrowserPageStateRule`).
@@ -907,6 +948,7 @@ final class BrowserModel {
     private func connectionEnded(_ ended: CDPClient) {
         guard client === ended else { return }
         stopWheel()
+        cancelFirstFrameCheck()
         client = nil
         clientTabID = nil
         mainFrameID = nil
@@ -919,6 +961,7 @@ final class BrowserModel {
         eventTask?.cancel()
         eventTask = nil
         cancelFrameWait()
+        cancelFirstFrameCheck()
         let old = client
         client = nil
         clientTabID = nil

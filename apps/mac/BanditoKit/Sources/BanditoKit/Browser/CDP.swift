@@ -33,6 +33,9 @@ public enum CDPCommand: Sendable {
     case navigateToHistoryEntry(id: Int)
     case startScreencast(maxWidth: Int, maxHeight: Int, quality: Int)
     case stopScreencast
+    /// One still JPEG of the page as it shows now (`Page.captureScreenshot`). A page that does not repaint sends no
+    /// screencast frame, so the picture of a first load is asked for this way. The picture has the page's size.
+    case captureScreenshot(quality: Int)
     /// Sizes the page to a view of this size (`Emulation.setDeviceMetricsOverride`), so the picture fills the view.
     case setViewport(BrowserViewport)
     /// Gives the page its own size back (`Emulation.clearDeviceMetricsOverride`).
@@ -64,6 +67,7 @@ public enum CDPCommand: Sendable {
         case .navigateToHistoryEntry: "Page.navigateToHistoryEntry"
         case .startScreencast: "Page.startScreencast"
         case .stopScreencast: "Page.stopScreencast"
+        case .captureScreenshot: "Page.captureScreenshot"
         case .setViewport: "Emulation.setDeviceMetricsOverride"
         case .clearViewport: "Emulation.clearDeviceMetricsOverride"
         case .ackScreencastFrame: "Page.screencastFrameAck"
@@ -103,6 +107,13 @@ public enum CDPCommand: Sendable {
             ])
         case .ackScreencastFrame(let sessionId):
             return .object(["sessionId": .number(Double(sessionId))])
+        case .captureScreenshot(let quality):
+            // `fromSurface`: the picture of what the page shows, not a re-layout of it.
+            return .object([
+                "format": .string("jpeg"),
+                "quality": .number(Double(quality)),
+                "fromSurface": .bool(true),
+            ])
         case .mouse(let type, let x, let y, let button, let clickCount, let deltaX, let deltaY, let modifiers):
             // Only presses and drags hold a button down; a release or a wheel tick reports none.
             let holding = type == .mousePressed || (type == .mouseMoved && button != .none)
@@ -200,6 +211,12 @@ public enum CDP {
             return .event(method: method, params: object["params"] ?? .object([:]))
         }
         throw CDPError.badMessage
+    }
+
+    /// The JPEG of a `Page.captureScreenshot` result (`{data: base64}`), or nil when the field is missing or not base64.
+    public static func screenshot(from result: JSONValue) -> Data? {
+        guard let encoded = result["data"]?.string else { return nil }
+        return Data(base64Encoded: encoded)
     }
 
     /// The frame of a `Page.screencastFrame` event's params, or nil when a field is missing or the data is not base64.
