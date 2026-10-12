@@ -198,6 +198,34 @@
 			<string>%1$lld 个工具</string>
 		</dict>
 	</dict>
+	<key>ios.intent.needsMe.countOnly</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>%1$lld 项等待你处理</string>
+		</dict>
+	</dict>
+	<key>ios.intent.needsMe.waiting</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>%1$lld 项等待你处理：%2$@</string>
+		</dict>
+	</dict>
 	<key>ios.settings.security.minutes</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -210,6 +238,22 @@
 			<string>lld</string>
 			<key>other</key>
 			<string>%1$lld 分钟</string>
+		</dict>
+	</dict>
+	<key>ios.widget.lock.waiting</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld 项等待</string>
+			<key>other</key>
+			<string>%1$lld 项等待</string>
 		</dict>
 	</dict>
 	<key>market.journal.calls24h</key>

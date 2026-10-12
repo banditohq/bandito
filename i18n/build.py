@@ -8,6 +8,10 @@ Apple output is classic per-language resources (Resources/<code>.lproj/Localizab
 for plain keys, Localizable.stringsdict for plurals), not .xcstrings: SwiftPM copies these
 on every Xcode version, while older toolchains do not compile .xcstrings in packages.
 
+Keys under "shortcut." are App Intents metadata of the iPhone app, not Swift strings: the English text is
+the key. "shortcut.phrase.*" go to Resources/<code>.lproj/AppShortcuts.strings (the Siri phrases),
+"shortcut.title.*" to Resources/<code>.lproj/Localizable.strings (intent, shortcut and parameter titles).
+
 Standard library only. All paths are resolved from this script's location, so the
 script works from any working directory.
 """
@@ -25,6 +29,12 @@ RESOURCES_DIR = BANDITO_L10N / "Resources"
 STRINGS_FILE = "Localizable.strings"
 STRINGSDICT_FILE = "Localizable.stringsdict"
 SWIFT_PATH = BANDITO_L10N / "L10n.swift"
+APP_RESOURCES_DIR = REPO_ROOT / "apps/ios/Bandito/Resources"
+SHORTCUTS_FILE = "AppShortcuts.strings"
+APP_STRINGS_FILE = "Localizable.strings"
+SHORTCUT_PREFIX = "shortcut."
+SHORTCUT_PHRASE = "shortcut.phrase."
+SHORTCUT_TITLE = "shortcut.title."
 
 REFERENCE = "en"
 LANGUAGES_FILE = "languages.json"
@@ -201,6 +211,21 @@ def plural_rule(value, order):
             **categories,
         },
     }
+
+
+def is_shortcut(key):
+    return key.startswith(SHORTCUT_PREFIX)
+
+
+def build_shortcuts(translations, reference, prefix):
+    """A .strings file of the app for one language: the English text of each shortcut key under `prefix` maps to its
+    translation (AppShortcuts.strings for the phrases, Localizable.strings for the titles)."""
+    lines = [STRINGS_HEADER]
+    for key in sorted(k for k in reference if k.startswith(prefix)):
+        source = reference[key]
+        value = translations.get(key, source)
+        lines.append(f'"{strings_escape(source)}" = "{strings_escape(value)}";')
+    return ("\n".join(lines) + "\n").encode("utf-8")
 
 
 def build_lproj(translations, reference):
@@ -402,22 +427,27 @@ def build():
                 continue
             check_translation(code, key, reference[key], value, errors)
         if code != REFERENCE:
-            missing = [key for key in reference if key not in translations]
+            missing = [key for key in reference if key not in translations and not is_shortcut(key)]
             if missing:
                 warnings.append(f"{code}: {len(missing)} missing (falls back to English)")
                 warnings.append("  " + ", ".join(missing))
 
-    check_swift_names(build_tree(sorted(reference)), errors)
+    ui_reference = {key: value for key, value in reference.items() if not is_shortcut(key)}
+    check_swift_names(build_tree(sorted(ui_reference)), errors)
 
     if errors:
         return errors, warnings, None
 
-    outputs = {SWIFT_PATH: build_swift(entries, reference).encode("utf-8")}
+    outputs = {SWIFT_PATH: build_swift(entries, ui_reference).encode("utf-8")}
     for code in codes:
-        strings_bytes, stringsdict_bytes = build_lproj(data[code], reference)
+        ui_translations = {key: value for key, value in data[code].items() if not is_shortcut(key)}
+        strings_bytes, stringsdict_bytes = build_lproj(ui_translations, ui_reference)
         lproj = RESOURCES_DIR / f"{code}.lproj"
         outputs[lproj / STRINGS_FILE] = strings_bytes
         outputs[lproj / STRINGSDICT_FILE] = stringsdict_bytes
+        app_lproj = APP_RESOURCES_DIR / f"{code}.lproj"
+        outputs[app_lproj / SHORTCUTS_FILE] = build_shortcuts(data[code], reference, SHORTCUT_PHRASE)
+        outputs[app_lproj / APP_STRINGS_FILE] = build_shortcuts(data[code], reference, SHORTCUT_TITLE)
     return errors, warnings, outputs
 
 

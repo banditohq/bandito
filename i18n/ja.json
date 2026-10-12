@@ -3195,5 +3195,44 @@
   "ios.onboarding.connect.scan": "Mac のコードを読み取る",
   "ios.onboarding.connect.paste": "リンクを貼り付け",
   "ios.onboarding.connect.type": "アドレスを入力",
-  "ios.onboarding.connect.hint": "Mac で: 設定 → サーバー → iPhone を接続"
+  "ios.onboarding.connect.hint": "Mac で: 設定 → サーバー → iPhone を接続",
+  "ios.widget.inbox.name": "受信トレイ",
+  "ios.widget.inbox.desc": "Bandito で確認待ちの件数。",
+  "ios.widget.crew.name": "クルー",
+  "ios.widget.crew.desc": "エージェントと、その作業状況。",
+  "ios.widget.waitingTitle": "確認待ち",
+  "ios.widget.allQuiet": "異常なし",
+  "ios.widget.lock.waiting": {
+    "one": "{count}件 確認待ち",
+    "other": "{count}件 確認待ち"
+  },
+  "ios.widget.lock.working": "{name}が作業中",
+  "ios.widget.status.working": "作業中",
+  "ios.widget.status.needsYou": "確認待ち",
+  "ios.widget.status.idle": "空き",
+  "ios.widget.status.error": "エラー",
+  "ios.widget.status.offline": "オフライン",
+  "ios.widget.more": "{names}ほか{count}人",
+  "ios.widget.open": "Bandito を開く",
+  "ios.intent.needsMe.none": "あなたを待っているものはありません",
+  "ios.intent.needsMe.waiting": {
+    "other": "{count}件があなたを待っています: {names}"
+  },
+  "ios.intent.needsMe.countOnly": {
+    "other": "{count}件があなたを待っています"
+  },
+  "ios.intent.open.inbox": "受信トレイを開く",
+  "ios.intent.ask.sent": "{name}に送信しました",
+  "ios.intent.ask.notConnected": "{name}に今は接続できません。Banditoを開いてもう一度お試しください。",
+  "ios.intent.ask.empty": "メッセージが空です。",
+  "shortcut.title.whatNeedsMe": "私に必要なこと",
+  "shortcut.title.askAgent": "エージェントに頼む",
+  "shortcut.title.openAgent": "エージェントを開く",
+  "shortcut.title.agentType": "エージェント",
+  "shortcut.title.messageParam": "メッセージ",
+  "shortcut.phrase.whatNeedsMe": "${applicationName}で私に必要なこと",
+  "shortcut.phrase.askAgent": "${applicationName}で${agent}に聞く",
+  "shortcut.phrase.openAgent": "${applicationName}で${agent}を開く",
+  "shortcut.title.openInbox": "受信トレイを開く",
+  "ios.intent.ask.failed": "{name}に送信できませんでした。もう一度お試しください。"
 }

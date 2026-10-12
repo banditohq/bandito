@@ -88,6 +88,7 @@ private struct FeatureCardFrame<Visual: View>: View {
 /// Their moods are Core Animation layers of their own (`CrewAvatar`), so the card needs no timer.
 struct CrewFeatureCard: View {
     let reduceMotion: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private struct Member: Identifiable {
         let name: String
@@ -110,26 +111,45 @@ struct CrewFeatureCard: View {
 
     var body: some View {
         FeatureCardFrame(title: L10n.Ios.Onboarding.Features.Crew.title, text: L10n.Ios.Onboarding.Features.Crew.text) {
-            HStack(alignment: .top, spacing: BanditoSpace.s2) {
-                ForEach(Self.team) { member in
-                    VStack(spacing: BanditoSpace.s2) {
-                        CrewAvatar(name: member.name, look: member.look, mood: reduceMotion ? .idle : member.mood, size: 56)
-                        Text(member.name)
-                            .font(BanditoFont.display(size: 12.5, weight: 600))
-                            .foregroundStyle(Color.Bandito.text)
-                            .lineLimit(1)
-                        Text(member.role)
-                            .font(BanditoFont.text(size: 11.5))
-                            .foregroundStyle(Color.Bandito.text3)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                            .minimumScaleFactor(0.8)
+            // Four columns at the normal sizes; at the accessibility sizes one row per agent, so no name is cut.
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: BanditoSpace.s4) {
+                    ForEach(Self.team) { member in
+                        memberView(member, avatar: 48, centered: false)
                     }
-                    .frame(maxWidth: .infinity)
-                    .accessibilityElement(children: .combine)
+                }
+            } else {
+                HStack(alignment: .top, spacing: BanditoSpace.s2) {
+                    ForEach(Self.team) { member in
+                        memberView(member, avatar: 56, centered: true)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
             }
         }
+    }
+
+    private func memberView(_ member: Member, avatar: CGFloat, centered: Bool) -> some View {
+        HStack(spacing: BanditoSpace.s3) {
+            if !centered {
+                CrewAvatar(name: member.name, look: member.look, mood: reduceMotion ? .idle : member.mood, size: avatar)
+            }
+            VStack(alignment: centered ? .center : .leading, spacing: BanditoSpace.s2) {
+                if centered {
+                    CrewAvatar(name: member.name, look: member.look, mood: reduceMotion ? .idle : member.mood, size: avatar)
+                }
+                Text(member.name)
+                    .font(BanditoFont.display(size: 12.5, weight: 600))
+                    .foregroundStyle(Color.Bandito.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(member.role)
+                    .font(BanditoFont.text(size: 11.5))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .multilineTextAlignment(centered ? .center : .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -149,6 +169,7 @@ enum ApprovalDemoState: Equatable, Sendable {
 struct ApprovalFeatureCard: View {
     let isActive: Bool
     let reduceMotion: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     @State private var state: ApprovalDemoState = .waiting
 
@@ -167,26 +188,31 @@ struct ApprovalFeatureCard: View {
                     Text("Forge")
                         .font(BanditoFont.display(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(L10n.Ios.Crew.needsYou)
                         .font(BanditoFont.text(size: 11.5))
                         .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
                 Text("git push origin main")
                     .font(BanditoFont.mono(size: 12.5))
                     .foregroundStyle(Color.Bandito.text2)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, BanditoSpace.s3)
                     .padding(.vertical, BanditoSpace.s2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                HStack(spacing: BanditoSpace.s2) {
+                // Side by side at the normal sizes; stacked at the accessibility sizes, where a label may not fit half a row.
+                let buttons = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: BanditoSpace.s2)) : AnyLayout(HStackLayout(spacing: BanditoSpace.s2))
+                buttons {
                     // Decorative, as on the Mac: not a control here.
                     Text(L10n.Approval.deny)
                         .font(BanditoFont.text(size: 13, weight: 500))
                         .foregroundStyle(Color.Bandito.text2)
+                        .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 40)
+                        .frame(minHeight: 40)
                         .overlay(Capsule().stroke(Color.Bandito.lineStrong, lineWidth: 1))
                         .accessibilityHidden(true)
                     Button(action: allow) {
@@ -198,8 +224,9 @@ struct ApprovalFeatureCard: View {
                         }
                         .font(BanditoFont.display(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.bg)
+                        .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 40)
+                        .frame(minHeight: 40)
                         .background(Capsule().fill(allowed ? Color.Bandito.ok : Color.Bandito.text))
                     }
                     .buttonStyle(ApprovalPressStyle(reduceMotion: reduceMotion))
@@ -302,9 +329,9 @@ struct NightFeatureCard: View {
                     .accessibilityHidden(true)
                     Spacer(minLength: 0)
                 }
-                .frame(height: 26)
+                .frame(minHeight: 26)
                 NightStrip(lit: lit, morning: morning)
-                    .frame(height: 46)
+                    .frame(minHeight: 46)
                 Text(caption)
                     .font(BanditoFont.text(size: 13.5))
                     .foregroundStyle(Color.Bandito.text)

@@ -47,8 +47,9 @@ struct SignalButtonStyle: ButtonStyle {
         configuration.label
             .font(BanditoFont.display(size: 14, weight: 600))
             .foregroundStyle(Color.Bandito.bg)
+            .multilineTextAlignment(.center)
             .padding(.horizontal, 22)
-            .frame(height: 46)
+            .frame(minHeight: 46)
             .background(Capsule().fill(Color.Bandito.text))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
     }

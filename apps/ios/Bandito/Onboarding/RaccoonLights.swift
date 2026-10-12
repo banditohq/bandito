@@ -4,10 +4,10 @@ import SwiftUI
 import UIKit
 
 // The raccoon of points of light: the first screen of onboarding. About two thousand small lights fly from a ring around
-// the figure to their rests on the raccoon's 52-point design grid (the same grid as the avatars), in about 1.6 s. The
-// figure is the avatar's tile (a rounded square) made of lights, with the avatar's own mask (`RaccoonMask`) left open
-// and two signal eyes in it, lighting up last. Each light is one Core Animation layer with one grouped animation; after
-// the flight nothing moves, so the main thread is idle. Reduce Motion draws the finished figure at once.
+// the figure to their rests on the head of the logo (`RaccoonHead`: the head with its ears, as on the site), in about
+// 1.6 s. The lights sit on one grid over the head; the two eyes (the logo's chevron and dash) are grids of their own and
+// light up last. Each light is one Core Animation layer with one grouped animation; after the flight nothing moves, so
+// the main thread is idle. Reduce Motion draws the finished figure at once.
 
 /// The tone of a light: the fur's orange or a cream spark.
 enum RaccoonLightTone: Sendable, Equatable {
@@ -15,22 +15,26 @@ enum RaccoonLightTone: Sendable, Equatable {
     case cream
 }
 
-/// Where a point of the design grid belongs to the raccoon.
+/// Where a light belongs to the raccoon: the head, or an eye.
 enum RaccoonRegion: Sendable, Equatable {
-    case outside
     case fur
-    case mask
     case eye
 }
 
-/// One light: its rest on the grid, its look, and its flight (start point, delay, duration). Pure values.
+/// A point of the figure's square: 0...1 on each side, y down.
+struct FigurePoint: Equatable, Sendable {
+    let x: Double
+    let y: Double
+}
+
+/// One light: its rest in the figure's square, its look, and its flight (start point, delay, duration). Pure values.
 struct RaccoonLight: Equatable, Sendable {
     let region: RaccoonRegion
     let x: Double
     let y: Double
     let startX: Double
     let startY: Double
-    /// Diameter in points.
+    /// Diameter as a share of the square's side.
     let diameter: Double
     /// Brightness, 0 to 1.
     let alpha: Double
@@ -40,108 +44,78 @@ struct RaccoonLight: Equatable, Sendable {
     let duration: Double
 }
 
-/// The figure and its flight as pure functions of the design grid, so the layout is tested without a screen.
+/// The logo's units to the figure's square: the head's box, centred and scaled to fill the square less a margin.
+struct RaccoonFrame: Equatable, Sendable {
+    let centreX: Double
+    let centreY: Double
+    /// Square units per logo unit.
+    let scale: Double
+
+    init(box: CGRect) {
+        centreX = Double(box.midX)
+        centreY = Double(box.midY)
+        scale = (1 - 2 * RaccoonLights.margin) / Double(max(box.width, box.height))
+    }
+
+    func point(_ p: CGPoint) -> FigurePoint {
+        FigurePoint(x: 0.5 + (Double(p.x) - centreX) * scale, y: 0.5 + (Double(p.y) - centreY) * scale)
+    }
+}
+
+/// The figure and its flight as pure functions of the logo's head, so the layout is tested without a screen.
 enum RaccoonLights {
     /// Seconds from the first light leaving its ring to the last one arriving.
     static let assemblyDuration: Double = 1.6
-    static let gridEdge: Double = 52
-    /// The two eyes on the design grid, and their radius.
-    static let eyeCentres: [(x: Double, y: Double)] = [(18, 26), (34, 26)]
-    static let eyeRadius: Double = 3.4
-    static let furCount = 1900
-    static let eyeLightsPerEye = 70
-    /// The avatar tile on the grid: a rounded square inset by 3, with the avatar's corner radius (17 on 52, less the inset).
-    static let tileInset: Double = 3
-    static let tileCornerRadius: Double = 16
     /// Share of the fur lights that are cream instead of signal.
     static let creamShare: Double = 0.1
+    /// The head fills the square less this margin on each side (a share of the square).
+    static let margin: Double = 0.05
+    /// The eyes' glow, a share of the square's side.
+    static let eyeGlowShare: Double = 0.24
 
-    /// Where `(x, y)` on the grid belongs to the raccoon. The mask is open (`.mask`), the eyes sit in it.
-    static func region(x: Double, y: Double) -> RaccoonRegion {
-        for eye in eyeCentres where hypot(x - eye.x, y - eye.y) <= eyeRadius {
-            return .eye
-        }
-        if inMask(x: x, y: y) {
-            return .mask
-        }
-        return inTile(x: x, y: y) ? .fur : .outside
+    /// The figure, built once: its lights and the centres of its two eyes.
+    static let figure: Figure = make()
+
+    struct Figure: Equatable, Sendable {
+        let lights: [RaccoonLight]
+        let eyeCentres: [FigurePoint]
     }
 
-    /// The avatar's mask, the very shape `RaccoonMask` draws on every avatar.
-    static func inMask(x: Double, y: Double) -> Bool {
-        RaccoonMask().path(in: CGRect(x: 0, y: 0, width: gridEdge, height: gridEdge)).contains(CGPoint(x: x, y: y))
-    }
-
-    /// The rounded tile under the mask.
-    static func inTile(x: Double, y: Double) -> Bool {
-        let low = tileInset
-        let high = gridEdge - tileInset
-        guard x >= low, x <= high, y >= low, y <= high else { return false }
-        let cx = min(max(x, low + tileCornerRadius), high - tileCornerRadius)
-        let cy = min(max(y, low + tileCornerRadius), high - tileCornerRadius)
-        return hypot(x - cx, y - cy) <= tileCornerRadius
-    }
-
-    /// The whole figure, in a fixed order: the same input always gives the same lights.
-    static func make() -> [RaccoonLight] {
+    /// The whole figure, in a fixed order: the same logo always gives the same lights.
+    static func make() -> Figure {
+        guard let sample = RaccoonHead.sample() else { return Figure(lights: [], eyeCentres: []) }
+        let frame = RaccoonFrame(box: sample.box)
+        let cell = Double(RaccoonHead.gridStep) * frame.scale
         var lights: [RaccoonLight] = []
-        lights.reserveCapacity(furCount + 2 * eyeLightsPerEye)
-
-        // Fur: a low-discrepancy (Halton 2, 3) sweep of the tile's box, kept where the region is fur.
-        let span = gridEdge - 2 * tileInset
-        var index = 1
-        var furPlaced = 0
-        while furPlaced < furCount, index < 200_000 {
-            let x = halton(index, base: 2) * span + tileInset
-            let y = halton(index, base: 3) * span + tileInset
-            index += 1
-            guard region(x: x, y: y) == .fur else { continue }
-            lights.append(light(region: .fur, x: x, y: y, seed: index))
-            furPlaced += 1
+        lights.reserveCapacity(sample.head.count + sample.eyes.reduce(0) { $0 + $1.count })
+        for (index, point) in sample.head.enumerated() {
+            lights.append(light(region: .fur, at: frame.point(point), cell: cell, seed: index + 1))
         }
-
-        // Eyes: a dense disc of lights in each eye, arriving last.
-        for (eyeIndex, eye) in eyeCentres.enumerated() {
-            for k in 1...eyeLightsPerEye {
-                let radius = eyeRadius * sqrt(halton(k, base: 2))
-                let angle = 2 * Double.pi * halton(k, base: 3)
-                let x = eye.x + radius * cos(angle)
-                let y = eye.y + radius * sin(angle)
-                lights.append(light(region: .eye, x: x, y: y, seed: 100_000 + eyeIndex * 1000 + k))
+        for (eyeIndex, eye) in sample.eyes.enumerated() {
+            for (k, point) in eye.enumerated() {
+                let seed = 100_000 + eyeIndex * 1000 + k + 1
+                lights.append(light(region: .eye, at: frame.point(point), cell: cell, seed: seed))
             }
         }
-        return lights
-    }
-
-    /// The radical inverse of `index` in `base`, in 0..<1.
-    static func halton(_ index: Int, base: Int) -> Double {
-        var fraction = 1.0
-        var result = 0.0
-        var n = index
-        while n > 0 {
-            fraction /= Double(base)
-            result += fraction * Double(n % base)
-            n /= base
-        }
-        return result
+        return Figure(lights: lights, eyeCentres: sample.eyeCentres.map(frame.point))
     }
 
     /// One light's look and flight. The noise is a hash of the seed, so the figure does not change between launches.
-    private static func light(region: RaccoonRegion, x: Double, y: Double, seed: Int) -> RaccoonLight {
+    private static func light(region: RaccoonRegion, at rest: FigurePoint, cell: Double, seed: Int) -> RaccoonLight {
         let angle = 2 * Double.pi * noise(seed, 1)
-        let ring = 24 + 8 * noise(seed, 2)
-        let startX = 26 + ring * cos(angle)
-        let startY = 27 + ring * sin(angle)
+        let ring = 0.46 + 0.16 * noise(seed, 2)
+        let startX = 0.5 + ring * cos(angle)
+        let startY = 0.5 + ring * sin(angle)
         switch region {
         case .eye:
             return RaccoonLight(
-                region: .eye, x: x, y: y, startX: startX, startY: startY, diameter: 2.6, alpha: 1,
+                region: .eye, x: rest.x, y: rest.y, startX: startX, startY: startY, diameter: cell * 0.95, alpha: 1,
                 tone: .signal, delay: 0.7 + 0.2 * noise(seed, 3), duration: 0.6 + 0.1 * noise(seed, 4))
-        default:
+        case .fur:
             let cream = noise(seed, 7) < creamShare
             return RaccoonLight(
-                region: region, x: x, y: y, startX: startX, startY: startY,
-                diameter: 2.4 + 1.2 * noise(seed, 5), alpha: 0.55 + 0.4 * noise(seed, 6),
+                region: .fur, x: rest.x, y: rest.y, startX: startX, startY: startY,
+                diameter: cell * (0.62 + 0.25 * noise(seed, 5)), alpha: 0.55 + 0.4 * noise(seed, 6),
                 tone: cream ? .cream : .signal, delay: 0.3 * noise(seed, 3), duration: 1.0 + 0.3 * noise(seed, 4))
         }
     }
@@ -197,24 +171,23 @@ final class RaccoonLightsView: UIView {
 
     private func build() {
         let side = min(bounds.width, bounds.height)
-        let unit = side / CGFloat(RaccoonLights.gridEdge)
         let now = CACurrentMediaTime()
         let curve = CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.2, 1)
-        let lights = RaccoonLights.make()
+        let figure = RaccoonLights.figure
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for light in lights {
+        for light in figure.lights {
             let disc = CALayer()
-            let diameter = CGFloat(light.diameter)
+            let diameter = CGFloat(light.diameter) * side
             disc.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
             disc.cornerRadius = diameter / 2
             disc.backgroundColor = Self.color(light.tone)
-            let rest = CGPoint(x: CGFloat(light.x) * unit, y: CGFloat(light.y) * unit)
+            let rest = CGPoint(x: CGFloat(light.x) * side, y: CGFloat(light.y) * side)
             disc.position = rest
             disc.opacity = Float(light.alpha)
             if !reduceMotion {
-                let start = CGPoint(x: CGFloat(light.startX) * unit, y: CGFloat(light.startY) * unit)
+                let start = CGPoint(x: CGFloat(light.startX) * side, y: CGFloat(light.startY) * side)
                 let move = CABasicAnimation(keyPath: "position")
                 move.fromValue = NSValue(cgPoint: start)
                 move.toValue = NSValue(cgPoint: rest)
@@ -232,15 +205,15 @@ final class RaccoonLightsView: UIView {
             layer.addSublayer(disc)
         }
 
-        for eye in RaccoonLights.eyeCentres {
+        let glowSize = side * RaccoonLights.eyeGlowShare
+        for eye in figure.eyeCentres {
             let glow = CAGradientLayer()
-            let size: CGFloat = 64
             glow.type = .radial
             glow.colors = [Self.color(.signal, alpha: 0.6), Self.color(.signal, alpha: 0)]
             glow.startPoint = CGPoint(x: 0.5, y: 0.5)
             glow.endPoint = CGPoint(x: 1, y: 1)
-            glow.bounds = CGRect(x: 0, y: 0, width: size, height: size)
-            glow.position = CGPoint(x: CGFloat(eye.x) * unit, y: CGFloat(eye.y) * unit)
+            glow.bounds = CGRect(x: 0, y: 0, width: glowSize, height: glowSize)
+            glow.position = CGPoint(x: CGFloat(eye.x) * side, y: CGFloat(eye.y) * side)
             if reduceMotion {
                 glow.opacity = 0.8
             } else {

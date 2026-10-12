@@ -14,6 +14,7 @@ targets:
     platform: iOS
     sources:
       - Bandito
+      - Shared
     dependencies:
       - package: BanditoKit
         product: BanditoKit
@@ -21,12 +22,18 @@ targets:
         product: BanditoDesign
       - package: BanditoKit
         product: BanditoL10n
+      - target: BanditoWidgets
+    entitlements:
+      path: Bandito/Bandito.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.bandito.ios
     # xcodegen rewrites the file at `path` from these properties on every `generate`, so they live here, not in the file.
     info:
       path: Bandito/Info.plist
       properties:
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, ru, de, es, fr, ja, ko, pt-BR, zh-Hans]
         CFBundleDisplayName: Bandito
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -59,6 +66,44 @@ targets:
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
         # Simulator builds only for now: no signing (the build script passes CODE_SIGNING_ALLOWED=NO as well).
+        CODE_SIGN_STYLE: Automatic
+  # The home and lock screen widgets (docs/IOS_APP.md, phase 2). Reads the snapshot in the App Group, no network.
+  BanditoWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - BanditoWidgets
+      - Shared
+    dependencies:
+      - package: BanditoKit
+        product: BanditoDesign
+      - package: BanditoKit
+        product: BanditoL10n
+    info:
+      path: BanditoWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Bandito
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: BanditoWidgets/BanditoWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.bandito.ios
+    settings:
+      base:
+        PRODUCT_NAME: BanditoWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.ios.widgets
+        MARKETING_VERSION: 0.1.14
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: NO
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SKIP_INSTALL: YES
         CODE_SIGN_STYLE: Automatic
   BanditoIOSTests:
     type: bundle.unit-test
@@ -98,6 +143,7 @@ schemes:
         BanditoIOS: all
         BanditoIOSTests: [test]
         BanditoIOSScreenshots: [test]
+        BanditoWidgets: all
     test:
       targets:
         - BanditoIOSTests

@@ -8,6 +8,8 @@ import SwiftUI
 struct CrewScreen: View {
     let servers: [ServerModel]
     let onConnect: () -> Void
+    /// An agent a `bandito://agent/...` link asked for: the screen opens its row, as a tap on the row does.
+    var focus: CrewFocus?
 
     /// The server shown; nil means the first one (the list of servers can change under the screen).
     @State private var chosenServerID: UUID?
@@ -22,7 +24,9 @@ struct CrewScreen: View {
             Group {
                 if let server = currentServer {
                     CrewList(
-                        server: server, servers: servers, onChoose: { chosenServerID = $0 },
+                        server: server, servers: servers,
+                        // The path is reset here, not on a change of the chosen server: a widget's link sets both.
+                        onChoose: { chosenServerID = $0; path = NavigationPath() },
                         open: { path.append($0) },
                         details: { path.append(AgentDetailRoute(agentID: $0)) },
                         onCreate: { newAgent = NewAgentStart(tab: .teams) }
@@ -57,7 +61,9 @@ struct CrewScreen: View {
                 }
             }
         }
-        .onChange(of: chosenServerID) { _, _ in path = NavigationPath() }
+        .task(id: focus) {
+            open(focus)
+        }
         .onChange(of: servers.count, initial: true) { _, _ in openScreenshotHooks() }
         .sheet(item: $newAgent) { start in
             if let server = currentServer {
@@ -86,12 +92,29 @@ struct CrewScreen: View {
     private var currentServer: ServerModel? {
         servers.first { $0.id == chosenServerID } ?? servers.first
     }
+
+    /// Opens the agent a link named: its server is shown, and its row is opened. An agent that is not there is ignored.
+    private func open(_ focus: CrewFocus?) {
+        guard let focus, let server = servers.first(where: { $0.id == focus.serverID }),
+              let agent = server.agents.first(where: { $0.id == focus.agentID })
+        else { return }
+        chosenServerID = server.id
+        path = NavigationPath([CrewRoute(agentID: agent.id, name: agent.name)])
+    }
 }
 
 /// A chat opened from the Crew list: the agent and its name, for the chat's title.
 struct CrewRoute: Hashable {
     let agentID: String
     let name: String
+}
+
+/// An agent a widget or a link asked the Crew to open. `request` is new for every request, so the same agent asked
+/// twice opens twice.
+struct CrewFocus: Equatable {
+    let serverID: UUID
+    let agentID: String
+    let request: UUID
 }
 
 /// The agent card opened from the Crew list ("Details" in the context menu).

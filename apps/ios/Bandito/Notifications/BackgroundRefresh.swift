@@ -20,6 +20,7 @@ enum BackgroundRefresh {
             }
             let box = BGAppRefreshTaskBox(refresh)
             Task { @MainActor in
+                WidgetSnapshotWriter.shared.refreshNow()
                 await IOSNotifications.shared.refreshInBackground(box)
             }
         }
