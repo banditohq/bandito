@@ -282,6 +282,26 @@
 			<string>%1$lld инструмента</string>
 		</dict>
 	</dict>
+	<key>ios.settings.security.minutes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld минуты</string>
+			<key>many</key>
+			<string>%1$lld минут</string>
+			<key>one</key>
+			<string>%1$lld минута</string>
+			<key>other</key>
+			<string>%1$lld минуты</string>
+		</dict>
+	</dict>
 	<key>market.journal.calls24h</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

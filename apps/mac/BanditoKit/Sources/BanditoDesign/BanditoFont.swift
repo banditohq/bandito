@@ -117,9 +117,43 @@ public enum BanditoFont {
     }
 
     private static func font(_ spec: Spec, size: CGFloat, weight: Int) -> Font {
+        #if os(iOS)
+        // iOS scales every brand font with the person's Dynamic Type setting. macOS keeps the fixed sizes.
+        Font(scaledForDynamicType(ctFont(spec, size: size, weight: weight)))
+        #else
         Font(ctFont(spec, size: size, weight: weight))
+        #endif
     }
 }
+
+#if os(iOS)
+import UIKit
+
+extension BanditoFont {
+    /// The font at the size the person's Dynamic Type setting gives it. The text style only picks the scaling curve:
+    /// the style whose default size is nearest to the font's size, so a 13 pt caption grows like a footnote.
+    static func scaledForDynamicType(_ font: CTFont) -> CTFont {
+        let style = textStyle(forPointSize: CTFontGetSize(font))
+        let scaled = UIFontMetrics(forTextStyle: style).scaledFont(for: font as UIFont)
+        return scaled as CTFont
+    }
+
+    private static func textStyle(forPointSize size: CGFloat) -> UIFont.TextStyle {
+        switch size {
+        case ..<11.5: .caption2
+        case ..<12.5: .caption1
+        case ..<13.5: .footnote
+        case ..<14.5: .subheadline
+        case ..<16.5: .callout
+        case ..<18.5: .body
+        case ..<21: .title3
+        case ..<23: .title2
+        case ..<29: .title1
+        default: .largeTitle
+        }
+    }
+}
+#endif
 
 #if canImport(AppKit)
 import AppKit
