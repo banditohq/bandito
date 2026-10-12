@@ -2222,6 +2222,9 @@
 "settings.nav.usage" = "订阅与限额";
 "settings.notifications" = "通知";
 "settings.notifications.allow" = "允许";
+"settings.notifications.dockBadge" = "在图标上显示未读数";
+"settings.notifications.dockBadgeHint" = "已连接服务器中你还没查看的回复。";
+"settings.notifications.dockGroup" = "Dock 图标";
 "settings.notifications.failed" = "错误";
 "settings.notifications.failedHint" = "代理因故障而停止。";
 "settings.notifications.finished" = "完成";

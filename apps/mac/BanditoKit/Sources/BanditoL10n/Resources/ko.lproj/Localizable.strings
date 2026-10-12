@@ -2222,6 +2222,9 @@
 "settings.nav.usage" = "구독과 한도";
 "settings.notifications" = "알림";
 "settings.notifications.allow" = "허용";
+"settings.notifications.dockBadge" = "아이콘에 읽지 않은 개수 표시";
+"settings.notifications.dockBadgeHint" = "연결된 서버에서 아직 확인하지 않은 답장입니다.";
+"settings.notifications.dockGroup" = "Dock 아이콘";
 "settings.notifications.failed" = "오류";
 "settings.notifications.failedHint" = "에이전트가 오류로 멈췄어요.";
 "settings.notifications.finished" = "완료";

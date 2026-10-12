@@ -3130,6 +3130,9 @@ public enum L10n {
 
         public enum Notifications {
             public static var allow: String { L10n.tr("settings.notifications.allow") }
+            public static var dockBadge: String { L10n.tr("settings.notifications.dockBadge") }
+            public static var dockBadgeHint: String { L10n.tr("settings.notifications.dockBadgeHint") }
+            public static var dockGroup: String { L10n.tr("settings.notifications.dockGroup") }
             public static var failed: String { L10n.tr("settings.notifications.failed") }
             public static var failedHint: String { L10n.tr("settings.notifications.failedHint") }
             public static var finished: String { L10n.tr("settings.notifications.finished") }

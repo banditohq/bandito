@@ -2222,6 +2222,9 @@
 "settings.nav.usage" = "Подписки и лимиты";
 "settings.notifications" = "Уведомления";
 "settings.notifications.allow" = "Разрешить";
+"settings.notifications.dockBadge" = "Число непрочитанных на значке";
+"settings.notifications.dockBadgeHint" = "Ответы подключённых серверов, которые вы ещё не открывали.";
+"settings.notifications.dockGroup" = "Значок в Dock";
 "settings.notifications.failed" = "Ошибка";
 "settings.notifications.failedHint" = "Агент остановился из-за ошибки.";
 "settings.notifications.finished" = "Готово";

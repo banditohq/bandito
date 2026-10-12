@@ -2222,6 +2222,9 @@
 "settings.nav.usage" = "Abos und Limits";
 "settings.notifications" = "Mitteilungen";
 "settings.notifications.allow" = "Erlauben";
+"settings.notifications.dockBadge" = "Anzahl ungelesener Nachrichten auf dem Symbol";
+"settings.notifications.dockBadgeHint" = "Antworten der verbundenen Server, die Sie noch nicht angesehen haben.";
+"settings.notifications.dockGroup" = "Symbol im Dock";
 "settings.notifications.failed" = "Fehler";
 "settings.notifications.failedHint" = "Ein Agent hat wegen eines Fehlers angehalten.";
 "settings.notifications.finished" = "Fertig";

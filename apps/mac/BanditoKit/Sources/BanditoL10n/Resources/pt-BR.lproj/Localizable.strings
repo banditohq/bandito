@@ -2222,6 +2222,9 @@
 "settings.nav.usage" = "Assinaturas e limites";
 "settings.notifications" = "Notificações";
 "settings.notifications.allow" = "Permitir";
+"settings.notifications.dockBadge" = "Número de não lidas no ícone";
+"settings.notifications.dockBadgeHint" = "Respostas dos servidores conectados que você ainda não viu.";
+"settings.notifications.dockGroup" = "Ícone no Dock";
 "settings.notifications.failed" = "Erro";
 "settings.notifications.failedHint" = "Um agente parou por causa de uma falha.";
 "settings.notifications.finished" = "Concluído";
