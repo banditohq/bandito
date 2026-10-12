@@ -39,7 +39,7 @@ deleted first). Extra arguments are passed to the app, for example `-qa.mode fil
 ## Commands (`cmd.sh <n> <command>`)
 
 - `mode team|files|terminals|browser|screen|server`
-- `sheet newAgent|account|addServer`, `dismiss`
+- `sheet newAgent|account|addServer|reportProblem|readyTeam:<bundle id>`, `dismiss`
 - `window <W>x<H>`: resizes and centres the main window (SwiftUI keeps at least 900×600)
 - `files <path>`: opens Files at a folder on the QA server
 - `tab overview|workspaces|secrets|ports|devices|updates|journal`: opens Server mode on that section

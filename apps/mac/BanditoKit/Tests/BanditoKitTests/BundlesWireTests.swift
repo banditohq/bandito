@@ -105,4 +105,25 @@ import Testing
         let retry = try json(NewBundle(bundleId: "startup-team", language: "ru", templates: ["docs-writer"]))
         #expect(retry["templates"] as? [String] == ["docs-writer"])
     }
+
+    @Test func newBundleCarriesTheModelTheSharedFolderAndTheConfirmedSchedules() throws {
+        let body = try json(
+            NewBundle(
+                bundleId: "web-project", language: "ru", model: "haiku", cwd: "/srv/shop",
+                schedules: ["code-reviewer:0"]))
+        #expect(body["model"] as? String == "haiku")
+        #expect(body["cwd"] as? String == "/srv/shop")
+        #expect(body["schedules"] as? [String] == ["code-reviewer:0"])
+        // An empty list is sent: every schedule is made, all of them off.
+        let allOff = try json(NewBundle(bundleId: "web-project", language: "ru", schedules: []))
+        #expect(allOff["schedules"] as? [String] == [])
+        let plain = try json(NewBundle(bundleId: "web-project", language: "ru"))
+        #expect(plain["model"] == nil && plain["cwd"] == nil && plain["schedules"] == nil)
+    }
+
+    @Test func templateDecodesItsCapabilities() throws {
+        let t = try decode(BotTemplate.self, ##"{"id":"x","name_en":"X","capabilities":["terminal","files"]}"##)
+        #expect(t.capabilities == ["terminal", "files"])
+        #expect(try decode(BotTemplate.self, ##"{"id":"x","name_en":"X"}"##).capabilities.isEmpty)
+    }
 }

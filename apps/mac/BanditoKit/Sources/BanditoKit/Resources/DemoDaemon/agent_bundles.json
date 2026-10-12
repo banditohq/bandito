@@ -118,5 +118,85 @@
     "accent": "#6E8290",
     "templates": ["devops-on-call", "sentry-on-call", "qa-tester"],
     "category": "ops"
+  },
+  {
+    "id": "web-project",
+    "name_en": "Web project",
+    "name_ru": "Веб-проект",
+    "description_en": "A developer, a reviewer and a tester working in one project folder.",
+    "description_ru": "Разработчик, ревьюер и тестировщик в одной папке проекта.",
+    "l10n": {
+      "de": { "name": "Webprojekt", "description": "Ein Entwickler, ein Reviewer und ein Tester arbeiten in einem Projektordner." },
+      "es": { "name": "Proyecto web", "description": "Un desarrollador, un revisor y un tester que trabajan en una misma carpeta de proyecto." },
+      "fr": { "name": "Projet web", "description": "Un développeur, un relecteur et un testeur qui travaillent dans un même dossier de projet." },
+      "ja": { "name": "Webプロジェクト", "description": "開発者、レビュアー、テスターが1つのプロジェクトフォルダで作業します。" },
+      "ko": { "name": "웹 프로젝트", "description": "개발자, 리뷰어, 테스터가 하나의 프로젝트 폴더에서 함께 일해요." },
+      "pt-BR": { "name": "Projeto web", "description": "Um desenvolvedor, um revisor e um testador trabalhando em uma mesma pasta de projeto." },
+      "zh-Hans": { "name": "网页项目", "description": "开发者、审查者和测试员在同一个项目文件夹中协作。" }
+    },
+    "icon": "globe",
+    "accent": "#6F8FB5",
+    "templates": ["web-developer", "code-reviewer", "qa-tester"],
+    "category": "dev"
+  },
+  {
+    "id": "server-duty",
+    "name_en": "Server on duty",
+    "name_ru": "Дежурный по серверу",
+    "description_en": "Checks the logs, the disk and the updates on a schedule and speaks up only when something is wrong.",
+    "description_ru": "По расписанию смотрит логи, диск и обновления и пишет, только если что-то не так.",
+    "l10n": {
+      "de": { "name": "Server-Bereitschaft", "description": "Prüft nach Zeitplan Logs, Festplatte und Updates und meldet sich nur, wenn etwas nicht stimmt." },
+      "es": { "name": "Guardia del servidor", "description": "Revisa según un horario los logs, el disco y las actualizaciones y avisa solo cuando algo va mal." },
+      "fr": { "name": "Astreinte serveur", "description": "Vérifie selon un horaire les journaux, le disque et les mises à jour, et ne parle que si quelque chose ne va pas." },
+      "ja": { "name": "サーバー当番", "description": "スケジュールでログ、ディスク、アップデートを確認し、問題があるときだけ知らせます。" },
+      "ko": { "name": "서버 당직", "description": "일정에 따라 로그, 디스크, 업데이트를 살펴보고 문제가 있을 때만 알려 줘요." },
+      "pt-BR": { "name": "Plantão do servidor", "description": "Verifica por agenda os logs, o disco e as atualizações e só fala quando algo está errado." },
+      "zh-Hans": { "name": "服务器值守", "description": "按计划查看日志、磁盘和更新，只在出问题时才出声。" }
+    },
+    "icon": "waveform.path.ecg",
+    "accent": "#74907F",
+    "templates": ["server-watch"],
+    "category": "ops"
+  },
+  {
+    "id": "morning-summary",
+    "name_en": "Morning summary",
+    "name_ru": "Утренняя сводка",
+    "description_en": "Every morning at 8:00 a brief of what matters today, from the services you have connected.",
+    "description_ru": "Каждое утро в 8:00 сводка о том, что важно сегодня, из подключённых вами сервисов.",
+    "l10n": {
+      "de": { "name": "Morgenübersicht", "description": "Jeden Morgen um 8:00 eine Übersicht, was heute wichtig ist, aus Ihren verbundenen Diensten." },
+      "es": { "name": "Resumen matinal", "description": "Cada mañana a las 8:00, un resumen de lo importante de hoy desde los servicios que conectaste." },
+      "fr": { "name": "Brief du matin", "description": "Chaque matin à 8 h 00, un récapitulatif de l'essentiel du jour à partir des services connectés." },
+      "ja": { "name": "朝のまとめ", "description": "毎朝8:00に、接続したサービスから今日大事なことをまとめます。" },
+      "ko": { "name": "아침 요약", "description": "매일 아침 8:00에 연결한 서비스에서 오늘 중요한 것을 요약해 줘요." },
+      "pt-BR": { "name": "Resumo da manhã", "description": "Toda manhã às 8:00, um resumo do que importa hoje a partir dos serviços conectados." },
+      "zh-Hans": { "name": "晨间简报", "description": "每天早上 8:00 从你连接的服务中汇总今天的重点。" }
+    },
+    "icon": "sun.horizon",
+    "accent": "#B89A6A",
+    "templates": ["morning-brief"],
+    "category": "personal"
+  },
+  {
+    "id": "docs-upkeep",
+    "name_en": "Documentation",
+    "name_ru": "Документация",
+    "description_en": "Follows the changes in the code and keeps the README and the docs up to date.",
+    "description_ru": "Следит за изменениями в коде и держит README и документацию актуальными.",
+    "l10n": {
+      "de": { "name": "Dokumentation", "description": "Verfolgt die Änderungen im Code und hält README und Dokumentation aktuell." },
+      "es": { "name": "Documentación", "description": "Sigue los cambios del código y mantiene al día el README y la documentación." },
+      "fr": { "name": "Documentation", "description": "Suit les changements du code et tient le README et la documentation à jour." },
+      "ja": { "name": "ドキュメント", "description": "コードの変更を追い、READMEとドキュメントを最新に保ちます。" },
+      "ko": { "name": "문서화", "description": "코드의 변경을 따라가며 README와 문서를 최신 상태로 유지해요." },
+      "pt-BR": { "name": "Documentação", "description": "Acompanha as mudanças no código e mantém o README e a documentação em dia." },
+      "zh-Hans": { "name": "文档", "description": "跟进代码的变化，让 README 和文档保持最新。" }
+    },
+    "icon": "doc.text",
+    "accent": "#8C9A7A",
+    "templates": ["docs-keeper"],
+    "category": "writing"
   }
 ]

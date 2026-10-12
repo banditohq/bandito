@@ -128,6 +128,14 @@ import Testing
         },
     ]
 
+    /// The catalog the daemon ships (the demo copy of `agent_bundles.json` and `agent_templates.json`), for the ready
+    /// team's preview, which has no server to ask.
+    static var readyTeamCatalog: ReadyTeamPreview {
+        let bundles = (try? RPCClient.decoder.decode([AgentBundle].self, from: Data(DemoCatalogs.shared.bundles.utf8))) ?? []
+        let templates = (try? RPCClient.decoder.decode([BotTemplate].self, from: Data(DemoCatalogs.shared.templates.utf8))) ?? []
+        return ReadyTeamPreview(bundles: bundles, templates: templates)
+    }
+
     // MARK: sheets with data
 
     /// The settings page's values and host numbers without a server: long names and the largest choices on purpose.
@@ -287,6 +295,15 @@ import Testing
             AnyView(FolderPicker(server: env.server, selection: .constant("/Users/maria/projects"), onChoose: {}))
         },
         AuditCase(name: "sheet-import", width: 720, height: 600, selfSized: true) { _ in AnyView(ImportSheet()) },
+        AuditCase(name: "sheet-report-problem", width: 640, height: 640, selfSized: true) { _ in
+            AnyView(ReportProblemSheet())
+        },
+        AuditCase(name: "sheet-ready-team-web", width: 600, height: 620, selfSized: true) { env in
+            AnyView(ReadyTeamSheet(bundleID: "web-project", server: env.server, preview: readyTeamCatalog))
+        },
+        AuditCase(name: "sheet-ready-team-server-duty", width: 600, height: 620, selfSized: true) { env in
+            AnyView(ReadyTeamSheet(bundleID: "server-duty", server: env.server, preview: readyTeamCatalog))
+        },
         AuditCase(name: "sheet-new-agent", width: 640, height: 540, selfSized: true) { _ in AnyView(NewAgentSheet()) },
         AuditCase(name: "sheet-add-server", width: 680, height: 460, selfSized: true) { _ in AnyView(AddServerSheet()) },
         AuditCase(name: "sheet-account-signed-out", width: ProfileSheetLayout.width, selfSized: true) { _ in

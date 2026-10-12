@@ -1,0 +1,29 @@
+name: Problem report from the app
+description: Opened by Report a Problem in the Bandito Mac app (Help menu, Settings → Updates)
+labels: [bug, from-app]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The Mac app filled this form for you. Look it over before you post: the app hides tokens, keys, e-mails,
+        addresses, host names and your home folder, but you know your own data best. Chats are never included.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What was done and what was seen.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: false
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Versions, the state of the servers and the last lines of the logs. When the app says the diagnostics are on the clipboard, paste them here.
+    validations:
+      required: false

@@ -134,9 +134,9 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_has_the_sixteen_templates_and_parses_strictly() {
+    fn the_catalog_has_the_twenty_templates_and_parses_strictly() {
         let templates = catalog();
-        assert_eq!(templates.len(), 16);
+        assert_eq!(templates.len(), 20);
     }
 
     /// A bot gets its template's name in the app's language, so every name must pass the agent name rule.

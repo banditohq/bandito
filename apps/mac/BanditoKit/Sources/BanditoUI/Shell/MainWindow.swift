@@ -47,7 +47,7 @@ struct MainWindow: View {
         // ⌘0 (the keymap's "team home") works from every mode; the menu in BanditoCommands does not list it.
         .keymapShortcut("global.teamHome", keymap: keymap) { router.showTeamHome() }
         // Adding a server may be in the middle of an install: a stray click must not cancel it (Esc still closes).
-        .banditoSheet(item: $router.sheet, dismissOnOutsideClick: router.sheet != .addServer) { sheet in
+        .banditoSheet(item: $router.sheet, dismissOnOutsideClick: Self.dismissesOnOutsideClick(router.sheet)) { sheet in
             sheetView(for: sheet)
         }
         .overlay {
@@ -160,6 +160,14 @@ struct MainWindow: View {
         return swipeAction(progress.direction, overBrowserPage: progress.overBrowserPage).symbol
     }
 
+    /// A sheet where the person types or a request is running stays when the click lands outside it.
+    static func dismissesOnOutsideClick(_ sheet: Sheet?) -> Bool {
+        switch sheet {
+        case .addServer, .reportProblem, .readyTeam: false
+        default: true
+        }
+    }
+
     @ViewBuilder
     private func sheetView(for sheet: Sheet) -> some View {
         switch sheet {
@@ -167,6 +175,11 @@ struct MainWindow: View {
         case .account: AccountSheet()
         case .addServer: AddServerSheet()
         case .importer: ImportSheet()
+        case .reportProblem: ReportProblemSheet()
+        case .readyTeam(let bundleID):
+            if let server = app.currentServer {
+                ReadyTeamSheet(bundleID: bundleID, server: server)
+            }
         case .schedule(let agentID, let existing):
             if let server = app.currentServer {
                 ScheduleEditor(server: server, agentID: agentID, existing: existing)

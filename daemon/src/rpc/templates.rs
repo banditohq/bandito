@@ -15,7 +15,7 @@ use crate::skills;
 use crate::store::{Agent, Capability, Effort, NewAgent, NewSchedule, Store, validate_name};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 /// The integrations catalog, read for the url of an entry: a connected integration may match an entry by url.
@@ -42,11 +42,19 @@ struct CreateFromTemplate {
     schedules: Option<Vec<usize>>,
     #[serde(default)]
     workspace_id: Option<String>,
+    /// Set by `agents.create_bundle` only (never read from the request): the project folder shared by the bundle.
+    #[serde(skip)]
+    cwd: Option<String>,
+    /// Set by `agents.create_bundle` only: the indexes of `schedules` that are created switched off.
+    #[serde(skip)]
+    schedules_off: Vec<usize>,
 }
 
-/// What `agents.create_bundle` takes. The bots keep their templates' schedules (`enabled_by_default`) and their models
-/// (none). `templates` absent makes every template of the bundle; present, it makes only those (a retry after a failed
-/// request makes the ones that are still missing).
+/// What `agents.create_bundle` takes. The bots keep their templates' schedules (`enabled_by_default`) and the runtime's
+/// default model. `templates` absent makes every template of the bundle; present, it makes only those (a retry after a
+/// failed request makes the ones that are still missing). `model` is given to every bot, `cwd` is the one project
+/// folder they all work in (absent: each bot gets its own folder), and `schedules` (feature `bundle_schedules`) makes
+/// every schedule of every bot, switched off except the listed `<template_id>:<index>` keys.
 #[derive(Deserialize)]
 struct CreateBundle {
     bundle_id: String,
@@ -57,6 +65,12 @@ struct CreateBundle {
     workspace_id: Option<String>,
     #[serde(default)]
     templates: Option<Vec<String>>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
+    schedules: Option<Vec<String>>,
 }
 
 /// Answers the template and bundle methods. Unknown names get METHOD_NOT_FOUND.
@@ -133,7 +147,15 @@ pub(super) async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
                 }
                 templates.retain(|t| wanted.contains(&t.id));
             }
-            create_bundle(app, &templates, &req).await
+            // Every check runs before the first agent is made, so a refusal leaves nothing behind.
+            let models = resolve_bundle_model(app, &templates, &req).await?;
+            if let Some(cwd) = &req.cwd {
+                super::check_cwd(cwd)?;
+            }
+            if let Some(keys) = &req.schedules {
+                check_schedule_keys(&templates, keys)?;
+            }
+            create_bundle(app, &templates, &req, &models).await
         }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
@@ -144,7 +166,12 @@ pub(super) async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
 /// carries `error`, and an agent that exists is still named. A name taken by another agent gets " 2", " 3"… (agent
 /// names are not unique in the store). `missing_integrations` lists each integration once, `required` when any of the
 /// templates requires it.
-async fn create_bundle(app: &App, templates: &[AgentTemplate], req: &CreateBundle) -> RpcResult {
+async fn create_bundle(
+    app: &App,
+    templates: &[AgentTemplate],
+    req: &CreateBundle,
+    models: &HashMap<String, String>,
+) -> RpcResult {
     let mut agents: Vec<Value> = Vec::with_capacity(templates.len());
     let mut missing: Vec<(String, bool)> = Vec::new();
     for t in templates {
@@ -158,15 +185,24 @@ async fn create_bundle(app: &App, templates: &[AgentTemplate], req: &CreateBundl
                 continue;
             }
         };
-        let request = CreateFromTemplate {
+        let mut request = CreateFromTemplate {
             template_id: t.id.clone(),
             name,
             runtime: req.runtime.clone(),
-            model: None,
+            model: models.get(runtime_name(t, req)).cloned(),
             language: req.language.clone(),
             schedules: None,
             workspace_id: req.workspace_id.clone(),
+            cwd: req.cwd.clone(),
+            schedules_off: Vec::new(),
         };
+        if let Some(keys) = &req.schedules {
+            // Every schedule is made; the ones the owner did not confirm are off.
+            request.schedules = Some((0..t.schedules.len()).collect());
+            request.schedules_off = (0..t.schedules.len())
+                .filter(|i| !keys.contains(&schedule_key(&t.id, *i)))
+                .collect();
+        }
         match create_from(app, t, request).await {
             Ok(reply) => {
                 for m in reply["missing_integrations"].as_array().into_iter().flatten() {
@@ -200,6 +236,77 @@ async fn create_bundle(app: &App, templates: &[AgentTemplate], req: &CreateBundl
         .map(|(id, required)| json!({ "id": id, "required": required }))
         .collect();
     ok(json!({ "agents": agents, "missing_integrations": missing }))
+}
+
+/// The runtime a template's bot runs on in this request: the request's, else the template's.
+fn runtime_name<'a>(t: &'a AgentTemplate, req: &'a CreateBundle) -> &'a str {
+    req.runtime.as_deref().unwrap_or(&t.runtime)
+}
+
+/// The request's `model` checked against what each runtime of the team offers (as `team_create` checks a model): the
+/// id of the model for each runtime, or `INVALID_PARAMS` when it is empty, unknown to a runtime, or cannot be checked.
+async fn resolve_bundle_model(
+    app: &App,
+    templates: &[AgentTemplate],
+    req: &CreateBundle,
+) -> Result<HashMap<String, String>, RpcError> {
+    let Some(asked) = req.model.as_deref().map(str::trim) else {
+        return Ok(HashMap::new());
+    };
+    if asked.is_empty() {
+        return Err(RpcError::new(INVALID_PARAMS, "model is empty"));
+    }
+    let mut answers = Vec::new();
+    let mut seen = HashSet::new();
+    for t in templates {
+        let name = runtime_name(t, req);
+        let kind =
+            RuntimeKind::parse(name).ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("unknown runtime {name}")))?;
+        if !seen.insert(name.to_string()) {
+            continue;
+        }
+        let cwd = app.data_home.join("models-probe");
+        let cwd = if std::fs::create_dir_all(&cwd).is_ok() {
+            cwd
+        } else {
+            app.data_home.clone()
+        };
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        answers.push((name.to_string(), app.models.answer(kind, &cwd, &path, false).await));
+    }
+    models_from_answers(&answers, asked)
+}
+
+/// The pure part of `resolve_bundle_model`: `asked` looked up in each runtime's answer.
+fn models_from_answers(
+    answers: &[(String, crate::runtime::models::ModelsAnswer)],
+    asked: &str,
+) -> Result<HashMap<String, String>, RpcError> {
+    let mut out = HashMap::new();
+    for (name, answer) in answers {
+        out.insert(name.clone(), super::team_create::model_for_new(answer, asked)?);
+    }
+    Ok(out)
+}
+
+/// The key of one schedule of a template in the `schedules` list of `agents.create_bundle`.
+fn schedule_key(template_id: &str, index: usize) -> String {
+    format!("{template_id}:{index}")
+}
+
+/// Every key of the list names a schedule of a template that is being made, and none is listed twice.
+fn check_schedule_keys(templates: &[AgentTemplate], keys: &[String]) -> Result<(), RpcError> {
+    let known: HashSet<String> = templates
+        .iter()
+        .flat_map(|t| (0..t.schedules.len()).map(|i| schedule_key(&t.id, i)))
+        .collect();
+    let mut seen = HashSet::new();
+    for key in keys {
+        if !known.contains(key) || !seen.insert(key.as_str()) {
+            return Err(RpcError::new(INVALID_PARAMS, format!("no schedule {key}")));
+        }
+    }
+    Ok(())
 }
 
 /// `base`, or `base 2`, `base 3`… : the first that no agent has, compared without case and outer spaces.
@@ -283,6 +390,9 @@ async fn create_from(app: &App, t: &AgentTemplate, req: CreateFromTemplate) -> R
     new_agent.system_prompt = Some(t.system_prompt.clone());
     new_agent.effort = t.effort.map(store_effort);
     new_agent.capabilities = Some(capabilities);
+    if let Some(cwd) = &req.cwd {
+        new_agent.cwd = cwd.clone();
+    }
     let id = create_agent(app, new_agent, req.workspace_id)?;
 
     let store = &app.sup.hub().store;
@@ -331,7 +441,7 @@ async fn create_from(app: &App, t: &AgentTemplate, req: CreateFromTemplate) -> R
             cron: t.schedules[index].cron.clone(),
             tz: tz.clone(),
             prompt,
-            enabled: true,
+            enabled: !req.schedules_off.contains(&index),
             title: None,
         };
         match schedules::create(app, new) {
@@ -1118,7 +1228,7 @@ mod tests {
         let (app, _) = app(dir.path());
         let list = call(&app, "agents.templates", json!({})).await.unwrap();
         let list = list.as_array().unwrap();
-        assert_eq!(list.len(), 16);
+        assert_eq!(list.len(), 20);
         assert_eq!(list[0]["id"], "morning-digest");
         assert!(features().contains(&"agent_templates"));
     }
@@ -1522,7 +1632,7 @@ mod tests {
         let (app, _) = app(dir.path());
         let list = call(&app, "agents.bundles", json!({})).await.unwrap();
         let list = list.as_array().unwrap();
-        assert_eq!(list.len(), 6);
+        assert_eq!(list.len(), 10);
         assert_eq!(list[0]["id"], "startup-team");
         assert!(features().contains(&"agent_bundles"));
     }
@@ -1615,8 +1725,11 @@ mod tests {
             runtime: None,
             workspace_id: None,
             templates: None,
+            model: None,
+            cwd: None,
+            schedules: None,
         };
-        let reply = create_bundle(&app, &templates, &req).await.unwrap();
+        let reply = create_bundle(&app, &templates, &req, &HashMap::new()).await.unwrap();
 
         let refused = entry(&reply, "code-reviewer");
         assert!(refused.get("agent").is_none(), "{refused}");
@@ -1794,5 +1907,169 @@ mod tests {
                 .collect();
             assert_eq!(names.len(), 8, "two teams of four, every name different");
         }
+    }
+
+    const READY_TEAMS: [(&str, &[&str]); 4] = [
+        ("web-project", &["web-developer", "code-reviewer", "qa-tester"]),
+        ("server-duty", &["server-watch"]),
+        ("morning-summary", &["morning-brief"]),
+        ("docs-upkeep", &["docs-keeper"]),
+    ];
+
+    #[test]
+    fn the_ready_teams_are_valid_in_every_language_and_their_schedules_parse() {
+        const TAGS: [&str; 9] = ["en", "ru", "de", "es", "fr", "ja", "ko", "pt-BR", "zh-Hans"];
+        for (bundle_id, members) in READY_TEAMS {
+            let bundle = agent_bundles::find(bundle_id).unwrap().expect("a shipped bundle");
+            assert_eq!(bundle.templates, members, "{bundle_id}");
+            for id in members {
+                let t = template(id);
+                for tag in TAGS {
+                    let language = resolve_language(&t, tag);
+                    assert_eq!(language, tag, "{id}: {tag} is not resolved to itself");
+                    assert!(!template_role(&t, &language).trim().is_empty(), "{id} {tag}: role");
+                    for (index, s) in t.schedules.iter().enumerate() {
+                        assert!(
+                            !schedule_prompt(&t, index, s, &language).trim().is_empty(),
+                            "{id} {tag}"
+                        );
+                        assert!(!s.enabled_by_default, "{id}: a ready team's schedule starts off");
+                    }
+                }
+                for s in &t.schedules {
+                    schedules::check_agent_interval(&s.cron, &schedule_text::local_zone()).unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_quiet_schedules_say_so_in_the_instructions() {
+        for id in ["server-watch", "morning-brief", "docs-keeper"] {
+            let t = template(id);
+            assert!(!t.schedules.is_empty(), "{id}");
+            assert!(t.system_prompt.contains("nothing_to_report"), "{id}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_ready_team_is_made_with_one_folder_the_model_and_schedules_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("shop");
+        std::fs::create_dir_all(&project).unwrap();
+        let (app, store) = app(dir.path());
+        let reply = call(
+            &app,
+            "agents.create_bundle",
+            json!({
+                "bundle_id": "web-project", "language": "ru",
+                "cwd": project.display().to_string(), "schedules": [],
+            }),
+        )
+        .await
+        .unwrap();
+        let entries = reply["agents"].as_array().unwrap();
+        assert_eq!(entries.len(), 3);
+        for e in entries {
+            assert!(e.get("error").is_none(), "{e}");
+            let agent = store.agent_get(e["agent"]["id"].as_str().unwrap()).unwrap().unwrap();
+            assert_eq!(agent.cwd, project.display().to_string());
+        }
+        // code-reviewer and qa-tester have a schedule each: made, but off.
+        let all = store.schedule_list(None).unwrap();
+        assert_eq!(all.len(), 2);
+        assert!(all.iter().all(|s| !s.enabled));
+    }
+
+    #[tokio::test]
+    async fn the_confirmed_schedules_are_the_only_ones_switched_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store) = app(dir.path());
+        call(
+            &app,
+            "agents.create_bundle",
+            json!({ "bundle_id": "server-duty", "language": "en", "schedules": ["server-watch:0"] }),
+        )
+        .await
+        .unwrap();
+        let all = store.schedule_list(None).unwrap();
+        assert_eq!(all.len(), 1);
+        assert!(all[0].enabled);
+        assert!(all[0].prompt.contains("report nothing"));
+        let agent = store.agent_list().unwrap().remove(0);
+        assert_eq!(agent.name, "Server watch");
+        assert_eq!(agent.template_id.as_deref(), Some("server-watch"));
+    }
+
+    #[tokio::test]
+    async fn without_the_schedules_key_a_bundle_behaves_as_before() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store) = app(dir.path());
+        call(&app, "agents.create_bundle", bundle_request("morning-summary", "en"))
+            .await
+            .unwrap();
+        // Off by default in the template, so none is made.
+        assert!(store.schedule_list(None).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_bad_folder_model_or_schedule_key_is_refused_before_anything_is_created() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store) = app(dir.path());
+        for extra in [
+            json!({ "cwd": "relative/path" }),
+            json!({ "cwd": dir.path().join("missing").display().to_string() }),
+            json!({ "model": "  " }),
+            json!({ "model": "no-such-model-anywhere" }),
+            json!({ "schedules": ["server-watch:1"] }),
+            json!({ "schedules": ["other-bot:0"] }),
+            json!({ "schedules": ["server-watch:0", "server-watch:0"] }),
+        ] {
+            let mut p = bundle_request("server-duty", "en");
+            for (k, v) in extra.as_object().unwrap() {
+                p[k] = v.clone();
+            }
+            let err = call(&app, "agents.create_bundle", p).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{extra}");
+        }
+        assert!(store.agent_list().unwrap().is_empty());
+        assert!(features().contains(&"bundle_schedules"));
+    }
+
+    fn answer(kind: RuntimeKind, ids: &[(&str, &str)], error: Option<&str>) -> crate::runtime::models::ModelsAnswer {
+        crate::runtime::models::ModelsAnswer {
+            runtime: kind,
+            models: ids
+                .iter()
+                .map(|(id, name)| crate::runtime::models::RuntimeModel {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    description: None,
+                    is_default: false,
+                    efforts: Vec::new(),
+                    context_window: None,
+                })
+                .collect(),
+            error: error.map(String::from),
+            fetched_at: 0,
+        }
+    }
+
+    #[test]
+    fn a_bundle_model_must_be_one_the_runtime_offers() {
+        let ok = vec![(
+            "claude".to_string(),
+            answer(RuntimeKind::Claude, &[("haiku", "Haiku 5.5")], None),
+        )];
+        assert_eq!(models_from_answers(&ok, " HAIKU ").unwrap()["claude"], "haiku");
+        assert_eq!(models_from_answers(&ok, "Haiku 5.5").unwrap()["claude"], "haiku");
+        for bad in ["gpt-9", "haiku; rm"] {
+            assert_eq!(models_from_answers(&ok, bad).unwrap_err().code, INVALID_PARAMS);
+        }
+        let none = vec![(
+            "claude".to_string(),
+            answer(RuntimeKind::Claude, &[], Some("not_installed")),
+        )];
+        assert_eq!(models_from_answers(&none, "haiku").unwrap_err().code, INVALID_PARAMS);
     }
 }
