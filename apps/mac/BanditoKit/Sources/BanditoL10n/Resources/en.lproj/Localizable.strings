@@ -1827,7 +1827,6 @@
 "onboarding.welcome.askText" = "Pushes, deploys, deletes — only with your yes. Answer from the Mac, from a notification, or from an iPhone.";
 "onboarding.welcome.askTitle" = "They ask before anything risky";
 "onboarding.welcome.footer" = "Open source · your code and keys never leave your servers";
-"onboarding.welcome.hasAccount" = "I already have an account";
 "onboarding.welcome.serverText" = "Files, terminals, browser and the server screen in one window. Easier than SSH, and agents see what you see.";
 "onboarding.welcome.serverTitle" = "The whole server at hand";
 "onboarding.welcome.signIn" = "Sign in";

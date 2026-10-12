@@ -734,7 +734,6 @@
   "serverUpdate.banner.title": "服务器 {name} 有可用的新版本 {version}",
   "onboarding.welcome.serverTitle": "整台服务器尽在手边",
   "onboarding.welcome.serverText": "文件、终端、浏览器和服务器屏幕都在一个窗口里。比 SSH 方便，代理看到的画面与此相同。",
-  "onboarding.welcome.hasAccount": "我已有账户",
   "onboarding.steps.intro": "简介",
   "onboarding.steps.account": "账户",
   "onboarding.steps.server": "服务器",

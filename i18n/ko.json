@@ -734,7 +734,6 @@
   "serverUpdate.banner.title": "서버 {name}에서 버전 {version}을(를) 사용할 수 있습니다",
   "onboarding.welcome.serverTitle": "서버 전체를 손안에",
   "onboarding.welcome.serverText": "파일, 터미널, 브라우저, 서버 화면을 한 창에서 쓸 수 있어요. SSH보다 편하고, 에이전트도 내가 보는 화면을 함께 봐요.",
-  "onboarding.welcome.hasAccount": "이미 계정이 있어요",
   "onboarding.steps.intro": "소개",
   "onboarding.steps.account": "계정",
   "onboarding.steps.server": "서버",

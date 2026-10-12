@@ -752,7 +752,6 @@
   "serverUpdate.banner.title": "No servidor {name} está disponível a versão {version}",
   "onboarding.welcome.serverTitle": "O servidor inteiro à mão",
   "onboarding.welcome.serverText": "Arquivos, terminais, navegador e a tela do servidor numa só janela. Mais fácil que SSH, e os agentes veem o que você vê.",
-  "onboarding.welcome.hasAccount": "Já tenho uma conta",
   "onboarding.steps.intro": "Introdução",
   "onboarding.steps.account": "Conta",
   "onboarding.steps.server": "Servidor",

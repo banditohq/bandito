@@ -70,15 +70,17 @@ import Testing
     /// the end of the assembly every light is at its rest.
     @Test func showingAMomentPlacesTheLightsOnTheirFlight() {
         let layer = RaccoonLightsLayer()
-        layer.signalColor = CGColor(red: 1, green: 0.5, blue: 0.2, alpha: 1)
-        layer.creamColor = CGColor(red: 1, green: 0.95, blue: 0.87, alpha: 1)
+        layer.configure(
+            signal: CGColor(red: 1, green: 0.5, blue: 0.2, alpha: 1),
+            cream: CGColor(red: 1, green: 0.95, blue: 0.87, alpha: 1), fullStrength: false, reduceMotion: false)
+        layer.isGeometryFlipped = true  // the contents run down, as the figure's coordinates do (see the orientation tests)
         layer.bounds = CGRect(x: 0, y: 0, width: 280, height: 280)
         layer.layoutIfNeeded()
-        let discs = Array((layer.sublayers ?? []).prefix(lights.count))
+        let discs = Array((layer.figureLayer.sublayers ?? []).prefix(lights.count))
         #expect(discs.count == lights.count, "one layer per light")
 
         func distanceToRest(_ disc: CALayer, _ light: RaccoonLight) -> CGFloat {
-            hypot(disc.position.x - CGFloat(light.x) * 280, disc.position.y - CGFloat(light.y) * 280)
+            hypot(disc.position.x - CGFloat(light.x) * RaccoonLightsLayer.referenceSide, disc.position.y - CGFloat(light.y) * RaccoonLightsLayer.referenceSide)
         }
         layer.show(at: 0.5)
         let onTheWay = zip(discs, lights).filter { distanceToRest($0.0, $0.1) > 1 }
@@ -87,6 +89,12 @@ import Testing
         layer.show(at: 2.4)
         let unsettled = zip(discs, lights).filter { distanceToRest($0.0, $0.1) > 0.01 }
         #expect(unsettled.isEmpty, "every light is at its rest after the assembly")
+    }
+
+    /// The eyes stay lit from 1.5 s to the breathing at 1.6 s: they do not go dark in the tenth of a second between.
+    @Test func theEyesStayLitUntilTheyBreathe() {
+        #expect(abs(RaccoonLights.eyeGlow(at: 1.55) - 0.8) < 1e-9)
+        #expect(abs(RaccoonLights.eyeGlow(at: 1.599) - 0.8) < 1e-9)
     }
 
     @Test func theCurveStartsAndEndsAtTheRest() {

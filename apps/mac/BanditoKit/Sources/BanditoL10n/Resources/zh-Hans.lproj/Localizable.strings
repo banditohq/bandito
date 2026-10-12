@@ -1827,7 +1827,6 @@
 "onboarding.welcome.askText" = "推送、部署、删除都必须经过同意。可以在 Mac、通知或 iPhone 上回复。";
 "onboarding.welcome.askTitle" = "有风险的操作前会先询问";
 "onboarding.welcome.footer" = "开源 · 代码和密钥永远不会离开服务器";
-"onboarding.welcome.hasAccount" = "我已有账户";
 "onboarding.welcome.serverText" = "文件、终端、浏览器和服务器屏幕都在一个窗口里。比 SSH 方便，代理看到的画面与此相同。";
 "onboarding.welcome.serverTitle" = "整台服务器尽在手边";
 "onboarding.welcome.signIn" = "登录";

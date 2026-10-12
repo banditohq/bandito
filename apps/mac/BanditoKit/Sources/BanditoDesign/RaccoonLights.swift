@@ -7,38 +7,38 @@ import Foundation
 // of their own and light up last. This file is the figure as pure values: the layers that show it are `RaccoonLightsLayer`.
 
 /// The tone of a light: the fur's orange or a cream spark.
-public enum RaccoonLightTone: Sendable, Equatable {
+enum RaccoonLightTone: Sendable, Equatable {
     case signal
     case cream
 }
 
 /// Where a light belongs to the raccoon: the head, or an eye.
-public enum RaccoonRegion: Sendable, Equatable {
+enum RaccoonRegion: Sendable, Equatable {
     case fur
     case eye
 }
 
 /// A point of the figure's square: 0...1 on each side, y down.
-public struct FigurePoint: Equatable, Sendable {
-    public let x: Double
-    public let y: Double
+struct FigurePoint: Equatable, Sendable {
+    let x: Double
+    let y: Double
 }
 
 /// One light: its rest in the figure's square, its look, and its flight (start point, delay, duration). Pure values.
-public struct RaccoonLight: Equatable, Sendable {
-    public let region: RaccoonRegion
-    public let x: Double
-    public let y: Double
-    public let startX: Double
-    public let startY: Double
+struct RaccoonLight: Equatable, Sendable {
+    let region: RaccoonRegion
+    let x: Double
+    let y: Double
+    let startX: Double
+    let startY: Double
     /// Diameter as a share of the square's side.
-    public let diameter: Double
+    let diameter: Double
     /// Brightness, 0 to 1.
-    public let alpha: Double
-    public let tone: RaccoonLightTone
+    let alpha: Double
+    let tone: RaccoonLightTone
     /// Seconds after the assembly starts, and how long the flight takes. `delay + duration` is at most the assembly.
-    public let delay: Double
-    public let duration: Double
+    let delay: Double
+    let duration: Double
 }
 
 /// The logo's units to the figure's square: the head's box, centred and scaled to fill the square less a margin.
@@ -60,26 +60,26 @@ struct RaccoonFrame: Equatable, Sendable {
 }
 
 /// The figure and its flight as pure functions of the logo's head, so the layout is tested without a screen.
-public enum RaccoonLights {
+enum RaccoonLights {
     /// Seconds from the first light leaving its ring to the last one arriving.
-    public static let assemblyDuration: Double = 1.6
+    static let assemblyDuration: Double = 1.6
     /// Share of the fur lights that are cream instead of signal.
     static let creamShare: Double = 0.1
     /// The head fills the square less this margin on each side (a share of the square).
     static let margin: Double = 0.05
     /// The eyes' glow, a share of the square's side.
-    public static let eyeGlowShare: Double = 0.24
+    static let eyeGlowShare: Double = 0.24
 
     /// The figure, built once: its lights and the centres of its two eyes.
-    public static let figure: Figure = make()
+    static let figure: Figure = make()
 
-    public struct Figure: Equatable, Sendable {
-        public let lights: [RaccoonLight]
-        public let eyeCentres: [FigurePoint]
+    struct Figure: Equatable, Sendable {
+        let lights: [RaccoonLight]
+        let eyeCentres: [FigurePoint]
     }
 
     /// The whole figure, in a fixed order: the same logo always gives the same lights.
-    public static func make() -> Figure {
+    static func make() -> Figure {
         guard let sample = RaccoonHead.sample() else { return Figure(lights: [], eyeCentres: []) }
         let frame = RaccoonFrame(box: sample.box)
         let cell = Double(RaccoonHead.gridStep) * frame.scale
@@ -118,7 +118,7 @@ public enum RaccoonLights {
     }
 
     /// A stable pseudo-random value in 0..<1 from a seed and a salt (SplitMix64 finalizer).
-    public static func noise(_ seed: Int, _ salt: UInt64) -> Double {
+    static func noise(_ seed: Int, _ salt: UInt64) -> Double {
         var z = UInt64(bitPattern: Int64(seed)) &* 0x9E37_79B9_7F4A_7C15 &+ salt &* 0xBF58_476D_1CE4_E5B9
         z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
         z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
@@ -166,12 +166,12 @@ extension RaccoonLights {
         flightCurve(min(max((elapsed - light.delay) / light.duration, 0), 1))
     }
 
-    /// The eyes' glow at `elapsed`: it lights up from 1.0 s to 1.5 s, is dark for the tenth of a second before the
-    /// breathing starts at 1.6 s (the layers do not fill that animation forwards), then breathes between 0.8 and 0.45.
+    /// The eyes' glow at `elapsed`: it lights up from 1.0 s to 1.5 s, holds 0.8 until the breathing starts at 1.6 s,
+    /// then breathes between 0.8 and 0.45.
     static func eyeGlow(at elapsed: Double) -> Double {
         if elapsed < 1.0 { return 0 }
         if elapsed < 1.5 { return 0.8 * flightCurve((elapsed - 1.0) / 0.5) }
-        if elapsed < 1.6 { return 0 }
+        if elapsed < 1.6 { return 0.8 }
         let phase = (elapsed - 1.6).truncatingRemainder(dividingBy: 4.8)
         if phase < 2.4 {
             return 0.8 + (0.45 - 0.8) * breathCurve(phase / 2.4)

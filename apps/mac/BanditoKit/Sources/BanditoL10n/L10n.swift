@@ -2609,7 +2609,6 @@ public enum L10n {
             public static var askText: String { L10n.tr("onboarding.welcome.askText") }
             public static var askTitle: String { L10n.tr("onboarding.welcome.askTitle") }
             public static var footer: String { L10n.tr("onboarding.welcome.footer") }
-            public static var hasAccount: String { L10n.tr("onboarding.welcome.hasAccount") }
             public static var serverText: String { L10n.tr("onboarding.welcome.serverText") }
             public static var serverTitle: String { L10n.tr("onboarding.welcome.serverTitle") }
             public static var signIn: String { L10n.tr("onboarding.welcome.signIn") }

@@ -23,9 +23,21 @@ struct WelcomeView: View {
         // (short window). Not ViewThatFits: it keeps every candidate alive, four demos and four story cards animating
         // at once, and measured them all on every frame.
         GeometryReader { geometry in
-            layout(wide: geometry.size.width >= Self.wideWidth, compact: geometry.size.height < Self.fullHeight)
+            layout(
+                wide: geometry.size.width >= Self.wideWidth, compact: geometry.size.height < Self.fullHeight,
+                raccoon: Self.raccoonSide(height: geometry.size.height))
                 .frame(width: geometry.size.width, height: geometry.size.height)
         }
+    }
+
+    /// The raccoon's side for a content height: as large as the window leaves room for (the hero, 240 pt, from about
+    /// 600 pt of content), and 0 (no raccoon) when even the smallest side (`raccoonMinimumSide`) does not fit beside the
+    /// title, the story card and the buttons.
+    static let raccoonMaximumSide: CGFloat = 240
+    static let raccoonMinimumSide: CGFloat = 96
+    static func raccoonSide(height: CGFloat) -> CGFloat {
+        let side = min(raccoonMaximumSide, height - 360)
+        return side >= raccoonMinimumSide ? side : 0
     }
 
     /// Narrowest content width that still has room for the demo beside the intro (540 + 40 + 460).
@@ -33,19 +45,19 @@ struct WelcomeView: View {
     /// Shortest content height for the full layout (mascot, big headline, story card, footer).
     static let fullHeight: CGFloat = 640
 
-    private func layout(wide: Bool, compact: Bool) -> some View {
+    private func layout(wide: Bool, compact: Bool, raccoon: CGFloat) -> some View {
         VStack(spacing: 0) {
             if wide {
-                wideLayout(compact: compact)
+                wideLayout(compact: compact, raccoon: raccoon)
             } else {
-                narrowLayout(compact: compact)
+                narrowLayout(compact: compact, raccoon: raccoon)
             }
         }
     }
 
-    private func wideLayout(compact: Bool) -> some View {
+    private func wideLayout(compact: Bool, raccoon: CGFloat) -> some View {
         HStack(alignment: .center, spacing: 40) {
-            intro(compact: compact)
+            intro(compact: compact, raccoon: raccoon)
                 .frame(width: 540, alignment: .leading)
             WelcomeDemoCard(start: demoStart) {
                 demoStart = Date()
@@ -53,41 +65,30 @@ struct WelcomeView: View {
         }
     }
 
-    private func narrowLayout(compact: Bool) -> some View {
+    private func narrowLayout(compact: Bool, raccoon: CGFloat) -> some View {
         // Without the demo the column keeps a readable measure instead of running across the window.
-        intro(compact: compact)
+        intro(compact: compact, raccoon: raccoon)
             .frame(maxWidth: 680, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func intro(compact: Bool) -> some View {
+    private func intro(compact: Bool, raccoon: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: compact ? 14 : 22) {
             // The raccoon of points of light: the hero of the screen, assembled on appear (static under Reduce Motion).
-            // On a short window (the minimum, 900 x 640) even 96 pt pushes the subtitle to one line and the footer out,
-            // so it is left out there.
-            if !compact {
+            // Its size follows the window's height (`raccoonSide`); it is left out when even the smallest does not fit.
+            if raccoon > 0 {
                 RaccoonLightsHost(
                     reduceMotion: MotionLevel(stored: motionLevel).reducesMotion(systemReduceMotion: reduceMotion),
                     dark: colorScheme == .dark)
-                    .frame(width: 240, height: 240)
+                    .frame(width: raccoon, height: raccoon)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(L10n.Ios.Onboarding.Welcome.assembly)
                     .accessibilityAddTraits(.isImage)
             }
             // The title is never cut: the first size whose line fits the column is used.
-            if compact {
-                ViewThatFits(in: .horizontal) {
-                    title(size: 44)
-                    title(size: 40)
-                    title(size: 36)
-                }
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    title(size: 62)
-                    title(size: 52)
-                    title(size: 44)
-                    title(size: 36)
-                }
+            let titleSizes: [CGFloat] = compact ? [44, 40, 36] : [62, 52, 44, 36]
+            FirstFit(count: titleSizes.count) { index, _ in
+                title(size: titleSizes[index])
             }
             Text(L10n.Onboarding.Welcome.subtitle)
                 .font(BanditoFont.text(size: 17, weight: 400))

@@ -25,12 +25,10 @@ final class RaccoonLightsView: UIView {
         backgroundColor = .clear
         isUserInteractionEnabled = false
         clipsToBounds = true
-        if let lights = layer as? RaccoonLightsLayer {
-            lights.reduceMotion = reduceMotion
-            // The onboarding is always dark: the brand's colours are resolved for dark.
-            lights.signalColor = Self.color(Color.Bandito.signal)
-            lights.creamColor = Self.color(Color.Bandito.text)
-        }
+        // The onboarding is always dark: the brand's colours are resolved for dark.
+        (layer as? RaccoonLightsLayer)?.configure(
+            signal: Self.color(Color.Bandito.signal), cream: Self.color(Color.Bandito.text),
+            fullStrength: false, reduceMotion: reduceMotion)
     }
 
     @available(*, unavailable)

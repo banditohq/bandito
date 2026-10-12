@@ -449,7 +449,6 @@
   "onboarding.welcome.footer": "Open source · your code and keys never leave your servers",
   "onboarding.welcome.serverTitle": "The whole server at hand",
   "onboarding.welcome.serverText": "Files, terminals, browser and the server screen in one window. Easier than SSH, and agents see what you see.",
-  "onboarding.welcome.hasAccount": "I already have an account",
   "onboarding.steps.intro": "Introduction",
   "onboarding.steps.account": "Account",
   "onboarding.steps.server": "Server",
