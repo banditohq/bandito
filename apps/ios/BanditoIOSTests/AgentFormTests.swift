@@ -52,6 +52,33 @@ import Testing
         #expect(body["capabilities"] as? [String] == [])
     }
 
+    @Test func aRuntimeChangeMovesTheEffortToTheNearestLevelItTakes() {
+        let moved = AgentForms.afterRuntimeChange(to: .grok, pickedModel: nil, effort: .xhigh, lists: [:])
+        #expect(moved.effort == .high)
+        #expect(moved.pickedModel == nil)
+    }
+
+    @Test func aRuntimeChangeDropsAPickedModelTheNewListDoesNotName() {
+        let lists = ["codex": RuntimeModelList(runtime: .codex, models: [RuntimeModel(id: "gpt-5", name: "GPT-5")], fetchedAt: 0)]
+        let dropped = AgentForms.afterRuntimeChange(to: .codex, pickedModel: "haiku", effort: .low, lists: lists)
+        #expect(dropped.pickedModel == nil)
+        #expect(dropped.effort == .low)
+        let kept = AgentForms.afterRuntimeChange(to: .codex, pickedModel: "gpt-5", effort: nil, lists: lists)
+        #expect(kept.pickedModel == "gpt-5")
+    }
+
+    @Test func aRuntimeSwitchOfTheCardClearsTheFallbackAndTheUnknownModel() throws {
+        let agent = Agent(
+            id: "a1", name: "Forge", role: "", runtime: .claude, model: "haiku", cwd: "/a",
+            fallbackRuntime: .codex, fallbackModel: "gpt-5")
+        let patch = AgentForms.runtimeSwitch(of: agent, to: .codex, lists: [:])
+        let body = try wire(patch)
+        #expect(body["runtime"] as? String == "codex")
+        #expect(body["fallback_runtime"] is NSNull)
+        #expect(body["fallback_model"] is NSNull)
+        #expect(body["model"] is NSNull)
+    }
+
     // MARK: fixtures
 
     /// The runtimes of `runtimes.status`, with the given kinds installed.

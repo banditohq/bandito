@@ -17,7 +17,9 @@ struct CrewScreen: View {
     @State private var path = NavigationPath()
     /// The creation sheet, while it is open: the tab it opens on. A new value is a new sheet.
     @State private var newAgent: NewAgentStart?
+    #if DEBUG
     @State private var hooksOpened = false
+    #endif
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -64,7 +66,9 @@ struct CrewScreen: View {
         .task(id: focus) {
             open(focus)
         }
+        #if DEBUG
         .onChange(of: servers.count, initial: true) { _, _ in openScreenshotHooks() }
+        #endif
         .sheet(item: $newAgent) { start in
             if let server = currentServer {
                 NewAgentSheet(server: server, tab: start.tab)
@@ -72,8 +76,9 @@ struct CrewScreen: View {
         }
     }
 
+    #if DEBUG
     /// The screenshot hooks, read once from the launch arguments as `-tab` is: `-agent-card <name>` opens that agent's
-    /// card, `-new-agent` opens the creation sheet (`-new-agent one` on its one-agent tab).
+    /// card, `-new-agent` opens the creation sheet (`-new-agent one` on its one-agent tab). Debug builds only.
     private func openScreenshotHooks() {
         guard !hooksOpened, let server = currentServer else { return }
         hooksOpened = true
@@ -88,6 +93,7 @@ struct CrewScreen: View {
             newAgent = NewAgentStart(tab: one ? .one : .teams)
         }
     }
+    #endif
 
     private var currentServer: ServerModel? {
         servers.first { $0.id == chosenServerID } ?? servers.first

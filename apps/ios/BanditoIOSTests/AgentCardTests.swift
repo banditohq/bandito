@@ -19,7 +19,7 @@ import Testing
         #expect(body.keys.sorted() == ["role"])
         #expect(body["role"] as? String == "Reviewer")
         #expect(card.savedCount == 1)
-        #expect(card.failure == nil)
+        #expect(card.failures.isEmpty)
     }
 
     @Test func pauseAndResumeUseThePausedField() async throws {
@@ -43,9 +43,9 @@ import Testing
         let fake = FakeAgentServer(agents: [agent(name: "Forge", role: "Builder")])
         fake.error = RPCError(code: -32000, message: "the daemon refused")
         let card = AgentDetailModel(server: fake, agentID: "a1")
-        let saved = await card.save(AgentPatch(approvalMode: .never))
+        let saved = await card.save(AgentPatch(approvalMode: .never), in: .approval)
         #expect(!saved)
-        #expect(card.failure == "the daemon refused")
+        #expect(card.failures[.approval] == "the daemon refused")
         #expect(card.savedCount == 0)
     }
 
@@ -82,7 +82,34 @@ import Testing
         let card = AgentDetailModel(server: fake, agentID: "a1")
         let deleted = await card.delete()
         #expect(!deleted)
-        #expect(card.failure == "busy")
+        #expect(card.failures[.delete] == "busy")
+    }
+
+    @Test func twoQuickChipTapsBothReachTheServer() async throws {
+        let fake = FakeAgentServer(agents: [agent(name: "Forge", role: "Builder")])
+        let card = AgentDetailModel(server: fake, agentID: "a1")
+        card.syncChips(with: fake.agents[0])
+        card.toggleChip(.terminal)
+        card.toggleChip(.files)
+        await card.finishChipSends()
+        // Each send carries the list as it was after its own tap, so the second holds both changes.
+        #expect(fake.patches.count == 2)
+        #expect(fake.patches.map { $0.capabilities ?? [] } == [
+            ["files", "browser", "team", "screen"],
+            ["browser", "team", "screen"],
+        ])
+        #expect(card.chips == [.browser, .team, .screen])
+    }
+
+    @Test func aFailedChipSendGoesBackToTheAgentsList() async throws {
+        let fake = FakeAgentServer(agents: [agent(name: "Forge", role: "Builder")])
+        let card = makeCard(fake)
+        card.syncChips(with: fake.agents[0])
+        fake.error = RPCError(code: -32000, message: "no")
+        card.toggleChip(.terminal)
+        await card.finishChipSends()
+        #expect(card.chips.contains(.terminal))
+        #expect(card.failures[.capabilities] == "no")
     }
 
     @Test func identityPatchHoldsOnlyTheFieldsThatChanged() throws {
@@ -116,6 +143,10 @@ import Testing
              "enabled":\(enabled),"created_at":1}
             """
         return try JSONDecoder.wire.decode(Schedule.self, from: Data(json.utf8))
+    }
+
+    private func makeCard(_ server: FakeAgentServer) -> AgentDetailModel {
+        AgentDetailModel(server: server, agentID: "a1")
     }
 
     /// The request body as the RPC client sends it.

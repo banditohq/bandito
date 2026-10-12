@@ -127,6 +127,11 @@ final class AgentDetailModel {
         await save(patch, in: .work)
     }
 
+    /// Waits until the chip sends queued so far are answered (the tests read the server's list after them).
+    func finishChipSends() async {
+        await chipChain?.value
+    }
+
     /// Switches one schedule on or off (`schedules.update {enabled}`), and keeps the list in step with the answer.
     func setScheduleEnabled(_ id: String, _ enabled: Bool) async {
         do {

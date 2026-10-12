@@ -11,7 +11,12 @@ struct RootView: View {
     /// The demo servers of the `-demo` launch arguments; empty without them.
     @State private var demoServers: [ServerModel] = []
     @State private var showsConnect = false
+    #if DEBUG
+    /// `-tab <name>` opens a tab at launch (the screenshots); release builds always open Crew.
     @State private var tab = AppTab.requested(in: ProcessInfo.processInfo.arguments)
+    #else
+    @State private var tab = AppTab.crew
+    #endif
     @State private var settings = IOSSettings()
     @State private var servers = ConnectedServers.launch(demo: IOSDemo.isRequested(in: ProcessInfo.processInfo.arguments))
     @State private var appLock = AppLock()
@@ -154,11 +159,13 @@ enum AppTab: String, CaseIterable, Hashable {
     case activity
     case settings
 
+    #if DEBUG
     static func requested(in arguments: [String]) -> AppTab {
         guard let index = arguments.firstIndex(of: "-tab"), arguments.indices.contains(index + 1),
               let tab = AppTab(rawValue: arguments[index + 1]) else { return .crew }
         return tab
     }
+    #endif
 }
 
 struct ComingSoonTab: View {

@@ -85,11 +85,44 @@ import Testing
         let watch = try #require(server.agents.first { $0.name == "Watch" })
         let schedules = try await server.schedules(agentId: watch.id)
         #expect(schedules.count == 2)
-        let nightly = try #require(schedules.first { $0.title == "Nightly disk check" })
+        let nightly = try #require(schedules.first { $0.cron == "0 22 * * *" })
+        #expect(nightly.humanEn != nil)
         #expect(nightly.enabled)
         let switched = try await server.updateSchedule(nightly.id, enabled: false)
         #expect(!switched.enabled)
         try await server.runScheduleNow(nightly.id)
+        await server.disconnect()
+    }
+
+    @Test func aSecondFolderWithTheSameNameIsRefused() async throws {
+        let server = await IOSDemo.start()
+        _ = try await server.mkdir("/Users/demo/Ledger")
+        do {
+            _ = try await server.mkdir("/Users/demo/Ledger")
+            Issue.record("the second folder with the same name was made")
+        } catch {
+            #expect((error as? RPCError)?.message == "already exists")
+        }
+        await server.disconnect()
+    }
+
+    @Test func aFailedTemplateOfABundleMakesNoAgentUntilItIsAllowed() async throws {
+        let (server, transport) = await IOSDemo.startWithTransport()
+        let bundles = try await server.agentBundles()
+        let bundle = try #require(bundles.first { $0.id == "web-project" })
+        let templates = try await server.botTemplates().filter { bundle.templates.contains($0.id) }
+        let items = ReadyTeamsLogic.scheduleItems(members: templates, languageCode: "en")
+        await transport.failBundleEntry(templateID: "code-reviewer", failing: true)
+        let request = try #require(
+            ReadyTeamsLogic.request(
+                bundle: bundle, runtime: .claude, languageCode: "en", model: nil,
+                folder: "/Users/demo/Projects/web", items: items, enabled: []))
+        let made = try await server.createBundle(request)
+        let failed = try #require(made.agents.first { $0.templateId == "code-reviewer" })
+        #expect(failed.agent == nil)
+        #expect(failed.error != nil)
+        #expect(made.agents.filter { $0.agent != nil }.count == 2)
+        await transport.failBundleEntry(templateID: "code-reviewer", failing: false)
         await server.disconnect()
     }
 }
