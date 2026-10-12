@@ -1,3 +1,4 @@
+import BanditoDesign
 import BanditoKit
 import CoreGraphics
 import SwiftUI

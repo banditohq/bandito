@@ -3070,5 +3070,19 @@
   "ios.tab.crew": "团队",
   "ios.tab.inbox": "收件箱",
   "ios.tab.activity": "动态",
-  "ios.tab.comingSoon": "即将推出"
+  "ios.tab.comingSoon": "即将推出",
+  "ios.crew.needsYou": "等待你处理",
+  "ios.crew.serverSwitch": "切换服务器",
+  "ios.crew.wantsToRun": "{name} 想要执行 {command}",
+  "ios.crew.waitingForm": "{name} 在等待表单填写",
+  "ios.crew.waitingAnswer": "{name} 在等你",
+  "ios.crew.noMessages": "还没有消息",
+  "ios.crew.lead": "主理人",
+  "ios.crew.unread": "{count} 条未读",
+  "ios.crew.openChat": "打开与 {name} 的聊天",
+  "ios.crew.emptyTitle": "还没有智能体",
+  "ios.crew.emptyMessage": "这台服务器还没有智能体。创建第一个，让团队开始工作。",
+  "ios.crew.createAgent": "创建智能体",
+  "ios.crew.createSoon": "在 iPhone 上创建智能体即将推出。",
+  "ios.crew.chatSoon": "与 {name} 的聊天即将推出。"
 }

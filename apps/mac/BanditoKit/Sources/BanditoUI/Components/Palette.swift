@@ -43,12 +43,12 @@ enum BanditoPalette {
     // MARK: Avatars
 
     // Fixed brand avatar colors, same in light and dark. They do not follow theme tokens.
-    static let avatarPeach = Color(hex: 0xFFB067)
-    static let avatarSky = Color(hex: 0xA3BDEB)
-    static let avatarSage = Color(hex: 0xA9C7A2)
-    static let avatarRose = Color(hex: 0xF2A093)
-    static let avatarLilac = Color(hex: 0xC8B6E8)
-    static let avatarCream = Color(hex: 0xF3EBDD)
+    static let avatarPeach = AvatarTile.peach
+    static let avatarSky = AvatarTile.sky
+    static let avatarSage = AvatarTile.sage
+    static let avatarRose = AvatarTile.rose
+    static let avatarLilac = AvatarTile.lilac
+    static let avatarCream = AvatarTile.cream
     /// Raccoon mask on every avatar: fixed #12100E, same in light and dark.
-    static let avatarMask = Color(hex: 0x12100E)
+    static let avatarMask = AvatarTile.mask
 }

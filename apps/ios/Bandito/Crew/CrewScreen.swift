@@ -1,0 +1,204 @@
+import BanditoDesign
+import BanditoKit
+import BanditoL10n
+import SwiftUI
+
+/// Crew, the home tab: the agents that wait for the person on top, then the team. The server switcher sits in the title
+/// area under the large title (a menu when there is more than one server).
+struct CrewScreen: View {
+    let servers: [ServerModel]
+    let onConnect: () -> Void
+
+    /// The server shown; nil means the first one (the list of servers can change under the screen).
+    @State private var chosenServerID: UUID?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let server = currentServer {
+                    CrewList(server: server, servers: servers, onChoose: { chosenServerID = $0 })
+                        .id(server.id)
+                } else {
+                    WelcomeView(onConnect: onConnect)
+                }
+            }
+            .navigationTitle(L10n.Ios.Tab.crew)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(.hidden, for: .navigationBar)
+        }
+    }
+
+    private var currentServer: ServerModel? {
+        servers.first { $0.id == chosenServerID } ?? servers.first
+    }
+}
+
+/// The list of one server's crew. Reads the server's agents and their thread summaries; each row is an `Equatable`
+/// view of its facts (`CrewAgentRow`), so the list rebuilds the rows that changed and no others.
+struct CrewList: View {
+    let server: ServerModel
+    let servers: [ServerModel]
+    let onChoose: (UUID) -> Void
+
+    @State private var pinned: [String] = []
+    @State private var showsCreateNote = false
+
+    var body: some View {
+        let rows = CrewFacts.build(server: server, pinned: pinned)
+        let waiting = rows.filter { $0.waiting != nil }
+        List {
+            serverSwitch
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: BanditoSpace.s5, bottom: 0, trailing: BanditoSpace.s5))
+                .listRowSeparator(.hidden)
+
+            if !waiting.isEmpty {
+                Section {
+                    ForEach(waiting) { facts in
+                        NavigationLink {
+                            AgentChatStub(name: facts.name)
+                        } label: {
+                            NeedsYouCard(facts: facts)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: BanditoSpace.s1, leading: BanditoSpace.s4, bottom: BanditoSpace.s1, trailing: BanditoSpace.s4))
+                        .listRowSeparator(.hidden)
+                    }
+                } header: {
+                    CrewSectionLabel(title: L10n.Ios.Crew.needsYou, waiting: true)
+                }
+            }
+
+            if rows.isEmpty {
+                Section {
+                    emptyState
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+            } else {
+                Section {
+                    ForEach(rows) { facts in
+                        NavigationLink {
+                            AgentChatStub(name: facts.name)
+                        } label: {
+                            CrewAgentRow(facts: facts).equatable()
+                        }
+                        .listRowBackground(Color.Bandito.surface1)
+                        .contextMenu {
+                            Button {
+                                pinned = CrewPins.toggled(facts.id, in: pinned)
+                                CrewPins.save(pinned, serverID: server.id)
+                            } label: {
+                                Label(
+                                    facts.isPinned ? L10n.Agent.Menu.unpin : L10n.Agent.Menu.pin,
+                                    systemImage: facts.isPinned ? "pin.slash" : "pin")
+                            }
+                            Button {
+                                let paused = !facts.isPaused
+                                Task { _ = try? await server.setPaused(agentID: facts.id, paused) }
+                            } label: {
+                                Label(
+                                    facts.isPaused ? L10n.Agent.Menu.resume : L10n.Agent.Menu.pause,
+                                    systemImage: facts.isPaused ? "play" : "pause")
+                            }
+                        }
+                    }
+                } header: {
+                    CrewSectionLabel(title: L10n.Sidebar.team)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.Bandito.bg.ignoresSafeArea())
+        .refreshable {
+            // Pull to refresh means "check now": the agents are read again from the server.
+            try? await server.readAgentsNow()
+        }
+        .task(id: server.id) {
+            pinned = CrewPins.load(server.id)
+        }
+        .alert(L10n.Ios.Crew.createAgent, isPresented: $showsCreateNote) {
+            Button(L10n.Common.close, role: .cancel) {}
+        } message: {
+            Text(L10n.Ios.Crew.createSoon)
+        }
+    }
+
+    /// The server's name under the large title: a menu to choose another server when there are several.
+    @ViewBuilder private var serverSwitch: some View {
+        let label = HStack(spacing: BanditoSpace.s2) {
+            Circle()
+                .fill(server.state == .connected ? Color.Bandito.ok : Color.Bandito.text3)
+                .frame(width: 7, height: 7)
+            Text(server.config.name)
+                .font(BanditoFont.text(size: 13, weight: 500))
+                .foregroundStyle(Color.Bandito.text2)
+                .lineLimit(1)
+            if servers.count > 1 {
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.Bandito.text3)
+            }
+        }
+        .padding(.top, BanditoSpace.s1)
+        if servers.count > 1 {
+            Menu {
+                ForEach(servers) { candidate in
+                    Button(candidate.config.name) { onChoose(candidate.id) }
+                }
+            } label: {
+                label
+            }
+            .accessibilityLabel(L10n.Ios.Crew.serverSwitch)
+            .accessibilityValue(server.config.name)
+        } else {
+            label
+                .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// No agent on this server: a sleeping raccoon, one line, and the action (the creation is not built yet).
+    private var emptyState: some View {
+        VStack(spacing: BanditoSpace.s3) {
+            CrewAvatar(
+                name: "", look: CrewLook(color: .peach, face: .sleeping, customHex: nil), mood: .sleeping, size: 72)
+            Text(L10n.Ios.Crew.emptyTitle)
+                .font(BanditoFont.display(size: 16.5, weight: 600))
+                .foregroundStyle(Color.Bandito.text)
+                .multilineTextAlignment(.center)
+            Text(L10n.Ios.Crew.emptyMessage)
+                .font(BanditoFont.text(size: 13.5))
+                .foregroundStyle(Color.Bandito.text2)
+                .multilineTextAlignment(.center)
+            Button {
+                showsCreateNote = true
+            } label: {
+                Text(L10n.Ios.Crew.createAgent)
+            }
+            .buttonStyle(SignalButtonStyle())
+            .padding(.top, BanditoSpace.s2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, BanditoSpace.s6)
+    }
+}
+
+/// The chat of an agent is not built yet: this screen holds its place, with the agent's name.
+struct AgentChatStub: View {
+    let name: String
+
+    var body: some View {
+        VStack(spacing: BanditoSpace.s3) {
+            Text(L10n.Ios.Crew.chatSoon(name: name))
+                .font(BanditoFont.text(size: 15))
+                .foregroundStyle(Color.Bandito.text2)
+                .multilineTextAlignment(.center)
+        }
+        .padding(BanditoSpace.s6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.Bandito.bg.ignoresSafeArea())
+        .navigationTitle(name)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}

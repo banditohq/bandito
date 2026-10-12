@@ -3190,5 +3190,19 @@
   "ios.tab.crew": "Команда",
   "ios.tab.inbox": "Входящие",
   "ios.tab.activity": "Активность",
-  "ios.tab.comingSoon": "Скоро"
+  "ios.tab.comingSoon": "Скоро",
+  "ios.crew.needsYou": "Ждут вас",
+  "ios.crew.serverSwitch": "Сменить сервер",
+  "ios.crew.wantsToRun": "{name} хочет выполнить {command}",
+  "ios.crew.waitingForm": "{name} ждёт заполненную форму",
+  "ios.crew.waitingAnswer": "{name} ждёт вас",
+  "ios.crew.noMessages": "Сообщений пока нет",
+  "ios.crew.lead": "Главный",
+  "ios.crew.unread": "непрочитанных: {count}",
+  "ios.crew.openChat": "Открыть чат с {name}",
+  "ios.crew.emptyTitle": "Агентов пока нет",
+  "ios.crew.emptyMessage": "На этом сервере нет агентов. Создайте первого, чтобы команда начала работать.",
+  "ios.crew.createAgent": "Создать агента",
+  "ios.crew.createSoon": "Создание агентов с iPhone появится скоро.",
+  "ios.crew.chatSoon": "Чат с {name} появится скоро."
 }

@@ -6,13 +6,13 @@ import SwiftUI
 /// The four tabs of the app: Crew (home), Inbox, Activity and Settings. Only Crew has content so far; the other three
 /// are placeholders until their screens are built (docs/IOS_APP.md).
 struct RootView: View {
-    /// The demo server of the `-demo` launch argument; nil without it.
-    @State private var demoServer: ServerModel?
+    /// The demo servers of the `-demo` launch arguments; empty without them.
+    @State private var demoServers: [ServerModel] = []
     @State private var showsConnect = false
 
     var body: some View {
         TabView {
-            CrewTab(server: demoServer, onConnect: { showsConnect = true })
+            CrewScreen(servers: demoServers, onConnect: { showsConnect = true })
                 .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
             ComingSoonTab(title: L10n.Ios.Tab.inbox)
                 .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
@@ -21,31 +21,15 @@ struct RootView: View {
             ComingSoonTab(title: L10n.Settings.title)
                 .tabItem { Label(L10n.Settings.title, systemImage: "gearshape") }
         }
+        // Accents are the brand's signal orange (a link, a menu's chevron); the tab bar itself stays cream on warm dark.
+        .tint(Color.Bandito.signal)
         .task {
-            guard demoServer == nil, IOSDemo.isRequested(in: ProcessInfo.processInfo.arguments) else { return }
-            demoServer = await IOSDemo.start()
+            let arguments = ProcessInfo.processInfo.arguments
+            guard demoServers.isEmpty, IOSDemo.isRequested(in: arguments) else { return }
+            demoServers = await IOSDemo.startServers(withTeam: !IOSDemo.isEmptyRequested(in: arguments))
         }
         .sheet(isPresented: $showsConnect) {
             ConnectPlaceholderSheet()
-        }
-    }
-}
-
-/// Crew: the team of the demo server, or the welcome screen while no server is connected.
-struct CrewTab: View {
-    let server: ServerModel?
-    let onConnect: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if let server {
-                    TeamList(server: server)
-                } else {
-                    WelcomeView(onConnect: onConnect)
-                }
-            }
-            .navigationTitle(L10n.Ios.Tab.crew)
         }
     }
 }

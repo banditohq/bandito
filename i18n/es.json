@@ -3109,5 +3109,19 @@
   "ios.tab.crew": "Equipo",
   "ios.tab.inbox": "Bandeja de entrada",
   "ios.tab.activity": "Actividad",
-  "ios.tab.comingSoon": "Próximamente"
+  "ios.tab.comingSoon": "Próximamente",
+  "ios.crew.needsYou": "Esperan por ti",
+  "ios.crew.serverSwitch": "Cambiar de servidor",
+  "ios.crew.wantsToRun": "{name} quiere ejecutar {command}",
+  "ios.crew.waitingForm": "{name} espera un formulario",
+  "ios.crew.waitingAnswer": "{name} te espera",
+  "ios.crew.noMessages": "Aún no hay mensajes",
+  "ios.crew.lead": "Líder",
+  "ios.crew.unread": "{count} sin leer",
+  "ios.crew.openChat": "Abrir el chat con {name}",
+  "ios.crew.emptyTitle": "Aún no hay agentes",
+  "ios.crew.emptyMessage": "Este servidor no tiene agentes. Crea el primero para que el equipo empiece a trabajar.",
+  "ios.crew.createAgent": "Crear agente",
+  "ios.crew.createSoon": "Crear agentes desde el iPhone llegará pronto.",
+  "ios.crew.chatSoon": "El chat con {name} llegará pronto."
 }

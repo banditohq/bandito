@@ -3070,5 +3070,19 @@
   "ios.tab.crew": "クルー",
   "ios.tab.inbox": "受信箱",
   "ios.tab.activity": "アクティビティ",
-  "ios.tab.comingSoon": "近日公開"
+  "ios.tab.comingSoon": "近日公開",
+  "ios.crew.needsYou": "あなたを待っています",
+  "ios.crew.serverSwitch": "サーバーを切り替え",
+  "ios.crew.wantsToRun": "{name} が {command} を実行しようとしています",
+  "ios.crew.waitingForm": "{name} がフォームの入力を待っています",
+  "ios.crew.waitingAnswer": "{name} があなたを待っています",
+  "ios.crew.noMessages": "まだメッセージはありません",
+  "ios.crew.lead": "リーダー",
+  "ios.crew.unread": "未読 {count}",
+  "ios.crew.openChat": "{name} とのチャットを開く",
+  "ios.crew.emptyTitle": "まだエージェントがいません",
+  "ios.crew.emptyMessage": "このサーバーにはエージェントがいません。最初のエージェントを作って、チームを動かしましょう。",
+  "ios.crew.createAgent": "エージェントを作成",
+  "ios.crew.createSoon": "iPhone からのエージェント作成は近日対応予定です。",
+  "ios.crew.chatSoon": "{name} とのチャットは近日対応予定です。"
 }

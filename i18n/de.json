@@ -3108,5 +3108,19 @@
   "ios.tab.crew": "Crew",
   "ios.tab.inbox": "Posteingang",
   "ios.tab.activity": "Aktivität",
-  "ios.tab.comingSoon": "Demnächst"
+  "ios.tab.comingSoon": "Demnächst",
+  "ios.crew.needsYou": "Warten auf dich",
+  "ios.crew.serverSwitch": "Server wechseln",
+  "ios.crew.wantsToRun": "{name} möchte {command} ausführen",
+  "ios.crew.waitingForm": "{name} wartet auf ein Formular",
+  "ios.crew.waitingAnswer": "{name} wartet auf dich",
+  "ios.crew.noMessages": "Noch keine Nachrichten",
+  "ios.crew.lead": "Leitung",
+  "ios.crew.unread": "{count} ungelesen",
+  "ios.crew.openChat": "Chat mit {name} öffnen",
+  "ios.crew.emptyTitle": "Noch keine Agenten",
+  "ios.crew.emptyMessage": "Auf diesem Server gibt es keine Agenten. Lege den ersten an, damit die Crew loslegt.",
+  "ios.crew.createAgent": "Agent anlegen",
+  "ios.crew.createSoon": "Agenten auf dem iPhone anlegen kommt bald.",
+  "ios.crew.chatSoon": "Der Chat mit {name} kommt bald."
 }

@@ -1,6 +1,7 @@
+import BanditoDesign
+@testable import BanditoUI
 import Foundation
 import Testing
-@testable import BanditoUI
 
 struct AvatarScheduleTests {
     private func frames(_ mood: AvatarMood, seconds: Double, phase: Double = 0) -> [Date] {

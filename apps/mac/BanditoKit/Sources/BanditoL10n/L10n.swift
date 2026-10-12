@@ -1343,6 +1343,23 @@ public enum L10n {
             public static var placeholder: String { L10n.tr("ios.connect.placeholder") }
         }
 
+        public enum Crew {
+            public static func chatSoon(name: String) -> String { L10n.tr("ios.crew.chatSoon", name) }
+            public static var createAgent: String { L10n.tr("ios.crew.createAgent") }
+            public static var createSoon: String { L10n.tr("ios.crew.createSoon") }
+            public static var emptyMessage: String { L10n.tr("ios.crew.emptyMessage") }
+            public static var emptyTitle: String { L10n.tr("ios.crew.emptyTitle") }
+            public static var lead: String { L10n.tr("ios.crew.lead") }
+            public static var needsYou: String { L10n.tr("ios.crew.needsYou") }
+            public static var noMessages: String { L10n.tr("ios.crew.noMessages") }
+            public static func openChat(name: String) -> String { L10n.tr("ios.crew.openChat", name) }
+            public static var serverSwitch: String { L10n.tr("ios.crew.serverSwitch") }
+            public static func unread(count: Int) -> String { L10n.tr("ios.crew.unread", count) }
+            public static func waitingAnswer(name: String) -> String { L10n.tr("ios.crew.waitingAnswer", name) }
+            public static func waitingForm(name: String) -> String { L10n.tr("ios.crew.waitingForm", name) }
+            public static func wantsToRun(name: String, command: String) -> String { L10n.tr("ios.crew.wantsToRun", name, command) }
+        }
+
         public enum Tab {
             public static var activity: String { L10n.tr("ios.tab.activity") }
             public static var comingSoon: String { L10n.tr("ios.tab.comingSoon") }

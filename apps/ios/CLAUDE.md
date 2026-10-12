@@ -28,11 +28,23 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
 - Logic lives in small pure types next to the view; `IOSDemo` is the demo world (`-demo`), nothing else reads it.
 - The app's bundle id is `dev.bandito.ios`; the debug and release builds are not yet split. Signing is not set up.
 
+## The raccoon and the Crew
+
+- The raccoon's geometry and mood timing are shared: `BanditoDesign/RaccoonShape.swift` (`RaccoonFace`, masks, eyes,
+  `AvatarTile` colors) and `BanditoDesign/AvatarPose.swift` (`AvatarMood`, `AvatarPose`, `MotionKeyframes`). The iPhone
+  moves them with Core Animation layers (`Crew/CrewAvatar.swift`, `RaccoonMotionView`), never a SwiftUI repeating
+  animation; Reduce Motion draws the rest pose.
+- Crew (`Crew/`): facts per agent in `CrewFacts.swift` (`Equatable`), rows in `CrewRows.swift`. The screen counts row
+  evaluations in `CrewCounters`; `CrewSpeedTests` holds a streamed reply to at most two row evaluations.
+- The large title is the system's; the navigation bar background is transparent (`toolbarBackground(.hidden)`). A UIKit
+  navigation appearance hid the title (see `BrandAppearance.swift`), so the bar is not styled in UIKit.
+
 ## Known gaps before a release
 
 - `AppIcon` is `brand/png/icon-1024.png` with an alpha channel; App Store Connect rejects an icon with alpha: flatten it
   before the first upload.
 - The pairing flow (QR, link, address) is a placeholder sheet. The `bandito://` URL scheme is registered, but no link
   handler exists yet.
+- The chat, the agent's creation and the server's pairing are stubs (Crew shows them as "coming soon").
 - The button styles (`.signal`, `.quiet`) exist only in `BanditoUI`; `SignalButtonStyle` in `Crew/TeamViews.swift` is a
   copy for this target until they move to `BanditoDesign`.

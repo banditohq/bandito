@@ -1,7 +1,8 @@
-import BanditoKit
-import Testing
 
+import BanditoDesign
+import BanditoKit
 @testable import BanditoUI
+import Testing
 
 @Suite struct AvatarLookTests {
     @Test func unsavedAvatarTakesTheNameAutomaticLook() {
