@@ -16,8 +16,8 @@ import SwiftUI
 /// frame is already the right candidate.
 ///
 /// With a `memory` key, the widths outlive the view (`FirstFitMemory`): the same toolbar made again (a return to
-/// Files) shows the candidate chosen last time at once, measures nothing, and only checks the choice against the
-/// width it gets. The key must name everything the candidates' widths depend on. With `persists`, they are kept in the
+/// Files) measures nothing: the first layout is a `ViewThatFits`, and the choice is made from the remembered widths as
+/// soon as the width offered is known. The key must name everything the candidates' widths depend on. With `persists`, they are kept in the
 /// defaults too (for this build), so the first visit after a launch is quick as well.
 struct FirstFit<Candidate: View>: View {
     let count: Int
@@ -34,7 +34,9 @@ struct FirstFit<Candidate: View>: View {
     var body: some View {
         let remembered = rememberedWidths
         Group {
-            if let shown = chosen ?? remembered.map({ FirstFitRule.index(available: $0.available, widths: $0.widths, count: count) }) {
+            // The remembered widths come with the width offered last time, not this one: until this one is known the
+            // `ViewThatFits` chooses (a narrower window would otherwise get last time's wider candidate).
+            if let shown = chosen {
                 candidate(shown, false)
             } else {
                 ViewThatFits(in: .horizontal) {
