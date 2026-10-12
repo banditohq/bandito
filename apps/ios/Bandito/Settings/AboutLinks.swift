@@ -1,3 +1,4 @@
+import BanditoL10n
 import Foundation
 import SafariServices
 import SwiftUI
@@ -9,8 +10,20 @@ enum AboutLinks {
     static let docs = URL(string: "https://bandito.dev/docs")!
     static let reportProblem = URL(string: "https://github.com/banditohq/bandito/issues/new/choose")!
     static let privacy = URL(string: "https://bandito.dev/privacy")!
-    /// The site has no terms page; the terms are the license in the repository.
-    static let terms = URL(string: "https://github.com/banditohq/bandito/blob/main/LICENSE.md")!
+    /// The languages the site has terms pages for, by the codes of `i18n/languages.json`, besides English.
+    private static let termsLanguages: Set<String> = ["ru", "ja", "zh-Hans", "ko", "es", "pt-BR", "de", "fr"]
+
+    /// The terms page in the language of the app's strings: `/terms/` for English, `/<code>/terms/` for the others.
+    /// Any other code gets English.
+    static func terms(forLanguage code: String) -> URL {
+        guard code != "en", termsLanguages.contains(code) else { return URL(string: "https://bandito.dev/terms/")! }
+        return URL(string: "https://bandito.dev/\(code)/terms/")!
+    }
+
+    /// The terms page for the language the app is showing now.
+    static var terms: URL {
+        terms(forLanguage: L10n.locale.identifier.replacingOccurrences(of: "_", with: "-"))
+    }
 
     /// The version and build from the bundle, for example "0.1.14 (1)".
     static var version: String {

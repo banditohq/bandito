@@ -7,6 +7,7 @@ import SwiftUI
 /// Activity are placeholders until their screens are built (docs/IOS_APP.md).
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// The demo server of the `-demo` launch argument; nil without it.
     @State private var demoServer: ServerModel?
     @State private var showsConnect = false
@@ -19,23 +20,29 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $tab) {
             CrewTab(server: demoServer, onConnect: { showsConnect = true })
+                .id(dynamicTypeSize)
                 .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
                 .tag(AppTab.crew)
             ComingSoonTab(title: L10n.Ios.Tab.inbox)
+                .id(dynamicTypeSize)
                 .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
                 .tag(AppTab.inbox)
             ComingSoonTab(title: L10n.Ios.Tab.activity)
+                .id(dynamicTypeSize)
                 .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
                 .tag(AppTab.activity)
             SettingsTab(settings: settings, servers: servers, biometrics: biometrics, onConnect: { showsConnect = true })
+                .id(dynamicTypeSize)
                 .tabItem { Label(L10n.Settings.title, systemImage: "gearshape") }
                 .tag(AppTab.settings)
         }
         .preferredColorScheme(settings.theme.colorScheme)
+        // The brand fonts are sized when a view is built (BanditoFont), so a view is rebuilt when the text size changes.
         .tint(Color.Bandito.signalFill)
         .overlay {
             if appLock.isLocked {
                 LockScreen(onUnlock: unlockApp)
+                    .id(dynamicTypeSize)
             }
         }
         .onChange(of: scenePhase) { _, phase in
