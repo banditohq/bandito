@@ -16,6 +16,10 @@ enum IOSDemo {
         let fromPerson: Bool
         let text: String
         let minutesAgo: Int64
+        /// A scheduled run: `text` is its prompt, and the agent's next message is what it said.
+        var schedule: String?
+        /// An error the agent reported (the text is the message).
+        var isError = false
     }
 
     struct Member: Sendable {
@@ -44,11 +48,15 @@ enum IOSDemo {
         Member(
             name: "Watch", role: "On call", runtime: .grok, status: .needsYou,
             history: [
+                Turn(
+                    fromPerson: false, text: "Check the disk and tell me only when it is above 80%.", minutesAgo: 52,
+                    schedule: "Nightly disk check"),
                 Turn(fromPerson: false, text: "The server disk is 81% full. Should I clear the cache?", minutesAgo: 38),
             ]),
         Member(
             name: "Quill", role: "Docs", runtime: .claude, status: .error,
             history: [
+                Turn(fromPerson: false, text: "Changelog build: a release has no date.", minutesAgo: 27 * 60, isError: true),
                 Turn(fromPerson: false, text: "The changelog build failed on a missing date.", minutesAgo: 26 * 60),
             ]),
     ]
@@ -90,9 +98,16 @@ enum IOSDemo {
                 cwd: DemoDaemonFiles.projects, createdAt: now, updatedAt: now, status: member.status)
             agent.lead = member.lead
             // Message n has seq n: the reply ids (`s<seq>`) are what counts a chat's unread replies.
-            let items: [ThreadItem] = member.history.enumerated().map { offset, turn in
+            let items: [ThreadItem] = member.history.enumerated().map { offset, turn -> ThreadItem in
                 let ts = now - turn.minutesAgo * 60_000
                 let id = "s\(offset + 1)"
+                if let schedule = turn.schedule {
+                    let run = ScheduleRun(id: "ios-demo-run-\(offset + 1)", name: schedule, firedAt: ts)
+                    return .scheduleRun(id: id, run: run, prompt: turn.text, ts: ts)
+                }
+                if turn.isError {
+                    return .note(id: id, text: turn.text, kind: .error, ts: ts)
+                }
                 return turn.fromPerson
                     ? .user(id: id, text: turn.text, source: .user, from: nil, ts: ts)
                     : .assistant(id: id, text: turn.text, ts: ts)

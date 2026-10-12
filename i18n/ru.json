@@ -3249,5 +3249,16 @@
     "few": "{count} минуты",
     "many": "{count} минут",
     "other": "{count} минуты"
-  }
+  },
+  "ios.activity.filter.all": "Все",
+  "ios.activity.filter.unread": "Непрочитанные",
+  "ios.activity.filter.errors": "Ошибки",
+  "ios.activity.finished": "{name} закончил",
+  "ios.activity.scheduled": "{name} · {schedule}",
+  "ios.activity.failed": "{name}: ошибка",
+  "ios.activity.emptyTitle": "Пока тихо",
+  "ios.activity.emptyMessage": "Здесь появляются законченные ответы и запуски по расписанию, которые что-то сказали.",
+  "ios.activity.emptyUnread": "Непрочитанного нет.",
+  "ios.activity.emptyErrors": "Ошибок нет.",
+  "ios.activity.chatSoon": "Чат с {name} скоро откроется здесь. Событие {event}."
 }

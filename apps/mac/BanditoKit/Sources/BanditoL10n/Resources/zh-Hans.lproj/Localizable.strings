@@ -925,6 +925,17 @@
 "integrations.status.unchecked" = "尚未检查";
 "integrations.title" = "集成";
 "integrations.toolsFound" = "工具：%1$@";
+"ios.activity.chatSoon" = "与%1$@的聊天即将在此打开。事件 %2$@。";
+"ios.activity.emptyErrors" = "没有错误。";
+"ios.activity.emptyMessage" = "已完成的回复和有话要说的定时运行会显示在这里。";
+"ios.activity.emptyTitle" = "目前很安静";
+"ios.activity.emptyUnread" = "没有未读内容。";
+"ios.activity.failed" = "%1$@：错误";
+"ios.activity.filter.all" = "全部";
+"ios.activity.filter.errors" = "错误";
+"ios.activity.filter.unread" = "未读";
+"ios.activity.finished" = "%1$@ 已完成";
+"ios.activity.scheduled" = "%1$@ · %2$@";
 "ios.connect.placeholder" = "从 iPhone 连接服务器的功能即将推出。";
 "ios.crew.chatSoon" = "与 %1$@ 的聊天即将推出。";
 "ios.crew.createAgent" = "创建智能体";

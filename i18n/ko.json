@@ -3126,5 +3126,16 @@
   "ios.settings.about.terms": "이용약관",
   "ios.settings.security.minutes": {
     "other": "{count}분"
-  }
+  },
+  "ios.activity.filter.all": "전체",
+  "ios.activity.filter.unread": "읽지 않음",
+  "ios.activity.filter.errors": "오류",
+  "ios.activity.finished": "{name} 완료",
+  "ios.activity.scheduled": "{name} · {schedule}",
+  "ios.activity.failed": "{name}: 오류",
+  "ios.activity.emptyTitle": "아직 조용합니다",
+  "ios.activity.emptyMessage": "완료된 답변과 알릴 내용이 있었던 예약 실행이 여기에 표시됩니다.",
+  "ios.activity.emptyUnread": "읽지 않은 항목이 없습니다.",
+  "ios.activity.emptyErrors": "오류가 없습니다.",
+  "ios.activity.chatSoon": "{name}과의 채팅은 곧 여기서 열립니다. 이벤트 {event}."
 }

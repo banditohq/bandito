@@ -3165,5 +3165,16 @@
   "ios.settings.security.minutes": {
     "one": "{count} Minute",
     "other": "{count} Minuten"
-  }
+  },
+  "ios.activity.filter.all": "Alle",
+  "ios.activity.filter.unread": "Ungelesen",
+  "ios.activity.filter.errors": "Fehler",
+  "ios.activity.finished": "{name} hat beendet",
+  "ios.activity.scheduled": "{name} · {schedule}",
+  "ios.activity.failed": "{name}: Fehler",
+  "ios.activity.emptyTitle": "Bisher ruhig",
+  "ios.activity.emptyMessage": "Hier erscheinen abgeschlossene Antworten und geplante Läufe mit einer Meldung.",
+  "ios.activity.emptyUnread": "Nichts Ungelesenes.",
+  "ios.activity.emptyErrors": "Keine Fehler.",
+  "ios.activity.chatSoon": "Der Chat mit {name} öffnet sich hier bald. Ereignis {event}."
 }

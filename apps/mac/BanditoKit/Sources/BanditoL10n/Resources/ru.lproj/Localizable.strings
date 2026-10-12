@@ -925,6 +925,17 @@
 "integrations.status.unchecked" = "Ещё не проверена";
 "integrations.title" = "Интеграции";
 "integrations.toolsFound" = "Инструменты: %1$@";
+"ios.activity.chatSoon" = "Чат с %1$@ скоро откроется здесь. Событие %2$@.";
+"ios.activity.emptyErrors" = "Ошибок нет.";
+"ios.activity.emptyMessage" = "Здесь появляются законченные ответы и запуски по расписанию, которые что-то сказали.";
+"ios.activity.emptyTitle" = "Пока тихо";
+"ios.activity.emptyUnread" = "Непрочитанного нет.";
+"ios.activity.failed" = "%1$@: ошибка";
+"ios.activity.filter.all" = "Все";
+"ios.activity.filter.errors" = "Ошибки";
+"ios.activity.filter.unread" = "Непрочитанные";
+"ios.activity.finished" = "%1$@ закончил";
+"ios.activity.scheduled" = "%1$@ · %2$@";
 "ios.connect.placeholder" = "Подключение сервера с iPhone появится скоро.";
 "ios.crew.chatSoon" = "Чат с %1$@ появится скоро.";
 "ios.crew.createAgent" = "Создать агента";

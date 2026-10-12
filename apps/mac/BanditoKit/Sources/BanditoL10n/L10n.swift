@@ -1339,6 +1339,23 @@ public enum L10n {
 
     public enum Ios {
 
+        public enum Activity {
+            public static func chatSoon(name: String, event: String) -> String { L10n.tr("ios.activity.chatSoon", name, event) }
+            public static var emptyErrors: String { L10n.tr("ios.activity.emptyErrors") }
+            public static var emptyMessage: String { L10n.tr("ios.activity.emptyMessage") }
+            public static var emptyTitle: String { L10n.tr("ios.activity.emptyTitle") }
+            public static var emptyUnread: String { L10n.tr("ios.activity.emptyUnread") }
+            public static func failed(name: String) -> String { L10n.tr("ios.activity.failed", name) }
+            public static func finished(name: String) -> String { L10n.tr("ios.activity.finished", name) }
+            public static func scheduled(name: String, schedule: String) -> String { L10n.tr("ios.activity.scheduled", name, schedule) }
+
+            public enum Filter {
+                public static var all: String { L10n.tr("ios.activity.filter.all") }
+                public static var errors: String { L10n.tr("ios.activity.filter.errors") }
+                public static var unread: String { L10n.tr("ios.activity.filter.unread") }
+            }
+        }
+
         public enum Connect {
             public static var placeholder: String { L10n.tr("ios.connect.placeholder") }
         }

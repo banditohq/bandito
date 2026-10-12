@@ -3126,5 +3126,16 @@
   "ios.settings.about.terms": "条款",
   "ios.settings.security.minutes": {
     "other": "{count} 分钟"
-  }
+  },
+  "ios.activity.filter.all": "全部",
+  "ios.activity.filter.unread": "未读",
+  "ios.activity.filter.errors": "错误",
+  "ios.activity.finished": "{name} 已完成",
+  "ios.activity.scheduled": "{name} · {schedule}",
+  "ios.activity.failed": "{name}：错误",
+  "ios.activity.emptyTitle": "目前很安静",
+  "ios.activity.emptyMessage": "已完成的回复和有话要说的定时运行会显示在这里。",
+  "ios.activity.emptyUnread": "没有未读内容。",
+  "ios.activity.emptyErrors": "没有错误。",
+  "ios.activity.chatSoon": "与{name}的聊天即将在此打开。事件 {event}。"
 }
