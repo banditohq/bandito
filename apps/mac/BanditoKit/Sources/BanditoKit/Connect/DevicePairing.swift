@@ -112,6 +112,11 @@ public enum PairInput {
 public struct PairedDevice: Sendable {
     public var config: ServerConfig
     public var deviceID: String
+
+    public init(config: ServerConfig, deviceID: String) {
+        self.config = config
+        self.deviceID = deviceID
+    }
 }
 
 /// What went wrong with a pairing, in the cases the app words differently.

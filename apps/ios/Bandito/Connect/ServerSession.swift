@@ -25,12 +25,27 @@ final class ServerSession {
     @ObservationIgnored private let connect: @MainActor (ServerModel) -> Void
 
     init(
-        defaults: UserDefaults = .standard, secrets: SecretStore = KeychainStore(service: ServerSession.keychainService),
+        defaults: UserDefaults = .standard, secrets: SecretStore = ServerSession.deviceSecrets(),
         connect: @escaping @MainActor (ServerModel) -> Void = { model in Task { await model.connect() } }
     ) {
         self.defaults = defaults
         self.secrets = secrets
         self.connect = connect
+    }
+
+    /// Where device tokens are kept: the Keychain. On the Simulator an unsigned build (the project builds that way) has
+    /// no Keychain access group and the Keychain refuses every write, so there a private file stands in
+    /// (`SimulatorSecretStore`). A device never falls back to a file.
+    static func deviceSecrets() -> SecretStore {
+        let keychain = KeychainStore(service: keychainService)
+        #if targetEnvironment(simulator)
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        return SimulatorSecretStore(
+            primary: keychain, fallback: FileSecretStore(directory: base.appending(path: "Bandito/simulator-secrets")))
+        #else
+        return keychain
+        #endif
     }
 
     /// Reads the saved servers and connects them. Once. A server whose token is missing is not connected: it would be
@@ -131,3 +146,25 @@ final class ServerSession {
         return nil
     }
 }
+
+#if targetEnvironment(simulator)
+/// The Keychain first; when an unsigned Simulator build is refused (`errSecMissingEntitlement`, -34018), a private file.
+struct SimulatorSecretStore: SecretStore {
+    let primary: SecretStore
+    let fallback: SecretStore
+
+    func load(account: String) throws -> Data? {
+        if let data = try? primary.load(account: account) { return data }
+        return try fallback.load(account: account)
+    }
+
+    func save(_ data: Data?, account: String) throws {
+        do {
+            try primary.save(data, account: account)
+            if data == nil { try? fallback.save(nil, account: account) }
+        } catch SecretStoreError.keychain(let status) where status == errSecMissingEntitlement {
+            try fallback.save(data, account: account)
+        }
+    }
+}
+#endif

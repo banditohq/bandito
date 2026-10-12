@@ -66,8 +66,9 @@ final class PairingFlowTests: XCTestCase {
         let confirm = app.buttons["connect.trust.confirm"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 20), "the fingerprint is shown to compare")
         XCTAssertEqual(daemon.redeems, 0, "the code is not sent before the person confirms")
-        let shown = app.otherElements["connect.trust.fingerprint"].label + app.staticTexts["connect.trust.fingerprint"].label
-        XCTAssertTrue(shown.uppercased().contains(String(FakeDaemon.fingerprintA.uppercased().prefix(2))))
+        let shown = app.descendants(matching: .any).matching(identifier: "connect.trust.fingerprint").firstMatch
+        XCTAssertTrue(shown.exists, "the fingerprint is on the screen")
+        XCTAssertTrue(shown.label.uppercased().contains(String(FakeDaemon.fingerprintA.uppercased().prefix(2))))
         confirm.tap()
         XCTAssertTrue(app.staticTexts["connect.done.title"].waitForExistence(timeout: 20))
         XCTAssertEqual(daemon.redeems, 1)

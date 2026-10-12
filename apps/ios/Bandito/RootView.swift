@@ -27,6 +27,10 @@ struct RootView: View {
         }
         .task {
             session.loadIfNeeded()
+            if PairingLaunchHooks.opensConnect() {
+                incomingLink = PairingLaunchHooks.link()
+                showsConnect = true
+            }
             guard demoServer == nil, IOSDemo.isRequested(in: ProcessInfo.processInfo.arguments) else { return }
             demoServer = await IOSDemo.start()
         }

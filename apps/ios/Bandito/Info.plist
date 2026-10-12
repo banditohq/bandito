@@ -42,6 +42,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Bandito uses the camera only to scan a server's pairing QR code.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Bandito talks to your Mac or server on your local network.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

@@ -36,6 +36,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
         NSCameraUsageDescription: Bandito uses the camera only to scan a server's pairing QR code.
+        NSLocalNetworkUsageDescription: Bandito talks to your Mac or server on your local network.
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

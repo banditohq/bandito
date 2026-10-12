@@ -102,7 +102,10 @@ actor PairCalls {
         let w = world()
         w.model.submitLink(Self.link, origin: .scan)
         await settle(w.model, until: isDone)
-        guard case .done(_, let name) = w.model.phase else { return Issue.record("not done: \(w.model.phase)") }
+        guard case .done(_, let name) = w.model.phase else {
+            Issue.record("not done: \(w.model.phase)")
+            return
+        }
         #expect(name == "Studio Mac")
         #expect(w.session.servers.count == 1)
         #expect(w.session.active?.config.token == "bdt_token")
@@ -116,7 +119,10 @@ actor PairCalls {
         for origin in [LinkOrigin.paste, .url] {
             let w = world()
             w.model.submitLink("Look: \(Self.link)", origin: origin)
-            guard case .confirmLink(let request) = w.model.phase else { return Issue.record("no confirmation: \(w.model.phase)") }
+            guard case .confirmLink(let request) = w.model.phase else {
+            Issue.record("no confirmation: \(w.model.phase)")
+            return
+        }
             #expect(request.name == "Studio Mac")
             #expect(await w.calls.redeemed.isEmpty, "nothing is sent before the person agrees")
             w.model.confirmLink()
@@ -150,7 +156,10 @@ actor PairCalls {
         let w = world()
         w.model.submitLink(Self.link, origin: .paste)
         w.model.submitLink(Self.link.replacingOccurrences(of: "Studio%20Mac", with: "Other"), origin: .scan)
-        guard case .confirmLink(let request) = w.model.phase else { return Issue.record("\(w.model.phase)") }
+        guard case .confirmLink(let request) = w.model.phase else {
+            Issue.record("\(w.model.phase)")
+            return
+        }
         #expect(request.name == "Studio Mac", "the one waiting for an answer is not replaced")
     }
 
@@ -172,7 +181,10 @@ actor PairCalls {
         w.model.showManual()
         w.model.submitManual(address: "10.0.0.2", code: Self.code, fingerprint: "")
         await settle(w.model) { if case .trust = $0 { return true } else { return false } }
-        guard case .trust(let request, let seen) = w.model.phase else { return Issue.record("\(w.model.phase)") }
+        guard case .trust(let request, let seen) = w.model.phase else {
+            Issue.record("\(w.model.phase)")
+            return
+        }
         #expect(seen == String(repeating: "cd", count: 32))
         #expect(request.hosts == ["10.0.0.2:7879"])
         #expect(await w.calls.redeemed.isEmpty, "the code stays on the phone until the person compares")

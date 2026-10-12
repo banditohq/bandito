@@ -87,6 +87,7 @@ enum CameraPermission {
     static var hasCamera: Bool { AVCaptureDevice.default(for: .video) != nil }
 
     static func current() -> CameraAccess {
+        if let forced = PairingLaunchHooks.camera() { return forced }
         let status: CameraAccess.Status =
             switch AVCaptureDevice.authorizationStatus(for: .video) {
             case .notDetermined: .notDetermined
