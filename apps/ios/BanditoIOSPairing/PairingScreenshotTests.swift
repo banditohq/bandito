@@ -48,69 +48,69 @@ final class PairingScreenshotTests: XCTestCase {
         }
     }
 
-    func testScreens() throws {
-        for (appearance, style) in [("dark", XCUIDevice.Appearance.dark), ("light", .light)] {
-            for language in ["en", "ru"] {
-                XCUIDevice.shared.appearance = style
-                // The welcome screen, then the three camera states of the scanner.
-                var app = launch([], language: language)
-                shoot("welcome", appearance, language)
-                app.terminate()
-                for state in ["notAsked", "denied", "unavailable"] {
-                    app = launch(["-openConnect", "-pairCamera", state], language: language)
-                    shoot("camera-\(state)", appearance, language)
-                    app.terminate()
-                }
-                // A link from outside waits for the person.
-                app = launch(["-pairLink", Self.link], language: language)
-                shoot("confirm-link", appearance, language)
-                app.terminate()
-                // An unreadable link.
-                app = launch(["-pairLink", "bandito://pair?v=2&code=x"], language: language)
-                shoot("error-update", appearance, language)
-                app.terminate()
-                // The typed form, empty and then the flow against the fake daemon.
-                app = launch(["-openConnect", "-pairCamera", "unavailable"], language: language)
-                openManual(app)
-                _ = app.textFields["connect.manual.address"].waitForExistence(timeout: 5)
-                shoot("manual", appearance, language)
-                let daemon = try FakeDaemon()
-                self.daemon = daemon
-                type(app, daemon.address, into: "connect.manual.address")
-                type(app, FakeDaemon.validCode, into: "connect.manual.code")
-                app.buttons["connect.manual.submit"].tap()
-                _ = app.buttons["connect.trust.confirm"].waitForExistence(timeout: 20)
-                shoot("trust", appearance, language)
-                app.buttons["connect.trust.confirm"].tap()
-                _ = app.staticTexts["connect.done.title"].waitForExistence(timeout: 20)
-                shoot("done", appearance, language)
-                app.terminate()
-                daemon.stop()
-                // The loud failure: the address shows another certificate than the pinned one.
-                let impostor = try FakeDaemon(certificate: .b)
-                self.daemon = impostor
-                app = launch(["-openConnect", "-pairCamera", "unavailable"], language: language)
-                openManual(app)
-                type(app, impostor.address, into: "connect.manual.address")
-                type(app, FakeDaemon.validCode, into: "connect.manual.code")
-                type(app, FakeDaemon.fingerprintA, into: "connect.manual.fingerprint")
-                app.buttons["connect.manual.submit"].tap()
-                _ = app.buttons["connect.tryAgain"].waitForExistence(timeout: 20)
-                shoot("error-mismatch", appearance, language)
-                app.terminate()
-                impostor.stop()
-                // Nothing listening.
-                app = launch(["-openConnect", "-pairCamera", "unavailable"], language: language)
-                openManual(app)
-                type(app, "127.0.0.1:1", into: "connect.manual.address")
-                type(app, FakeDaemon.validCode, into: "connect.manual.code")
-                type(app, FakeDaemon.fingerprintA, into: "connect.manual.fingerprint")
-                app.buttons["connect.manual.submit"].tap()
-                _ = app.buttons["connect.tryAgain"].waitForExistence(timeout: 30)
-                shoot("error-unreachable", appearance, language)
-                app.terminate()
-            }
+    func testDarkEnglish() throws { try screens(.dark, "dark", "en") }
+    func testDarkRussian() throws { try screens(.dark, "dark", "ru") }
+    func testLightEnglish() throws { try screens(.light, "light", "en") }
+    func testLightRussian() throws { try screens(.light, "light", "ru") }
+
+    private func screens(_ style: XCUIDevice.Appearance, _ appearance: String, _ language: String) throws {
+        XCUIDevice.shared.appearance = style
+        // The welcome screen, then the three camera states of the scanner.
+        var app = launch([], language: language)
+        shoot("welcome", appearance, language)
+        app.terminate()
+        for state in ["notAsked", "denied", "unavailable"] {
+            app = launch(["-openConnect", "-pairCamera", state], language: language)
+            shoot("camera-\(state)", appearance, language)
+            app.terminate()
         }
-        XCUIDevice.shared.appearance = .unspecified
+        // A link from outside waits for the person.
+        app = launch(["-pairLink", Self.link], language: language)
+        shoot("confirm-link", appearance, language)
+        app.terminate()
+        // An unreadable link.
+        app = launch(["-pairLink", "bandito://pair?v=2&code=x"], language: language)
+        shoot("error-update", appearance, language)
+        app.terminate()
+        // The typed form, empty and then the flow against the fake daemon.
+        app = launch(["-openConnect", "-pairCamera", "unavailable"], language: language)
+        openManual(app)
+        _ = app.textFields["connect.manual.address"].waitForExistence(timeout: 5)
+        shoot("manual", appearance, language)
+        let daemon = try FakeDaemon()
+        self.daemon = daemon
+        type(app, daemon.address, into: "connect.manual.address")
+        type(app, FakeDaemon.validCode, into: "connect.manual.code")
+        app.buttons["connect.manual.submit"].tap()
+        _ = app.buttons["connect.trust.confirm"].waitForExistence(timeout: 20)
+        shoot("trust", appearance, language)
+        app.buttons["connect.trust.confirm"].tap()
+        _ = app.staticTexts["connect.done.title"].waitForExistence(timeout: 20)
+        shoot("done", appearance, language)
+        app.terminate()
+        daemon.stop()
+        // The loud failure: the address shows another certificate than the pinned one.
+        let impostor = try FakeDaemon(certificate: .b)
+        self.daemon = impostor
+        app = launch(["-openConnect", "-pairCamera", "unavailable"], language: language)
+        openManual(app)
+        type(app, impostor.address, into: "connect.manual.address")
+        type(app, FakeDaemon.validCode, into: "connect.manual.code")
+        type(app, FakeDaemon.fingerprintA, into: "connect.manual.fingerprint")
+        app.buttons["connect.manual.submit"].tap()
+        _ = app.buttons["connect.tryAgain"].waitForExistence(timeout: 20)
+        shoot("error-mismatch", appearance, language)
+        app.terminate()
+        impostor.stop()
+        // Nothing listening.
+        app = launch(["-openConnect", "-pairCamera", "unavailable"], language: language)
+        openManual(app)
+        type(app, "127.0.0.1:1", into: "connect.manual.address")
+        type(app, FakeDaemon.validCode, into: "connect.manual.code")
+        type(app, FakeDaemon.fingerprintA, into: "connect.manual.fingerprint")
+        app.buttons["connect.manual.submit"].tap()
+        _ = app.buttons["connect.tryAgain"].waitForExistence(timeout: 30)
+        shoot("error-unreachable", appearance, language)
+        app.terminate()
     }
 }
