@@ -2,7 +2,8 @@ name: uptime
 
 # Checks the public bandito.dev every 5 minutes (scripts/uptime.sh). A failing run opens an issue labelled `uptime`, a
 # healthy run after that closes it. The owner gets a Telegram message only on those state changes, not on every run.
-# Telegram needs the secrets UPTIME_TG_TOKEN and UPTIME_TG_CHAT; without them the run only writes to its log.
+# Telegram uses the secrets UPTIME_TG_TOKEN and UPTIME_TG_CHAT, or the TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID that
+# notify.yml already uses when those are empty; with neither set the run only writes to its log.
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -46,8 +47,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           DOWN: ${{ steps.probe.outputs.down }}
-          TG_TOKEN: ${{ secrets.UPTIME_TG_TOKEN }}
-          TG_CHAT: ${{ secrets.UPTIME_TG_CHAT }}
+          TG_TOKEN: ${{ secrets.UPTIME_TG_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.UPTIME_TG_CHAT || secrets.TELEGRAM_CHAT_ID }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
