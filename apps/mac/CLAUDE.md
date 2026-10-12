@@ -34,6 +34,16 @@ SwiftUI, macOS, dark theme. The app is a thin shell (`apps/mac/Bandito`); all co
 
 ## Performance rules (each one came from a real freeze or lag)
 
+The bar: 120 fps on a 120 Hz Mac (each frame's work under 8.3 ms), never under 60, no stretch over 50 ms while
+scrolling, typing or streaming, none over 100 ms anywhere. It holds for new work too. Before a new page, panel, sheet,
+list or animation is done:
+1. Build it from the fast parts that exist: `ThreadList`/`NativeRow` for chat-like lists, lazy stacks or an AppKit
+   table for long lists, `FirstFit` instead of `ViewThatFits`, `LayerMotion` for repeating motion, `Equatable` rows
+   keyed by the facts they show, state written only on change, heavy work (parsing, sizing, images) off the main thread.
+2. Add a scenario (or a part) for it to the smoothness check (`Perf/PerfScenarios.swift`) on the demo daemons.
+3. Run it in a speed build (`-O`) in the QA VM and compare with the page next to it; a page under the bar is not done.
+4. A new lag you find and fix becomes a rule below, with the number it cost.
+
 - Never write `@State`/model state from `onScrollGeometryChange`, `onGeometryChange`, hover or a timer unless the
   value changed (compare first). One write per frame re-renders the whole subtree.
 - The chat thread is an AppKit table (`ThreadList`, `NSTableView` with reused cells), not a SwiftUI stack: a stack laid

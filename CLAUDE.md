@@ -30,6 +30,9 @@ Public repo (FSL-1.1-ALv2). Everything here is visible to the world: no secrets,
 - Branches + PRs to `main` (protected). Commit messages in English, imperative.
 - Every UI string goes through i18n (all 9 languages), never a literal in Swift.
 - A screen is done when it was looked at running, not when its tests pass.
+- Speed is a feature: every screen holds 120 fps on a 120 Hz Mac (60 at the very least), with no hitch a person can
+  see. A new page, panel, sheet or list is built fast from the start, not optimized later: follow the performance
+  rules in `apps/mac/CLAUDE.md`, add its scenario to the smoothness check, and measure it before calling it done.
 
 ## Conventions
 
