@@ -80,9 +80,13 @@ import Testing
         _ = BanditoFont.registerBundledFonts()
         let server = ServerModel(config: ServerConfig(id: UUID(), name: "s", endpoint: .local(socketPath: "/tmp/x")))
         let width = CGFloat(width)
+        // Never shown: off every screen, see-through, deaf to the pointer, never ordered in (pictures come from
+        // `cacheDisplay`). Tests show no window on the screen of whoever runs them.
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: width, height: 400), styleMask: [.borderless], backing: .buffered,
-            defer: false)
+            contentRect: NSRect(x: -20_000, y: -20_000, width: width, height: 400), styleMask: [.borderless],
+            backing: .buffered, defer: false)
+        window.alphaValue = 0
+        window.ignoresMouseEvents = true
         window.appearance = NSAppearance(named: .darkAqua)
         let root = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 400))
         root.wantsLayer = true

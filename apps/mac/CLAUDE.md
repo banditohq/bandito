@@ -15,6 +15,10 @@ SwiftUI, macOS, dark theme. The app is a thin shell (`apps/mac/Bandito`); all co
   `--scratch-path <a folder outside the repo>` and delete it after.
 - The app bundle: `apps/mac/scripts/build.sh` (xcodegen + xcodebuild, Debug). Release: `apps/mac/scripts/release-app.sh`.
 - After building: `git checkout -- apps/mac/BanditoKit/Package.resolved`.
+- Tests never show a window on the screen of whoever runs them (the person's Mac): no `orderFront`,
+  `makeKeyAndOrderFront`, `showWindow` or `activate`. A test that needs a window makes it borderless, off every screen
+  (origin −20000), with `alphaValue = 0` and `ignoresMouseEvents`, and draws through `cacheDisplay` or `ImageRenderer`.
+  A measurement that needs a window on a screen (frames, a display link) runs only in the QA VM, never on the host.
 - Run the app only as a QA copy (`docs/qa/RUNBOOK.md`), never against the person's own daemon or defaults.
 
 ## Rules

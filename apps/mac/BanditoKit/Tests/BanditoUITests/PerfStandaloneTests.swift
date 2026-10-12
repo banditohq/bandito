@@ -27,6 +27,9 @@ import os
         heard.withLock { $0.removeAll() }
         let controller = await LaunchProbe.$record.withValue({ name in heard.withLock { $0.append(name) } }) {
             let controller = PerfCheckWindowController()
+            // Its window is never shown here (no `showWindow`); off every screen in case anything orders it in.
+            controller.window?.alphaValue = 0
+            controller.window?.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
             await controller.world.start()
             return controller
         }
