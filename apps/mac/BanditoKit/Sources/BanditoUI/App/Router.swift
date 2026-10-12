@@ -696,11 +696,12 @@ public final class Router {
         return WorkbenchRules.shortcutCloseTab(in: workbenchState(for: agentID)) != nil
     }
 
-    /// ⌘W: closes the selected tab of the focused pane of the selected agent's workbench, while the panel is open.
+    /// ⌘W: closes the tab that `WorkbenchRules.shortcutCloseTab` picks in the selected agent's workbench, and the
+    /// panel with its last tab.
     func closeFocusedWorkbenchTab() {
-        guard let agentID = actingAgentID, let tab = WorkbenchRules.shortcutCloseTab(in: workbenchState(for: agentID))
+        guard let agentID = actingAgentID, WorkbenchRules.shortcutCloseTab(in: workbenchState(for: agentID)) != nil
         else { return }
-        closeWorkbenchTab(tab, agentID: agentID)
+        updateWorkbench(for: agentID) { WorkbenchRules.closeShortcutTab(in: $0) }
     }
 
     /// Closes the workbench panel of `agentID`; its tabs stay open for the next time.
