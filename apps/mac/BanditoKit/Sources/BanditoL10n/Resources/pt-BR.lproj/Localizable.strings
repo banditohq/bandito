@@ -961,7 +961,7 @@
 "ios.inbox.failed" = "Não foi possível enviar sua resposta. Verifique a conexão e tente de novo.";
 "ios.inbox.form" = "%1$@ pede que você preencha um formulário";
 "ios.inbox.invalidForm" = "Confira os campos marcados em vermelho.";
-"ios.inbox.openHint" = "Abre os detalhes";
+"ios.inbox.openHint" = "Abra os detalhes";
 "ios.inbox.reason" = "Por que pergunta";
 "ios.inbox.risky" = "Arriscado";
 "ios.inbox.send" = "Enviar";

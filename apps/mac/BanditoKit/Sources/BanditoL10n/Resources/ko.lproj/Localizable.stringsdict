@@ -209,7 +209,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>other</key>
-			<string>%1$lld개가 응답을 기다립니다</string>
+			<string>%1$lld개가 응답을 기다려요</string>
 		</dict>
 	</dict>
 	<key>ios.intent.needsMe.waiting</key>
