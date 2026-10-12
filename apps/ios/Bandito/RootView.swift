@@ -14,30 +14,41 @@ struct RootView: View {
     @State private var settings = IOSSettings()
     @State private var servers = ConnectedServers.launch(demo: IOSDemo.isRequested(in: ProcessInfo.processInfo.arguments))
     @State private var appLock = AppLock()
+    /// The first run's progress; the flow covers the app until a server is paired (docs/IOS_APP.md, Onboarding).
+    @State private var onboarding = OnboardingStore.launch(arguments: ProcessInfo.processInfo.arguments)
     private let biometrics = DeviceAuthenticator()
 
     var body: some View {
-        TabView(selection: $tab) {
-            CrewScreen(servers: demoServers, onConnect: { showsConnect = true })
-                .id(dynamicTypeSize)
-                .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
-                .tag(AppTab.crew)
-            InboxScreen(servers: demoServers, settings: settings)
-                .id(dynamicTypeSize)
-                .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
-                .badge(InboxRules.badge(of: demoServers))
-                .tag(AppTab.inbox)
-            ActivityScreen(servers: demoServers)
-                .id(dynamicTypeSize)
-                .badge(ActivityFacts.unreadCount(servers: demoServers))
-                .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
-                .tag(AppTab.activity)
-            SettingsTab(settings: settings, servers: servers, biometrics: biometrics, onConnect: { showsConnect = true })
-                .id(dynamicTypeSize)
-                .tabItem { Label(L10n.Settings.title, systemImage: "gearshape") }
-                .tag(AppTab.settings)
+        let showsOnboarding = onboarding.shows(hasServers: !servers.servers.isEmpty)
+        ZStack {
+            TabView(selection: $tab) {
+                CrewScreen(servers: demoServers, onConnect: { showsConnect = true })
+                    .id(dynamicTypeSize)
+                    .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
+                    .tag(AppTab.crew)
+                InboxScreen(servers: demoServers, settings: settings)
+                    .id(dynamicTypeSize)
+                    .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
+                    .badge(InboxRules.badge(of: demoServers))
+                    .tag(AppTab.inbox)
+                ActivityScreen(servers: demoServers)
+                    .id(dynamicTypeSize)
+                    .badge(ActivityFacts.unreadCount(servers: demoServers))
+                    .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
+                    .tag(AppTab.activity)
+                SettingsTab(settings: settings, servers: servers, biometrics: biometrics, onConnect: { showsConnect = true })
+                    .id(dynamicTypeSize)
+                    .tabItem { Label(L10n.Settings.title, systemImage: "gearshape") }
+                    .tag(AppTab.settings)
+            }
+            .preferredColorScheme(settings.theme.colorScheme)
+
+            if showsOnboarding {
+                OnboardingView(store: onboarding, motion: settings.motion, onConnect: { _ in showsConnect = true })
+                    .transition(.opacity)
+            }
         }
-        .preferredColorScheme(settings.theme.colorScheme)
+        .animation(BanditoMotion.ease, value: showsOnboarding)
         .overlay {
             if appLock.isLocked {
                 LockScreen(onUnlock: unlockApp)
@@ -46,6 +57,9 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             appLock.scenePhaseChanged(to: phase, enabled: settings.faceIDLock, timeout: settings.lockTimeout)
+        }
+        .onChange(of: servers.servers.isEmpty, initial: true) { _, isEmpty in
+            if !isEmpty { onboarding.markCompleted() }
         }
         // Accents are the brand's signal orange (a link, a menu's chevron); the tab bar itself stays cream on warm dark.
         .tint(Color.Bandito.signal)
