@@ -113,6 +113,16 @@ enum IOSDemo {
                     : .assistant(id: id, text: turn.text, ts: ts)
             }
             server.installSyntheticAgent(agent, items: items)
+            // The daemon knows the agent too, so that editing and deleting it answer as a real server does.
+            await transport.remember(agent)
+            if member.name == "Watch" {
+                await transport.rememberSchedule(
+                    id: "ios-demo-schedule-1", agentID: ids[index], cron: "0 22 * * *", tz: "Asia/Vladivostok",
+                    prompt: member.history.first?.text ?? "", title: "Nightly disk check", enabled: true)
+                await transport.rememberSchedule(
+                    id: "ios-demo-schedule-2", agentID: ids[index], cron: "0 9 * * 1", tz: "Asia/Vladivostok",
+                    prompt: "Summarize the week's disk usage.", title: "Weekly summary", enabled: false)
+            }
         }
         // What the team has read so far: every chat is read to its last message.
         for id in ids {

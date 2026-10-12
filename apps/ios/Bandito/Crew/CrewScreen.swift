@@ -13,8 +13,11 @@ struct CrewScreen: View {
 
     /// The server shown; nil means the first one (the list of servers can change under the screen).
     @State private var chosenServerID: UUID?
-    /// The chats opened from the list (a waiting card pushes its chat by hand, so it has no disclosure chevron).
-    @State private var path: [CrewRoute] = []
+    /// The chats and the agent cards opened from the list (a waiting card pushes its chat by hand, so it has no chevron).
+    @State private var path = NavigationPath()
+    /// The creation sheet, while it is open: the tab it opens on. A new value is a new sheet.
+    @State private var newAgent: NewAgentStart?
+    @State private var hooksOpened = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -22,8 +25,11 @@ struct CrewScreen: View {
                 if let server = currentServer {
                     CrewList(
                         server: server, servers: servers,
-                        onChoose: { chosenServerID = $0; path = [] },
-                        open: { path.append($0) }
+                        // The path is reset here, not on a change of the chosen server: a widget's link sets both.
+                        onChoose: { chosenServerID = $0; path = NavigationPath() },
+                        open: { path.append($0) },
+                        details: { path.append(AgentDetailRoute(agentID: $0)) },
+                        onCreate: { newAgent = NewAgentStart(tab: .teams) }
                     )
                     .id(server.id)
                 } else {
@@ -33,12 +39,53 @@ struct CrewScreen: View {
             .navigationTitle(L10n.Ios.Tab.crew)
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                if currentServer != nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            newAgent = NewAgentStart(tab: .teams)
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel(L10n.Ios.Crew.createAgent)
+                        .accessibilityIdentifier("crew.new")
+                    }
+                }
+            }
             .navigationDestination(for: CrewRoute.self) { route in
                 AgentChatStub(name: route.name)
+            }
+            .navigationDestination(for: AgentDetailRoute.self) { route in
+                if let server = currentServer {
+                    AgentDetailView(server: server, agentID: route.agentID)
+                }
             }
         }
         .task(id: focus) {
             open(focus)
+        }
+        .onChange(of: servers.count, initial: true) { _, _ in openScreenshotHooks() }
+        .sheet(item: $newAgent) { start in
+            if let server = currentServer {
+                NewAgentSheet(server: server, tab: start.tab)
+            }
+        }
+    }
+
+    /// The screenshot hooks, read once from the launch arguments as `-tab` is: `-agent-card <name>` opens that agent's
+    /// card, `-new-agent` opens the creation sheet (`-new-agent one` on its one-agent tab).
+    private func openScreenshotHooks() {
+        guard !hooksOpened, let server = currentServer else { return }
+        hooksOpened = true
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "-agent-card"), arguments.indices.contains(index + 1),
+           let agent = server.sortedAgents.first(where: { $0.name == arguments[index + 1] })
+        {
+            path.append(AgentDetailRoute(agentID: agent.id))
+        }
+        if let index = arguments.firstIndex(of: "-new-agent") {
+            let one = arguments.indices.contains(index + 1) && arguments[index + 1] == "one"
+            newAgent = NewAgentStart(tab: one ? .one : .teams)
         }
     }
 
@@ -52,7 +99,7 @@ struct CrewScreen: View {
               let agent = server.agents.first(where: { $0.id == focus.agentID })
         else { return }
         chosenServerID = server.id
-        path = [CrewRoute(agentID: agent.id, name: agent.name)]
+        path = NavigationPath([CrewRoute(agentID: agent.id, name: agent.name)])
     }
 }
 
@@ -70,6 +117,11 @@ struct CrewFocus: Equatable {
     let request: UUID
 }
 
+/// The agent card opened from the Crew list ("Details" in the context menu).
+struct AgentDetailRoute: Hashable {
+    let agentID: String
+}
+
 /// The list of one server's crew. Reads the server's agents and their thread summaries; each row is an `Equatable`
 /// view of its facts (`CrewAgentRow`), so the list rebuilds the rows that changed and no others.
 struct CrewList: View {
@@ -78,9 +130,12 @@ struct CrewList: View {
     let onChoose: (UUID) -> Void
     /// Opens an agent's chat (the screen's navigation path).
     let open: (CrewRoute) -> Void
+    /// Opens an agent's card.
+    let details: (String) -> Void
+    /// Opens the sheet that makes an agent (the empty state's button).
+    let onCreate: () -> Void
 
     @State private var pinned: [String] = []
-    @State private var showsCreateNote = false
 
     var body: some View {
         let rows = CrewFacts.build(server: server, pinned: pinned)
@@ -125,6 +180,11 @@ struct CrewList: View {
                         .listRowBackground(Color.Bandito.surface1)
                         .contextMenu {
                             Button {
+                                details(facts.id)
+                            } label: {
+                                Label(L10n.Inspector.details, systemImage: "info.circle")
+                            }
+                            Button {
                                 pinned = CrewPins.toggled(facts.id, in: pinned)
                                 CrewPins.save(pinned, serverID: server.id)
                             } label: {
@@ -156,11 +216,6 @@ struct CrewList: View {
         }
         .task(id: server.id) {
             pinned = CrewPins.load(server.id)
-        }
-        .alert(L10n.Ios.Crew.createAgent, isPresented: $showsCreateNote) {
-            Button(L10n.Common.close, role: .cancel) {}
-        } message: {
-            Text(L10n.Ios.Crew.createSoon)
         }
     }
 
@@ -197,7 +252,7 @@ struct CrewList: View {
         }
     }
 
-    /// No agent on this server: a sleeping raccoon, one line, and the action (the creation is not built yet).
+    /// No agent on this server: a sleeping raccoon, one line, and the action that opens the creation sheet.
     private var emptyState: some View {
         VStack(spacing: BanditoSpace.s3) {
             CrewAvatar(
@@ -211,10 +266,11 @@ struct CrewList: View {
                 .foregroundStyle(Color.Bandito.text2)
                 .multilineTextAlignment(.center)
             Button {
-                showsCreateNote = true
+                onCreate()
             } label: {
                 Text(L10n.Ios.Crew.createAgent)
             }
+            .accessibilityIdentifier("crew.empty.create")
             .buttonStyle(SignalButtonStyle())
             .padding(.top, BanditoSpace.s2)
         }
@@ -240,4 +296,10 @@ struct AgentChatStub: View {
         .navigationTitle(name)
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+/// The creation sheet's start: the tab it opens on. Identifiable, so every opening is a sheet of its own.
+struct NewAgentStart: Identifiable {
+    let id = UUID()
+    let tab: NewAgentSheet.Tab
 }

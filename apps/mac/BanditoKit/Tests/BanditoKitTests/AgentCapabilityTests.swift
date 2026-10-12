@@ -1,7 +1,7 @@
 import BanditoL10n
 import Testing
 
-@testable import BanditoUI
+@testable import BanditoKit
 
 /// Logic behind the "What it may do" chips: a click flips one capability and leaves the others alone.
 @Suite struct AgentCapabilityTests {

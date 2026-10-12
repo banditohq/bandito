@@ -2,6 +2,7 @@ import BanditoKit
 import Foundation
 import Testing
 
+@testable import BanditoKit
 @testable import BanditoUI
 
 /// The rules of the share screens: links, the draft's limits, the buttons' states, the capabilities a shared bot

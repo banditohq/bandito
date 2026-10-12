@@ -936,10 +936,12 @@
 "ios.activity.filter.unread" = "未読";
 "ios.activity.finished" = "%1$@が完了";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "エージェントを削除";
+"ios.agent.error" = "保存できませんでした: %1$@";
+"ios.agent.noSchedules" = "スケジュールはまだありません。";
 "ios.connect.placeholder" = "iPhone からのサーバー接続は近日対応予定です。";
 "ios.crew.chatSoon" = "%1$@ とのチャットは近日対応予定です。";
 "ios.crew.createAgent" = "エージェントを作成";
-"ios.crew.createSoon" = "iPhone からのエージェント作成は近日対応予定です。";
 "ios.crew.emptyMessage" = "このサーバーにはエージェントがいません。最初のエージェントを作って、チームを動かしましょう。";
 "ios.crew.emptyTitle" = "まだエージェントがいません";
 "ios.crew.lead" = "リーダー";
@@ -972,6 +974,9 @@
 "ios.intent.ask.sent" = "%1$@に送信しました";
 "ios.intent.needsMe.none" = "あなたを待っているものはありません";
 "ios.intent.open.inbox" = "受信トレイを開く";
+"ios.newAgent.tabOne" = "エージェント1つ";
+"ios.newAgent.tabTeams" = "すぐに使えるチーム";
+"ios.newAgent.teamsEmpty" = "このサーバーにはまだ用意済みのチームがありません。";
 "ios.onboarding.connect.hint" = "Mac で: 設定 → サーバー → iPhone を接続";
 "ios.onboarding.connect.paste" = "リンクを貼り付け";
 "ios.onboarding.connect.scan" = "Mac のコードを読み取る";
