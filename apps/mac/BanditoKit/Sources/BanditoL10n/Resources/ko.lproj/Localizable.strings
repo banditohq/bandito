@@ -2175,7 +2175,7 @@
 "settings.approvals.wildcardNote" = "*는 모든 것을 뜻해요. 두 규칙이 모두 맞으면 특정 에이전트용 규칙이 우선하고, 그다음에는 더 최근 규칙이 적용돼요.";
 "settings.approvalsIntro" = "Bandito는 에이전트의 모든 작업을 확인해요. 일상적인 작업은 자동으로 진행되고, 아래 규칙이나 내장 검사에 해당하는 작업은 사용자의 결정을 기다려요.";
 "settings.autoCheckUpdates" = "업데이트를 자동으로 확인";
-"settings.autoCheckUpdatesHint" = "하루에 한 번이에요. 허락 없이는 아무것도 설치되지 않아요.";
+"settings.autoCheckUpdatesHint" = "30분마다. 동의 없이는 아무것도 설치되지 않습니다.";
 "settings.browserScreen.clipboard" = "공유 클립보드";
 "settings.browserScreen.clipboardHint" = "여기서 복사하고 저기서 붙여 넣을 수 있어요. 반대도 마찬가지예요.";
 "settings.browserScreen.intro" = "이 Mac에서 보이는 그대로의 서버 브라우저와 화면이에요.";

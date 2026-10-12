@@ -730,7 +730,7 @@
   "approval.why.deleteFolder": "删除整个文件夹",
   "menu.checkForUpdates": "检查更新…",
   "settings.autoCheckUpdates": "自动检查更新",
-  "settings.autoCheckUpdatesHint": "每天一次。未经同意，不会安装任何内容。",
+  "settings.autoCheckUpdatesHint": "每 30 分钟一次。未经你同意，不会安装任何内容。",
   "settings.channelHint": "Beta 版会优先获得预览版本。",
   "server.daemonUpdate.title": "版本 {latest} 可用（当前为 {current}）",
   "server.daemonUpdate.button": "更新服务器",

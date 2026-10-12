@@ -358,7 +358,7 @@
   "settings.updates.stable": "Стабильный",
   "menu.checkForUpdates": "Проверить обновления…",
   "settings.autoCheckUpdates": "Проверять обновления автоматически",
-  "settings.autoCheckUpdatesHint": "Раз в сутки. Без вашего согласия ничего не устанавливается.",
+  "settings.autoCheckUpdatesHint": "Каждые 30 минут. Без вашего согласия ничего не устанавливается.",
   "settings.channelHint": "Бета получает предварительные сборки раньше.",
   "server.daemonUpdate.title": "Доступна версия {latest} (у вас {current})",
   "server.daemonUpdate.button": "Обновить сервер",

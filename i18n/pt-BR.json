@@ -748,7 +748,7 @@
   "approval.why.deleteFolder": "apaga uma pasta inteira",
   "menu.checkForUpdates": "Verificar atualizações…",
   "settings.autoCheckUpdates": "Verificar atualizações automaticamente",
-  "settings.autoCheckUpdatesHint": "Uma vez por dia. Nada é instalado sem o seu OK.",
+  "settings.autoCheckUpdatesHint": "A cada 30 minutos. Nada é instalado sem o seu consentimento.",
   "settings.channelHint": "A versão Beta recebe as prévias primeiro.",
   "server.daemonUpdate.title": "A versão {latest} está disponível (você tem a {current})",
   "server.daemonUpdate.button": "Atualizar servidor",

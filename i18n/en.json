@@ -333,7 +333,7 @@
   "settings.updates.stable": "Stable",
   "menu.checkForUpdates": "Check for Updates…",
   "settings.autoCheckUpdates": "Check for updates automatically",
-  "settings.autoCheckUpdatesHint": "Once a day. Nothing is installed without your OK.",
+  "settings.autoCheckUpdatesHint": "Every 30 minutes. Nothing is installed without your consent.",
   "settings.channelHint": "Beta gets preview builds first.",
   "server.daemonUpdate.title": "Version {latest} is available (you have {current})",
   "server.daemonUpdate.button": "Update server",

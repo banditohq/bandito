@@ -730,7 +730,7 @@
   "approval.why.deleteFolder": "フォルダー全体を削除します",
   "menu.checkForUpdates": "アップデートを確認…",
   "settings.autoCheckUpdates": "アップデートを自動で確認",
-  "settings.autoCheckUpdatesHint": "1日に1回。許可なしに何もインストールされません。",
+  "settings.autoCheckUpdatesHint": "30分ごと。同意なしに何もインストールされません。",
   "settings.channelHint": "ベータ版は先にプレビュービルドを受け取ります。",
   "server.daemonUpdate.title": "バージョン {latest} が利用可能です（現在 {current}）",
   "server.daemonUpdate.button": "サーバーを更新",

@@ -2175,7 +2175,7 @@
 "settings.approvals.wildcardNote" = "* 代表任意内容。若两条规则都匹配，则优先采用针对特定代理的规则，其次采用较新的规则。";
 "settings.approvalsIntro" = "Bandito 会检查代理的每一项操作。日常工作自动进行，符合下方规则或内置检查的操作会等待决定。";
 "settings.autoCheckUpdates" = "自动检查更新";
-"settings.autoCheckUpdatesHint" = "每天一次。未经同意，不会安装任何内容。";
+"settings.autoCheckUpdatesHint" = "每 30 分钟一次。未经你同意，不会安装任何内容。";
 "settings.browserScreen.clipboard" = "共享剪贴板";
 "settings.browserScreen.clipboardHint" = "在这里复制，在那里粘贴，反之亦然。";
 "settings.browserScreen.intro" = "以在这台 Mac 上看到的方式显示服务器的浏览器和屏幕。";

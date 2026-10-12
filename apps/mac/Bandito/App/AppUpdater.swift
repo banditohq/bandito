@@ -15,6 +15,9 @@ final class AppUpdater {
     private static let log = Logger(subsystem: "dev.bandito", category: "updates")
     /// How long after launch the background check runs.
     private static let launchCheckDelay: Duration = .seconds(5)
+    /// How often a quiet check runs while the app is open. Sparkle's own schedule does not go below an hour, so the
+    /// app keeps its own: a new version shows in the banner within half an hour of its release.
+    static let periodicCheckInterval: Duration = .seconds(30 * 60)
 
     private let channels = UpdateChannelDelegate()
     private let driver: UpdateUserDriver
@@ -24,6 +27,7 @@ final class AppUpdater {
     private var started = false
     private var preferencesObserver: NSObjectProtocol?
     private var launchCheck: Task<Void, Never>?
+    private var periodicCheck: Task<Void, Never>?
 
     init() {
         driver = UpdateUserDriver(center: center)
@@ -48,6 +52,7 @@ final class AppUpdater {
             MainActor.assumeIsolated { self?.applyAutomaticChecks() }
         }
         scheduleLaunchCheck()
+        schedulePeriodicChecks()
     }
 
     /// "Check for Updates…" in the menu, Settings and "Try again": the answer shows in the banner.
@@ -64,6 +69,19 @@ final class AppUpdater {
             do { try await Task.sleep(for: Self.launchCheckDelay) } catch { return }
             guard let self, AppUpdatePreferences.automaticChecks() else { return }
             self.updater.checkForUpdatesInBackground()
+        }
+    }
+
+    /// Every half hour, a quiet check while automatic checks are on. Sparkle skips a check while another one or an
+    /// install is under way, so a tick during an update does nothing.
+    private func schedulePeriodicChecks() {
+        periodicCheck = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: Self.periodicCheckInterval) } catch { return }
+                guard let self else { return }
+                guard AppUpdatePreferences.automaticChecks(), self.updater.canCheckForUpdates else { continue }
+                self.updater.checkForUpdatesInBackground()
+            }
         }
     }
 

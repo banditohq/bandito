@@ -2175,7 +2175,7 @@
 "settings.approvals.wildcardNote" = "* は任意の文字列を表します。2 つのルールが該当する場合、特定のエージェント向けのルールが優先され、その後に新しいルールが適用されます。";
 "settings.approvalsIntro" = "Bandito はエージェントのすべての操作を確認します。通常の作業は自動で進み、下のルールや組み込みチェックに当たるものはあなたの判断を待ちます。";
 "settings.autoCheckUpdates" = "アップデートを自動で確認";
-"settings.autoCheckUpdatesHint" = "1日に1回。許可なしに何もインストールされません。";
+"settings.autoCheckUpdatesHint" = "30分ごと。同意なしに何もインストールされません。";
 "settings.browserScreen.clipboard" = "共有クリップボード";
 "settings.browserScreen.clipboardHint" = "ここでコピーして、あちらに貼り付けられます。逆方向も同じです。";
 "settings.browserScreen.intro" = "サーバーのブラウザと画面を、この Mac で見えるとおりに表示します。";

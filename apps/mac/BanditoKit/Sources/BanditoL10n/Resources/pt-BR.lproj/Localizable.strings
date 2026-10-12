@@ -2175,7 +2175,7 @@
 "settings.approvals.wildcardNote" = "* significa qualquer coisa. Se duas regras se aplicarem, vence a do agente específico e, depois, a mais recente.";
 "settings.approvalsIntro" = "O Bandito verifica cada ação do agente. O trabalho rotineiro segue sozinho, enquanto o que bater com uma regra abaixo ou com uma verificação embutida espera sua decisão.";
 "settings.autoCheckUpdates" = "Verificar atualizações automaticamente";
-"settings.autoCheckUpdatesHint" = "Uma vez por dia. Nada é instalado sem o seu OK.";
+"settings.autoCheckUpdatesHint" = "A cada 30 minutos. Nada é instalado sem o seu consentimento.";
 "settings.browserScreen.clipboard" = "Área de transferência compartilhada";
 "settings.browserScreen.clipboardHint" = "Copie aqui, cole ali, e vice-versa.";
 "settings.browserScreen.intro" = "O navegador e a tela do servidor, como você os vê neste Mac.";

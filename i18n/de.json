@@ -747,7 +747,7 @@
   "approval.why.deleteFolder": "löscht einen ganzen Ordner",
   "menu.checkForUpdates": "Nach Updates suchen…",
   "settings.autoCheckUpdates": "Automatisch nach Updates suchen",
-  "settings.autoCheckUpdatesHint": "Einmal am Tag. Ohne Ihre Zustimmung wird nichts installiert.",
+  "settings.autoCheckUpdatesHint": "Alle 30 Minuten. Ohne Ihre Zustimmung wird nichts installiert.",
   "settings.channelHint": "Beta erhält Vorabversionen früher.",
   "server.daemonUpdate.title": "Version {latest} ist verfügbar (installiert ist {current})",
   "server.daemonUpdate.button": "Server aktualisieren",

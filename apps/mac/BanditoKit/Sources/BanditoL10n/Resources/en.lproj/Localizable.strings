@@ -2175,7 +2175,7 @@
 "settings.approvals.wildcardNote" = "* means anything. If two rules match, the rule for one agent wins, then the newer one.";
 "settings.approvalsIntro" = "Bandito checks every action an agent takes. Routine work runs on its own, while anything that matches a rule below or a built-in check waits for your decision.";
 "settings.autoCheckUpdates" = "Check for updates automatically";
-"settings.autoCheckUpdatesHint" = "Once a day. Nothing is installed without your OK.";
+"settings.autoCheckUpdatesHint" = "Every 30 minutes. Nothing is installed without your consent.";
 "settings.browserScreen.clipboard" = "Shared clipboard";
 "settings.browserScreen.clipboardHint" = "Copy here, paste there, and the other way round.";
 "settings.browserScreen.intro" = "The server's browser and screen, as you see them on this Mac.";

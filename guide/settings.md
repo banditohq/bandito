@@ -55,9 +55,9 @@ Starts Bandito when you sign in to this Mac. It uses the macOS login items; the 
 ## Check for updates automatically (Проверять обновления автоматически)
 
 <!-- id: set-auto-update; covers: setting:SUEnableAutomaticChecks -->
-Bandito checks for a new version once a day and tells you when one is out. It never installs anything without your OK. The switch is on by default.
+Bandito checks for a new version a few seconds after it opens and then every 30 minutes, and tells you when one is out. It never installs anything without your OK. The switch is on by default.
 Где: Settings (⌘,) → Updates (Обновления) → Check for updates automatically (Проверять обновления автоматически)
-1. Turn the switch off to stop the daily check. Check for Updates… (Проверить обновления…) in the Bandito menu still works.
+1. Turn the switch off to stop the automatic checks. Check for Updates… (Проверить обновления…) in the Bandito menu still works.
 2. When a new version is found, a card appears in the sidebar above your profile (see "Update card in the sidebar" below). Click Update (Обновить) there.
 
 ## Update channel (Канал обновлений)

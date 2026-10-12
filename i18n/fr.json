@@ -748,7 +748,7 @@
   "approval.why.deleteFolder": "supprime un dossier entier",
   "menu.checkForUpdates": "Rechercher les mises à jour…",
   "settings.autoCheckUpdates": "Rechercher les mises à jour automatiquement",
-  "settings.autoCheckUpdatesHint": "Une fois par jour. Rien n’est installé sans votre accord.",
+  "settings.autoCheckUpdatesHint": "Toutes les 30 minutes. Rien n’est installé sans votre accord.",
   "settings.channelHint": "La version bêta reçoit les préversions en premier.",
   "server.daemonUpdate.title": "La version {latest} est disponible (vous avez {current})",
   "server.daemonUpdate.button": "Mettre à jour le serveur",
