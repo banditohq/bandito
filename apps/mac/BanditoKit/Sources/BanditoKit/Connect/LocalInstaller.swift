@@ -30,7 +30,7 @@ public struct LocalInstaller: Sendable {
     ///   - runner: runs the installed binary.
     ///   - bundledBinary: the bandito binary inside the app bundle. Default: `Contents/Helpers/bandito`.
     ///   - home: the user's home directory (a test passes a temporary one).
-    ///   - hostName: this Mac's name (`Host.current().localizedName`). Nil or empty uses `fallbackName`.
+    ///   - hostName: this Mac's name (`ComputerName.current()`). Nil or empty uses `fallbackName`.
     ///   - fallbackName: the server's name when this Mac has no name. The caller passes the localized "This Mac".
     ///   - redeem: exchanges the pairing code for a token. Default: over the WebSocket on loopback.
     ///   - pollInterval: how long to wait between two `info --json` asks while the daemon starts.

@@ -212,7 +212,7 @@ public final class AppModel {
         let paired: PairedServer
         do {
             paired = try await pairing.pair(
-                name: old.config.name, id: id, deviceName: Host.current().localizedName ?? "This Mac")
+                name: old.config.name, id: id, deviceName: ComputerName.current() ?? "This Mac")
         } catch {
             // The server may have been removed while the pairing ran: no state for an id that is gone.
             keyRepair[id] = servers.contains { $0.id == id } ? .failed(Self.repairFailure(error)) : nil
@@ -423,7 +423,7 @@ public final class AppModel {
             guard let old = servers.first(where: { $0.id == id }) else { continue }
             do {
                 let paired = try await pairing.pair(
-                    name: old.config.name, id: id, deviceName: Host.current().localizedName ?? "This Mac")
+                    name: old.config.name, id: id, deviceName: ComputerName.current() ?? "This Mac")
                 guard let token = paired.config.token, storeToken(token, id) else {
                     await revokeUnkeptToken(paired, revoke: revoke)
                     continue

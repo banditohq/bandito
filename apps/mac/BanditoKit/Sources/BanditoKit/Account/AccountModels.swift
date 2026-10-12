@@ -173,7 +173,7 @@ public struct DeviceDescriptor: Sendable, Equatable {
     public static var current: DeviceDescriptor {
         #if os(macOS)
         let platform = "macos"
-        let name = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+        let name = ComputerName.current() ?? "Mac"
         #else
         let platform = "ios"
         let name = ProcessInfo.processInfo.hostName
