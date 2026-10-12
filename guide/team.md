@@ -73,6 +73,16 @@ The screen shown in the Team mode when no chat is open: a greeting with the racc
 2. Click New agent, or a template, to open the New agent sheet; a bot tile opens the create sheet of that bot in the Marketplace; click an agent to open its chat.
 3. Swipe left with two fingers to return to the chat you left.
 
+## Ready teams (Готовые команды)
+
+<!-- id: team-ready-teams; covers: sheet:readyTeam -->
+A ready team is a set of agents made in one go: Web project (Веб-проект) is a developer, a reviewer and a tester; Server on duty (Дежурный по серверу) looks at the logs, the disk and the updates on a schedule and stays silent when all is well; Morning summary (Утренняя сводка) gathers what matters today at 8:00 from your connected services; Documentation (Документация) keeps the README and the docs in line with the code. The cards are on the team home and on the empty team. A card opens a preview: the agents with what each may use, the model they start on (Haiku for Claude Code), the schedules, the project folder and the runtime. Nothing is made until you click Create team (Создать команду).
+Где: Team home (⌘0) → Ready teams (Готовые команды); the empty Team screen → Ready teams
+1. Click a card to see the team.
+2. Switch on the schedules you want. All are off until you do, and a scheduled run with nothing to report stays silent.
+3. For a team of several agents choose the project folder: they all work in it. For one agent the folder is optional.
+4. Pick the runtime if you have several, then click Create team (Создать команду). The result lists each agent; Open (Открыть) goes to the first one.
+
 ## Search and quick open (⌘K)
 
 <!-- id: team-quick-open; covers: -->

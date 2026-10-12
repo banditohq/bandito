@@ -96,6 +96,18 @@ enum LoginCommand {
     }
 }
 
+/// The daemon's hint for a CLI it cannot install: an https address (a guide) or a short reason.
+enum SubscriptionHint {
+    /// The guide's address when the whole hint is one https link; nil for a reason in words.
+    static func guideURL(_ hint: String) -> URL? {
+        let trimmed = hint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.contains(where: \.isWhitespace), let url = URL(string: trimmed),
+            url.scheme == "https", url.host != nil
+        else { return nil }
+        return url
+    }
+}
+
 /// What the person can do with one agent CLI row: install it, sign in, or nothing while the status is not known.
 enum SubscriptionRowAction: Equatable, Sendable {
     /// Not on the server, and Bandito can install it here: the "Install" button.

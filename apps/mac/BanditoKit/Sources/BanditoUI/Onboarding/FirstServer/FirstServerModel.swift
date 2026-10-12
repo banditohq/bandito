@@ -141,7 +141,7 @@ final class FirstServerModel {
         checklist = InstallChecklist(items: ChecklistItem.thisMac)
         phase = .installing
         let installer = LocalInstaller(
-            runner: runner, hostName: Host.current().localizedName, fallbackName: L10n.Onboarding.Server.thisMacName)
+            runner: runner, hostName: ComputerName.current(), fallbackName: L10n.Onboarding.Server.thisMacName)
         run(installer.install(), app: app)
     }
 

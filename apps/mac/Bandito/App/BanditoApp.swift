@@ -47,6 +47,10 @@ struct BanditoApp: App {
                     focusMode.start()
                 }
                 .task {
+                    // First-use costs (the first chart) are paid offscreen while nobody uses the app.
+                    IdleWarmup.start()
+                }
+                .task {
                     // Anonymous statistics: the account's token joins the pulse when someone is signed in.
                     telemetry.attach(accountHub: accountHub)
                     await telemetry.run(app: model)
@@ -55,6 +59,7 @@ struct BanditoApp: App {
                     // Actions aimed at the server that was in front are dropped when another one is chosen.
                     model.onServerChanged = { [router] in router.dropPendingServerActions() }
                     model.startNotifications(
+                        askPermission: !onboarding.isActive,
                         selectedAgentID: { [router] in
                             router.mode == .team ? router.selectedAgentID : nil
                         },

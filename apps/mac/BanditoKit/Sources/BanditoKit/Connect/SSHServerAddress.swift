@@ -41,13 +41,19 @@ public struct SSHServerAddress: Codable, Sendable, Hashable {
 
     /// Checks what the person typed into the form. Empty optional fields become nil. The host and the user are names
     /// (`SSHTarget.isSafeName`): letters, digits, dot, dash and underscore, never starting with a dash, so ssh can not
-    /// read them as an option (`-oProxyCommand=…`). A key file must be an existing regular file (`isRegularFile`).
+    /// read them as an option (`-oProxyCommand=…`). The host may also be an IPv6 address, bare or in brackets
+    /// (`[2001:db8::1]`); it is kept without them. A key file must be an existing regular file (`isRegularFile`).
     public static func validated(
         host: String, user: String, port: String, identityFile: String?,
         isRegularFile: (String) -> Bool = SSHServerAddress.isRegularFile
     ) -> Result<SSHServerAddress, Problem> {
-        let host = host.trimmingCharacters(in: .whitespaces)
-        guard SSHTarget.isSafeName(host) else { return .failure(.host) }
+        var host = host.trimmingCharacters(in: .whitespaces)
+        if host.hasPrefix("["), host.hasSuffix("]"), host.count > 2 {
+            let inside = String(host.dropFirst().dropLast())
+            guard SSHTarget.isIPv6Literal(inside) else { return .failure(.host) }
+            host = inside
+        }
+        guard SSHTarget.isSafeHost(host) else { return .failure(.host) }
 
         let user = user.trimmingCharacters(in: .whitespaces)
         if !user.isEmpty, !SSHTarget.isSafeName(user) { return .failure(.user) }

@@ -38,11 +38,12 @@ The step where your team lives: Where will your team live? You choose On this Ma
 1. Pick the server and, for your own server, type the address and click Connect.
 2. Compare the fingerprint with the one your server shows, then click This is my server — trust it. If you are not sure, cancel: nothing is trusted until you confirm.
 3. Wait for the install to end, then click Next: the first agent.
+4. If the connection fails (a wrong address, no answer, a key the server does not accept), the title says The connection failed (Подключение не удалось) and What to do (Что сделать) names the fix. Retry (Повторить) tries again; Back (Назад) returns to the address.
 
 ## This Mac is your first server
 
 <!-- id: gs-this-mac; covers: -->
-Choosing On this Mac adds a server named after this Mac (its host name, or "This Mac"). No SSH is involved: Bandito is copied to `~/.local/bin`, its service starts, and the app pairs with it over the connection on this Mac, with its own device token. If the daemon does not start, the install log shows the last lines of its log. Agents and their CLIs run on this Mac. Other servers are listed in Settings → Servers.
+Choosing On this Mac adds a server named after this Mac (the name in System Settings, or "This Mac"). No SSH is involved: Bandito is copied to `~/.local/bin`, its service starts, and the app pairs with it over the connection on this Mac, with its own device token. If the daemon does not start, the install log shows the last lines of its log. Agents and their CLIs run on this Mac. Other servers are listed in Settings → Servers.
 Где: Settings (⌘,) → Servers (Серверы) → the server list
 1. Open Settings with ⌘, and choose Servers (Серверы). Your Mac is listed with its state: Online (В сети) or Offline (Не в сети).
 ## Add a server
@@ -84,8 +85,9 @@ Agents run on the official CLIs and your existing subscriptions. Bandito does no
 <!-- id: gs-first-agent; covers: onboarding:agent -->
 The first-agent step creates your first agent: a template or a blank one, a name, a runtime that is signed in on the server, a project folder and the workplace (Shared). Connect your subscriptions shows which runtimes are ready and what to do with the others. The agent is created with the same options as in New agent (see [new-agent.md](new-agent.md)).
 Где: Introduction → step 4 of 5 (Agent)
-1. Pick a runtime that is signed in, type a name and click Next to finish the step.
-2. Create more agents later with New agent (⌘N).
+1. In Connect your subscriptions, click Install (Установить) for an agent program the server does not have yet. For one Bandito cannot install (Grok), How to install (Как установить) opens the vendor's guide. Then click Sign in (Войти) and finish the login in the terminal that opens.
+2. Pick a runtime that is signed in, type a name and click Next to finish the step.
+3. Create more agents later with New agent (⌘N).
 ## Tour: your first look
 
 <!-- id: gs-tour; covers: -->

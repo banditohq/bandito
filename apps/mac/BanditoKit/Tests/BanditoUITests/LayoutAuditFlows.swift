@@ -75,6 +75,16 @@ extension LayoutAuditSnapshots {
                 $0.phase = .failed
             }
         },
+        AuditCase(name: "flow-server-unreachable", width: 680, selfSized: true) { _ in
+            addServer {
+                $0.choose(.ownServer)
+                $0.address = "nonsense"
+                $0.checklist.apply(.step(.connect, "Connecting over SSH"))
+                $0.checklist.apply(.step(.check, "Checking the server"))
+                $0.checklist.apply(.failed(.sshFailed(.unknownHost)))
+                $0.phase = .failed
+            }
+        },
         AuditCase(name: "flow-server-host-key", width: 680, selfSized: true) { _ in
             addServer {
                 $0.choose(.ownServer)
@@ -112,5 +122,31 @@ extension LayoutAuditSnapshots {
             github(.failed(longFailure))
         },
         AuditCase(name: "sheet-github-expired", width: 420, selfSized: true) { _ in github(.expired) },
+    ]
+}
+
+/// The install row under a runtime card of the New agent sheet, at the width of one card in the narrowest sheet.
+extension LayoutAuditSnapshots {
+    private static func installRow(_ prepare: @MainActor (RuntimeInstaller) -> Void) -> AnyView {
+        let installer = RuntimeInstaller()
+        installer.offeredForAudit = [.claude]
+        prepare(installer)
+        return AnyView(
+            RuntimeInstallRow(installer: installer, kind: .claude, name: "Claude Code", install: {})
+                .frame(width: 280, alignment: .topLeading))
+    }
+
+    static let runtimeInstallRows: [AuditCase] = [
+        // The sidebar's card while there is no server, at the sidebar's width.
+        AuditCase(name: "sidebar-no-server", width: 268, selfSized: true) { _ in
+            AnyView(NoServerCard {}.frame(width: 268, alignment: .topLeading))
+        },
+        AuditCase(name: "runtime-install-offer", width: 280, selfSized: true) { _ in installRow { _ in } },
+        AuditCase(name: "runtime-install-running", width: 280, selfSized: true) { _ in
+            installRow { $0.installing = .claude }
+        },
+        AuditCase(name: "runtime-install-failed", width: 280, selfSized: true) { _ in
+            installRow { $0.failed = .claude }
+        },
     ]
 }

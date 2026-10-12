@@ -45,9 +45,9 @@ import Testing
     }
 
     /// IPv6 literals are not supported yet (see `SSHTarget`): the bracket forms are refused, not guessed at.
-    @Test func ipv6LiteralsAreRefusedForNow() {
-        #expect(SSHTarget.parse("[::1]:22") == nil)
-        #expect(SSHTarget.parse("user@[fe80::1]:2200") == nil)
-        #expect(SSHTarget.parse("fe80::1") == nil)
+    @Test func ipv6LiteralsAreTakenInBracketsOrBare() {
+        #expect(SSHTarget.parse("[::1]:22") == SSHTarget(user: nil, host: "::1", port: 22))
+        #expect(SSHTarget.parse("user@[fe80::1]:2200") == SSHTarget(user: "user", host: "fe80::1", port: 2200))
+        #expect(SSHTarget.parse("fe80::1") == SSHTarget(user: nil, host: "fe80::1", port: nil))
     }
 }

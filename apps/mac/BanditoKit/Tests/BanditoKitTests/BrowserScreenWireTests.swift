@@ -72,6 +72,14 @@ private func json(_ text: String) throws -> Data {
     #expect(status.idleMs == 1200)
 }
 
+/// The daemon sends the display as a number (daemon/src/screen.rs `ScreenStatus.display: Option<u32>`).
+@Test func screenStatusDecodesTheDaemonsNumericDisplay() throws {
+    let data = try json(#"{"running":true,"display":90,"width":1280,"height":800,"vnc_port":5901,"controller":"none"}"#)
+    let status = try RPCClient.decoder.decode(ScreenStatus.self, from: data)
+    #expect(status.display == ":90")
+    #expect(status.vncPort == 5901)
+}
+
 @Test func screenStatusWhenStoppedDecodesWithoutDetails() throws {
     let status = try RPCClient.decoder.decode(ScreenStatus.self, from: json(#"{"running":false}"#))
     #expect(!status.running)

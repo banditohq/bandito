@@ -40,7 +40,12 @@ public struct ScreenStatus: Codable, Sendable, Hashable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         running = try c.decode(Bool.self, forKey: .running)
-        display = try c.decodeIfPresent(String.self, forKey: .display)
+        // The daemon sends the X display number (`90` for `:90`); a string is read as it is.
+        if let number = try? c.decodeIfPresent(Int.self, forKey: .display) {
+            display = ":\(number)"
+        } else {
+            display = try c.decodeIfPresent(String.self, forKey: .display)
+        }
         width = try c.decodeIfPresent(Int.self, forKey: .width)
         height = try c.decodeIfPresent(Int.self, forKey: .height)
         vncPort = try c.decodeIfPresent(Int.self, forKey: .vncPort)

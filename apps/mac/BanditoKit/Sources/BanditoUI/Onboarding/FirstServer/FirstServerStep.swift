@@ -398,7 +398,9 @@ struct FirstServerStep: View {
                     .font(BanditoFont.display(size: 22, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
             } else {
-                Text(L10n.Onboarding.Server.failedTitle)
+                // A connection that failed before anything ran is not "the install did not finish".
+                let notReached = model.failure?.isConnectionProblem == true && model.checklist.mark(at: 0) == .failed
+                Text(notReached ? L10n.Onboarding.Server.connectFailedTitle : L10n.Onboarding.Server.failedTitle)
                     .font(BanditoFont.display(size: 22, weight: 600))
                     .foregroundStyle(Color.Bandito.danger)
             }

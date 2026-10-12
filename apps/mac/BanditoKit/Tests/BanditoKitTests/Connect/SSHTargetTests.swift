@@ -33,7 +33,7 @@ import Testing
         #expect(SSHTarget.parse("host:0") == nil)
         #expect(SSHTarget.parse("host:70000") == nil)
         #expect(SSHTarget.parse("host:abc") == nil)
-        #expect(SSHTarget.parse("[::1]:22") == nil)
+        #expect(SSHTarget.parse("[::1]:22x") == nil)
         #expect(SSHTarget.parse("host;rm -rf") == nil)
     }
 

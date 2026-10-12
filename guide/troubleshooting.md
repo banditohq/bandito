@@ -288,3 +288,13 @@ Measures how smoothly every page of the app draws on this Mac. A window of its o
 1. Leave the window alone while it runs: it drives the pages itself and ignores clicks.
 2. Click Copy result (Скопировать результат) to paste the table into a message or a report; Run again (Проверить ещё раз) repeats it.
 3. Close the window to end it.
+
+## Report a problem… (Сообщить о проблеме…)
+
+<!-- id: ts-report-problem; covers: sheet:reportProblem -->
+Opens a sheet for a bug report. Describe what happened and what you expected, and keep Attach diagnostics (Приложить диагностику) on to add the versions of the app, the daemon and macOS, the state of your servers ("This Mac", "Linux server 1", without names or addresses) and the last lines of the app's log and of the daemon's log. Tokens and keys, passwords in settings, e-mails, IP addresses, host names and your home folder are replaced with ‹скрыто› before the text is shown; chats are never included. The whole report is shown in the box below, exactly as it will be posted, and you can edit it. Nothing is sent from the app: Open on GitHub (Открыть на GitHub) opens the issue form in your browser with the report filled in, and you post it there. When the diagnostics are too long for a link, they are copied to the clipboard and the form says to paste them.
+Где: Help (Справка) → Report a Problem… (Сообщить о проблеме…); Settings (⌘,) → Updates (Обновления) → Report a problem (Сообщить о проблеме)
+1. Choose Help (Справка) → Report a Problem… (Сообщить о проблеме…), or click Report… (Сообщить…) in Settings → Updates (Обновления).
+2. Fill in What happened? (Что случилось?) and What did you expect? (Что вы ожидали?).
+3. Read the report. Edit it if something private is left; Reset the text (Вернуть исходный текст) brings the generated text back.
+4. Click Open on GitHub (Открыть на GitHub) and post the issue, or click Copy report (Скопировать отчёт) to send it another way.

@@ -94,6 +94,20 @@ struct UpdatesSection: View {
                         .fixedSize(horizontal: true, vertical: false)
                 }
             }
+            SettingsGroup(title: nil) {
+                SettingsRow(
+                    title: L10n.Settings.Updates.reportTitle, hint: L10n.Settings.Updates.reportHint,
+                    icon: SettingsIcon(symbol: "exclamationmark.bubble", tint: BanditoPalette.badgeRed),
+                    keepsControlBeside: true
+                ) {
+                    Button(L10n.Settings.Updates.reportButton) {
+                        // The sheet is in the main window: Settings closes, and the sheet opens there.
+                        SettingsHandoff.openMainWindow(router: router) { $0.sheet = .reportProblem }
+                    }
+                    .banditoButton(.quiet())
+                    .fixedSize()
+                }
+            }
             if let server = app.currentServer {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(ServerPicker.name(server))

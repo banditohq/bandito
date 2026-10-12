@@ -1777,6 +1777,7 @@ public enum L10n {
         public static var checkForUpdates: String { L10n.tr("menu.checkForUpdates") }
         public static var go: String { L10n.tr("menu.go") }
         public static var importClaude: String { L10n.tr("menu.importClaude") }
+        public static var reportProblem: String { L10n.tr("menu.reportProblem") }
         public static var terminals: String { L10n.tr("menu.terminals") }
         public static var view: String { L10n.tr("menu.view") }
     }
@@ -2239,9 +2240,9 @@ public enum L10n {
             public static var loginAfter: String { L10n.tr("onboarding.subs.loginAfter") }
             public static func loginTitle(name: String) -> String { L10n.tr("onboarding.subs.loginTitle", name) }
             public static var needOne: String { L10n.tr("onboarding.subs.needOne") }
+            public static var noInstaller: String { L10n.tr("onboarding.subs.noInstaller") }
             public static var openLink: String { L10n.tr("onboarding.subs.openLink") }
             public static var signIn: String { L10n.tr("onboarding.subs.signIn") }
-            public static var skipLater: String { L10n.tr("onboarding.subs.skipLater") }
             public static var stateChecking: String { L10n.tr("onboarding.subs.stateChecking") }
             public static var stateNeedsLogin: String { L10n.tr("onboarding.subs.stateNeedsLogin") }
             public static var stateNotInstalled: String { L10n.tr("onboarding.subs.stateNotInstalled") }
@@ -2375,6 +2376,24 @@ public enum L10n {
         public static func progress(done: String, total: String) -> String { L10n.tr("quickReplies.progress", done, total) }
     }
 
+    public enum ReadyTeam {
+        public static var agents: String { L10n.tr("readyTeam.agents") }
+        public static var chooseFolder: String { L10n.tr("readyTeam.chooseFolder") }
+        public static func connectServices(names: String) -> String { L10n.tr("readyTeam.connectServices", names) }
+        public static var create: String { L10n.tr("readyTeam.create") }
+        public static var creating: String { L10n.tr("readyTeam.creating") }
+        public static var folder: String { L10n.tr("readyTeam.folder") }
+        public static var folderOwn: String { L10n.tr("readyTeam.folderOwn") }
+        public static var folderShared: String { L10n.tr("readyTeam.folderShared") }
+        public static func model(name: String) -> String { L10n.tr("readyTeam.model", name) }
+        public static var modelDefault: String { L10n.tr("readyTeam.modelDefault") }
+        public static var noPermissions: String { L10n.tr("readyTeam.noPermissions") }
+        public static func permissions(list: String) -> String { L10n.tr("readyTeam.permissions", list) }
+        public static var schedules: String { L10n.tr("readyTeam.schedules") }
+        public static var schedulesHint: String { L10n.tr("readyTeam.schedulesHint") }
+        public static var unavailable: String { L10n.tr("readyTeam.unavailable") }
+    }
+
     public enum Recommend {
 
         public enum Reason {
@@ -2406,6 +2425,25 @@ public enum L10n {
         public static func toAgent(name: String) -> String { L10n.tr("reply.toAgent", name) }
         public static var toSelf: String { L10n.tr("reply.toSelf") }
         public static var you: String { L10n.tr("reply.you") }
+    }
+
+    public enum Report {
+        public static var attach: String { L10n.tr("report.attach") }
+        public static var attachHint: String { L10n.tr("report.attachHint") }
+        public static var clipboardNote: String { L10n.tr("report.clipboardNote") }
+        public static var collecting: String { L10n.tr("report.collecting") }
+        public static var copied: String { L10n.tr("report.copied") }
+        public static var copy: String { L10n.tr("report.copy") }
+        public static var expected: String { L10n.tr("report.expected") }
+        public static var expectedPlaceholder: String { L10n.tr("report.expectedPlaceholder") }
+        public static var openGitHub: String { L10n.tr("report.openGitHub") }
+        public static var preview: String { L10n.tr("report.preview") }
+        public static var previewHint: String { L10n.tr("report.previewHint") }
+        public static var reset: String { L10n.tr("report.reset") }
+        public static var subtitle: String { L10n.tr("report.subtitle") }
+        public static var title: String { L10n.tr("report.title") }
+        public static var what: String { L10n.tr("report.what") }
+        public static var whatPlaceholder: String { L10n.tr("report.whatPlaceholder") }
     }
 
     public enum Rules {
@@ -3273,6 +3311,9 @@ public enum L10n {
             public static var intro: String { L10n.tr("settings.updates.intro") }
             public static var latest: String { L10n.tr("settings.updates.latest") }
             public static var moreOnServer: String { L10n.tr("settings.updates.moreOnServer") }
+            public static var reportButton: String { L10n.tr("settings.updates.reportButton") }
+            public static var reportHint: String { L10n.tr("settings.updates.reportHint") }
+            public static var reportTitle: String { L10n.tr("settings.updates.reportTitle") }
             public static var restartDaemon: String { L10n.tr("settings.updates.restartDaemon") }
             public static var stable: String { L10n.tr("settings.updates.stable") }
             public static var stableDesc: String { L10n.tr("settings.updates.stableDesc") }
@@ -3585,6 +3626,7 @@ public enum L10n {
             public static var idea4: String { L10n.tr("team.home.idea4") }
             public static var ideas: String { L10n.tr("team.home.ideas") }
             public static var `open`: String { L10n.tr("team.home.open") }
+            public static var readyTeams: String { L10n.tr("team.home.readyTeams") }
             public static var recent: String { L10n.tr("team.home.recent") }
             public static var subtitle: String { L10n.tr("team.home.subtitle") }
             public static var templates: String { L10n.tr("team.home.templates") }
@@ -3838,19 +3880,9 @@ public enum L10n {
             public static var title: String { L10n.tr("tour.approvals.title") }
         }
 
-        public enum Approve {
-            public static var text: String { L10n.tr("tour.approve.text") }
-            public static var title: String { L10n.tr("tour.approve.title") }
-        }
-
         public enum Composer {
             public static var text: String { L10n.tr("tour.composer.text") }
             public static var title: String { L10n.tr("tour.composer.title") }
-        }
-
-        public enum Limits {
-            public static var text: String { L10n.tr("tour.limits.text") }
-            public static var title: String { L10n.tr("tour.limits.title") }
         }
 
         public enum Modes {
@@ -3861,16 +3893,6 @@ public enum L10n {
         public enum QuickOpen {
             public static var text: String { L10n.tr("tour.quickOpen.text") }
             public static var title: String { L10n.tr("tour.quickOpen.title") }
-        }
-
-        public enum Team {
-            public static var text: String { L10n.tr("tour.team.text") }
-            public static var title: String { L10n.tr("tour.team.title") }
-        }
-
-        public enum Write {
-            public static var text: String { L10n.tr("tour.write.text") }
-            public static var title: String { L10n.tr("tour.write.title") }
         }
     }
 

@@ -42,13 +42,7 @@ struct MetricDetailView: View {
     private static let collapsedRows = 8
     private static let gib = 1024.0 * 1024 * 1024
 
-    /// One drawn sample: a time, a value and the line it belongs to.
-    private struct Sample: Identifiable {
-        let id: Int
-        let date: Date
-        let value: Double
-        let series: String
-    }
+    private typealias Sample = MetricChart.Sample
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -128,52 +122,9 @@ struct MetricDetailView: View {
     // MARK: - Chart
 
     private var chart: some View {
-        let samples = samples
-        let names = seriesNames
-        let scale = yScale
-        return Chart {
-            ForEach(samples) { sample in
-                LineMark(x: .value("Time", sample.date), y: .value("Value", sample.value / yScale))
-                    .interpolationMethod(.monotone)
-                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                    .foregroundStyle(by: .value("Series", sample.series))
-            }
-            if let selected, let nearest = nearestSample(to: selected, in: samples) {
-                RuleMark(x: .value("Selected", nearest.date))
-                    .foregroundStyle(Color.Bandito.text3.opacity(0.6))
-                    .annotation(position: .top, alignment: .leading, spacing: 4) {
-                        Text(annotationText(for: nearest))
-                            .font(BanditoFont.text(size: 11.5, weight: 500))
-                            .foregroundStyle(Color.Bandito.text)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Color.Bandito.surface3, in: RoundedRectangle(cornerRadius: 6))
-                    }
-            }
-        }
-        .chartForegroundStyleScale(domain: names.map(\.name), range: names.map(\.color))
-        .chartLegend(metric == .network ? .visible : .hidden)
-        .chartYScale(domain: yDomain)
-        .chartXSelection(value: $selected)
-        .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 5)) { _ in
-                AxisGridLine()
-                AxisValueLabel(format: .dateTime.hour().minute())
-            }
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading, values: yTicks) { value in
-                AxisGridLine()
-                AxisValueLabel {
-                    if let number = value.as(Double.self) {
-                        Text(Self.axisLabel(format(number * scale)))
-                    }
-                }
-            }
-        }
-        .frame(height: 150)
-        .help(L10n.Server.Detail.hint)
-        .banditoAnimation(.easeInOut(duration: 0.3), value: monitor.range)
+        MetricChart(
+            metric: metric, samples: samples, names: seriesNames, yScale: yScale, yDomain: yDomain, yTicks: yTicks,
+            range: monitor.range, selected: $selected)
     }
 
     // MARK: - Processes
@@ -426,29 +377,101 @@ struct MetricDetailView: View {
         metric == .memory ? HostFormat.bytes(row.rssBytes) : HostFormat.percent(row.cpuPercent)
     }
 
+    /// An axis label without a zero fraction: "8 ГБ", not "8,0 ГБ".
+    static func axisLabel(_ text: String) -> String {
+        text.replacingOccurrences(of: #"(\d)[.,]0(?=\D|$)"#, with: "$1", options: .regularExpression)
+    }
+
+    private func format(_ value: Double) -> String { Self.format(value, metric: metric) }
+
+    /// A value of `metric` as the detail writes it: a percent, bytes, or a rate.
+    static func format(_ value: Double, metric: OverviewMetric) -> String {
+        switch metric {
+        case .cpu: HostFormat.percent(value)
+        case .memory: HostFormat.bytes(Int64(value))
+        case .network, .disk: HostFormat.rate(Int64(value))
+        }
+    }
+}
+
+/// The large chart of a metric's detail: a line per series, the value at the hovered moment, the time and value axes.
+/// Its own view so that `ChartsWarmup` draws this very chart offscreen before the first detail opens.
+struct MetricChart: View {
+    /// One drawn sample: a time, a value and the line it belongs to.
+    struct Sample: Identifiable {
+        let id: Int
+        let date: Date
+        let value: Double
+        let series: String
+    }
+
+    let metric: OverviewMetric
+    let samples: [Sample]
+    let names: [(name: String, color: Color)]
+    /// What the y values are divided by: memory is drawn in GiB, so the axis ends on round numbers.
+    let yScale: Double
+    let yDomain: ClosedRange<Double>
+    let yTicks: AxisMarkValues
+    /// The chosen period: a change of it animates the lines.
+    let range: HostHistoryRange
+    @Binding var selected: Date?
+
+    var body: some View {
+        let samples = samples
+        let scale = yScale
+        return Chart {
+            ForEach(samples) { sample in
+                LineMark(x: .value("Time", sample.date), y: .value("Value", sample.value / scale))
+                    .interpolationMethod(.monotone)
+                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    .foregroundStyle(by: .value("Series", sample.series))
+            }
+            if let selected, let nearest = nearestSample(to: selected, in: samples) {
+                RuleMark(x: .value("Selected", nearest.date))
+                    .foregroundStyle(Color.Bandito.text3.opacity(0.6))
+                    .annotation(position: .top, alignment: .leading, spacing: 4) {
+                        Text(annotationText(for: nearest))
+                            .font(BanditoFont.text(size: 11.5, weight: 500))
+                            .foregroundStyle(Color.Bandito.text)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.Bandito.surface3, in: RoundedRectangle(cornerRadius: 6))
+                    }
+            }
+        }
+        .chartForegroundStyleScale(domain: names.map(\.name), range: names.map(\.color))
+        .chartLegend(metric == .network ? .visible : .hidden)
+        .chartYScale(domain: yDomain)
+        .chartXSelection(value: $selected)
+        .chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: 5)) { _ in
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.hour().minute())
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: yTicks) { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let number = value.as(Double.self) {
+                        Text(MetricDetailView.axisLabel(MetricDetailView.format(number * scale, metric: metric)))
+                    }
+                }
+            }
+        }
+        .frame(height: 150)
+        .help(L10n.Server.Detail.hint)
+        .banditoAnimation(.easeInOut(duration: 0.3), value: range)
+    }
+
     private func nearestSample(to date: Date, in samples: [Sample]) -> Sample? {
         samples.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) }
     }
 
     private func annotationText(for sample: Sample) -> String {
         let clock = sample.date.formatted(.dateTime.hour().minute().second())
-        if metric == .network {
-            return "\(clock) · \(sample.series) \(format(sample.value))"
-        }
-        return "\(clock) · \(format(sample.value))"
-    }
-
-    /// An axis label without a zero fraction: "8 ГБ", not "8,0 ГБ".
-    static func axisLabel(_ text: String) -> String {
-        text.replacingOccurrences(of: #"(\d)[.,]0(?=\D|$)"#, with: "$1", options: .regularExpression)
-    }
-
-    private func format(_ value: Double) -> String {
-        switch metric {
-        case .cpu: HostFormat.percent(value)
-        case .memory: HostFormat.bytes(Int64(value))
-        case .network, .disk: HostFormat.rate(Int64(value))
-        }
+        let value = MetricDetailView.format(sample.value, metric: metric)
+        return metric == .network ? "\(clock) · \(sample.series) \(value)" : "\(clock) · \(value)"
     }
 }
 

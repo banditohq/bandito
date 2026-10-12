@@ -11,7 +11,8 @@ public final class SystemNotificationSink: NSObject, NotificationService.Sink, U
 
     private let center = UNUserNotificationCenter.current()
 
-    /// Registers the categories and asks for permission. Call once at launch.
+    /// Registers the categories. Call once at launch. The system's permission question is `requestPermission`: a
+    /// person who has just opened the app for the first time is asked after the introduction, not on its first screen.
     public func start() {
         center.delegate = self
         // Allow needs an unlocked device (the system asks for authentication); Deny is destructive.
@@ -36,6 +37,10 @@ public final class SystemNotificationSink: NSObject, NotificationService.Sink, U
                 hiddenPreviewsBodyPlaceholder: placeholder, options: []),
         ]
         center.setNotificationCategories(Set(categories))
+    }
+
+    /// Asks the system for permission to show notifications. Nothing is shown when it was answered before.
+    public func requestPermission() {
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 

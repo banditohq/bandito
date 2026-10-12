@@ -31,6 +31,8 @@ struct NewAgentSheet: View {
     @State private var integrations: [Integration] = []
     /// True once the `runtimes.status` request has finished, with or without an answer.
     @State private var runtimesAnswered = false
+    /// Installs a missing agent CLI on the server from its card.
+    @State private var installer = RuntimeInstaller()
     /// The workplace made by an earlier attempt to create the agent, reused when the attempt is repeated.
     @State private var preparedWorkplace: PreparedWorkplace?
     /// The folder picker of the agents folder ("Change…" under "New folder").
@@ -160,6 +162,9 @@ struct NewAgentSheet: View {
                 _ = try? await server.refreshRuntimes()
             }
             runtimesAnswered = true
+            if server.supports("setup") {
+                Task { await installer.load(server) }
+            }
             await loaded.load()
         }
     }
@@ -566,6 +571,11 @@ struct NewAgentSheet: View {
                     .font(BanditoFont.text(size: 11.5, weight: 500))
                     .banditoButton(.link)
                     .padding(.leading, 12)
+            }
+            if state.kind == .notInstalled, let server {
+                RuntimeInstallRow(
+                    installer: installer, kind: kind, name: runtimeName(kind),
+                    install: { Task { await installer.install(kind, server: server) { _ = try? await server.refreshRuntimes() } } })
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)

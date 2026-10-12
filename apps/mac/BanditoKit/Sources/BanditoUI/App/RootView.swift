@@ -60,6 +60,10 @@ public struct RootView: View {
         .task { QAHooks.start(router: router, onboarding: onboarding, telemetry: telemetry) }
         #endif
         .task { await app.keepUsageFresh() }
+        // The introduction is over: now the system may ask to show notifications (it asks only the first time).
+        .onChange(of: onboarding.isActive) { _, active in
+            if !active { app.askNotificationPermission() }
+        }
         // The unread count on the Dock icon (see `DockBadge`), watched from the first appearance on.
         .task {
             guard dockIcon == nil else { return }
