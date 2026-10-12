@@ -46,4 +46,15 @@ import Testing
         let lines = ProblemDiagnosticsCollector.appLogLines(limit: 5, since: 60)
         #expect(lines.count <= 5)
     }
+
+    @Test func aLineIsHiddenBeforeItIsCut() {
+        // The key sits across the cut: cut first, its tail would be too short for the rule.
+        let pad = String(repeating: "x ", count: 140)
+        let key = "sk-" + "ant-api03-" + "AbCdEf1234567890xyzQQ"
+        let diagnostics = ProblemDiagnostics(
+            versions: "v", servers: [], appLog: [], daemonLog: [pad + key], daemonLogNote: nil)
+        let text = diagnostics.text(redactor: SecretRedactor())
+        #expect(!text.contains("sk-") && !text.contains("AbCdEf"))
+        #expect(!text.contains("xyzQQ"))
+    }
 }

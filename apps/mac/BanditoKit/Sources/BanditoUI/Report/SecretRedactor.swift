@@ -22,13 +22,13 @@ struct SecretRedactor: Sendable {
     /// The text with every secret replaced by `mark`.
     func redact(_ text: String) -> String {
         guard !text.isEmpty else { return text }
-        var out = text
+        // This Mac's own words first: a user name with a space is hidden whole, before any rule cuts it.
+        var out = hidingTerms(text)
         for rule in Self.rules {
             out = rule.apply(to: out)
         }
         out = Self.hidingIPv6(out)
         out = Self.hidingHosts(out)
-        out = hidingTerms(out)
         return out
     }
 
@@ -67,19 +67,32 @@ struct SecretRedactor: Sendable {
         Rule(#"\bgithub_pat_[A-Za-z0-9_]{20,}"#, m),
         Rule(#"\bxox[abprs]-[A-Za-z0-9\-]{10,}"#, m),
         Rule(#"\bAKIA[0-9A-Z]{16}\b"#, m),
+        Rule(#"\b[sr]k_(?:live|test)_[A-Za-z0-9]{10,}"#, m),
+        Rule(#"\bnpm_[A-Za-z0-9]{20,}"#, m),
+        Rule(#"\bya29\.[A-Za-z0-9_\-]{20,}"#, m),
+        Rule(#"\bglpat-[A-Za-z0-9_\-]{16,}"#, m),
+        Rule(#"\bhf_[A-Za-z0-9]{20,}"#, m),
+        Rule(#"\bxapp-[A-Za-z0-9\-]{10,}"#, m),
         Rule(#"\bAIza[0-9A-Za-z_\-]{30,}"#, m),
         Rule(#"\b(?:bdt|bat)_[A-Za-z0-9_\-]{8,}"#, m),
         Rule(#"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]*"#, m),
         // A Telegram bot key: 123456789:AA…
         Rule(#"\b\d+:[A-Za-z0-9_\-]{30,}"#, m),
-        // An authorization header with its scheme word.
-        Rule(#"(?i)(authorization["']?\s*[=:]\s*)(?:basic|bearer|digest|token)\s+\S+"#, "$1" + m),
-        // A secret in settings or an environment: NAME=value, NAME: value, "name": "value".
+        // An authorization header with its scheme word (the quotes may be escaped inside a log line: \").
         Rule(
-            #"(?i)(\b[A-Za-z0-9_.\-]*(?:token(?!s\b)|secret|password|passwd|passphrase|api[_\-]?key|apikey|private[_\-]?key|access[_\-]?key|credential|authorization)[A-Za-z0-9_.\-]*)(["']?\s*[=:]\s*)(?:"[^"\n]*"|'[^'\n]*'|[^\s,;}\]]+)"#,
+            #"(?i)(authorization\\?["']?\s*[=:]\s*\\?["']?)(?:basic|bearer|digest|token)\s+[^\s"\\]+"#,
+            "$1" + m),
+        // A cookie header: every cookie on the line.
+        Rule(#"(?i)(\b(?:set-)?cookie\\?["']?\s*[=:]\s*)[^\n]+"#, "$1" + m),
+        // A secret in settings or an environment: NAME=value, NAME: value, "name": "value", and the same with the
+        // quotes escaped. Long words count anywhere in the name; short ones (key, pass, pwd, session, auth) only as a
+        // word of it (FOO_KEY, DB_PASS, PWD), so "monkey" and "passed" are left alone.
+        Rule(
+            #"(?i)(\b(?:[A-Za-z0-9_.\-]*(?:token(?!s\b)|secret|password|passwd|passphrase|api[_\-]?key|apikey|private[_\-]?key|access[_\-]?key|credential|authorization|cookie)|(?:[A-Za-z0-9]+[_\-.])*(?:key|pass|pwd|session|auth)(?![A-Za-z0-9]))[A-Za-z0-9_.\-]*)(\\?["']?\s*[=:]\s*)(?:\\?"[^"\n]*?\\?"|'[^'\n]*'|[^\s,;}\]"\\]+)"#,
             "$1$2" + m),
         // The home folder of the person: /Users/name, /home/name, C:\Users\name.
-        Rule(#"(?<![A-Za-z0-9])/(?:Users|home)/[^/\s"'<>:]+"#, m),
+        // A name with a space goes up to the next slash.
+        Rule(#"(?<![A-Za-z0-9])/(?:Users|home)/(?:[^/\n"'<>:]+(?=/)|[^/\s"'<>:]+)"#, m),
         Rule(#"(?i)\b[A-Z]:\\Users\\[^\\\s"'<>]+"#, m),
         // E-mail addresses.
         Rule(#"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}"#, m),
@@ -150,11 +163,17 @@ struct SecretRedactor: Sendable {
     private func hidingTerms(_ text: String) -> String {
         var out = text
         // Longest first: "Maria Schneider" before "Maria".
-        let list = Set(terms.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { $0.count >= 3 })
+        let list = Set(terms.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { $0.count >= 2 })
             .sorted { $0.count > $1.count }
         for term in list {
-            let pattern = "(?<![\\p{L}\\p{N}])" + NSRegularExpression.escapedPattern(for: term) + "(?![\\p{L}\\p{N}])"
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
+            // A short name (a server called "pi") is hidden as a whole word only, in its own case: it is too likely to
+            // be a part of ordinary text.
+            let short = term.count < 3
+            let edge = short ? #"(?<![\p{L}\p{N}_.\-])"# : #"(?<![\p{L}\p{N}])"#
+            let after = short ? #"(?![\p{L}\p{N}_\-]|\.\p{L})"# : #"(?![\p{L}\p{N}])"#
+            let pattern = edge + NSRegularExpression.escapedPattern(for: term) + after
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: short ? [] : [.caseInsensitive])
+            else { continue }
             out = regex.stringByReplacingMatches(
                 in: out, range: NSRange(out.startIndex..., in: out),
                 withTemplate: NSRegularExpression.escapedTemplate(for: Self.mark))

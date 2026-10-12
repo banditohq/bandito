@@ -47,8 +47,9 @@ struct ProblemDiagnostics: Sendable, Equatable {
     }
 
     private static func line(_ raw: String, _ redactor: SecretRedactor) -> String {
-        let flat = raw.replacingOccurrences(of: "```", with: "'''")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Hidden first, then cut: a key cut in half would be too short for the rule that knows it.
+        let flat = redactor.redact(
+            raw.replacingOccurrences(of: "```", with: "'''").trimmingCharacters(in: .whitespacesAndNewlines))
         return flat.count > lineLimit ? String(flat.prefix(lineLimit)) + "…" : flat
     }
 

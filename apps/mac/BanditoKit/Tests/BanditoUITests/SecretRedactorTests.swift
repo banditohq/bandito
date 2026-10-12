@@ -143,4 +143,72 @@ import Testing
         keeps("接続できませんでした")
         keeps("")
     }
+
+    // MARK: review round: short key words, escaped quotes, more token shapes, paths, short names
+
+    private func halves(_ a: String, _ b: String) -> String { a + b }
+
+    @Test func shortKeyWordsCountOnlyAsAWordOfTheName() {
+        hides("s3cr3t", in: "FOO_KEY=s3cr3t")
+        hides("s3cr3t", in: "MY_KEY=s3cr3t and more")
+        hides("s3cr3t", in: "key: s3cr3t")
+        hides("hunter2", in: "DB_PASS=hunter2")
+        hides("hunter2", in: "PWD=hunter2")
+        hides("hunter2", in: "db.pwd = hunter2")
+        hides("abc123", in: "SESSION_ID=abc123")
+        hides("abc123", in: "AUTH=abc123")
+        hides("a1b2c3", in: "Cookie: session=a1b2c3; theme=dark")
+        hides("theme=dark", in: "Set-Cookie: session=a1b2c3; theme=dark; Path=/")
+    }
+
+    @Test func plainWordsWithKeyPassOrAuthStay() {
+        keeps("the monkey eats a banana")
+        keeps("keyboard: US layout")
+        keeps("tests passed: 12")
+        keeps("author: Maria wrote the guide")
+        keeps("pass the salt, please")
+        keeps("a key press took 3 ms")
+    }
+
+    @Test func quotesEscapedInsideALogLine() {
+        hides("abc", in: #"{\"token\":\"abc\"}"#)
+        hides("hunter2", in: #"body={\"password\": \"hunter2\", \"user\": \"x\"}"#)
+        hides("xyz789abc", in: #"\"Authorization\": \"Bearer xyz789abc\""#)
+        hides("xyz789abc", in: #"headers {\"authorization\":\"Basic xyz789abc\"}"#)
+        let out = redactor.redact(#"{\"user\":\"maria\",\"token\":\"abc\"}"#)
+        #expect(out.contains(#"\"user\":\"maria\""#), "other fields stay: \(out)")
+    }
+
+    @Test func moreTokenShapes() {
+        hides(halves("sk_live_", "4eC39HqLyjWDarjtT1zdp7dc"), in: "stripe \(halves("sk_live_", "4eC39HqLyjWDarjtT1zdp7dc")) ok")
+        hides(halves("sk_test_", "4eC39HqLyjWDarjtT1zdp7dc"), in: halves("sk_test_", "4eC39HqLyjWDarjtT1zdp7dc"))
+        hides(halves("rk_live_", "4eC39HqLyjWDarjtT1zdp7dc"), in: halves("rk_live_", "4eC39HqLyjWDarjtT1zdp7dc"))
+        hides(halves("npm_", "abcdefghijklmnopqrstuvwxyz0123456789"), in: "//registry:_authToken=" + halves("npm_", "abcdefghijklmnopqrstuvwxyz0123456789"))
+        hides(halves("ya29.", "a0AfH6SMBx1234567890abcdefghijkl"), in: "oauth " + halves("ya29.", "a0AfH6SMBx1234567890abcdefghijkl"))
+        hides(halves("glpat-", "abcdefghij1234567890"), in: halves("glpat-", "abcdefghij1234567890"))
+        hides(halves("hf_", "abcdefghijklmnopqrstuvwxyzABCD"), in: "hub " + halves("hf_", "abcdefghijklmnopqrstuvwxyzABCD"))
+        hides(halves("xapp-", "1-A0123456789-abcdef"), in: halves("xapp-", "1-A0123456789-abcdef"))
+        hides(halves("AIza", "SyA-1234567890abcdefghijklmnopqrstu"), in: "google " + halves("AIza", "SyA-1234567890abcdefghijklmnopqrstu"))
+    }
+
+    @Test func wordsLikeTokenPrefixesStay() {
+        keeps("hf_cache is a folder name")
+        keeps("npm install and npm_config are ordinary words")
+        keeps("glpat is short; sk_live alone too")
+    }
+
+    @Test func aHomeFolderNameWithASpaceIsHiddenWhole() {
+        let out = redactor.redact("open /Users/Maria Ivanova/Documents/report.txt now")
+        #expect(out == "open ‹скрыто›/Documents/report.txt now")
+        let named = SecretRedactor(terms: ["Maria Ivanova", "/Users/Maria Ivanova"])
+        #expect(named.redact("cwd /Users/Maria Ivanova/work and Maria Ivanova's Mac") == "cwd ‹скрыто›/work and ‹скрыто›'s Mac")
+        #expect(redactor.redact("see /Users/maria then stop") == "see ‹скрыто› then stop")
+    }
+
+    @Test func aShortServerNameIsHiddenAsAWholeWordOnly() {
+        let named = SecretRedactor(terms: ["pi", "Al"])
+        #expect(named.redact("server pi is down; Al left; pipeline and api stay; pi.local is a host") == "server ‹скрыто› is down; ‹скрыто› left; pipeline and api stay; ‹скрыто› is a host")
+        #expect(named.redact("PI stays in its other case, and a spiral too") == "PI stays in its other case, and a spiral too")
+        #expect(SecretRedactor(terms: ["x"]).redact("x marks the spot") == "x marks the spot", "one letter is never a name")
+    }
 }

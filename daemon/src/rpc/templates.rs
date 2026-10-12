@@ -15,7 +15,7 @@ use crate::skills;
 use crate::store::{Agent, Capability, Effort, NewAgent, NewSchedule, Store, validate_name};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 /// The integrations catalog, read for the url of an entry: a connected integration may match an entry by url.
@@ -148,16 +148,14 @@ pub(super) async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
                 templates.retain(|t| wanted.contains(&t.id));
             }
             // Every check runs before the first agent is made, so a refusal leaves nothing behind.
-            if req.model.as_deref().is_some_and(|m| m.trim().is_empty()) {
-                return Err(RpcError::new(INVALID_PARAMS, "model is empty"));
-            }
+            let models = resolve_bundle_model(app, &templates, &req).await?;
             if let Some(cwd) = &req.cwd {
                 super::check_cwd(cwd)?;
             }
             if let Some(keys) = &req.schedules {
                 check_schedule_keys(&templates, keys)?;
             }
-            create_bundle(app, &templates, &req).await
+            create_bundle(app, &templates, &req, &models).await
         }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
@@ -168,7 +166,12 @@ pub(super) async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
 /// carries `error`, and an agent that exists is still named. A name taken by another agent gets " 2", " 3"… (agent
 /// names are not unique in the store). `missing_integrations` lists each integration once, `required` when any of the
 /// templates requires it.
-async fn create_bundle(app: &App, templates: &[AgentTemplate], req: &CreateBundle) -> RpcResult {
+async fn create_bundle(
+    app: &App,
+    templates: &[AgentTemplate],
+    req: &CreateBundle,
+    models: &HashMap<String, String>,
+) -> RpcResult {
     let mut agents: Vec<Value> = Vec::with_capacity(templates.len());
     let mut missing: Vec<(String, bool)> = Vec::new();
     for t in templates {
@@ -186,7 +189,7 @@ async fn create_bundle(app: &App, templates: &[AgentTemplate], req: &CreateBundl
             template_id: t.id.clone(),
             name,
             runtime: req.runtime.clone(),
-            model: req.model.clone(),
+            model: models.get(runtime_name(t, req)).cloned(),
             language: req.language.clone(),
             schedules: None,
             workspace_id: req.workspace_id.clone(),
@@ -233,6 +236,57 @@ async fn create_bundle(app: &App, templates: &[AgentTemplate], req: &CreateBundl
         .map(|(id, required)| json!({ "id": id, "required": required }))
         .collect();
     ok(json!({ "agents": agents, "missing_integrations": missing }))
+}
+
+/// The runtime a template's bot runs on in this request: the request's, else the template's.
+fn runtime_name<'a>(t: &'a AgentTemplate, req: &'a CreateBundle) -> &'a str {
+    req.runtime.as_deref().unwrap_or(&t.runtime)
+}
+
+/// The request's `model` checked against what each runtime of the team offers (as `team_create` checks a model): the
+/// id of the model for each runtime, or `INVALID_PARAMS` when it is empty, unknown to a runtime, or cannot be checked.
+async fn resolve_bundle_model(
+    app: &App,
+    templates: &[AgentTemplate],
+    req: &CreateBundle,
+) -> Result<HashMap<String, String>, RpcError> {
+    let Some(asked) = req.model.as_deref().map(str::trim) else {
+        return Ok(HashMap::new());
+    };
+    if asked.is_empty() {
+        return Err(RpcError::new(INVALID_PARAMS, "model is empty"));
+    }
+    let mut answers = Vec::new();
+    let mut seen = HashSet::new();
+    for t in templates {
+        let name = runtime_name(t, req);
+        let kind =
+            RuntimeKind::parse(name).ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("unknown runtime {name}")))?;
+        if !seen.insert(name.to_string()) {
+            continue;
+        }
+        let cwd = app.data_home.join("models-probe");
+        let cwd = if std::fs::create_dir_all(&cwd).is_ok() {
+            cwd
+        } else {
+            app.data_home.clone()
+        };
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        answers.push((name.to_string(), app.models.answer(kind, &cwd, &path, false).await));
+    }
+    models_from_answers(&answers, asked)
+}
+
+/// The pure part of `resolve_bundle_model`: `asked` looked up in each runtime's answer.
+fn models_from_answers(
+    answers: &[(String, crate::runtime::models::ModelsAnswer)],
+    asked: &str,
+) -> Result<HashMap<String, String>, RpcError> {
+    let mut out = HashMap::new();
+    for (name, answer) in answers {
+        out.insert(name.clone(), super::team_create::model_for_new(answer, asked)?);
+    }
+    Ok(out)
 }
 
 /// The key of one schedule of a template in the `schedules` list of `agents.create_bundle`.
@@ -1675,7 +1729,7 @@ mod tests {
             cwd: None,
             schedules: None,
         };
-        let reply = create_bundle(&app, &templates, &req).await.unwrap();
+        let reply = create_bundle(&app, &templates, &req, &HashMap::new()).await.unwrap();
 
         let refused = entry(&reply, "code-reviewer");
         assert!(refused.get("agent").is_none(), "{refused}");
@@ -1908,7 +1962,7 @@ mod tests {
             &app,
             "agents.create_bundle",
             json!({
-                "bundle_id": "web-project", "language": "ru", "model": "haiku",
+                "bundle_id": "web-project", "language": "ru",
                 "cwd": project.display().to_string(), "schedules": [],
             }),
         )
@@ -1920,7 +1974,6 @@ mod tests {
             assert!(e.get("error").is_none(), "{e}");
             let agent = store.agent_get(e["agent"]["id"].as_str().unwrap()).unwrap().unwrap();
             assert_eq!(agent.cwd, project.display().to_string());
-            assert_eq!(agent.model.as_deref(), Some("haiku"));
         }
         // code-reviewer and qa-tester have a schedule each: made, but off.
         let all = store.schedule_list(None).unwrap();
@@ -1967,6 +2020,7 @@ mod tests {
             json!({ "cwd": "relative/path" }),
             json!({ "cwd": dir.path().join("missing").display().to_string() }),
             json!({ "model": "  " }),
+            json!({ "model": "no-such-model-anywhere" }),
             json!({ "schedules": ["server-watch:1"] }),
             json!({ "schedules": ["other-bot:0"] }),
             json!({ "schedules": ["server-watch:0", "server-watch:0"] }),
@@ -1980,5 +2034,42 @@ mod tests {
         }
         assert!(store.agent_list().unwrap().is_empty());
         assert!(features().contains(&"bundle_schedules"));
+    }
+
+    fn answer(kind: RuntimeKind, ids: &[(&str, &str)], error: Option<&str>) -> crate::runtime::models::ModelsAnswer {
+        crate::runtime::models::ModelsAnswer {
+            runtime: kind,
+            models: ids
+                .iter()
+                .map(|(id, name)| crate::runtime::models::RuntimeModel {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    description: None,
+                    is_default: false,
+                    efforts: Vec::new(),
+                    context_window: None,
+                })
+                .collect(),
+            error: error.map(String::from),
+            fetched_at: 0,
+        }
+    }
+
+    #[test]
+    fn a_bundle_model_must_be_one_the_runtime_offers() {
+        let ok = vec![(
+            "claude".to_string(),
+            answer(RuntimeKind::Claude, &[("haiku", "Haiku 5.5")], None),
+        )];
+        assert_eq!(models_from_answers(&ok, " HAIKU ").unwrap()["claude"], "haiku");
+        assert_eq!(models_from_answers(&ok, "Haiku 5.5").unwrap()["claude"], "haiku");
+        for bad in ["gpt-9", "haiku; rm"] {
+            assert_eq!(models_from_answers(&ok, bad).unwrap_err().code, INVALID_PARAMS);
+        }
+        let none = vec![(
+            "claude".to_string(),
+            answer(RuntimeKind::Claude, &[], Some("not_installed")),
+        )];
+        assert_eq!(models_from_answers(&none, "haiku").unwrap_err().code, INVALID_PARAMS);
     }
 }
