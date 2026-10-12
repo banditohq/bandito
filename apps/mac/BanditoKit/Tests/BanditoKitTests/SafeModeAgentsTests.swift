@@ -41,9 +41,8 @@ import Testing
 
         failing.set(true)
         model.refreshAgentsIfStale(now: Date().addingTimeInterval(3600))
-        try await Task.sleep(for: .milliseconds(500))
-        let asked = await agentListRequests(fake)
-        #expect(asked >= 2, "the read failed and a retry was scheduled")
+        // The read failed and a retry was scheduled (waited for: a loaded CI runner may take longer than the delay).
+        try await eventually { await agentListRequests(fake) >= 2 }
 
         // The daemon restarts in safe mode: no more reads.
         model.info = try RPCClient.decoder.decode(DaemonInfo.self, from: Data(Self.safeInfo.utf8))
