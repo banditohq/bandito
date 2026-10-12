@@ -968,6 +968,7 @@
 "ios.inbox.risky" = "Arriesgado";
 "ios.inbox.send" = "Enviar";
 "ios.inbox.service" = "Servicio";
+"ios.newAgent.installTimedOut" = "La instalación sigue en curso. Inténtalo más tarde.";
 "ios.newAgent.tabOne" = "Un agente";
 "ios.newAgent.tabTeams" = "Equipos listos";
 "ios.newAgent.teamsEmpty" = "Este servidor aún no tiene equipos listos.";

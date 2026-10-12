@@ -968,6 +968,7 @@
 "ios.inbox.risky" = "위험";
 "ios.inbox.send" = "보내기";
 "ios.inbox.service" = "서비스";
+"ios.newAgent.installTimedOut" = "설치가 아직 진행 중입니다. 잠시 후 다시 시도하세요.";
 "ios.newAgent.tabOne" = "에이전트 하나";
 "ios.newAgent.tabTeams" = "바로 쓸 수 있는 팀";
 "ios.newAgent.teamsEmpty" = "이 서버에는 아직 준비된 팀이 없습니다.";

@@ -18,10 +18,14 @@ struct OneAgentForm: View {
     @State private var approval = ApprovalMode.risky
     @State private var permissions = Set(AgentCapability.allCases)
     @State private var root: String?
-    @State private var busy = false
+    /// The creation, once a first attempt started: it keeps the folder for the attempts after it.
+    @State private var creation: OneAgentCreation?
+    @State private var installRound = 0
     @State private var installing = false
-    @State private var failure: String?
-    @State private var madeCount = 0
+    @State private var installFailure: String?
+
+    /// How long the install is watched: this many one-second polls. Then the form says so and offers a retry.
+    static let installPolls = 900
 
     private var installed: Bool {
         server.runtimes.contains { $0.kind == runtime && $0.installed }
@@ -41,8 +45,18 @@ struct OneAgentForm: View {
         return NewAgentFolderRules.folderName(for: trimmed.isEmpty ? L10n.AgentSheet.autoName(number: "1") : trimmed)
     }
 
+    /// The folder the agent gets: the one already made by a failed attempt, else the one it would get now.
     private var folderPreview: String? {
-        root.map { NewAgentFolderRules.folderPath(root: $0, name: folderBase) }
+        if let folder = creation?.folder { return folder }
+        return root.map { NewAgentFolderRules.folderPath(root: $0, name: folderBase) }
+    }
+
+    private var unavailable: [AgentCapability: String] {
+        AgentCapability.unavailable(infoKnown: server.info != nil, supports: { server.supports($0) })
+    }
+
+    private var busy: Bool {
+        creation?.busy ?? false
     }
 
     private var canCreate: Bool {
@@ -75,13 +89,18 @@ struct OneAgentForm: View {
                             .font(BanditoFont.text(size: 14))
                             .foregroundStyle(Color.Bandito.text2)
                         Button {
-                            Task { await install() }
+                            installRound += 1
                         } label: {
-                            Text(installing ? L10n.Browser.installing : L10n.Setup.install)
+                            Text(installButtonTitle)
                                 .foregroundStyle(Color.Bandito.signal)
                         }
                         .disabled(installing)
                         .accessibilityIdentifier("oneAgent.install")
+                        if let installFailure {
+                            Text(installFailure)
+                                .font(BanditoFont.text(size: 13))
+                                .foregroundStyle(Color.Bandito.danger)
+                        }
                     }
                     .listRowBackground(Color.Bandito.surface1)
                 }
@@ -103,6 +122,13 @@ struct OneAgentForm: View {
                 }
             }
             .listRowBackground(Color.Bandito.surface1)
+            // A model or a runtime that takes fewer levels moves the effort to the nearest one it takes (the Mac's rule).
+            .onChange(of: runtime) { _, next in
+                let moved = AgentForms.afterRuntimeChange(
+                    to: next, pickedModel: pickedModel, effort: effort, lists: server.runtimeModels)
+                pickedModel = moved.pickedModel
+                effort = moved.effort
+            }
 
             Section {
                 ForEach(AgentForms.approvalOrder, id: \.self) { mode in
@@ -137,7 +163,10 @@ struct OneAgentForm: View {
                     alignment: .leading, spacing: BanditoSpace.s2
                 ) {
                     ForEach(AgentCapability.allCases) { permission in
-                        PermissionChip(permission: permission, on: permissions.contains(permission)) {
+                        PermissionChip(
+                            permission: permission, on: permissions.contains(permission),
+                            reason: unavailable[permission]
+                        ) {
                             if permissions.contains(permission) {
                                 permissions.remove(permission)
                             } else {
@@ -165,7 +194,7 @@ struct OneAgentForm: View {
                 Text(L10n.AgentSheet.folderNewHint)
             }
 
-            if let failure {
+            if let failure = creation?.failure {
                 Section {
                     Text(failure)
                         .font(BanditoFont.text(size: 13))
@@ -181,7 +210,7 @@ struct OneAgentForm: View {
                 } label: {
                     HStack {
                         Spacer()
-                        Text(L10n.AgentSheet.create)
+                        Text(creation?.failure == nil ? L10n.AgentSheet.create : L10n.Banner.retry)
                         Spacer()
                     }
                 }
@@ -193,7 +222,12 @@ struct OneAgentForm: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color.Bandito.bg.ignoresSafeArea())
-        .sensoryFeedback(.success, trigger: madeCount)
+        .sensoryFeedback(.success, trigger: creation?.madeCount ?? 0)
+        // The install is a task of the form: leaving the sheet cancels the watching of it.
+        .task(id: installRound) {
+            guard installRound > 0 else { return }
+            await install()
+        }
         .task {
             if !installed, let first = AgentForms.runtimes.first(where: { kind in
                 server.runtimes.contains { $0.kind == kind && $0.installed }
@@ -210,6 +244,11 @@ struct OneAgentForm: View {
         }
     }
 
+    private var installButtonTitle: String {
+        if installing { return L10n.Browser.installing }
+        return installFailure == nil ? L10n.Setup.install : L10n.Banner.retry
+    }
+
     /// The model picker: a pick is kept, and "Default" is a pick too (an empty string).
     private var modelBinding: Binding<String> {
         Binding(
@@ -219,45 +258,60 @@ struct OneAgentForm: View {
 
     private func create() async {
         guard installed, let root else { return }
-        busy = true
-        defer { busy = false }
-        failure = nil
-        do {
-            let folder = try await AgentFolders.makeFree(root: root, base: folderBase, server: server)
-            let request = AgentForms.newAgent(
-                name: name, role: role, runtime: runtime, model: model.isEmpty ? nil : model, folder: folder,
-                approval: approval, effort: effort, permissions: permissions)
-            _ = try await server.createAgent(request)
-            madeCount += 1
-            onMade()
-        } catch {
-            failure = AgentForms.errorText(error)
+        let attempt: OneAgentCreation
+        if let creation {
+            attempt = creation
+        } else {
+            attempt = OneAgentCreation(server: server, root: root, base: folderBase)
+            creation = attempt
         }
+        let sent = permissions.subtracting(unavailable.keys)
+        let made = await attempt.create { folder in
+            AgentForms.newAgent(
+                name: name, role: role, runtime: runtime, model: model.isEmpty ? nil : model, folder: folder,
+                approval: approval, effort: effort, permissions: sent)
+        }
+        if made { onMade() }
     }
 
-    /// Installs the runtime (`setup.install`, the Mac's way), then reads the server's runtimes again.
+    /// Installs the runtime (`setup.install`, the Mac's way) and watches it for `installPolls` seconds at most; then the
+    /// server's runtimes are read again. A failure, or no end within the limit, is said and can be retried.
     private func install() async {
         installing = true
         defer { installing = false }
-        failure = nil
+        installFailure = nil
         do {
             let job = try await server.setupInstall(components: [runtime.rawValue])
             var offset: UInt64 = 0
-            while true {
-                let state = try await server.setupJob(job, from: offset)
+            for _ in 0..<Self.installPolls {
+                try Task.checkCancellation()
+                let state = try await readJob(job, from: offset)
                 offset = state.offset
-                if state.state == .failed {
-                    failure = L10n.Browser.installFailed
-                    break
+                if state.state == .failed || state.state == .needsPassword {
+                    installFailure = L10n.Browser.installFailed
+                    return
                 }
                 if state.state != .running {
-                    break
+                    try await server.refreshRuntimes()
+                    return
                 }
                 try await Task.sleep(for: .seconds(1))
             }
-            try await server.refreshRuntimes()
+            installFailure = L10n.Ios.NewAgent.installTimedOut
+        } catch is CancellationError {
+            return
         } catch {
-            failure = AgentForms.errorText(error)
+            installFailure = AgentForms.errorText(error)
+        }
+    }
+
+    /// Reads the job from `offset`. A failed read is repeated once after a short wait, as the Mac does.
+    private func readJob(_ id: String, from offset: UInt64) async throws -> SetupJob {
+        do {
+            return try await server.setupJob(id, from: offset)
+        } catch {
+            try await Task.sleep(for: .seconds(1))
+            return try await server.setupJob(id, from: offset)
         }
     }
 
@@ -297,10 +351,13 @@ struct OneAgentForm: View {
     }
 }
 
-/// One "may do" chip: a switch. An on chip has a solid outline and a check, an off chip a dashed one and a plus.
+/// One "may do" chip: a switch. An on chip has a solid outline and a check, an off chip a dashed one and a plus. A chip
+/// the server cannot give is disabled and says why (the Mac's `CapabilityChips`).
 struct PermissionChip: View {
     let permission: AgentCapability
     let on: Bool
+    /// The reason the server cannot give this chip; nil when it can.
+    var reason: String?
     let toggle: () -> Void
 
     var body: some View {
@@ -321,7 +378,9 @@ struct PermissionChip: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .disabled(reason != nil)
         .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityHint(reason ?? "")
         .accessibilityIdentifier("permission.\(permission.rawValue)")
     }
 }

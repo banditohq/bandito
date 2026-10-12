@@ -3129,6 +3129,7 @@
   "ios.newAgent.tabTeams": "Equipes prontas",
   "ios.newAgent.tabOne": "Um agente",
   "ios.newAgent.teamsEmpty": "Este servidor ainda não tem equipes prontas.",
+  "ios.newAgent.installTimedOut": "A instalação ainda está em andamento. Tente de novo daqui a pouco.",
   "ios.settings.header.servers": "Servidores",
   "ios.settings.header.notifications": "Notificações",
   "ios.settings.header.security": "Segurança",

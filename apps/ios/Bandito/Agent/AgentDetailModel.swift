@@ -20,8 +20,13 @@ extension ServerModel: AgentEditingServer {
     }
 }
 
-/// The state and the edits of the agent card. Every change is one RPC on the server, and the server model takes the
-/// agent the daemon answers with. A failure is kept as text for the screen to show; the agent stays as it was.
+/// The parts of the card that can fail on their own. A failure is shown in its part, next to its control.
+enum AgentArea: Hashable {
+    case identity, status, work, approval, capabilities, schedules, delete
+}
+
+/// The state and the edits of the agent card. Every change is one RPC on the server, and the server model takes the agent
+/// the daemon answers with. A failure is kept as text in its area; the agent stays as it was.
 @MainActor
 @Observable
 final class AgentDetailModel {
@@ -30,37 +35,52 @@ final class AgentDetailModel {
 
     /// The agent's schedules, as the daemon lists them. Empty until `loadSchedules` answers.
     private(set) var schedules: [Schedule] = []
-    /// The last failure, as the message to show; nil when the last change went through.
-    private(set) var failure: String?
+    /// The last failure of each area, as the message to show there. An area without one has no entry.
+    private(set) var failures: [AgentArea: String] = [:]
     /// Counts the saves that went through (a haptic on each).
     private(set) var savedCount = 0
-    /// Counts the schedules that were started by hand (a haptic on each).
+    /// Counts the schedules started by hand (a haptic on each).
     private(set) var ranCount = 0
+    /// The "May do" chips as shown: a tap sets them at once, and they are taken from the agent again when no send is
+    /// in flight (the Mac's `InspectorTabs` does the same).
+    private(set) var chips: Set<AgentCapability> = []
+    private var serverChips: Set<AgentCapability> = []
+    private var chipsInFlight = 0
+    private var chipChain: Task<Void, Never>?
 
     init(server: AgentEditingServer, agentID: String) {
         self.server = server
         self.agentID = agentID
     }
 
-    /// Reads the agent's schedules. A failure is kept; the list stays empty.
+    /// Takes the agent's list of rights as the server has it. The chips follow it unless a send is still in flight.
+    func syncChips(with agent: Agent) {
+        serverChips = AgentCapability.set(from: agent.capabilities)
+        if chipsInFlight == 0 {
+            chips = serverChips
+        }
+    }
+
+    /// Reads the agent's schedules. A failure is kept in the schedules area; the list stays empty.
     func loadSchedules() async {
         do {
             schedules = try await server.schedules(agentId: agentID)
+            failures[.schedules] = nil
         } catch {
-            failure = AgentForms.errorText(error)
+            failures[.schedules] = AgentForms.errorText(error)
         }
     }
 
     /// Applies one patch to the agent (`agents.update`). Returns whether it went through.
     @discardableResult
-    func save(_ patch: AgentPatch) async -> Bool {
+    func save(_ patch: AgentPatch, in area: AgentArea = .identity) async -> Bool {
         do {
             _ = try await server.updateAgent(agentID, patch: patch)
-            failure = nil
+            failures[area] = nil
             savedCount += 1
             return true
         } catch {
-            failure = AgentForms.errorText(error)
+            failures[area] = AgentForms.errorText(error)
             return false
         }
     }
@@ -70,13 +90,41 @@ final class AgentDetailModel {
     func setPaused(_ paused: Bool) async -> Bool {
         do {
             _ = try await server.setPaused(agentID: agentID, paused)
-            failure = nil
+            failures[.status] = nil
             savedCount += 1
             return true
         } catch {
-            failure = AgentForms.errorText(error)
+            failures[.status] = AgentForms.errorText(error)
             return false
         }
+    }
+
+    /// Toggles one chip and sends the whole list. The sends go one after another, each with the list as it is then, so
+    /// the last answer holds every tap (two quick taps both reach the server).
+    func toggleChip(_ capability: AgentCapability) {
+        var next = chips
+        if next.contains(capability) {
+            next.remove(capability)
+        } else {
+            next.insert(capability)
+        }
+        chips = next
+        chipsInFlight += 1
+        let previous = chipChain
+        chipChain = Task {
+            await previous?.value
+            let saved = await save(AgentPatch(capabilities: AgentCapability.wire(next)), in: .capabilities)
+            chipsInFlight -= 1
+            if !saved, chipsInFlight == 0 {
+                chips = serverChips
+            }
+        }
+    }
+
+    /// Moves the agent to another runtime in one patch (`AgentForms.runtimeSwitch`).
+    @discardableResult
+    func switchRuntime(_ patch: AgentPatch) async -> Bool {
+        await save(patch, in: .work)
     }
 
     /// Switches one schedule on or off (`schedules.update {enabled}`), and keeps the list in step with the answer.
@@ -84,9 +132,9 @@ final class AgentDetailModel {
         do {
             let updated = try await server.setScheduleEnabled(id, enabled)
             replaceSchedule(updated)
-            failure = nil
+            failures[.schedules] = nil
         } catch {
-            failure = AgentForms.errorText(error)
+            failures[.schedules] = AgentForms.errorText(error)
             await loadSchedules()
         }
     }
@@ -95,10 +143,10 @@ final class AgentDetailModel {
     func runScheduleNow(_ id: String) async {
         do {
             try await server.runScheduleNow(id)
-            failure = nil
+            failures[.schedules] = nil
             ranCount += 1
         } catch {
-            failure = AgentForms.errorText(error)
+            failures[.schedules] = AgentForms.errorText(error)
         }
     }
 
@@ -106,10 +154,10 @@ final class AgentDetailModel {
     func delete() async -> Bool {
         do {
             try await server.deleteAgent(agentID)
-            failure = nil
+            failures[.delete] = nil
             return true
         } catch {
-            failure = AgentForms.errorText(error)
+            failures[.delete] = AgentForms.errorText(error)
             return false
         }
     }
@@ -119,7 +167,6 @@ final class AgentDetailModel {
             schedules[index] = updated
         }
     }
-
 }
 
 /// The patch that changes the agent's name and role. A field that did not change is left out, so the daemon keeps it.

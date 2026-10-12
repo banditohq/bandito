@@ -3090,6 +3090,7 @@
   "ios.newAgent.tabTeams": "すぐに使えるチーム",
   "ios.newAgent.tabOne": "エージェント1つ",
   "ios.newAgent.teamsEmpty": "このサーバーにはまだ用意済みのチームがありません。",
+  "ios.newAgent.installTimedOut": "インストールがまだ続いています。しばらくしてからもう一度お試しください。",
   "ios.settings.header.servers": "サーバー",
   "ios.settings.header.notifications": "通知",
   "ios.settings.header.security": "セキュリティ",

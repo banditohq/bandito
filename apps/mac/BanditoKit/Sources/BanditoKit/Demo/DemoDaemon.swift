@@ -45,6 +45,10 @@ public actor DemoDaemonTransport: RPCTransport {
     var demoAgents: [[String: Any]] = []
     /// The schedules the daemon holds, in wire form (`schedules.create`, `rememberSchedule`).
     var demoSchedules: [[String: Any]] = []
+    /// The folders `fs.mkdir` made, by path: a name taken answers `exists`, and the folder is listed from then on.
+    var demoFolders: [String] = []
+    /// The templates `agents.create_bundle` answers with an `error` (see `failBundleEntry`).
+    var demoBundleFailures: Set<String> = []
 
     public init(setup: DemoDaemonSetup = DemoDaemonSetup()) {
         self.setup = setup
@@ -428,10 +432,13 @@ public actor DemoDaemonTransport: RPCTransport {
 
     private func listing(_ raw: String, now: Int64) -> Result<String, RPCError> {
         let path = raw == "~" || raw.isEmpty ? DemoDaemonFiles.home : raw.replacingOccurrences(of: "~", with: DemoDaemonFiles.home)
-        guard let entries = children(of: path, now: now) else {
+        guard var entries = children(of: path, now: now) else {
             return .failure(
                 RPCError(code: RPCError.fileError, message: "not found", data: .object(["reason": .string("not_found")])))
         }
+        // The folders the app made here are listed beside the tree.
+        entries += demoFolders.filter { ($0 as NSString).deletingLastPathComponent == path }
+            .map { entry($0, kind: "dir", size: 0, modified: now) }
         let parent: Any = path == "/" ? NSNull() : (path as NSString).deletingLastPathComponent
         return .success(
             DemoJSON.text(["path": path, "parent": parent, "entries": entries, "truncated": false, "skipped": 0]))
@@ -444,9 +451,16 @@ public actor DemoDaemonTransport: RPCTransport {
         return .success(DemoJSON.text(entry(path, kind: isDir ? "dir" : "file", size: 52_000, modified: now - 100_000)))
     }
 
-    /// Makes a folder (`fs.mkdir`). The demo keeps no folders of its own: the new folder is answered, not kept.
+    /// Makes a folder (`fs.mkdir`), as the server does: a name that is taken answers `exists`, and the new folder is
+    /// listed in its parent from then on.
     private func mkdir(_ raw: String, now: Int64) -> Result<String, RPCError> {
         let path = raw == "~" || raw.hasPrefix("~/") ? DemoDaemonFiles.home + raw.dropFirst() : raw
+        let parent = (path as NSString).deletingLastPathComponent
+        let inTree = children(of: parent, now: now)?.contains { ($0["path"] as? String) == path } ?? false
+        guard !inTree, !demoFolders.contains(path) else {
+            return .failure(RPCError(code: RPCError.fileError, message: "already exists", data: .object(["reason": .string("exists")])))
+        }
+        demoFolders.append(path)
         return .success(DemoJSON.text(entry(path, kind: "dir", size: 0, modified: now)))
     }
 

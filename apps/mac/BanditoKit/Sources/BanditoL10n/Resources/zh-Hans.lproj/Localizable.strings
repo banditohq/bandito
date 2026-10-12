@@ -968,6 +968,7 @@
 "ios.inbox.risky" = "有风险";
 "ios.inbox.send" = "发送";
 "ios.inbox.service" = "服务";
+"ios.newAgent.installTimedOut" = "安装仍在进行，请稍后再试。";
 "ios.newAgent.tabOne" = "单个智能体";
 "ios.newAgent.tabTeams" = "现成团队";
 "ios.newAgent.teamsEmpty" = "此服务器暂无现成团队。";

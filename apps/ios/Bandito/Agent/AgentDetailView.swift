@@ -6,7 +6,8 @@ import UIKit
 
 /// The agent card: the avatar with its mood, the name and the role (both editable), the status with pause and resume,
 /// the runtime, model and effort, the approvals, what the agent may do, its schedules, its project folder, and deleting
-/// it. Each change is one RPC (`AgentDetailModel`). Opened from Crew's context menu; the chat's header uses it too.
+/// it. Each change is one RPC (`AgentDetailModel`); a failure shows next to the control that made it. Pushed from Crew's
+/// context menu.
 struct AgentDetailView: View {
     let server: ServerModel
     let agentID: String
@@ -59,16 +60,21 @@ struct AgentDetailView: View {
                 draftName = agent.name
                 draftRole = agent.role
                 draftsLoaded = true
+                model.syncChips(with: agent)
             }
             await model.loadSchedules()
             if server.runtimeModels.isEmpty {
                 try? await server.refreshRuntimeModels()
             }
         }
+        .onChange(of: agent?.capabilities) { _, _ in
+            if let agent { model.syncChips(with: agent) }
+        }
         .onChange(of: focus) { old, new in
             if old != nil, new != old { commitIdentity() }
         }
         .sensoryFeedback(.success, trigger: model.savedCount)
+        .sensoryFeedback(.success, trigger: model.ranCount)
         .confirmationDialog(
             L10n.Agent.Delete.confirm(name: agent?.name ?? ""), isPresented: $confirmsDelete, titleVisibility: .visible
         ) {
@@ -109,6 +115,7 @@ struct AgentDetailView: View {
             .padding(.vertical, BanditoSpace.s2)
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+            failureRow(.identity)
         }
     }
 
@@ -130,6 +137,7 @@ struct AgentDetailView: View {
             }
             .listRowBackground(Color.Bandito.surface1)
             .accessibilityIdentifier("agent.detail.pause")
+            failureRow(.status)
         }
     }
 
@@ -162,6 +170,7 @@ struct AgentDetailView: View {
                 }
                 .listRowBackground(Color.Bandito.surface1)
             }
+            failureRow(.work)
         } header: {
             Text(L10n.Inspector.sectionWork)
         }
@@ -171,7 +180,7 @@ struct AgentDetailView: View {
         Section {
             ForEach(AgentForms.approvalOrder, id: \.self) { mode in
                 Button {
-                    Task { await model.save(AgentPatch(approvalMode: mode)) }
+                    Task { await model.save(AgentPatch(approvalMode: mode), in: .approval) }
                 } label: {
                     HStack(alignment: .top, spacing: BanditoSpace.s3) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -194,25 +203,29 @@ struct AgentDetailView: View {
                 .listRowBackground(Color.Bandito.surface1)
                 .accessibilityAddTraits(agent.approvalMode == mode ? .isSelected : [])
             }
+            failureRow(.approval)
         } header: {
             Text(L10n.Inspector.approvals)
         }
     }
 
     @ViewBuilder private func permissionSection(_ agent: Agent) -> some View {
-        let enabled = AgentCapability.set(from: agent.capabilities)
+        let unavailable = AgentCapability.unavailable(infoKnown: server.info != nil, supports: { server.supports($0) })
         Section {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: BanditoSpace.s2, alignment: .leading)],
                 alignment: .leading, spacing: BanditoSpace.s2)
             {
                 ForEach(AgentCapability.allCases) { permission in
-                    PermissionChip(permission: permission, on: enabled.contains(permission)) {
-                        togglePermission(permission, of: agent)
+                    PermissionChip(
+                        permission: permission, on: model.chips.contains(permission), reason: unavailable[permission]
+                    ) {
+                        model.toggleChip(permission)
                     }
                 }
             }
             .padding(.vertical, BanditoSpace.s1)
             .listRowBackground(Color.Bandito.surface1)
+            failureRow(.capabilities)
         } header: {
             Text(L10n.Capability.title)
         }
@@ -229,6 +242,7 @@ struct AgentDetailView: View {
                 scheduleRow(schedule)
                     .listRowBackground(Color.Bandito.surface1)
             }
+            failureRow(.schedules)
         } header: {
             Text(L10n.Inspector.schedules)
         }
@@ -257,13 +271,7 @@ struct AgentDetailView: View {
 
     @ViewBuilder private var deleteSection: some View {
         Section {
-            if let failure = model.failure {
-                Text(L10n.Ios.Agent.error(message: failure))
-                    .font(BanditoFont.text(size: 13))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .listRowBackground(Color.Bandito.surface1)
-                    .accessibilityIdentifier("agent.detail.error")
-            }
+            failureRow(.delete)
             Button(role: .destructive) {
                 confirmsDelete = true
             } label: {
@@ -276,17 +284,18 @@ struct AgentDetailView: View {
         }
     }
 
-    // MARK: rows
-
-    private func togglePermission(_ permission: AgentCapability, of agent: Agent) {
-        var next = AgentCapability.set(from: agent.capabilities)
-        if next.contains(permission) {
-            next.remove(permission)
-        } else {
-            next.insert(permission)
+    /// A failure of one part of the card, as a row under its control. Nothing when the part has none.
+    @ViewBuilder private func failureRow(_ area: AgentArea) -> some View {
+        if let failure = model.failures[area] {
+            Text(L10n.Ios.Agent.error(message: failure))
+                .font(BanditoFont.text(size: 13))
+                .foregroundStyle(Color.Bandito.danger)
+                .listRowBackground(Color.Bandito.surface1)
+                .accessibilityIdentifier("agent.detail.error.\(area)")
         }
-        Task { await model.save(AgentPatch(capabilities: AgentCapability.wire(next))) }
     }
+
+    // MARK: rows
 
     private func scheduleRow(_ schedule: Schedule) -> some View {
         HStack(spacing: BanditoSpace.s3) {
@@ -321,16 +330,21 @@ struct AgentDetailView: View {
 
     // MARK: bindings and choices
 
+    /// A runtime change is one patch: the runtime, with the fallback and the model that the new runtime does not keep.
     private func runtimeBinding(_ agent: Agent) -> Binding<RuntimeKind> {
         Binding(
             get: { agent.runtime },
-            set: { kind in Task { await model.save(AgentPatch(runtime: kind)) } })
+            set: { kind in
+                Task {
+                    await model.switchRuntime(AgentForms.runtimeSwitch(of: agent, to: kind, lists: server.runtimeModels))
+                }
+            })
     }
 
     private func modelBinding(_ agent: Agent) -> Binding<String> {
         Binding(
             get: { agent.model ?? "" },
-            set: { id in Task { await model.save(AgentEdit.model(id.isEmpty ? nil : id)) } })
+            set: { id in Task { await model.save(AgentEdit.model(id.isEmpty ? nil : id), in: .work) } })
     }
 
     /// The effort as the agent has it, clamped to what the runtime offers. The default (nil) is never sent back: the
@@ -340,13 +354,13 @@ struct AgentDetailView: View {
             get: { agent.effort.map { agent.runtime.clampedEffort($0) } },
             set: { level in
                 guard let level else { return }
-                Task { await model.save(AgentPatch(effort: level)) }
+                Task { await model.save(AgentPatch(effort: level), in: .work) }
             })
     }
 
     /// The runtimes the server has installed, plus the agent's own when it is not among them (it still shows).
     private func runtimeOptions(_ agent: Agent) -> [RuntimeKind] {
-        let installed = [RuntimeKind.claude, .codex, .grok].filter { kind in
+        let installed = AgentForms.runtimes.filter { kind in
             server.runtimes.contains { $0.kind == kind && $0.installed }
         }
         return installed.contains(agent.runtime) ? installed : installed + [agent.runtime]
@@ -358,7 +372,7 @@ struct AgentDetailView: View {
             draftRole = agent?.role ?? draftRole
             return
         }
-        Task { await model.save(patch) }
+        Task { await model.save(patch, in: .identity) }
     }
 
     private func delete() async {

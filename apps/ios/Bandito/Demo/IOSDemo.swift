@@ -86,6 +86,11 @@ enum IOSDemo {
     /// the connect reads the agents of the daemon, which has none of its own. Forge asks for an approval, so the Crew
     /// shows a card; Scout gets one reply after the first look, so it shows an unread badge.
     static func start(withTeam: Bool = true) async -> ServerModel {
+        await startWithTransport(withTeam: withTeam).0
+    }
+
+    /// The demo server with the daemon behind it: the tests answer their own requests through the transport.
+    static func startWithTransport(withTeam: Bool = true) async -> (ServerModel, DemoDaemonTransport) {
         let members = withTeam ? team : []
         let ids = members.indices.map { "ios-demo-\($0 + 1)" }
         let (server, transport) = DemoDaemon.server(
@@ -118,10 +123,10 @@ enum IOSDemo {
             if member.name == "Watch" {
                 await transport.rememberSchedule(
                     id: "ios-demo-schedule-1", agentID: ids[index], cron: "0 22 * * *", tz: "Asia/Vladivostok",
-                    prompt: member.history.first?.text ?? "", title: "Nightly disk check", enabled: true)
+                    prompt: member.history.first?.text ?? "", title: nil, enabled: true)
                 await transport.rememberSchedule(
                     id: "ios-demo-schedule-2", agentID: ids[index], cron: "0 9 * * 1", tz: "Asia/Vladivostok",
-                    prompt: "Summarize the week's disk usage.", title: "Weekly summary", enabled: false)
+                    prompt: "Summarize the week's disk usage.", title: nil, enabled: false)
             }
         }
         // What the team has read so far: every chat is read to its last message.
@@ -181,7 +186,7 @@ enum IOSDemo {
         if let scout = agent(named: "Scout") {
             deliver(.messageAssistant(text: unreadReply), to: scout)
         }
-        return server
+        return (server, transport)
     }
 
     /// A second demo server with no agent, connected.

@@ -50,17 +50,28 @@ struct NewAgentSheet: View {
     }
 }
 
-/// The ready teams of the server, in the order of `ReadyTeamsLogic.ids`. A tap opens the team's preview.
+/// The ready teams of the server, in the order of `ReadyTeamsLogic.ids`. A tap opens the team's preview. A failed read
+/// says what failed and can be retried; it is not shown as "no ready teams".
 struct ReadyTeamsList: View {
     let server: ServerModel
     let onMade: () -> Void
 
     @State private var teams: [AgentBundle]?
+    @State private var loadFailure: String?
 
     var body: some View {
         Group {
             if !ReadyTeamsLogic.supported(server.supports) {
                 message(L10n.ReadyTeam.unavailable)
+            } else if let loadFailure {
+                VStack(spacing: BanditoSpace.s3) {
+                    message(loadFailure)
+                    Button(L10n.Banner.retry) {
+                        Task { await load() }
+                    }
+                    .buttonStyle(SignalButtonStyle())
+                    .accessibilityIdentifier("newAgent.teams.retry")
+                }
             } else if let teams {
                 if teams.isEmpty {
                     message(L10n.Ios.NewAgent.teamsEmpty)
@@ -87,9 +98,17 @@ struct ReadyTeamsList: View {
             ReadyTeamPreview(server: server, bundle: team, onMade: onMade)
         }
         .task {
-            guard ReadyTeamsLogic.supported(server.supports) else { return }
-            let all = (try? await server.agentBundles()) ?? []
-            teams = ReadyTeamsLogic.teams(from: all)
+            if teams == nil { await load() }
+        }
+    }
+
+    private func load() async {
+        guard ReadyTeamsLogic.supported(server.supports) else { return }
+        do {
+            teams = ReadyTeamsLogic.teams(from: try await server.agentBundles())
+            loadFailure = nil
+        } catch {
+            loadFailure = AgentForms.errorText(error)
         }
     }
 
@@ -137,8 +156,9 @@ struct TeamRow: View {
     }
 }
 
-/// A ready team before it is made: its agents with their rights, its schedules (all off until switched on), the
-/// model it starts on, and the folder the team shares. "Create team" makes the agents in one request.
+/// A ready team before it is made: its agents with their rights, its schedules in words (all off until switched on), the
+/// model it starts on, and the folder the team shares. "Create team" makes the agents in one request; a retry makes the
+/// ones still missing (`TeamCreationModel`).
 struct ReadyTeamPreview: View {
     let server: ServerModel
     let bundle: AgentBundle
@@ -147,9 +167,8 @@ struct ReadyTeamPreview: View {
     @State private var members: [BotTemplate] = []
     @State private var enabled: Set<String> = []
     @State private var root: String?
-    @State private var busy = false
-    @State private var failure: String?
-    @State private var madeCount = 0
+    @State private var loadFailure: String?
+    @State private var creation: TeamCreationModel?
 
     private var runtime: RuntimeKind? {
         AgentForms.defaultRuntime(server.runtimes)
@@ -167,13 +186,17 @@ struct ReadyTeamPreview: View {
 
     /// The folder the team gets: the agents folder, and the team's name (a free name is taken when it is made).
     private var folderPreview: String? {
+        if let folder = creation?.folder { return folder }
         guard let root else { return nil }
         return NewAgentFolderRules.folderPath(
             root: root, name: NewAgentFolderRules.folderName(for: bundle.name(languageCode: AgentForms.languageCode)))
     }
 
+    /// Whether the team can be made now: not while a request is under way or once the team is complete.
     private var canCreate: Bool {
-        folderPreview != nil && ReadyTeamsLogic.canCreate(runtime: runtime, folder: folderPreview ?? "", members: members, busy: busy)
+        if creation?.busy == true || creation?.isComplete == true { return false }
+        guard folderPreview != nil else { return false }
+        return ReadyTeamsLogic.canCreate(runtime: runtime, folder: folderPreview ?? "", members: members, busy: false)
     }
 
     var body: some View {
@@ -243,7 +266,7 @@ struct ReadyTeamPreview: View {
                 Text(L10n.ReadyTeam.folderShared)
             }
 
-            if let failure {
+            if let failure = loadFailure ?? creation?.failure {
                 Section {
                     Text(failure)
                         .font(BanditoFont.text(size: 13))
@@ -255,15 +278,15 @@ struct ReadyTeamPreview: View {
 
             Section {
                 Button {
-                    Task { await create() }
+                    Task { await createOrRetry() }
                 } label: {
                     HStack {
                         Spacer()
-                        Text(busy ? L10n.ReadyTeam.creating : L10n.ReadyTeam.create)
+                        Text(creationTitle)
                         Spacer()
                     }
                 }
-                .disabled(!canCreate)
+                .disabled(!canCreate && loadFailure == nil)
                 .listRowBackground(Color.clear)
                 .accessibilityIdentifier("newAgent.team.create")
             }
@@ -273,17 +296,34 @@ struct ReadyTeamPreview: View {
         .background(Color.Bandito.bg.ignoresSafeArea())
         .navigationTitle(bundle.name(languageCode: AgentForms.languageCode))
         .navigationBarTitleDisplayMode(.inline)
-        .sensoryFeedback(.success, trigger: madeCount)
+        .sensoryFeedback(.success, trigger: creation?.madeCount ?? 0)
         .task {
-            let all = (try? await server.botTemplates()) ?? []
+            if members.isEmpty, loadFailure == nil { await load() }
+        }
+    }
+
+    private var creationTitle: String {
+        if creation?.busy == true { return L10n.ReadyTeam.creating }
+        if loadFailure != nil || creation?.failure != nil { return L10n.Banner.retry }
+        return L10n.ReadyTeam.create
+    }
+
+    /// Reads the templates the team is made of, and the folder it shares. A failed read says so and can be retried.
+    private func load() async {
+        do {
+            let all = try await server.botTemplates()
             members = bundle.templates.compactMap { id in all.first { $0.id == id } }
-            root = await AgentFolders.root(server: server)
-            if runtime == nil {
-                try? await server.refreshRuntimes()
-            }
-            if server.runtimeModels.isEmpty {
-                try? await server.refreshRuntimeModels()
-            }
+            loadFailure = nil
+        } catch {
+            loadFailure = AgentForms.errorText(error)
+            return
+        }
+        root = await AgentFolders.root(server: server)
+        if runtime == nil {
+            try? await server.refreshRuntimes()
+        }
+        if server.runtimeModels.isEmpty {
+            try? await server.refreshRuntimeModels()
         }
     }
 
@@ -307,30 +347,24 @@ struct ReadyTeamPreview: View {
             })
     }
 
-    /// Makes the team's folder, then the agents in one `agents.create_bundle`. The team is made when every agent is.
-    private func create() async {
-        guard let runtime, let root else { return }
-        busy = true
-        defer { busy = false }
-        failure = nil
-        do {
-            let folder = try await AgentFolders.makeFree(
-                root: root, base: NewAgentFolderRules.folderName(for: bundle.name(languageCode: AgentForms.languageCode)),
-                server: server)
-            guard let request = ReadyTeamsLogic.request(
-                bundle: bundle, runtime: runtime, languageCode: AgentForms.languageCode, model: model,
-                folder: folder, items: schedules, enabled: enabled)
-            else { return }
-            let made = try await server.createBundle(request)
-            let done = made.agents.filter { $0.agent != nil && $0.error == nil }.count
-            if done == made.agents.count, done > 0 {
-                madeCount += 1
-                onMade()
-            } else {
-                failure = L10n.Market.Bundle.resultTitle(created: String(done), total: String(made.agents.count))
-            }
-        } catch {
-            failure = AgentForms.errorText(error)
+    /// The first attempt builds the creation (it keeps the folder); a retry continues it.
+    private func createOrRetry() async {
+        if members.isEmpty || root == nil {
+            await load()
+            return
+        }
+        guard let root else { return }
+        let attempt: TeamCreationModel
+        if let creation {
+            attempt = creation
+        } else {
+            attempt = TeamCreationModel(
+                server: server, bundle: bundle, members: members, root: root, runtime: runtime ?? .claude,
+                model: model, languageCode: AgentForms.languageCode)
+            creation = attempt
+        }
+        if await attempt.create(items: schedules, enabled: enabled) {
+            onMade()
         }
     }
 }

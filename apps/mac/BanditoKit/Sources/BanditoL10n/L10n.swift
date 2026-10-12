@@ -1404,6 +1404,7 @@ public enum L10n {
         }
 
         public enum NewAgent {
+            public static var installTimedOut: String { L10n.tr("ios.newAgent.installTimedOut") }
             public static var tabOne: String { L10n.tr("ios.newAgent.tabOne") }
             public static var tabTeams: String { L10n.tr("ios.newAgent.tabTeams") }
             public static var teamsEmpty: String { L10n.tr("ios.newAgent.teamsEmpty") }

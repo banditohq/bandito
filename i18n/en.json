@@ -3129,6 +3129,7 @@
   "ios.newAgent.tabTeams": "Ready teams",
   "ios.newAgent.tabOne": "One agent",
   "ios.newAgent.teamsEmpty": "This server has no ready teams yet.",
+  "ios.newAgent.installTimedOut": "The install is still running. Try again in a moment.",
   "ios.settings.header.servers": "Servers",
   "ios.settings.header.notifications": "Notifications",
   "ios.settings.header.security": "Security",

@@ -4,22 +4,22 @@ import Foundation
 /// A cron expression of a template in the person's words: "Weekdays at 8:00 AM". An expression it does not read
 /// (steps, ranges of hours, a day of the month) is left as it is, in monospace by the view.
 public enum BotScheduleWords {
-    public enum Days: Equatable {
+    enum Days: Equatable {
         case every
         case weekdays
         /// Cron weekday numbers, 0 is Sunday.
         case list([Int])
     }
 
-    public struct Reading: Equatable {
-        public var days: Days
+    struct Reading: Equatable {
+        var days: Days
         /// Minutes since midnight, in the order of the expression.
-        public var times: [Int]
+        var times: [Int]
     }
 
     /// The days and the times of `cron`, or nil when it is not of the plain kind the templates use: one minute, a list
     /// of hours, any day of the month and of the year, and every day, the weekdays or a list of weekdays.
-    public static func reading(_ cron: String) -> Reading? {
+    static func reading(_ cron: String) -> Reading? {
         let fields = cron.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
         guard fields.count == 5, fields[2] == "*", fields[3] == "*",
             let minute = Int(fields[0]), (0...59).contains(minute)

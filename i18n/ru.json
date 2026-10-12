@@ -3210,6 +3210,7 @@
   "ios.newAgent.tabTeams": "Готовые команды",
   "ios.newAgent.tabOne": "Один агент",
   "ios.newAgent.teamsEmpty": "На этом сервере пока нет готовых команд.",
+  "ios.newAgent.installTimedOut": "Установка всё ещё идёт. Попробуйте позже.",
   "ios.settings.header.servers": "Серверы",
   "ios.settings.header.notifications": "Уведомления",
   "ios.settings.header.security": "Безопасность",

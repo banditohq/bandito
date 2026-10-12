@@ -6,12 +6,13 @@ import Foundation
 /// (`Forge`, then `Forge 2`, …) under the agents folder, created on the server.
 @MainActor
 enum AgentFolders {
-    /// The agents folder on the server: the saved one, else the one the agents already use, else `Bandito` in the home
-    /// folder. Nil when none is known (the form then asks for nothing and cannot create).
+    /// The agents folder on the server: the one saved for this server (the Mac's `AgentsRootStore`), else the one the agents
+    /// already use, else `Bandito` in the home folder. Nil when none is known (the form then asks for nothing and cannot create).
     static func root(server: ServerModel) async -> String? {
         let home = (try? await server.stat("~"))?.path
         let projects = server.agents.compactMap { NewAgentFolderRules.projectFolder(cwd: $0.cwd, homeDir: $0.homeDir) }
-        return NewAgentFolderRules.defaultRoot(saved: nil, projectFolders: projects, home: home)
+        let saved = AgentsRootStore.load(serverID: server.id.uuidString)
+        return NewAgentFolderRules.defaultRoot(saved: saved, projectFolders: projects, home: home)
     }
 
     /// Creates the first free folder for `base` under `root` and returns its path. A name that is in the folder already

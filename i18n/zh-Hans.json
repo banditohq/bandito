@@ -3090,6 +3090,7 @@
   "ios.newAgent.tabTeams": "现成团队",
   "ios.newAgent.tabOne": "单个智能体",
   "ios.newAgent.teamsEmpty": "此服务器暂无现成团队。",
+  "ios.newAgent.installTimedOut": "安装仍在进行，请稍后再试。",
   "ios.settings.header.servers": "服务器",
   "ios.settings.header.notifications": "通知",
   "ios.settings.header.security": "安全",
