@@ -107,6 +107,8 @@ struct MainWindow: View {
                 Task { await hub.refreshPending() }
             }
         }
+        // The confirmation of a server update asked from the sidebar or the server menu (see `DaemonUpdateRequests`).
+        .modifier(PendingDaemonUpdateDialog())
     }
 
     // MARK: swipes

@@ -342,6 +342,7 @@
   "server.daemonUpdate.manualRestart": "Installed {version}. Restart the daemon on the server to run it.",
   "server.daemonUpdate.timedOut": "The server did not come back on {version} within two minutes. Check it in Terminal.",
   "server.daemonUpdate.failed": "Update failed: {error}",
+  "serverUpdate.banner.title": "On the server {name}, version {version} is available",
   "server.localUpgrade.title": "Updating Bandito on this Mac to {version}…",
   "server.localUpgrade.timedOut": "This Mac's server did not come back on {version} within two minutes.",
   "server.localUpgrade.failed": "Could not update this Mac's server: {error}",

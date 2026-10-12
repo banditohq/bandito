@@ -365,6 +365,7 @@
   "server.daemonUpdate.manualRestart": "Установлена версия {version}. Перезапустите демон на сервере, чтобы запустить её.",
   "server.daemonUpdate.timedOut": "Сервер не вернулся на версии {version} за две минуты. Проверьте его в терминале.",
   "server.daemonUpdate.failed": "Не удалось обновить: {error}",
+  "serverUpdate.banner.title": "На сервере {name} доступна версия {version}",
   "server.localUpgrade.title": "Обновляем Bandito на этом Mac до {version}…",
   "server.localUpgrade.timedOut": "Сервер на этом Mac не вернулся на {version} за две минуты.",
   "server.localUpgrade.failed": "Не удалось обновить сервер на этом Mac: {error}",

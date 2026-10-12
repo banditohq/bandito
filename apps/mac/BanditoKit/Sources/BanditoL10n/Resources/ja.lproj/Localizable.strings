@@ -2124,6 +2124,7 @@
 "serverSettings.support.hint" = "バージョンとシステム。アドレス・トークン・パスは含みません。";
 "serverSettings.support.title" = "サポート用レポート";
 "serverSettings.unsupported" = "このサーバーはこの設定に対応していません。変更するにはサーバーを更新してください。";
+"serverUpdate.banner.title" = "サーバー「%1$@」でバージョン %2$@ を利用できます";
 "settings.account.intro" = "サインインすると、デバイス間でサーバー、ショートカット、プロンプトを同期できます。";
 "settings.account.openProfile" = "プロフィールを開く";
 "settings.account.openProfileHint" = "ニックネーム、色、このMacのコード、デバイス、同期。";

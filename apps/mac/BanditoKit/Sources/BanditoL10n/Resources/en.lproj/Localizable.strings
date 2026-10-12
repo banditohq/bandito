@@ -2124,6 +2124,7 @@
 "serverSettings.support.hint" = "Versions and the system. No addresses, tokens or paths.";
 "serverSettings.support.title" = "Report for support";
 "serverSettings.unsupported" = "This server is too old for these settings. Update the server to change them.";
+"serverUpdate.banner.title" = "On the server %1$@, version %2$@ is available";
 "settings.account.intro" = "Sign in to sync servers, shortcuts and prompts between your devices.";
 "settings.account.openProfile" = "Open profile";
 "settings.account.openProfileHint" = "Nickname, colour, this Mac's code, devices and sync.";

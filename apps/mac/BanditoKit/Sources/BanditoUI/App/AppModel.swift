@@ -49,6 +49,11 @@ public final class AppModel {
     public let terminalFont = TerminalFontStore()
     /// Keeps this Mac's daemon at the version of the app (see `LocalDaemonUpgradeModel`).
     let localUpgrade = LocalDaemonUpgradeModel()
+    /// The daemon update of any remote server, run from the Server screens, the sidebar banner or the server menu. One
+    /// model, so the progress and the failure show the same everywhere (see `DaemonUpdateRequests`).
+    let daemonUpdate = DaemonUpdateModel()
+    /// The update the person is asked to confirm from the sidebar or the server menu (the main window shows the dialog).
+    var daemonUpdateAsk: DaemonUpdateAsk?
     /// System notifications for agent events; nil until `startNotifications` runs.
     public private(set) var notifications: NotificationService?
 
