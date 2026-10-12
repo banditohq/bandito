@@ -2240,9 +2240,9 @@ public enum L10n {
             public static var loginAfter: String { L10n.tr("onboarding.subs.loginAfter") }
             public static func loginTitle(name: String) -> String { L10n.tr("onboarding.subs.loginTitle", name) }
             public static var needOne: String { L10n.tr("onboarding.subs.needOne") }
+            public static var noInstaller: String { L10n.tr("onboarding.subs.noInstaller") }
             public static var openLink: String { L10n.tr("onboarding.subs.openLink") }
             public static var signIn: String { L10n.tr("onboarding.subs.signIn") }
-            public static var skipLater: String { L10n.tr("onboarding.subs.skipLater") }
             public static var stateChecking: String { L10n.tr("onboarding.subs.stateChecking") }
             public static var stateNeedsLogin: String { L10n.tr("onboarding.subs.stateNeedsLogin") }
             public static var stateNotInstalled: String { L10n.tr("onboarding.subs.stateNotInstalled") }
@@ -3880,19 +3880,9 @@ public enum L10n {
             public static var title: String { L10n.tr("tour.approvals.title") }
         }
 
-        public enum Approve {
-            public static var text: String { L10n.tr("tour.approve.text") }
-            public static var title: String { L10n.tr("tour.approve.title") }
-        }
-
         public enum Composer {
             public static var text: String { L10n.tr("tour.composer.text") }
             public static var title: String { L10n.tr("tour.composer.title") }
-        }
-
-        public enum Limits {
-            public static var text: String { L10n.tr("tour.limits.text") }
-            public static var title: String { L10n.tr("tour.limits.title") }
         }
 
         public enum Modes {
@@ -3903,16 +3893,6 @@ public enum L10n {
         public enum QuickOpen {
             public static var text: String { L10n.tr("tour.quickOpen.text") }
             public static var title: String { L10n.tr("tour.quickOpen.title") }
-        }
-
-        public enum Team {
-            public static var text: String { L10n.tr("tour.team.text") }
-            public static var title: String { L10n.tr("tour.team.title") }
-        }
-
-        public enum Write {
-            public static var text: String { L10n.tr("tour.write.text") }
-            public static var title: String { L10n.tr("tour.write.title") }
         }
     }
 
