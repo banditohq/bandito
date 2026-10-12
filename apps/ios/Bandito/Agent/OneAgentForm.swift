@@ -16,15 +16,12 @@ struct OneAgentForm: View {
     @State private var pickedModel: String?
     @State private var effort: Effort?
     @State private var approval = ApprovalMode.risky
-    @State private var permissions = Set(AgentPermission.allCases)
+    @State private var permissions = Set(AgentCapability.allCases)
     @State private var root: String?
     @State private var busy = false
     @State private var installing = false
     @State private var failure: String?
     @State private var madeCount = 0
-
-    /// The runtimes a person can run an agent on, in the Mac's order.
-    static let runtimes = [RuntimeKind.claude, .codex, .grok]
 
     private var installed: Bool {
         server.runtimes.contains { $0.kind == runtime && $0.installed }
@@ -36,20 +33,20 @@ struct OneAgentForm: View {
 
     /// The model the form sends: the person's pick, else the runtime's preferred one, else the runtime's default ("").
     private var model: String {
-        pickedModel ?? AgentRules.preferredModel(runtime: runtime, models: models) ?? ""
+        pickedModel ?? NewAgentModelRules.preferredModel(runtime: runtime, models: models) ?? ""
     }
 
     private var folderBase: String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return AgentRules.folderName(for: trimmed.isEmpty ? L10n.AgentSheet.autoName(number: "1") : trimmed)
+        return NewAgentFolderRules.folderName(for: trimmed.isEmpty ? L10n.AgentSheet.autoName(number: "1") : trimmed)
     }
 
     private var folderPreview: String? {
-        root.map { AgentRules.folderPath(root: $0, name: folderBase) }
+        root.map { NewAgentFolderRules.folderPath(root: $0, name: folderBase) }
     }
 
     private var canCreate: Bool {
-        AgentRules.canCreateOne(
+        AgentForms.canCreateOne(
             name: name, runtime: installed ? runtime : nil, folder: folderPreview ?? "", busy: busy || installing)
     }
 
@@ -67,7 +64,7 @@ struct OneAgentForm: View {
 
             Section {
                 Picker(L10n.AgentSheet.runtime, selection: $runtime) {
-                    ForEach(Self.runtimes, id: \.self) { kind in
+                    ForEach(AgentForms.runtimes, id: \.self) { kind in
                         Text(runtimeName(kind)).tag(kind)
                     }
                 }
@@ -108,7 +105,7 @@ struct OneAgentForm: View {
             .listRowBackground(Color.Bandito.surface1)
 
             Section {
-                ForEach(AgentRules.approvalOrder, id: \.self) { mode in
+                ForEach(AgentForms.approvalOrder, id: \.self) { mode in
                     Button {
                         approval = mode
                     } label: {
@@ -139,7 +136,7 @@ struct OneAgentForm: View {
                     columns: [GridItem(.adaptive(minimum: 150), spacing: BanditoSpace.s2, alignment: .leading)],
                     alignment: .leading, spacing: BanditoSpace.s2
                 ) {
-                    ForEach(AgentPermission.allCases) { permission in
+                    ForEach(AgentCapability.allCases) { permission in
                         PermissionChip(permission: permission, on: permissions.contains(permission)) {
                             if permissions.contains(permission) {
                                 permissions.remove(permission)
@@ -198,7 +195,7 @@ struct OneAgentForm: View {
         .background(Color.Bandito.bg.ignoresSafeArea())
         .sensoryFeedback(.success, trigger: madeCount)
         .task {
-            if !installed, let first = Self.runtimes.first(where: { kind in
+            if !installed, let first = AgentForms.runtimes.first(where: { kind in
                 server.runtimes.contains { $0.kind == kind && $0.installed }
             }) {
                 runtime = first
@@ -227,14 +224,14 @@ struct OneAgentForm: View {
         failure = nil
         do {
             let folder = try await AgentFolders.makeFree(root: root, base: folderBase, server: server)
-            let request = AgentRules.newAgent(
+            let request = AgentForms.newAgent(
                 name: name, role: role, runtime: runtime, model: model.isEmpty ? nil : model, folder: folder,
                 approval: approval, effort: effort, permissions: permissions)
             _ = try await server.createAgent(request)
             madeCount += 1
             onMade()
         } catch {
-            failure = AgentRules.errorText(error)
+            failure = AgentForms.errorText(error)
         }
     }
 
@@ -260,7 +257,7 @@ struct OneAgentForm: View {
             }
             try await server.refreshRuntimes()
         } catch {
-            failure = AgentRules.errorText(error)
+            failure = AgentForms.errorText(error)
         }
     }
 
@@ -302,7 +299,7 @@ struct OneAgentForm: View {
 
 /// One "may do" chip: a switch. An on chip has a solid outline and a check, an off chip a dashed one and a plus.
 struct PermissionChip: View {
-    let permission: AgentPermission
+    let permission: AgentCapability
     let on: Bool
     let toggle: () -> Void
 

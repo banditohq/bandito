@@ -152,8 +152,12 @@ struct AgentDetailView: View {
             .listRowBackground(Color.Bandito.surface1)
             if !agent.runtime.supportedEfforts.isEmpty {
                 Picker(L10n.Effort.title, selection: effortBinding(agent)) {
+                    // The runtime's default shows only while the agent has no effort; a level, once chosen, is kept.
+                    if agent.effort == nil {
+                        Text(L10n.ModelPicker.defaultPlain).tag(Effort?.none)
+                    }
                     ForEach(agent.runtime.supportedEfforts, id: \.self) { level in
-                        Text(effortName(level)).tag(level)
+                        Text(effortName(level)).tag(Optional(level))
                     }
                 }
                 .listRowBackground(Color.Bandito.surface1)
@@ -165,7 +169,7 @@ struct AgentDetailView: View {
 
     @ViewBuilder private func approvalSection(_ agent: Agent) -> some View {
         Section {
-            ForEach(AgentRules.approvalOrder, id: \.self) { mode in
+            ForEach(AgentForms.approvalOrder, id: \.self) { mode in
                 Button {
                     Task { await model.save(AgentPatch(approvalMode: mode)) }
                 } label: {
@@ -196,12 +200,12 @@ struct AgentDetailView: View {
     }
 
     @ViewBuilder private func permissionSection(_ agent: Agent) -> some View {
-        let enabled = AgentPermission.set(from: agent.capabilities)
+        let enabled = AgentCapability.set(from: agent.capabilities)
         Section {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: BanditoSpace.s2, alignment: .leading)],
                 alignment: .leading, spacing: BanditoSpace.s2)
             {
-                ForEach(AgentPermission.allCases) { permission in
+                ForEach(AgentCapability.allCases) { permission in
                     PermissionChip(permission: permission, on: enabled.contains(permission)) {
                         togglePermission(permission, of: agent)
                     }
@@ -236,7 +240,7 @@ struct AgentDetailView: View {
                 Text(L10n.Inspector.placeFolder)
                     .font(BanditoFont.text(size: 13))
                     .foregroundStyle(Color.Bandito.text2)
-                if let folder = AgentRules.projectFolder(cwd: agent.cwd, homeDir: agent.homeDir) {
+                if let folder = NewAgentFolderRules.projectFolder(cwd: agent.cwd, homeDir: agent.homeDir) {
                     Text(folder)
                         .font(BanditoFont.mono(size: 13))
                         .foregroundStyle(Color.Bandito.text)
@@ -274,14 +278,14 @@ struct AgentDetailView: View {
 
     // MARK: rows
 
-    private func togglePermission(_ permission: AgentPermission, of agent: Agent) {
-        var next = AgentPermission.set(from: agent.capabilities)
+    private func togglePermission(_ permission: AgentCapability, of agent: Agent) {
+        var next = AgentCapability.set(from: agent.capabilities)
         if next.contains(permission) {
             next.remove(permission)
         } else {
             next.insert(permission)
         }
-        Task { await model.save(AgentPatch(capabilities: AgentPermission.wire(next))) }
+        Task { await model.save(AgentPatch(capabilities: AgentCapability.wire(next))) }
     }
 
     private func scheduleRow(_ schedule: Schedule) -> some View {
@@ -291,8 +295,8 @@ struct AgentDetailView: View {
                     .font(BanditoFont.text(size: 15))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
-                Text(schedule.cron)
-                    .font(BanditoFont.mono(size: 12))
+                Text(scheduleWords(schedule))
+                    .font(BanditoFont.text(size: 12))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Spacer(minLength: BanditoSpace.s2)
@@ -329,10 +333,15 @@ struct AgentDetailView: View {
             set: { id in Task { await model.save(AgentEdit.model(id.isEmpty ? nil : id)) } })
     }
 
-    private func effortBinding(_ agent: Agent) -> Binding<Effort> {
+    /// The effort as the agent has it, clamped to what the runtime offers. The default (nil) is never sent back: the
+    /// patch cannot clear an effort, so only a chosen level is saved.
+    private func effortBinding(_ agent: Agent) -> Binding<Effort?> {
         Binding(
-            get: { agent.runtime.clampedEffort(agent.effort ?? .medium) },
-            set: { level in Task { await model.save(AgentPatch(effort: level)) } })
+            get: { agent.effort.map { agent.runtime.clampedEffort($0) } },
+            set: { level in
+                guard let level else { return }
+                Task { await model.save(AgentPatch(effort: level)) }
+            })
     }
 
     /// The runtimes the server has installed, plus the agent's own when it is not among them (it still shows).
@@ -411,6 +420,13 @@ struct AgentDetailView: View {
         case .always: L10n.ApprovalMode.Hint.always
         case .never: L10n.ApprovalMode.Hint.never
         }
+    }
+
+    /// The schedule in words: the daemon's own reading, else the Mac's reading of the cron, else the cron itself.
+    private func scheduleWords(_ schedule: Schedule) -> String {
+        schedule.humanText(languageCode: AgentForms.languageCode)
+            ?? BotScheduleWords.words(cron: schedule.cron, languageCode: AgentForms.languageCode)
+            ?? schedule.cron
     }
 
     private func firstLine(_ text: String) -> String {

@@ -11,9 +11,9 @@ import Testing
 @Suite struct AgentDemoTests {
     @Test func theDemoServerOffersReadyTeams() async throws {
         let server = await IOSDemo.start()
-        #expect(AgentRules.teamsSupported(server.supports))
+        #expect(ReadyTeamsLogic.supported(server.supports))
         let bundles = try await server.agentBundles()
-        for id in AgentRules.readyTeamIDs {
+        for id in ReadyTeamsLogic.ids {
             #expect(bundles.contains { $0.id == id }, "missing ready team \(id)")
         }
         await server.disconnect()
@@ -23,7 +23,7 @@ import Testing
         let server = await IOSDemo.start()
         let before = server.agents.count
         let made = try await server.createAgent(
-            AgentRules.newAgent(
+            AgentForms.newAgent(
                 name: "Ledger", role: "Bookkeeper", runtime: .claude, model: "haiku",
                 folder: "/Users/demo/Projects/ledger", approval: .risky, effort: nil, permissions: [.terminal]))
         #expect(server.agents.count == before + 1)
@@ -54,11 +54,17 @@ import Testing
 
     @Test func aReadyTeamMakesItsAgentsInOneRequest() async throws {
         let server = await IOSDemo.start()
+        let bundles = try await server.agentBundles()
+        let bundle = try #require(bundles.first { $0.id == "web-project" })
+        let templates = try await server.botTemplates().filter { bundle.templates.contains($0.id) }
+        let items = ReadyTeamsLogic.scheduleItems(members: templates, languageCode: "en")
+        #expect(items.map(\.key).sorted() == ["code-reviewer:0", "qa-tester:0"])
+        // The preview reads the schedules in words, not as cron.
+        #expect(items.allSatisfy { !$0.isCron })
         let request = try #require(
-            AgentRules.teamRequest(
-                bundleID: "web-project", runtime: .claude, languageCode: "en", model: "haiku",
-                folder: "/Users/demo/Projects/web", scheduleKeys: ["code-reviewer:0", "qa-tester:0"],
-                enabled: ["code-reviewer:0"]))
+            ReadyTeamsLogic.request(
+                bundle: bundle, runtime: .claude, languageCode: "en", model: "haiku",
+                folder: "/Users/demo/Projects/web", items: items, enabled: ["code-reviewer:0"]))
         let made = try await server.createBundle(request)
         #expect(made.agents.count == 3)
         #expect(made.agents.allSatisfy { $0.agent != nil && $0.error == nil })

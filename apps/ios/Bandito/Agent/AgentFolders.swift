@@ -10,8 +10,8 @@ enum AgentFolders {
     /// folder. Nil when none is known (the form then asks for nothing and cannot create).
     static func root(server: ServerModel) async -> String? {
         let home = (try? await server.stat("~"))?.path
-        let projects = server.agents.compactMap { AgentRules.projectFolder(cwd: $0.cwd, homeDir: $0.homeDir) }
-        return AgentRules.defaultRoot(saved: nil, projectFolders: projects, home: home)
+        let projects = server.agents.compactMap { NewAgentFolderRules.projectFolder(cwd: $0.cwd, homeDir: $0.homeDir) }
+        return NewAgentFolderRules.defaultRoot(saved: nil, projectFolders: projects, home: home)
     }
 
     /// Creates the first free folder for `base` under `root` and returns its path. A name that is in the folder already
@@ -25,10 +25,10 @@ enum AgentFolders {
             _ = try await server.mkdir(root)
             names = []
         }
-        for attempt in 1...AgentRules.attemptLimit {
-            let name = AgentRules.candidate(base: base, attempt: attempt)
+        for attempt in 1...NewAgentFolderRules.attemptLimit {
+            let name = NewAgentFolderRules.candidate(base: base, attempt: attempt)
             guard !names.contains(name) else { continue }
-            let path = AgentRules.folderPath(root: root, name: name)
+            let path = NewAgentFolderRules.folderPath(root: root, name: name)
             _ = try await server.mkdir(path)
             return path
         }

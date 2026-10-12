@@ -52,6 +52,19 @@ final class AgentCreateUITests: XCTestCase {
         XCTAssertTrue(app.textFields["agent.detail.name"].waitForExistence(timeout: 10))
     }
 
+    func testTheOneAgentFormShowsItsFields() {
+        continueAfterFailure = false
+        let app = XCUIApplication(bundleIdentifier: "dev.bandito.ios")
+        app.launchArguments = ["-demo", "-tab", "crew", "-new-agent", "one", "-AppleLanguages", "(en)"]
+        app.launch()
+
+        XCTAssertTrue(app.textFields["oneAgent.name"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.textFields["oneAgent.role"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["oneAgent.runtime"].exists)
+        XCTAssertTrue(app.staticTexts["Ask for permission"].exists || app.staticTexts["Only the risky ones"].exists)
+        scroll(to: app.buttons["oneAgent.create"], in: app)
+    }
+
     func testAReadyTeamPreviewListsItsAgents() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "dev.bandito.ios")

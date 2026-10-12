@@ -50,7 +50,7 @@ struct NewAgentSheet: View {
     }
 }
 
-/// The ready teams of the server, in the order of `AgentRules.readyTeamIDs`. A tap opens the team's preview.
+/// The ready teams of the server, in the order of `ReadyTeamsLogic.ids`. A tap opens the team's preview.
 struct ReadyTeamsList: View {
     let server: ServerModel
     let onMade: () -> Void
@@ -59,7 +59,7 @@ struct ReadyTeamsList: View {
 
     var body: some View {
         Group {
-            if !AgentRules.teamsSupported(server.supports) {
+            if !ReadyTeamsLogic.supported(server.supports) {
                 message(L10n.ReadyTeam.unavailable)
             } else if let teams {
                 if teams.isEmpty {
@@ -87,9 +87,9 @@ struct ReadyTeamsList: View {
             ReadyTeamPreview(server: server, bundle: team, onMade: onMade)
         }
         .task {
-            guard AgentRules.teamsSupported(server.supports) else { return }
+            guard ReadyTeamsLogic.supported(server.supports) else { return }
             let all = (try? await server.agentBundles()) ?? []
-            teams = AgentRules.readyTeamIDs.compactMap { id in all.first { $0.id == id } }
+            teams = ReadyTeamsLogic.teams(from: all)
         }
     }
 
@@ -119,10 +119,10 @@ struct TeamRow: View {
                 }
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(bundle.name(languageCode: AgentRules.languageCode))
+                Text(bundle.name(languageCode: AgentForms.languageCode))
                     .font(BanditoFont.display(size: 16, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
-                Text(bundle.description(languageCode: AgentRules.languageCode))
+                Text(bundle.description(languageCode: AgentForms.languageCode))
                     .font(BanditoFont.text(size: 13))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineLimit(2)
@@ -152,39 +152,34 @@ struct ReadyTeamPreview: View {
     @State private var madeCount = 0
 
     private var runtime: RuntimeKind? {
-        AgentRules.defaultRuntime(server.runtimes)
+        AgentForms.defaultRuntime(server.runtimes)
     }
 
     private var model: String? {
         guard let runtime else { return nil }
-        return AgentRules.preferredModel(runtime: runtime, models: server.runtimeModels[runtime.rawValue]?.models ?? [])
+        return ReadyTeamsLogic.model(runtime: runtime, models: server.runtimeModels[runtime.rawValue]?.models ?? [])
     }
 
-    private var schedules: [ReadyTeamSchedule] {
-        members.flatMap { member in
-            member.schedules.enumerated().map { index, schedule in
-                ReadyTeamSchedule(
-                    key: AgentRules.scheduleKey(templateID: member.id, index: index),
-                    agentName: member.name(languageCode: AgentRules.languageCode),
-                    cron: schedule.cron, promptsFirstLine: schedule.promptEn)
-            }
-        }
+    /// The team's schedules in words (`ReadyTeamsLogic`): all of them, each off until the person switches it on.
+    private var schedules: [ReadyTeamsLogic.ScheduleItem] {
+        ReadyTeamsLogic.scheduleItems(members: members, languageCode: AgentForms.languageCode)
     }
 
     /// The folder the team gets: the agents folder, and the team's name (a free name is taken when it is made).
     private var folderPreview: String? {
         guard let root else { return nil }
-        return AgentRules.folderPath(root: root, name: AgentRules.folderName(for: bundle.name(languageCode: AgentRules.languageCode)))
+        return NewAgentFolderRules.folderPath(
+            root: root, name: NewAgentFolderRules.folderName(for: bundle.name(languageCode: AgentForms.languageCode)))
     }
 
     private var canCreate: Bool {
-        !busy && runtime != nil && folderPreview != nil && !members.isEmpty
+        folderPreview != nil && ReadyTeamsLogic.canCreate(runtime: runtime, folder: folderPreview ?? "", members: members, busy: busy)
     }
 
     var body: some View {
         List {
             Section {
-                Text(bundle.description(languageCode: AgentRules.languageCode))
+                Text(bundle.description(languageCode: AgentForms.languageCode))
                     .font(BanditoFont.text(size: 14))
                     .foregroundStyle(Color.Bandito.text2)
                     .listRowBackground(Color.Bandito.surface1)
@@ -193,7 +188,7 @@ struct ReadyTeamPreview: View {
             Section {
                 ForEach(members) { member in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(member.name(languageCode: AgentRules.languageCode))
+                        Text(member.name(languageCode: AgentForms.languageCode))
                             .font(BanditoFont.display(size: 15, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
                         Text(permissionsLine(member))
@@ -213,8 +208,8 @@ struct ReadyTeamPreview: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.agentName)
                                     .foregroundStyle(Color.Bandito.text)
-                                Text(item.cron)
-                                    .font(BanditoFont.mono(size: 12))
+                                Text(item.when)
+                                    .font(item.isCron ? BanditoFont.mono(size: 12) : BanditoFont.text(size: 12))
                                     .foregroundStyle(Color.Bandito.text3)
                             }
                         }
@@ -276,7 +271,7 @@ struct ReadyTeamPreview: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color.Bandito.bg.ignoresSafeArea())
-        .navigationTitle(bundle.name(languageCode: AgentRules.languageCode))
+        .navigationTitle(bundle.name(languageCode: AgentForms.languageCode))
         .navigationBarTitleDisplayMode(.inline)
         .sensoryFeedback(.success, trigger: madeCount)
         .task {
@@ -300,7 +295,7 @@ struct ReadyTeamPreview: View {
     }
 
     private func permissionsLine(_ member: BotTemplate) -> String {
-        let titles = AgentPermission.allCases.filter { member.capabilities.contains($0.rawValue) }.map(\.title)
+        let titles = ReadyTeamsLogic.permissions(of: member).map(\.title)
         return titles.isEmpty ? L10n.ReadyTeam.noPermissions : L10n.ReadyTeam.permissions(list: titles.joined(separator: ", "))
     }
 
@@ -320,11 +315,11 @@ struct ReadyTeamPreview: View {
         failure = nil
         do {
             let folder = try await AgentFolders.makeFree(
-                root: root, base: AgentRules.folderName(for: bundle.name(languageCode: AgentRules.languageCode)),
+                root: root, base: NewAgentFolderRules.folderName(for: bundle.name(languageCode: AgentForms.languageCode)),
                 server: server)
-            guard let request = AgentRules.teamRequest(
-                bundleID: bundle.id, runtime: runtime, languageCode: AgentRules.languageCode, model: model,
-                folder: folder, scheduleKeys: schedules.map(\.key), enabled: enabled)
+            guard let request = ReadyTeamsLogic.request(
+                bundle: bundle, runtime: runtime, languageCode: AgentForms.languageCode, model: model,
+                folder: folder, items: schedules, enabled: enabled)
             else { return }
             let made = try await server.createBundle(request)
             let done = made.agents.filter { $0.agent != nil && $0.error == nil }.count
@@ -335,7 +330,7 @@ struct ReadyTeamPreview: View {
                 failure = L10n.Market.Bundle.resultTitle(created: String(done), total: String(made.agents.count))
             }
         } catch {
-            failure = AgentRules.errorText(error)
+            failure = AgentForms.errorText(error)
         }
     }
 }

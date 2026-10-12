@@ -47,7 +47,7 @@ final class AgentDetailModel {
         do {
             schedules = try await server.schedules(agentId: agentID)
         } catch {
-            failure = AgentRules.errorText(error)
+            failure = AgentForms.errorText(error)
         }
     }
 
@@ -60,7 +60,7 @@ final class AgentDetailModel {
             savedCount += 1
             return true
         } catch {
-            failure = AgentRules.errorText(error)
+            failure = AgentForms.errorText(error)
             return false
         }
     }
@@ -74,7 +74,7 @@ final class AgentDetailModel {
             savedCount += 1
             return true
         } catch {
-            failure = AgentRules.errorText(error)
+            failure = AgentForms.errorText(error)
             return false
         }
     }
@@ -86,7 +86,7 @@ final class AgentDetailModel {
             replaceSchedule(updated)
             failure = nil
         } catch {
-            failure = AgentRules.errorText(error)
+            failure = AgentForms.errorText(error)
             await loadSchedules()
         }
     }
@@ -98,7 +98,7 @@ final class AgentDetailModel {
             failure = nil
             ranCount += 1
         } catch {
-            failure = AgentRules.errorText(error)
+            failure = AgentForms.errorText(error)
         }
     }
 
@@ -109,7 +109,7 @@ final class AgentDetailModel {
             failure = nil
             return true
         } catch {
-            failure = AgentRules.errorText(error)
+            failure = AgentForms.errorText(error)
             return false
         }
     }

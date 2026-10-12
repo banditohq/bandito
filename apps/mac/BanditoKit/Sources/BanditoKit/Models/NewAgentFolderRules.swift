@@ -2,19 +2,19 @@ import Foundation
 
 /// The agent's own folder in the new agent sheet ("New folder"): its name, the agents folder it goes into, and the
 /// free name it gets. Pure, so the rules are tested in BanditoUITests; the sheet asks the server and makes the folder.
-enum NewAgentFolderRules {
+public enum NewAgentFolderRules {
     /// The longest folder name, in characters.
-    static let nameLimit = 64
+    public static let nameLimit = 64
     /// How many names are tried (`Forge`, `Forge 2`, …) before the sheet gives up.
-    static let attemptLimit = 200
+    public static let attemptLimit = 200
     /// The agents folder when nothing else says where it is: `Bandito` in the home folder of the server's user.
-    static let defaultRootName = "Bandito"
+    public static let defaultRootName = "Bandito"
 
     private static let forbidden: Set<Character> = ["/", "\\", ":", "*", "?", "\"", "<", ">", "|"]
 
     /// The folder name for an agent's name: characters a folder cannot have, and control characters, become `-`.
     /// Spaces at the ends are trimmed and the name is cut to `nameLimit`. Empty, "." and ".." give "agent".
-    static func folderName(for agentName: String) -> String {
+    public static func folderName(for agentName: String) -> String {
         var mapped = ""
         for scalar in agentName.unicodeScalars {
             if forbidden.contains(Character(scalar)) || CharacterSet.controlCharacters.contains(scalar) {
@@ -30,7 +30,7 @@ enum NewAgentFolderRules {
 
     /// The name tried for the given attempt: the name itself first, then ` 2`, ` 3`… The base is cut so the whole
     /// name stays within `nameLimit`.
-    static func candidate(base: String, attempt: Int) -> String {
+    public static func candidate(base: String, attempt: Int) -> String {
         guard attempt > 1 else { return base }
         let suffix = " \(attempt)"
         let head = base.prefix(nameLimit - suffix.count).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -38,14 +38,14 @@ enum NewAgentFolderRules {
     }
 
     /// The path of a folder `name` inside `root`. A trailing slash on the root does not double.
-    static func folderPath(root: String, name: String) -> String {
+    public static func folderPath(root: String, name: String) -> String {
         let base = trimmedSlash(root)
         return (base == "/" ? "" : base) + "/" + name
     }
 
     /// The folder above `path` (`/home/me/billing` gives `/home/me`, `/billing` gives `/`). Nil for the root or a
     /// relative path.
-    static func parent(of path: String) -> String? {
+    public static func parent(of path: String) -> String? {
         let trimmed = trimmedSlash(path)
         guard trimmed != "/", let slash = trimmed.lastIndex(of: "/") else { return nil }
         let head = String(trimmed[..<slash])
@@ -53,7 +53,7 @@ enum NewAgentFolderRules {
     }
 
     /// The project folder of an agent: its `cwd`, unless the agent has none or works in its own folder (`homeDir`).
-    static func projectFolder(cwd: String, homeDir: String?) -> String? {
+    public static func projectFolder(cwd: String, homeDir: String?) -> String? {
         let folder = trimmedSlash(cwd.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !folder.isEmpty else { return nil }
         if let homeDir, trimmedSlash(homeDir) == folder { return nil }
@@ -63,7 +63,7 @@ enum NewAgentFolderRules {
     /// The agents folder a new agent goes into, when the person has not chosen one on this server:
     /// the saved one; else the parent that holds the most project folders (at least two agents in it; a tie goes to
     /// the parent listed first); else `Bandito` in the home folder. Nil when none of these is known.
-    static func defaultRoot(saved: String?, projectFolders: [String], home: String?) -> String? {
+    public static func defaultRoot(saved: String?, projectFolders: [String], home: String?) -> String? {
         if let saved = saved?.trimmingCharacters(in: .whitespacesAndNewlines), !saved.isEmpty {
             return trimmedSlash(saved)
         }
@@ -98,21 +98,21 @@ enum NewAgentFolderRules {
 
 /// What the sheet finds at the folder an agent would get: nothing (it is made), an empty folder (used as it is), or
 /// something that is taken (a file, or a folder with things in it), so the next name is tried.
-enum AgentFolderSlot: Equatable {
+public enum AgentFolderSlot: Equatable {
     case missing, empty, taken
 }
 
 /// The agents folder a person chose on one server. Kept in UserDefaults per server, under `agents.root.<serverID>`.
-enum AgentsRootStore {
-    static func load(serverID: String, defaults: UserDefaults = .standard) -> String? {
+public enum AgentsRootStore {
+    public static func load(serverID: String, defaults: UserDefaults = .standard) -> String? {
         defaults.string(forKey: key(serverID: serverID))
     }
 
-    static func save(_ root: String, serverID: String, defaults: UserDefaults = .standard) {
+    public static func save(_ root: String, serverID: String, defaults: UserDefaults = .standard) {
         defaults.set(root, forKey: key(serverID: serverID))
     }
 
-    static func key(serverID: String) -> String {
+    public static func key(serverID: String) -> String {
         "agents.root.\(serverID)"
     }
 }

@@ -47,8 +47,7 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
   handler exists yet.
 - The chat and the server's pairing are stubs (Crew shows the chat as "coming soon").
 - The agent card (`Agent/AgentDetailView.swift`) and the creation sheet (`Agent/NewAgentSheet.swift`, `OneAgentForm.swift`)
-  are built. `Agent/AgentRules.swift` and `AgentPermission` port the Mac's rules from `BanditoUI` (`NewAgentModelRules`,
-  `NewAgentFolderRules`, `ReadyTeamsLogic`, `AgentCapability`), which is macOS only. Move the rules to `BanditoKit` in their
-  own change, then delete the copies here.
+  are built. The rules they use (`NewAgentModelRules`, `NewAgentFolderRules`, `ReadyTeamsLogic`, `AgentCapability`,
+  `BotScheduleWords`) live in BanditoKit; `Agent/AgentForms.swift` holds only the form glue.
 - The button styles (`.signal`, `.quiet`) exist only in `BanditoUI`; `SignalButtonStyle` in `Crew/TeamViews.swift` is a
   copy for this target until they move to `BanditoDesign`.
