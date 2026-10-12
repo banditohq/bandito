@@ -37,9 +37,12 @@ enum Cmd {
     Status,
     /// Create a one-time pairing code for the app.
     Pair {
-        /// Print {"code","expires_in_ms"} as one JSON line.
+        /// Print {"code","expires_in_ms"} as one JSON line (with --phone: also "link", "hosts", "fingerprint").
         #[arg(long)]
         json: bool,
+        /// Pair an iPhone: print the pairing link as a QR code. Needs phone access to be on (Settings → Servers).
+        #[arg(long)]
+        phone: bool,
     },
     /// Show version, paths and whether the daemon answers.
     Info {
@@ -202,7 +205,7 @@ async fn run_command(cmd: Cmd, home: PathBuf, home_given: bool) -> Result<()> {
     match cmd {
         Cmd::Daemon { listen } => daemon(&home, &sock, listen, home_given).await,
         Cmd::Status => status(&sock).await,
-        Cmd::Pair { json } => pair(&sock, json).await,
+        Cmd::Pair { json, phone } => pair(&sock, json, phone).await,
         Cmd::Info { json } => info(&home, &sock, json).await,
         Cmd::Service { cmd } => service_cmd(cmd, &home).await,
         Cmd::Backup { cmd } => backup_cmd(cmd, &home),
@@ -282,20 +285,61 @@ async fn update_cmd(
     Ok(())
 }
 
-async fn pair(sock: &Path, json: bool) -> Result<()> {
+async fn pair(sock: &Path, json: bool, phone: bool) -> Result<()> {
     let r = rpc::unix::call(sock, "pair.create", json!({})).await?;
     let code = r["code"].as_str().context("daemon returned no pairing code")?;
     let expires_in_ms = r["expires_in_ms"].as_i64().context("daemon returned no expiry")?;
+    let link = r["link"].as_str();
+    if phone && link.is_none() {
+        // The code made above is not shown, so it cannot be used: it expires by itself.
+        bail!(
+            "phone access is off or not listening. Turn it on in the Bandito app: Settings → Servers → this server → iPhone"
+        );
+    }
     if json {
-        println!("{}", pair_json(code, expires_in_ms));
+        if phone {
+            println!("{}", pair_phone_json(code, expires_in_ms, &r));
+        } else {
+            println!("{}", pair_json(code, expires_in_ms));
+        }
         return Ok(());
     }
     println!(
         "Pairing code (valid {} min, one use):\n\n    {code}\n",
         expires_in_ms / 60_000
     );
-    println!("Enter it in the Bandito app: Settings → Servers → Add server.");
+    if let Some(link) = link.filter(|_| phone) {
+        println!("{}", qr_text(link)?);
+        println!("{link}\n");
+        println!("On the iPhone: open Bandito → Connect a server → Scan.");
+    } else {
+        println!("Enter it in the Bandito app: Settings → Servers → Add server.");
+    }
     Ok(())
+}
+
+/// The QR code of `text` as text blocks, light modules drawn solid (right for a dark terminal).
+fn qr_text(text: &str) -> Result<String> {
+    use qrcode::render::unicode::Dense1x2;
+    let code = qrcode::QrCode::with_error_correction_level(text, qrcode::EcLevel::L).context("make the QR code")?;
+    Ok(code
+        .render::<Dense1x2>()
+        .dark_color(Dense1x2::Light)
+        .light_color(Dense1x2::Dark)
+        .quiet_zone(true)
+        .build())
+}
+
+/// One line for `bandito pair --phone --json`.
+fn pair_phone_json(code: &str, expires_in_ms: i64, reply: &Value) -> String {
+    json!({
+        "code": code,
+        "expires_in_ms": expires_in_ms,
+        "link": reply["link"],
+        "hosts": reply["hosts"],
+        "fingerprint": reply["fingerprint"],
+    })
+    .to_string()
 }
 
 /// File in the data directory with the address the daemon listens on (`bandito info`).
@@ -693,6 +737,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     });
 
     if safe_mode.is_none() {
+        // The listener for phones, when the owner has switched it on (docs/ARCHITECTURE.md#phone-access).
+        app.phone.spawn_watcher();
         bandito::scheduler::spawn_loop(sup.clone());
         rpc::integrations::spawn_oauth_refresher(app.clone());
         // Polls the Telegram bot when a token is set (never in safe mode: the database is not the real one).
@@ -781,6 +827,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     tracing::info!(version = rpc::VERSION, socket = %sock.display(), %listen, "bandito daemon is running");
     shutdown_signal().await;
     tracing::info!("shutting down");
+    app.phone.shutdown().await;
     app.terminals.shutdown_all();
     app.screens.shutdown_all().await;
     sup.stop_all().await;
@@ -847,11 +894,38 @@ mod tests {
 
     #[test]
     fn pair_takes_an_optional_json_flag() {
-        assert!(matches!(parse(&["bandito", "pair"]), Cmd::Pair { json: false }));
+        assert!(matches!(
+            parse(&["bandito", "pair"]),
+            Cmd::Pair {
+                json: false,
+                phone: false
+            }
+        ));
         assert!(matches!(
             parse(&["bandito", "pair", "--json"]),
-            Cmd::Pair { json: true }
+            Cmd::Pair {
+                json: true,
+                phone: false
+            }
         ));
+        assert!(matches!(
+            parse(&["bandito", "pair", "--phone"]),
+            Cmd::Pair {
+                json: false,
+                phone: true
+            }
+        ));
+    }
+
+    #[test]
+    fn the_phone_qr_is_text_and_the_json_has_the_link() {
+        let link = "bandito://pair?v=1&code=otter-lava-mint-orbit-crane-fig&fp=ab&name=Mac&host=100.64.0.1:7879";
+        let qr = qr_text(link).unwrap();
+        assert!(qr.lines().count() > 10 && qr.chars().any(|c| c == '█' || c == '▀' || c == '▄'));
+        let reply = json!({"link": link, "hosts": ["100.64.0.1:7879"], "fingerprint": "ab"});
+        let v: Value = serde_json::from_str(&pair_phone_json("c", 1, &reply)).unwrap();
+        assert_eq!(v["link"], link);
+        assert_eq!(v["hosts"][0], "100.64.0.1:7879");
     }
 
     #[test]

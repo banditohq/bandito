@@ -3030,6 +3030,58 @@ public enum L10n {
             public static var title: String { L10n.tr("serverSettings.maxRunning.title") }
         }
 
+        public enum Phone {
+            public static func error(reason: String) -> String { L10n.tr("serverSettings.phone.error", reason) }
+            public static func listening(addresses: String) -> String { L10n.tr("serverSettings.phone.listening", addresses) }
+            public static var notListening: String { L10n.tr("serverSettings.phone.notListening") }
+            public static var title: String { L10n.tr("serverSettings.phone.title") }
+            public static var unsupported: String { L10n.tr("serverSettings.phone.unsupported") }
+
+            public enum Access {
+                public static var hint: String { L10n.tr("serverSettings.phone.access.hint") }
+                public static var title: String { L10n.tr("serverSettings.phone.access.title") }
+            }
+
+            public enum Connect {
+                public static var hint: String { L10n.tr("serverSettings.phone.connect.hint") }
+                public static var needsAccess: String { L10n.tr("serverSettings.phone.connect.needsAccess") }
+                public static var title: String { L10n.tr("serverSettings.phone.connect.title") }
+            }
+
+            public enum Devices {
+                public static var disconnect: String { L10n.tr("serverSettings.phone.devices.disconnect") }
+                public static var disconnectMessage: String { L10n.tr("serverSettings.phone.devices.disconnectMessage") }
+                public static func disconnectTitle(name: String) -> String { L10n.tr("serverSettings.phone.devices.disconnectTitle", name) }
+                public static var empty: String { L10n.tr("serverSettings.phone.devices.empty") }
+                public static var loadFailed: String { L10n.tr("serverSettings.phone.devices.loadFailed") }
+                public static var title: String { L10n.tr("serverSettings.phone.devices.title") }
+            }
+
+            public enum Mode {
+                public static var lan: String { L10n.tr("serverSettings.phone.mode.lan") }
+                public static var off: String { L10n.tr("serverSettings.phone.mode.off") }
+                public static var tailscale: String { L10n.tr("serverSettings.phone.mode.tailscale") }
+            }
+
+            public enum Pair {
+                public static var codeLabel: String { L10n.tr("serverSettings.phone.pair.codeLabel") }
+                public static func expires(minutes: String) -> String { L10n.tr("serverSettings.phone.pair.expires", minutes) }
+                public static func hosts(hosts: String) -> String { L10n.tr("serverSettings.phone.pair.hosts", hosts) }
+                public static var invalid: String { L10n.tr("serverSettings.phone.pair.invalid") }
+                public static var new: String { L10n.tr("serverSettings.phone.pair.new") }
+                public static var notListening: String { L10n.tr("serverSettings.phone.pair.notListening") }
+                public static var steps: String { L10n.tr("serverSettings.phone.pair.steps") }
+                public static var title: String { L10n.tr("serverSettings.phone.pair.title") }
+                public static var updateApp: String { L10n.tr("serverSettings.phone.pair.updateApp") }
+            }
+
+            public enum Risk {
+                public static var lan: String { L10n.tr("serverSettings.phone.risk.lan") }
+                public static var off: String { L10n.tr("serverSettings.phone.risk.off") }
+                public static var tailscale: String { L10n.tr("serverSettings.phone.risk.tailscale") }
+            }
+        }
+
         public enum ScreenIdle {
             public static var hint: String { L10n.tr("serverSettings.screenIdle.hint") }
             public static var title: String { L10n.tr("serverSettings.screenIdle.title") }

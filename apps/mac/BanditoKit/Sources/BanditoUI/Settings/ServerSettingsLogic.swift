@@ -21,6 +21,7 @@ enum ServerSettingChange: Equatable {
     case backupEveryHours(Int)
     case backupKeep(Int)
     case defaultApprovalMode(ApprovalMode)
+    case phoneAccess(PhoneAccessMode)
 
     /// The patch with this one field, or nil when the value is outside the daemon's range (nothing is sent then).
     var patch: ServerSettingsPatch? {
@@ -37,6 +38,8 @@ enum ServerSettingChange: Equatable {
             ServerSettingLimits.backupKeep.contains(count) ? ServerSettingsPatch(backupKeep: count) : nil
         case .defaultApprovalMode(let mode):
             ServerSettingsPatch(defaultApprovalMode: mode)
+        case .phoneAccess(let mode):
+            ServerSettingsPatch(phoneAccess: mode)
         }
     }
 
@@ -50,6 +53,7 @@ enum ServerSettingChange: Equatable {
         case .backupEveryHours(let hours): next.backupEveryHours = hours
         case .backupKeep(let count): next.backupKeep = count
         case .defaultApprovalMode(let mode): next.defaultApprovalMode = mode
+        case .phoneAccess(let mode): next.phoneAccess = mode
         }
         return next
     }
@@ -63,6 +67,7 @@ enum ServerSettingChange: Equatable {
         case .backupEveryHours(let hours): hours != current.backupEveryHours
         case .backupKeep(let count): count != current.backupKeep
         case .defaultApprovalMode(let mode): mode != current.defaultApprovalMode
+        case .phoneAccess(let mode): mode != current.phoneAccess
         }
     }
 }
