@@ -83,6 +83,11 @@ impl Telegram {
                 st.last_answer.insert(agent, text);
                 st.bound();
             }
+            EventBody::TurnQuiet { turn_id, .. } => {
+                let mut st = self.lock();
+                st.quiet_turns.insert(turn_id);
+                st.bound();
+            }
             EventBody::TurnCompleted { turn_id, status, .. } => self.on_turn_completed(&agent, &turn_id, status).await,
             _ => {}
         }
@@ -158,10 +163,18 @@ impl Telegram {
     async fn on_turn_completed(&self, agent_id: &str, turn_id: &str, status: TurnStatus) {
         // Whatever the status, the turn no longer shows "typing…".
         self.stop_typing(turn_id);
-        let (origin, text) = {
+        let (origin, text, quiet) = {
             let mut st = self.lock();
-            (st.turn_chats.remove(turn_id), st.last_answer.remove(agent_id))
+            (
+                st.turn_chats.remove(turn_id),
+                st.last_answer.remove(agent_id),
+                st.quiet_turns.remove(turn_id),
+            )
         };
+        // A quiet turn (`nothing_to_report`) has nothing to say to the chats.
+        if quiet {
+            return;
+        }
         let Some(text) = text.filter(|t| !t.trim().is_empty()) else {
             return;
         };

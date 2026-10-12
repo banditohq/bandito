@@ -2689,6 +2689,8 @@
 "thread.notDelivered" = "Non remis";
 "thread.placeholder" = "Écrivez une tâche ou une question…";
 "thread.queued" = "En attente";
+"thread.quietTurn.showSteps" = "Affiche ce que l'agent a fait pendant cette exécution";
+"thread.quietTurn.title" = "Rien de nouveau";
 "thread.react" = "Réagir";
 "thread.reply" = "Répondre";
 "thread.reviewApproved" = "%1$@ a relu les modifications · approuvé";
@@ -2696,6 +2698,12 @@
 "thread.runtimeLimitUntil" = "La limite de %1$@ est épuisée — je continue sur %2$@ jusqu’à %3$@";
 "thread.runtimeReturned" = "De retour sur %1$@";
 "thread.savingMemory" = "Enregistre la mémoire avant un nouveau chapitre";
+"thread.scheduleRun.date" = "%1$@, %2$@";
+"thread.scheduleRun.folded" = "Replié";
+"thread.scheduleRun.open" = "Ouvert";
+"thread.scheduleRun.showPrompt" = "Affiche la consigne avec laquelle l'exécution a commencé";
+"thread.scheduleRun.today" = "aujourd'hui, %1$@";
+"thread.scheduleRun.yesterday" = "hier, %1$@";
 "thread.scheduledRun" = "Exécution planifiée";
 "thread.send" = "Envoyer";
 "thread.stop" = "Arrêter";

@@ -146,7 +146,7 @@ public final class AppModel {
                 self.notifications?.approvalSettled(approvalID)
             }
             // The sound follows the event whether or not a notification is shown (see `SoundRules`).
-            if let sound = Self.soundEvent(for: event.body) {
+            if let sound = Self.soundEvent(for: event.body, quiet: server.thread(for: event.agentId).quietTurn) {
                 SoundPlayer.play(sound)
             }
             guard let notice = Self.notice(for: event, in: server) else { return }
@@ -269,10 +269,11 @@ public final class AppModel {
     }
 
     /// The sound an agent event makes: an approval or question waiting, a finished turn, or an error.
-    static func soundEvent(for body: EventBody) -> SoundEvent? {
+    /// A quiet turn (`turn.quiet`) makes no sound when it ends.
+    static func soundEvent(for body: EventBody, quiet: Bool = false) -> SoundEvent? {
         switch body {
         case .approvalRequested: .needsYou
-        case .turnCompleted(_, .ok, _, _): .done
+        case .turnCompleted(_, .ok, _, _): quiet ? nil : .done
         case .error: .error
         default: nil
         }
@@ -287,6 +288,8 @@ public final class AppModel {
                 agentID: event.agentId, agentName: name, approvalID: approvalID, title: title, command: command,
                 reviewOnly: tool == AgentCreateSummary.tool)
         case .turnCompleted(_, .ok, _, _):
+            // A quiet turn finishes without a notice.
+            if server.thread(for: event.agentId).quietTurn { return nil }
             return .finished(agentID: event.agentId, agentName: name)
         case .error(let message):
             return .failed(agentID: event.agentId, agentName: name, message: message)

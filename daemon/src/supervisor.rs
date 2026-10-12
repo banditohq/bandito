@@ -75,6 +75,8 @@ pub struct Inbound {
     pub mentions: Vec<Mention>,
     /// The person pressed a quick-reply button the agent offered (checked by `agents.send` against the buttons shown).
     pub via_button: bool,
+    /// The schedule this run came from (a scheduled run only); the thread shows it as a run, not a message.
+    pub schedule: Option<crate::event::ScheduleRun>,
 }
 
 impl Inbound {
@@ -91,6 +93,7 @@ impl Inbound {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
         }
     }
 
@@ -107,6 +110,7 @@ impl Inbound {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
         }
     }
 }
@@ -275,7 +279,7 @@ const CHAT_GUIDE: &str = "Когда вам нужно несколько отв
 
 /// Put in the system prompt of every agent: do what was asked, say what is missing, offer buttons
 /// (see docs/ARCHITECTURE.md#quick-replies).
-const PRINCIPLES: &str = "Do exactly what the person asked. If there is no tool for the request, say at once what is missing and offer the options as buttons (reply_buttons); never swap the request for a similar action. When you wait for the person to confirm an outside step (connect, sign in, check) or you offer choices, use reply_buttons.";
+const PRINCIPLES: &str = "Do exactly what the person asked. If there is no tool for the request, say at once what is missing and offer the options as buttons (reply_buttons); never swap the request for a similar action. When you wait for the person to confirm an outside step (connect, sign in, check) or you offer choices, use reply_buttons. On a scheduled run with nothing worth telling the person, call nothing_to_report and write no message.";
 
 /// Added to the main agent's prompt: it creates agents (see docs/ARCHITECTURE.md#agents-creating-agents).
 const LEAD_CREATES: &str = "You can create agents, and \"create an agent that does X\" always means a new agent, not a schedule of your own. To create one: crew_create_agent (name, instructions, and services or capabilities it needs), then schedule_create with agent_id for its regular runs, then team_assign to hand it the first task. Never say you cannot create agents.";
@@ -678,6 +682,7 @@ impl Supervisor {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
@@ -1277,6 +1282,7 @@ impl Actor {
                 mentions: msg.mentions.clone(),
                 queued,
                 via_button: msg.via_button,
+                schedule: msg.schedule.clone(),
             },
         );
         ev.seq
@@ -1669,6 +1675,7 @@ impl Actor {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
         };
         match self.start_turn(msg, None).await {
             Ok(()) => true,
@@ -1838,7 +1845,15 @@ impl Actor {
         };
         self.turn_checkpoints = dirs.is_some();
         if let Some((home, cwd)) = dirs {
-            snapshot_before(&self.hub.store, &self.id, &home, &cwd, &msg.text, &turn_id).await;
+            snapshot_before(
+                &self.hub.store,
+                &self.id,
+                &home,
+                &cwd,
+                msg.typed.as_deref().unwrap_or(&msg.text),
+                &turn_id,
+            )
+            .await;
         }
         let sent = match &mut self.session {
             Some(s) => s.send(&prompt).await,
@@ -4040,6 +4055,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_scheduled_run_shows_its_prompt_and_the_runtime_gets_the_note() {
+        let w = world(ApprovalMode::Risky);
+        let note = crate::scheduler::SCHEDULE_NOTE;
+        let run = Inbound {
+            typed: Some("check the mail".into()),
+            schedule: Some(crate::event::ScheduleRun {
+                id: "s1".into(),
+                name: "Mail".into(),
+                fired_at: 7,
+            }),
+            ..Inbound::schedule(format!("check the mail\n\n{note}"))
+        };
+        w.sup.send(&w.agent, run).await.unwrap();
+        w.wait_log(&format!("send check the mail\n\n{note}")).await;
+        // The thread shows the prompt alone, with the schedule it came from.
+        let shown: Vec<(String, Option<crate::event::ScheduleRun>)> = w
+            .store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::MessageUser {
+                    text,
+                    schedule,
+                    source: Source::Schedule,
+                    ..
+                } => Some((text, schedule)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(shown.len(), 1, "{shown:?}");
+        assert_eq!(shown[0].0, "check the mail");
+        assert_eq!(shown[0].1.as_ref().map(|r| r.name.as_str()), Some("Mail"));
+    }
+
+    #[tokio::test]
     async fn recover_marks_unresolved_waiting_messages_dropped_once() {
         let w = world(ApprovalMode::Risky);
         let queued = |text: &str| EventBody::MessageUser {
@@ -4051,6 +4102,7 @@ mod tests {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
             queued: true,
         };
         let lost = w.store.append_event(&w.agent, queued("lost")).unwrap().seq;
@@ -4190,6 +4242,7 @@ mod tests {
                 attachments: Vec::new(),
                 mentions: Vec::new(),
                 via_button: false,
+                schedule: None,
                 queued: false,
             }
         );
@@ -4273,6 +4326,7 @@ mod tests {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -4396,6 +4450,7 @@ mod tests {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -5543,6 +5598,7 @@ mod tests {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
         };
         w.sup.send(&w.agent, wrap_up).await.unwrap();
         w.wait_log("send wrap up").await;

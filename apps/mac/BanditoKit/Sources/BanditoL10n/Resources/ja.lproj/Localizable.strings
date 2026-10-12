@@ -2689,6 +2689,8 @@
 "thread.notDelivered" = "未配信";
 "thread.placeholder" = "タスクや質問を入力…";
 "thread.queued" = "順番待ち";
+"thread.quietTurn.showSteps" = "この実行でエージェントが行ったことを表示します";
+"thread.quietTurn.title" = "新しいことはありません";
 "thread.react" = "リアクション";
 "thread.reply" = "返信";
 "thread.reviewApproved" = "%1$@ が変更を確認 · 承認";
@@ -2696,6 +2698,12 @@
 "thread.runtimeLimitUntil" = "%1$@ の上限に達したため、%3$@ まで %2$@ で続けます";
 "thread.runtimeReturned" = "%1$@ に戻りました";
 "thread.savingMemory" = "新しい章の前にメモリを保存中";
+"thread.scheduleRun.date" = "%1$@ %2$@";
+"thread.scheduleRun.folded" = "折りたたみ中";
+"thread.scheduleRun.open" = "展開中";
+"thread.scheduleRun.showPrompt" = "この実行の指示を表示します";
+"thread.scheduleRun.today" = "今日 %1$@";
+"thread.scheduleRun.yesterday" = "昨日 %1$@";
 "thread.scheduledRun" = "スケジュール実行";
 "thread.send" = "送信";
 "thread.stop" = "停止";

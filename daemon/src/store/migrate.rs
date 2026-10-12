@@ -171,6 +171,7 @@ mod tests {
             attachments: vec![],
             mentions: vec![],
             via_button: false,
+            schedule: None,
             queued: false,
         }
     }

@@ -58,7 +58,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 |---|---|
 | `turn.started` | `{turn_id, source: "user"\|"schedule"\|"crew"}`, plus `message_seq?` (the seq of the `message.user` this turn answers, when that message was shown before the turn began; see Queued messages under Chapters) |
 | `message.dropped` | `{seq, reason}`: the waiting `message.user` with this seq will get no turn (`crash`, `failed`, `stopped`, `restart`); see Queued messages under Chapters |
-| `message.user` | `{text, source, from_agent?, command?, reply_to?, attachments?, mentions?, queued?, via_button?}` (`via_button` is true when the person pressed a quick-reply button of the agent: see [Quick replies](#quick-replies); `text` is what the person typed; `command` names a slash command, see [Commands](#commands); `reply_to` is the seq of the message it answers and `attachments` the files it carries, see [Replies and attachments](#replies-and-attachments); `mentions` are the `@` mentions in the text, see [Mentions](#mentions)) |
+| `message.user` | `{text, source, from_agent?, command?, reply_to?, attachments?, mentions?, queued?, via_button?, schedule?}` (`schedule` is `{id, name, fired_at}` on a scheduled run, `name` empty when the schedule has no title; see [Scheduler](#scheduler)) (`via_button` is true when the person pressed a quick-reply button of the agent: see [Quick replies](#quick-replies); `text` is what the person typed; `command` names a slash command, see [Commands](#commands); `reply_to` is the seq of the message it answers and `attachments` the files it carries, see [Replies and attachments](#replies-and-attachments); `mentions` are the `@` mentions in the text, see [Mentions](#mentions)) |
 | `message.assistant` | `{text}` (final text of a message) |
 | `message.delta` | `{text}` streaming chunk, **not persisted**, broadcast only |
 | `tool.call` | `{call_id, tool, title, input}` |
@@ -66,6 +66,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | `approval.requested` | `{approval_id, call_id, tool, title, command?, diff?, reason, input?}` (`input` is what the answer is about, set only for a question the daemon asks itself, such as `agent.create`; see [Agents creating agents](#agents-creating-agents)) |
 | `approval.resolved` | `{approval_id, decision: "allow"\|"deny", by: "user"\|"policy", remember}` |
 | `approval.withdrawn` | `{approval_id}`: the CLI took the request back (`control_cancel_request`); nobody decided it, so the approval is closed with status `withdrawn` and no decision |
+| `turn.quiet` | `{turn_id, reason?}`: the agent ended the turn without a message with the crew tool `nothing_to_report` (see [Quiet turns](#quiet-turns)) |
 | `turn.completed` | `{turn_id, status: "ok"\|"error"\|"interrupted", usage?, cost_usd?}` |
 | `agent.status` | `{status: "idle"\|"working"\|"needs_you"\|"error"\|"offline", detail?}` |
 | `usage.limits` | `{runtime, windows:[{name, utilization, resets_at}]}` |
@@ -133,6 +134,15 @@ An agent shows buttons under its last message with the crew tool `reply_buttons{
 `buttons` are 1 to 4 of `{label, reply}`: the label is one line of at most 40 characters and different from the others, the reply too one line, at most 200 characters (a line break or an invisible character is refused: a reply could pass for two messages). `link` is `{label, url}` (a label of at most 40 characters; `url` is an https address with a host, at most 2000 characters, without a user name or spaces). `progress` is `{done, total}` with `0 <= done <= total` and `total` from 1 to 99 ("2 of 6"). A mistake is `invalid_params` and shows nothing. The daemon emits `agent.quick_replies` in the agent's feed (stored); it keeps no state of its own.
 
 Reading it is the client's job: the newest `agent.quick_replies` of a thread is the one shown, and it goes away when the person writes a message of their own (a press sends the button's `reply` as one), when a new turn begins, or when a newer set replaces it. A press goes out as `agents.send{text: reply, via_button: true}`. The daemon believes `via_button` only when `text` is exactly the reply of a button in the newest set the agent showed and the person has written nothing since; then `message.user` carries `via_button: true`, the thread marks it ("answered with a button"), and the agent reads, before the text, that it is the press of a button it offered. Anything else is an ordinary message of the person. A client that does not know the kind ignores it, and a person who talks to the agent through Telegram sees no buttons, so the agent writes its question in the message as well.
+
+## Quiet turns
+
+A scheduled run ("check the mail, and if nothing important, write nothing") can end quietly. The agent calls the crew tool `nothing_to_report{reason?}` (every agent, no capability; `reason` at most 200 characters), which is the agent method `messages.agent.nothing_to_report`. The daemon stores `turn.quiet {turn_id, reason?}` for the turn that runs (once per turn; with no turn running the call is refused). The tool answers "Ок, ход завершится без сообщения. Не пиши текст после этого."; the agent writes no text after it. The feature is `"quiet_schedules"`.
+
+A quiet turn is still a turn: its `turn.started` and `turn.completed` stay, and so do its events. What it changes:
+- Text the agent writes after `turn.quiet` is stored and hidden by clients. Text written before it stays in the thread: it was said before the agent chose to be quiet. The daemon forwards no answer of a quiet turn to Telegram, whatever its place in the turn.
+- It raises no notification (a Mac notification, a Telegram answer) and no unread count, and it leaves a sidebar's preview as it was.
+- The clients show the turn's tool calls folded under one line, "Nothing new", with the reason when there is one.
 
 ## Reactions
 
@@ -409,6 +419,8 @@ Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule
 - `every`: `15m` becomes `*/15 * * * *`, `2h` becomes `0 */2 * * *`, `1d` becomes `0 0 * * *` (midnight). Clock-aligned. Allowed: minutes 5 to 60 that divide 60, hours 1, 2, 3, 4, 6, 8, 12, and 1 day, so the gaps are even.
 - `at` and `days`: `09:00` with `mon`…`fri` becomes `0 9 * * 1-5`; no days means every day.
 - the time zone is the server's (`TZ`, else `/etc/localtime`, else UTC).
+
+**A run's event.** A scheduled run is a `message.user` with `source: "schedule"` and `schedule: {id, name, fired_at}`. Its `text` (and `typed`) is the prompt as the person wrote it, so the thread shows the prompt alone. The runtime also gets a note after the prompt, in English: when there is nothing worth telling the person, call `nothing_to_report` and end the turn without a message (see [Quiet turns](#quiet-turns)). The note is never in an event, so no client shows it.
 
 Limits for an agent: runs must come at least 5 minutes apart (two consecutive firings of the cron are compared, so every form is checked); at most 20 schedules per agent; a prompt of at most 4000 characters; a title of at most 80. Refusals are `INVALID_PARAMS`.
 

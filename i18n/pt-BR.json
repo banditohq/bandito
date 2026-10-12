@@ -3067,5 +3067,13 @@
   "perfCheck.page.settings": "Ajustes",
   "perfCheck.page.modes": "Modos e servidores",
   "perfCheck.page.overlays": "Menus, folhas e avisos",
-  "perfCheck.quit": "Sair"
+  "perfCheck.quit": "Sair",
+  "thread.scheduleRun.today": "hoje, {time}",
+  "thread.scheduleRun.yesterday": "ontem, {time}",
+  "thread.scheduleRun.date": "{date}, {time}",
+  "thread.scheduleRun.showPrompt": "Mostra a instrução com que a execução começou",
+  "thread.scheduleRun.open": "Aberto",
+  "thread.scheduleRun.folded": "Recolhido",
+  "thread.quietTurn.title": "Nada de novo",
+  "thread.quietTurn.showSteps": "Mostra o que o agente fez nesta execução"
 }

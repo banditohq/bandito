@@ -1132,6 +1132,29 @@ async fn telegram_unlink_and_update_chat_from_the_app() {
 // ---- 6. answer modes ----
 
 #[tokio::test]
+async fn a_quiet_turn_is_not_forwarded_to_any_chat() {
+    let mut rig = rig().await;
+    rig.link(12);
+    rig.set_answers(12, "all");
+    let forge = rig.agent.clone();
+
+    // The run ends quietly: its text (if the agent wrote one) goes to no chat.
+    rig.sup.send(&rig.agent, Inbound::user("a quiet run")).await.unwrap();
+    rig.wait_log_prefix("send a quiet run").await;
+    let started = rig.feed_until(|b| matches!(b, EventBody::TurnStarted { .. })).await;
+    let EventBody::TurnStarted { turn_id, .. } = started.body else {
+        unreachable!()
+    };
+    rig.sup
+        .hub()
+        .emit(&forge, EventBody::TurnQuiet { turn_id, reason: None });
+    rig.push(&forge, assistant("Nothing new")).await;
+    rig.push(&forge, done()).await;
+    rig.feed_until(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+    assert!(rig.fake.sent_to(12).is_empty(), "{:?}", rig.fake.sent_to(12));
+}
+
+#[tokio::test]
 async fn answers_follow_the_chat_mode() {
     let mut rig = rig().await;
     for chat in [11, 12, 13] {

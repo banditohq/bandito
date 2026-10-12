@@ -3148,5 +3148,13 @@
   "perfCheck.page.settings": "Настройки",
   "perfCheck.page.modes": "Режимы и серверы",
   "perfCheck.page.overlays": "Меню, листы и плашки",
-  "perfCheck.quit": "Выйти"
+  "perfCheck.quit": "Выйти",
+  "thread.scheduleRun.today": "сегодня, {time}",
+  "thread.scheduleRun.yesterday": "вчера, {time}",
+  "thread.scheduleRun.date": "{date}, {time}",
+  "thread.scheduleRun.showPrompt": "Показывает задание, с которым начался запуск",
+  "thread.scheduleRun.open": "Раскрыто",
+  "thread.scheduleRun.folded": "Свёрнуто",
+  "thread.quietTurn.title": "Ничего нового",
+  "thread.quietTurn.showSteps": "Показывает, что агент сделал в этом запуске"
 }

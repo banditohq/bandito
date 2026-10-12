@@ -263,6 +263,23 @@ impl Store {
             .query_row("SELECT COALESCE(MAX(seq), 0) FROM events", [], |r| r.get(0))?)
     }
 
+    /// The turn that runs for the agent: its newest `turn.started`, unless a `turn.completed` came after it.
+    pub fn open_turn(&self, agent_id: &str) -> Result<Option<(i64, String)>> {
+        let Some(started) = self.last_event_of_kind(agent_id, "turn.started")? else {
+            return Ok(None);
+        };
+        if self
+            .last_event_of_kind(agent_id, "turn.completed")?
+            .is_some_and(|done| done.seq > started.seq)
+        {
+            return Ok(None);
+        }
+        match started.body {
+            crate::event::EventBody::TurnStarted { turn_id, .. } => Ok(Some((started.seq, turn_id))),
+            _ => Ok(None),
+        }
+    }
+
     /// The newest event of an agent of this kind (`agent.quick_replies`), if there is one.
     pub fn last_event_of_kind(&self, agent_id: &str, kind: &str) -> Result<Option<Event>> {
         let row = self

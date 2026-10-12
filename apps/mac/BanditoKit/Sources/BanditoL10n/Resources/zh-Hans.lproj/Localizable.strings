@@ -2689,6 +2689,8 @@
 "thread.notDelivered" = "未送达";
 "thread.placeholder" = "输入任务或问题…";
 "thread.queued" = "排队中";
+"thread.quietTurn.showSteps" = "显示代理在这次运行中做了什么";
+"thread.quietTurn.title" = "没有新情况";
 "thread.react" = "回应";
 "thread.reply" = "回复";
 "thread.reviewApproved" = "%1$@ 已审阅更改 · 已批准";
@@ -2696,6 +2698,12 @@
 "thread.runtimeLimitUntil" = "%1$@ 的额度已用完，将在 %3$@ 前改用 %2$@ 继续";
 "thread.runtimeReturned" = "已切回 %1$@";
 "thread.savingMemory" = "开始新章节前保存记忆";
+"thread.scheduleRun.date" = "%1$@ %2$@";
+"thread.scheduleRun.folded" = "已折叠";
+"thread.scheduleRun.open" = "已展开";
+"thread.scheduleRun.showPrompt" = "显示这次运行所用的指令";
+"thread.scheduleRun.today" = "今天 %1$@";
+"thread.scheduleRun.yesterday" = "昨天 %1$@";
 "thread.scheduledRun" = "计划运行";
 "thread.send" = "发送";
 "thread.stop" = "停止";

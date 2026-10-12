@@ -103,6 +103,7 @@ mod tests {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
             queued: false,
         }
     }
@@ -196,6 +197,7 @@ mod tests {
                     attachments: Vec::new(),
                     mentions: Vec::new(),
                     via_button: false,
+                    schedule: None,
                     queued: false,
                 },
             )

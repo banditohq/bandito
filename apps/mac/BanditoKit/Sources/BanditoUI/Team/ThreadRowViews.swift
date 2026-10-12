@@ -248,6 +248,10 @@ private struct ItemView: View {
             }
         case .note(_, let text, let kind, _):
             NoteLine(text: text, isError: kind == .error)
+        case .scheduleRun:
+            ScheduleRunRow(item: item)
+        case .quietTurn:
+            QuietTurnRow(item: item)
         case .chapter:
             // Shown as a ChapterDivider between the rows (see ThreadRows.build), never as an item.
             EmptyView()

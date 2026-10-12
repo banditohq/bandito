@@ -18,6 +18,8 @@ enum NativeRow: Equatable {
     case note(text: String, isError: Bool)
     /// A folded group of finished tool calls: its key (`ThreadDisclosure`), title and whether one failed.
     case tools(key: String, title: String, failed: Bool)
+    /// A folded scheduled run or quiet turn (`SystemLine`); open, it is the SwiftUI row.
+    case systemLine(SystemLineSpec)
 
     /// The native row for a line, or nil when the line stays a SwiftUI row.
     @MainActor
@@ -35,6 +37,9 @@ enum NativeRow: Equatable {
                 failed: tools.contains { $0.ok == false })
         case .item(let item):
             switch item {
+            case .scheduleRun, .quietTurn:
+                guard let spec = ScheduleRunLine.spec(of: item), !ThreadDisclosure.shared.isOpen(spec.key) else { return nil }
+                return .systemLine(spec)
             case .note(_, let text, let kind, _):
                 return .note(text: text, isError: kind == .error)
             case .runtimeSwitch(_, let from, let to, let until, _):

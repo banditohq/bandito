@@ -120,6 +120,16 @@ pub struct QuickProgress {
     pub total: u32,
 }
 
+/// The schedule that started a scheduled run (see docs/ARCHITECTURE.md#scheduler). `name` is empty when the
+/// schedule has no title.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScheduleRun {
+    pub id: String,
+    pub name: String,
+    /// Unix milliseconds.
+    pub fired_at: i64,
+}
+
 /// The typed body of an event. Serialized as `{"kind": "...", "payload": {...}}`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "payload")]
@@ -163,6 +173,10 @@ pub enum EventBody {
         /// (see docs/ARCHITECTURE.md#quick-replies); the thread marks it, and so does the agent's prompt.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         via_button: bool,
+        /// The schedule that started this message, on a scheduled run. `text` is the prompt the person sees; the
+        /// runtime gets a note after it (see docs/ARCHITECTURE.md#scheduler).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        schedule: Option<ScheduleRun>,
     },
     /// A message shown as waiting (`message.user` with `queued: true`) will not get a turn: the queue was lost
     /// (a crash, a stop, a restart) or the session could not start. `reason`: `crash`, `stopped`, `failed`,
@@ -208,6 +222,14 @@ pub enum EventBody {
         decision: Decision,
         by: DecidedBy,
         remember: bool,
+    },
+    /// The agent ended its turn without a message: it called `nothing_to_report` (see docs/ARCHITECTURE.md#quiet-turns).
+    /// Its messages in this turn are hidden, and nothing notifies anyone about the turn.
+    #[serde(rename = "turn.quiet")]
+    TurnQuiet {
+        turn_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
     },
     #[serde(rename = "turn.completed")]
     TurnCompleted {
@@ -410,6 +432,54 @@ mod tests {
         );
         let back: EventBody = serde_json::from_value(serde_json::to_value(&body).unwrap()).unwrap();
         assert_eq!(back, body);
+    }
+
+    #[test]
+    fn turn_quiet_and_the_schedule_of_a_run_roundtrip() {
+        let quiet = EventBody::TurnQuiet {
+            turn_id: "t".into(),
+            reason: None,
+        };
+        let v = serde_json::to_value(&quiet).unwrap();
+        assert_eq!(
+            v,
+            serde_json::json!({"kind": "turn.quiet", "payload": {"turn_id": "t"}})
+        );
+        assert_eq!(serde_json::from_value::<EventBody>(v).unwrap(), quiet);
+
+        let run = EventBody::MessageUser {
+            text: "check the mail".into(),
+            source: Source::Schedule,
+            from_agent: None,
+            command: None,
+            reply_to: None,
+            attachments: Vec::new(),
+            mentions: Vec::new(),
+            queued: false,
+            via_button: false,
+            schedule: Some(ScheduleRun {
+                id: "s1".into(),
+                name: String::new(),
+                fired_at: 5,
+            }),
+        };
+        let v = serde_json::to_value(&run).unwrap();
+        assert_eq!(
+            v["payload"]["schedule"],
+            serde_json::json!({"id": "s1", "name": "", "fired_at": 5})
+        );
+        assert_eq!(serde_json::from_value::<EventBody>(v).unwrap(), run);
+
+        // A message that is not a scheduled run carries no `schedule`.
+        let mut plain = run.clone();
+        if let EventBody::MessageUser { schedule, .. } = &mut plain {
+            *schedule = None;
+        }
+        assert!(
+            serde_json::to_value(&plain).unwrap()["payload"]
+                .get("schedule")
+                .is_none()
+        );
     }
 
     #[test]

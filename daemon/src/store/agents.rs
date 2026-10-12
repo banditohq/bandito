@@ -1140,6 +1140,7 @@ mod tests {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
             queued: false,
         };
         s.append_event(&a.id, user("hi", Source::User)).unwrap();
