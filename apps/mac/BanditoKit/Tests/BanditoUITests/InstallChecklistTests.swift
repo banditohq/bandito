@@ -128,6 +128,41 @@ import Testing
         #expect(list.mark(at: 1) == .pending)
     }
 
+    @Test func aNameThatDoesNotResolveFailsTheConnectionLineEvenThoughTheCheckStartedIt() {
+        // ssh is first run by the system check, so the check line is the running one when the name fails.
+        var list = InstallChecklist()
+        list.apply(.step(.connect, "Connecting over SSH"))
+        list.apply(.step(.check, "Checking the server"))
+        list.apply(.failed(.sshFailed(.unknownHost)))
+        #expect(list.mark(at: 0) == .failed)
+        #expect((1..<5).allSatisfy { list.mark(at: $0) == .pending })
+        #expect(list.failure == .sshFailed(.unknownHost))
+    }
+
+    @Test func aConnectionThatBreaksLaterFailsTheLineThatWasRunning() {
+        var list = InstallChecklist()
+        list.apply(.step(.check, "Checking the server"))
+        list.apply(.step(.install, "Installing Bandito"))
+        list.apply(.failed(.sshFailed(.timedOut)))
+        #expect(list.mark(at: 0) == .done)
+        #expect(list.mark(at: 1) == .done)
+        #expect(list.mark(at: 2) == .failed)
+    }
+
+    @Test func connectionProblemsAreTheOnesThatStopBeforeAnythingRan() {
+        let problems: [InstallError] = [
+            .sshFailed(.unknownHost), .sshFailed(.refused), .sshFailed(.timedOut), .sshFailed(.noRoute),
+            .sshFailed(.keyNotAccepted), .sshFailed(.hostKeyChanged), .ssh(.authFailed), .ssh(.unknownHost),
+            .ssh(.unreachable),
+        ]
+        #expect(problems.allSatisfy { $0.isConnectionProblem })
+        let others: [InstallError] = [
+            .sshFailed(.hostKeyUnknown), .sshFailed(.other("x")), .unsupportedPlatform("Windows"), .localDaemonNotStarted,
+            .step("Download", detail: ""), .tokenNotSaved,
+        ]
+        #expect(others.allSatisfy { !$0.isConnectionProblem })
+    }
+
     // MARK: both
 
     @Test func retryAfterAFailureStartsOverCleanlyKeepingTheLines() {

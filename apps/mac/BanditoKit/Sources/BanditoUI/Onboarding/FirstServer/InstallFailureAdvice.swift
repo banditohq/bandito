@@ -65,3 +65,25 @@ enum InstallFailureAdvice {
         }
     }
 }
+
+extension InstallError {
+    /// The server could not be reached or would not let this Mac in: nothing was checked or installed yet, so the
+    /// person reads "the connection failed", and the connection line of the checklist is the one that failed.
+    /// A new host (its fingerprint is reviewed first) and an ssh message the app does not classify are not this.
+    var isConnectionProblem: Bool {
+        switch self {
+        case .sshFailed(let reason):
+            switch reason {
+            case .keyNotAccepted, .unknownHost, .refused, .timedOut, .noRoute, .hostKeyChanged: return true
+            case .hostKeyUnknown, .other: return false
+            }
+        case .ssh(let error):
+            switch error {
+            case .authFailed, .unknownHost, .unreachable, .hostKeyChanged: return true
+            case .invalidTarget, .exited, .portHijacked: return false
+            }
+        default:
+            return false
+        }
+    }
+}

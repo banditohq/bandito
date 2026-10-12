@@ -100,7 +100,16 @@ struct InstallChecklist: Equatable, Sendable {
         case .failed(let error):
             let current = marks.firstIndex(of: .running) ?? 0
             if !marks.isEmpty {
-                marks[current] = .failed
+                // ssh is first run by the system check, but a name that does not resolve or a key that is not
+                // accepted is a failed connection: the person sees the connection line fail, not the check.
+                if error.isConnectionProblem, let connect = index(of: .connect),
+                    current <= (index(of: .check) ?? connect)
+                {
+                    for index in marks.indices { marks[index] = .pending }
+                    marks[connect] = .failed
+                } else {
+                    marks[current] = .failed
+                }
             }
             failure = error
             appendToLog(Self.text(of: error), at: date)
