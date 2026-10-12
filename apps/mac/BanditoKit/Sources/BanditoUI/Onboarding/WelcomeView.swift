@@ -5,10 +5,13 @@ import SwiftUI
 /// Step 1 of 5: the raccoon of points of light, what Bandito is, and the way on.
 /// Left: the raccoon, the title and one line, a carousel of four stories, one button and a link. Right: the demo.
 struct WelcomeView: View {
-    /// Both the button ("Let's go") and the link ("I already have a server") go to the account step.
+    /// "Let's go" goes to the account step.
     var onContinue: () -> Void
+    /// "I already have a server" goes to the server step.
+    var onHaveServer: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
     @State private var demoStart = Date()
     @State private var storyAnchorIndex = 0
@@ -60,10 +63,13 @@ struct WelcomeView: View {
     private func intro(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: compact ? 14 : 22) {
             // The raccoon of points of light: the hero of the screen, assembled on appear (static under Reduce Motion).
-            // A short window (the minimum) has no room for it beside the title, the story card and the buttons.
+            // On a short window (the minimum, 900 x 640) even 96 pt pushes the subtitle to one line and the footer out,
+            // so it is left out there.
             if !compact {
-                RaccoonLightsHost(reduceMotion: MotionLevel(stored: motionLevel).reducesMotion(systemReduceMotion: reduceMotion))
-                    .frame(width: 200, height: 200)
+                RaccoonLightsHost(
+                    reduceMotion: MotionLevel(stored: motionLevel).reducesMotion(systemReduceMotion: reduceMotion),
+                    dark: colorScheme == .dark)
+                    .frame(width: 240, height: 240)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(L10n.Ios.Onboarding.Welcome.assembly)
                     .accessibilityAddTraits(.isImage)
@@ -125,7 +131,7 @@ struct WelcomeView: View {
     }
 
     private var hasAccountButton: some View {
-        Button(L10n.Ios.Onboarding.Welcome.haveServer, action: onContinue)
+        Button(L10n.Ios.Onboarding.Welcome.haveServer, action: onHaveServer)
             .banditoButton(.link)
             .fixedSize()
     }

@@ -160,4 +160,20 @@ import Testing
         print("RaccoonLights build (\(count) lights): \(elapsed)")
         #expect(elapsed < .milliseconds(250))
     }
+
+    /// The raccoon stands as the logo does: its ears are above its eyes on the screen. A UIKit view is y-down from its top,
+    /// so the layer's y is the screen's y (the Mac host is flipped to match; its test is in BanditoUITests).
+    @Test func earsAreAboveTheEyesOnTheScreen() throws {
+        let side: CGFloat = 280
+        let view = RaccoonLightsView(frame: CGRect(x: 0, y: 0, width: side, height: side))
+        view.layoutIfNeeded()
+        let lights = try #require(view.layer as? RaccoonLightsLayer)
+        lights.layoutIfNeeded()
+        lights.show(at: 2.4)
+        let figure = RaccoonLights.figure
+        let discs = Array((lights.sublayers ?? []).prefix(figure.lights.count))
+        let ear = try #require(zip(discs, figure.lights).filter { $0.1.region == .fur }.min { $0.1.y < $1.1.y })
+        let eyeY = try #require(figure.eyeCentres.first).y * Double(side)
+        #expect(ear.0.position.y < CGFloat(eyeY), "the ears are above the eyes on the screen")
+    }
 }

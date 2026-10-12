@@ -34,7 +34,7 @@ import Testing
         let scheme: ColorScheme = dark ? .dark : .light
         let root = ZStack {
             BlurOrbs()
-            WelcomeView(onContinue: {})
+            WelcomeView(onContinue: {}, onHaveServer: {})
         }
         .frame(width: size.width, height: size.height)
         .environment(\.colorScheme, scheme)

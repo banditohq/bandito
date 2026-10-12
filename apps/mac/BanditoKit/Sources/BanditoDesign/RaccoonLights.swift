@@ -154,12 +154,16 @@ extension RaccoonLights {
     /// A light's place (in the figure's square) and brightness `elapsed` seconds after the assembly began: before its
     /// delay it sits at its start, faded out (the fill of its animation), then it flies to its rest.
     static func pose(of light: RaccoonLight, at elapsed: Double) -> (x: Double, y: Double, alpha: Double) {
-        let fraction = min(max((elapsed - light.delay) / light.duration, 0), 1)
-        let progress = flightCurve(fraction)
+        let progress = progress(of: light, at: elapsed)
         return (
             x: light.startX + (light.x - light.startX) * progress,
             y: light.startY + (light.y - light.startY) * progress,
             alpha: light.alpha * progress)
+    }
+
+    /// How far a light's flight has come at `elapsed`, from 0 (at its start) to 1 (at its rest), on the flight's curve.
+    static func progress(of light: RaccoonLight, at elapsed: Double) -> Double {
+        flightCurve(min(max((elapsed - light.delay) / light.duration, 0), 1))
     }
 
     /// The eyes' glow at `elapsed`: it lights up from 1.0 s to 1.5 s, is dark for the tenth of a second before the

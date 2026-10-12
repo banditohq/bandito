@@ -151,7 +151,7 @@ public struct OnboardingFlow: View {
     private var stepBody: some View {
         switch onboarding.step {
         case .welcome:
-            WelcomeView { onboarding.advance() }
+            WelcomeView(onContinue: { onboarding.advance() }, onHaveServer: { onboarding.haveServer() })
         case .account:
             AccountSignInView(onFinished: { route in
                 // A first device or a ready device goes on; anything else needs the approval step.

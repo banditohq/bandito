@@ -15,6 +15,9 @@ public final class RaccoonLightsLayer: CALayer {
     public var creamColor: CGColor?
     /// Reduce Motion: the finished figure at once. Read when the figure is built.
     public var reduceMotion = false
+    /// The fur lights at their own brightness (dark theme, iPhone), or solid (light theme: pale dots on a light
+    /// background read as washed out). Read when the figure is built.
+    public var fullStrength = false
 
     private var built = false
     /// The side of the figure in points, and its layers: one disc per light (in the figure's order), one glow per eye.
@@ -52,9 +55,10 @@ public final class RaccoonLightsLayer: CALayer {
         CATransaction.setDisableActions(true)
         for (disc, light) in zip(discs, figure.lights) {
             let pose = RaccoonLights.pose(of: light, at: elapsed)
+            let progress = RaccoonLights.progress(of: light, at: elapsed)
             disc.removeAnimation(forKey: "assemble")
             disc.position = CGPoint(x: CGFloat(pose.x) * side, y: CGFloat(pose.y) * side)
-            disc.opacity = Float(pose.alpha)
+            disc.opacity = Float(fullStrength ? progress : pose.alpha)
         }
         for glow in glows {
             glow.removeAllAnimations()
@@ -87,7 +91,8 @@ public final class RaccoonLightsLayer: CALayer {
             disc.backgroundColor = light.tone == .signal ? signal : cream
             let rest = CGPoint(x: CGFloat(light.x) * side, y: CGFloat(light.y) * side)
             disc.position = rest
-            disc.opacity = Float(light.alpha)
+            let alpha = fullStrength ? 1 : light.alpha
+            disc.opacity = Float(alpha)
             if !reduceMotion {
                 let start = CGPoint(x: CGFloat(light.startX) * side, y: CGFloat(light.startY) * side)
                 let move = CABasicAnimation(keyPath: "position")
@@ -95,7 +100,7 @@ public final class RaccoonLightsLayer: CALayer {
                 move.toValue = Self.value(rest)
                 let fade = CABasicAnimation(keyPath: "opacity")
                 fade.fromValue = 0
-                fade.toValue = light.alpha
+                fade.toValue = alpha
                 let group = CAAnimationGroup()
                 group.animations = [move, fade]
                 group.duration = light.duration
