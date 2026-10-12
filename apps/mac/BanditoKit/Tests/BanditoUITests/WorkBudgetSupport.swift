@@ -82,14 +82,48 @@ final class WorkBudgetHarness {
         host.displayIfNeeded()
     }
 
+    /// Waits until the window is at rest: `calm` steps in a row in which nothing was counted (no body, no cell), up to
+    /// `limit` steps. A slow machine (a CI runner) finishes the last step's work later (a scroll's deferred report, the
+    /// demo world's replies): without this, that work was counted in the next step.
+    func quiet(calm: Int = 25, limit: Int = 600) async {
+        let wasCounting = PerfCounters.counting
+        PerfCounters.counting = true
+        defer { PerfCounters.counting = wasCounting }
+        let before = PerfCounters.snapshot()
+        await rest(calm: calm, limit: limit)
+        // What came while waiting was not part of a step: put the counts back as they were.
+        PerfCounters.reset()
+        for (name, value) in before { for _ in 0..<value { PerfCounters.hit(name) } }
+    }
+
+    /// Steps until `calm` steps in a row count nothing, twice, with a wait between: work the app schedules after a
+    /// delay (a 0.3 s debounce) comes inside it. The counts grow meanwhile.
+    private func rest(calm: Int, limit: Int) async {
+        for pass in 0..<2 {
+            if pass == 1 { try? await Task.sleep(for: .milliseconds(400)) }
+            var still = 0
+            for _ in 0..<limit {
+                let total = PerfCounters.snapshot().values.reduce(0, +)
+                await settle(rounds: 1)
+                if PerfCounters.snapshot().values.reduce(0, +) == total {
+                    still += 1
+                    if still >= calm { break }
+                } else {
+                    still = 0
+                }
+            }
+        }
+    }
+
     /// The counters during `body` (and the settling after it), by name.
     func count(_ body: () async throws -> Void) async rethrows -> [String: Int] {
-        await settle()
+        await quiet()
         PerfCounters.reset()
         PerfCounters.counting = true
         defer { PerfCounters.counting = false }
         try await body()
-        await settle()
+        // The step's own late work (a debounce, a reply) counts in it, not in the next one.
+        await rest(calm: 25, limit: 600)
         return PerfCounters.snapshot()
     }
 
