@@ -45,15 +45,15 @@ final class OnboardingUITests: XCTestCase {
         app.terminate()
     }
 
-    func testChoosingAWayOpensThePairingPlaceholder() {
+    func testChoosingAWayOpensTheConnectSheet() {
         continueAfterFailure = false
         let app = launchOnboarding(["-onboarding-step", "connect"])
 
         let scan = app.buttons["onboarding.connect.scan"]
         XCTAssertTrue(scan.waitForExistence(timeout: 15))
         scan.tap()
-        let placeholder = app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'coming soon'")).firstMatch
-        XCTAssertTrue(placeholder.waitForExistence(timeout: 5), "until the pairing flow lands, every way opens its sheet")
+        // The Simulator has no camera: the sheet still opens, with the other two ways in.
+        XCTAssertTrue(app.buttons["connect.manualButton"].waitForExistence(timeout: 10), "the way opens the connect sheet")
         app.terminate()
     }
 
