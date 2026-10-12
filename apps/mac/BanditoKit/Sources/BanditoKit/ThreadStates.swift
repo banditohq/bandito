@@ -40,6 +40,8 @@ public final class AgentThreadState {
     public private(set) var lastMessageHead: String?
     /// The time of the newest item that has one (Unix ms).
     public private(set) var lastItemTimestamp: Int64?
+    /// Replies the person has not looked at yet (`UnreadReplies`). Written only when it changes.
+    public private(set) var unreadCount = 0
 
     /// How much of the newest message `lastMessageHead` keeps.
     public static let previewLength = 240
@@ -51,10 +53,51 @@ public final class AgentThreadState {
     @ObservationIgnored var previewInterval: Duration?
     @ObservationIgnored private var headWrittenAt: ContinuousClock.Instant?
     @ObservationIgnored private var headTask: Task<Void, Never>?
+    /// The seq the chat was read to (see `markRead`); nil until a loaded thread is seen. Not observed: only the count is.
+    @ObservationIgnored private var readSeq: Int64?
+    @ObservationIgnored private var readMarks: ReadMarks?
+    @ObservationIgnored private var agentID: String?
 
     nonisolated init() {}
 
+    /// Set by `ThreadStates` when the box is made: where its read mark is kept, and for which agent.
+    func attach(readMarks: ReadMarks?, agentID: String) {
+        self.readMarks = readMarks
+        self.agentID = agentID
+    }
+
+    /// The chat was looked at: its window is active, it is on screen and follows the newest message. Every reply
+    /// shown so far is read now. Writes only when the mark moves.
+    public func markRead() {
+        guard loaded, let current = resolveReadSeq(), thread.lastSeq > current else { return }
+        moveRead(to: thread.lastSeq)
+        recount()
+    }
+
+    /// The seq the chat was read to. The first time a loaded thread is seen with no stored mark, all of it counts as read.
+    private func resolveReadSeq() -> Int64? {
+        if readSeq == nil, loaded {
+            let stored = agentID.flatMap { readMarks?.seq(for: $0) }
+            let first = UnreadReplies.firstSight(stored: stored, lastSeq: thread.lastSeq)
+            readSeq = first
+            if stored == nil, let agentID { readMarks?.set(first, for: agentID) }
+        }
+        return readSeq
+    }
+
+    private func moveRead(to seq: Int64) {
+        readSeq = seq
+        if let agentID { readMarks?.set(seq, for: agentID) }
+    }
+
+    private func recount() {
+        let unread = readSeq.map { UnreadReplies.count(in: thread.items, readSeq: $0) } ?? 0
+        if unreadCount != unread { unreadCount = unread }
+    }
+
     func summarize() {
+        _ = resolveReadSeq()
+        recount()
         let status: AgentStatus? = loaded ? thread.status : nil
         if loadedStatus != status { loadedStatus = status }
         if statusDetail != thread.statusDetail { statusDetail = thread.statusDetail }
@@ -133,13 +176,18 @@ public enum StreamPreviewThrottle {
 @MainActor
 public final class ThreadStates {
     private var boxes: [String: AgentThreadState] = [:]
+    /// Where the read marks of the chats are kept; nil keeps them in memory only (tests).
+    private let readMarks: ReadMarks?
 
-    nonisolated init() {}
+    init(readMarks: ReadMarks? = nil) {
+        self.readMarks = readMarks
+    }
 
     /// The box of `agentId`, made when it is missing.
     public func box(_ agentId: String) -> AgentThreadState {
         if let box = boxes[agentId] { return box }
         let box = AgentThreadState()
+        box.attach(readMarks: readMarks, agentID: agentId)
         boxes[agentId] = box
         return box
     }

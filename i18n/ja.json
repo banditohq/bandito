@@ -16,6 +16,9 @@
   "sidebar.team": "チーム",
   "sidebar.sharedChat": "共有チャット · {count}",
   "sidebar.needsYou": "要対応",
+  "sidebar.unread": {
+    "other": "未読 {count} 件"
+  },
   "sidebar.serverSummary": "{transport} 経由 · {agents} · {working}",
   "sidebar.messageTeam": "チームにメッセージ…",
   "sidebar.pinned": "ピン留め",

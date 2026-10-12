@@ -3463,6 +3463,7 @@ public enum L10n {
         public static var servers: String { L10n.tr("sidebar.servers") }
         public static func sharedChat(count: Int) -> String { L10n.tr("sidebar.sharedChat", count) }
         public static var team: String { L10n.tr("sidebar.team") }
+        public static func unread(count: Int) -> String { L10n.tr("sidebar.unread", count) }
 
         public enum NoServer {
             public static var connect: String { L10n.tr("sidebar.noServer.connect") }

@@ -16,6 +16,10 @@
   "sidebar.team": "Équipe",
   "sidebar.sharedChat": "chat partagé · {count}",
   "sidebar.needsYou": "ATTENDENT VOTRE AVIS",
+  "sidebar.unread": {
+    "one": "{count} non lu",
+    "other": "{count} non lus"
+  },
   "sidebar.serverSummary": "via {transport} · {agents} · {working}",
   "sidebar.messageTeam": "Écrire à l'équipe…",
   "sidebar.pinned": "Épinglés",

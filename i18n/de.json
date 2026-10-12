@@ -16,6 +16,10 @@
   "sidebar.team": "Team",
   "sidebar.sharedChat": "gemeinsamer Chat · {count}",
   "sidebar.needsYou": "WARTEN AUF DICH",
+  "sidebar.unread": {
+    "one": "{count} ungelesen",
+    "other": "{count} ungelesen"
+  },
   "sidebar.serverSummary": "über {transport} · {agents} · {working}",
   "sidebar.messageTeam": "Nachricht an das Team…",
   "sidebar.pinned": "Angeheftet",

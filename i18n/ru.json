@@ -39,6 +39,12 @@
   "sidebar.team": "Команда",
   "sidebar.sharedChat": "общий чат · {count}",
   "sidebar.needsYou": "ЖДУТ ВАС",
+  "sidebar.unread": {
+    "one": "{count} непрочитанное",
+    "few": "{count} непрочитанных",
+    "many": "{count} непрочитанных",
+    "other": "{count} непрочитанных"
+  },
   "sidebar.serverSummary": "по {transport} · {agents} · {working}",
   "sidebar.messageTeam": "Написать команде…",
   "sidebar.pinned": "Закреплённые",

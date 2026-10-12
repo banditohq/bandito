@@ -16,6 +16,10 @@
   "sidebar.team": "Equipo",
   "sidebar.sharedChat": "chat compartido · {count}",
   "sidebar.needsYou": "TE NECESITAN",
+  "sidebar.unread": {
+    "one": "{count} sin leer",
+    "other": "{count} sin leer"
+  },
   "sidebar.serverSummary": "vía {transport} · {agents} · {working}",
   "sidebar.messageTeam": "Escribe al equipo…",
   "sidebar.pinned": "Fijados",

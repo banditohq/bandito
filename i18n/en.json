@@ -35,6 +35,10 @@
   "sidebar.team": "Team",
   "sidebar.sharedChat": "shared chat · {count}",
   "sidebar.needsYou": "NEEDS YOU",
+  "sidebar.unread": {
+    "one": "{count} unread",
+    "other": "{count} unread"
+  },
   "sidebar.serverSummary": "via {transport} · {agents} · {working}",
   "sidebar.messageTeam": "Message the team…",
   "sidebar.pinned": "Pinned",

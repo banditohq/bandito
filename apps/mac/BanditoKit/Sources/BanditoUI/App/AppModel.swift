@@ -240,7 +240,7 @@ public final class AppModel {
             keyRepair[id] = nil
             return
         }
-        let model = ServerModel(config: paired.config)
+        let model = ServerModel(config: paired.config, readMarks: ReadMarks(serverID: paired.config.id))
         attachNotifications(model)
         servers[current] = model
         localUpgrade.forget(serverID: id)
@@ -334,7 +334,7 @@ public final class AppModel {
         else { return }
         var config = old.config
         config.isThisMac = true
-        let rebuilt = ServerModel(config: config)
+        let rebuilt = ServerModel(config: config, readMarks: ReadMarks(serverID: config.id))
         attachNotifications(rebuilt)
         servers[index] = rebuilt
         // The waiting upgrade of the old model would hold the old model: it ends, and the copy starts its own.
@@ -427,7 +427,7 @@ public final class AppModel {
                 }
                 await old.disconnect()
                 guard let index = servers.firstIndex(where: { $0.id == id }) else { continue }
-                let model = ServerModel(config: paired.config)
+                let model = ServerModel(config: paired.config, readMarks: ReadMarks(serverID: paired.config.id))
                 attachNotifications(model)
                 servers[index] = model
                 changed = true
@@ -469,7 +469,7 @@ public final class AppModel {
             remove(existing.id)
         }
         lastError = nil
-        let model = ServerModel(config: config)
+        let model = ServerModel(config: config, readMarks: ReadMarks(serverID: config.id))
         attachNotifications(model)
         servers.append(model)
         selectedServerID = model.id
@@ -560,7 +560,7 @@ public final class AppModel {
         servers = configs.map { c in
             var c = c
             c.token = Keychain.token(for: c.id)
-            let model = ServerModel(config: c)
+            let model = ServerModel(config: c, readMarks: ReadMarks(serverID: c.id))
             attachNotifications(model)
             return model
         }

@@ -254,7 +254,7 @@ public final class ServerModel: Identifiable {
     /// The threads of the agents, each in an observed box of its own (`AgentThreadState`): a token streamed into one
     /// agent's thread redraws the views that read that thread, not every view that reads any thread (the sidebar, the
     /// chat on screen, the menu bar all did, at every token of every agent).
-    public let threads = ThreadStates()
+    public let threads: ThreadStates
     public private(set) var runtimes: [RuntimeStatus] = []
     /// When `runtimes` was last read from the daemon; nil until the first answer.
     public private(set) var runtimesFetchedAt: Date?
@@ -307,10 +307,12 @@ public final class ServerModel: Identifiable {
     public init(
         config: ServerConfig,
         makeTransport: (@Sendable (ServerConfig) -> RPCTransport)? = nil,
-        reconnectDelay: (@Sendable (Int) -> Duration)? = nil
+        reconnectDelay: (@Sendable (Int) -> Duration)? = nil,
+        readMarks: ReadMarks? = nil
     ) {
         self.config = config
         self.id = config.id
+        self.threads = ThreadStates(readMarks: readMarks)
         self.makeTransport =
             makeTransport ?? { cfg in
                 switch cfg.endpoint {

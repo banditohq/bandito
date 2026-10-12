@@ -95,6 +95,17 @@ extension LayoutAuditSnapshots {
                 }
                 .padding(.horizontal, 8))
         },
+        // A team row with unread replies: the capsule with a count, the bold name and preview, the widest count (99+).
+        AuditCase(name: "team-sidebar-unread-row", width: 296) { env in
+            var thread = AgentThread()
+            thread.apply(Event(
+                seq: 1, agentId: movingAgent.id, ts: 1_791_530_000_000,
+                body: .messageAssistant(text: "Wrote 14 tests. Two failed on currency rounding, fixed.")))
+            let facts = SidebarThreadFacts(thread: thread, agent: movingAgent, unread: 120)
+            return AnyView(
+                AgentRow(agent: movingAgent, server: env.server, facts: facts, status: .idle, lastActivity: "12:40")
+                    .padding(.horizontal, 8))
+        },
         AuditCase(name: "files-workplace-group", width: 296) { _ in
             let box = auditWorkspaces[1]
             let agent = Agent(

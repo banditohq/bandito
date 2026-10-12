@@ -40,6 +40,7 @@ Each agent has one status. Agents that need you are sorted to the top and get th
 
 <!-- id: team-sidebar-menu; covers: -->
 Pinned agents are listed at the top. The context menu of an agent has Pin (Закрепить) or Unpin (Открепить), Pause (Приостановить) or Resume (Продолжить), and Move to… (Перенести на…) when another connected server takes moved agents, and Delete… (Удалить…). A paused agent shows a pause mark next to its name, and its avatar sleeps.
+A reply the agent wrote that you have not looked at yet is counted on its row: a capsule with the number (99+ above 99), the name and the preview turn bolder, and a pinned agent's avatar gets a dot. The chat is looked at when it is open in the active window and shows the newest message; the count is kept per Mac.
 Где: Team → sidebar → agent → right click
 1. Right-click an agent and choose Pause (Приостановить). The mark appears and the avatar goes to sleep.
 2. Right-click it again and choose Resume (Продолжить) to bring it back.

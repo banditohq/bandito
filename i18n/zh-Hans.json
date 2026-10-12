@@ -16,6 +16,9 @@
   "sidebar.team": "团队",
   "sidebar.sharedChat": "共享聊天 · {count}",
   "sidebar.needsYou": "等待处理",
+  "sidebar.unread": {
+    "other": "{count} 条未读"
+  },
   "sidebar.serverSummary": "通过 {transport} · {agents} · {working}",
   "sidebar.messageTeam": "给团队发消息…",
   "sidebar.pinned": "已置顶",

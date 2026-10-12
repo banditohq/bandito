@@ -16,6 +16,9 @@
   "sidebar.team": "팀",
   "sidebar.sharedChat": "공유 채팅 · {count}",
   "sidebar.needsYou": "확인 필요",
+  "sidebar.unread": {
+    "other": "읽지 않음 {count}개"
+  },
   "sidebar.serverSummary": "{transport} 경유 · {agents} · {working}",
   "sidebar.messageTeam": "팀에 메시지…",
   "sidebar.pinned": "고정됨",

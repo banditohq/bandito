@@ -61,6 +61,14 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
 
     /// The id of the row for the message with this `seq`.
     public static func messageID(seq: Int64) -> String { "s\(seq)" }
+
+    /// The `seq` of a finished reply of the agent: `s123`, or `s123-s` when a stream was finalized into it. Nil for any
+    /// other row (the person's message, a stream still running, a note, a crew message).
+    public var replySeq: Int64? {
+        guard case .assistant(let id, _, _) = self else { return nil }
+        let base = id.hasSuffix("-s") ? String(id.dropLast(2)) : id
+        return Self.seq(ofEventID: base)
+    }
 }
 
 extension ThreadItem {
