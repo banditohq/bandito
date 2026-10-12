@@ -5,7 +5,7 @@ name: notify
 # triggering code), so a pull request from a fork cannot reach the secrets.
 on:
   workflow_run:
-    workflows: [ci, release, release-app, renovate, audit]
+    workflows: [ci, release, release-flow, release-app, renovate, audit]
     types: [completed]
 
 permissions:

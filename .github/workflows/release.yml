@@ -1,8 +1,19 @@
 name: release
 
+# Started three ways: by hand (workflow_dispatch), by a published release, or by release-flow.yml (workflow_call), which
+# builds a draft release and publishes it after this succeeds.
 on:
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Existing release tag (draft or published) to build and attach to"
+        required: true
+        type: string
+    secrets:
+      RELEASE_SIGNING_KEY:
+        required: false
   workflow_dispatch:
     inputs:
       tag:
