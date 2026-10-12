@@ -2124,6 +2124,7 @@
 "serverSettings.support.hint" = "Versões e sistema. Sem endereços, tokens nem caminhos.";
 "serverSettings.support.title" = "Relatório para o suporte";
 "serverSettings.unsupported" = "Este servidor é antigo demais para estas configurações. Atualize o servidor para alterá-las.";
+"serverUpdate.banner.title" = "No servidor %1$@ está disponível a versão %2$@";
 "settings.account.intro" = "Entre para sincronizar servidores, atalhos e prompts entre seus dispositivos.";
 "settings.account.openProfile" = "Abrir perfil";
 "settings.account.openProfileHint" = "Apelido, cor, código deste Mac, dispositivos e sincronização.";

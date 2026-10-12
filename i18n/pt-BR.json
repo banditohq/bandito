@@ -757,6 +757,7 @@
   "server.daemonUpdate.manualRestart": "Versão {version} instalada. Reinicie o daemon no servidor para usá-la.",
   "server.daemonUpdate.timedOut": "O servidor não voltou na versão {version} em dois minutos. Verifique-o no Terminal.",
   "server.daemonUpdate.failed": "Falha na atualização: {error}",
+  "serverUpdate.banner.title": "No servidor {name} está disponível a versão {version}",
   "onboarding.welcome.serverTitle": "O servidor inteiro à mão",
   "onboarding.welcome.serverText": "Arquivos, terminais, navegador e a tela do servidor numa só janela. Mais fácil que SSH, e os agentes veem o que você vê.",
   "onboarding.welcome.hasAccount": "Já tenho uma conta",

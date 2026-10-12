@@ -740,6 +740,7 @@
   "server.daemonUpdate.manualRestart": "バージョン {version} をインストールしました。動作させるにはサーバーでデーモンを再起動してください。",
   "server.daemonUpdate.timedOut": "2分以内にサーバーがバージョン {version} で復帰しませんでした。ターミナルで確認してください。",
   "server.daemonUpdate.failed": "更新に失敗しました: {error}",
+  "serverUpdate.banner.title": "サーバー「{name}」でバージョン {version} を利用できます",
   "onboarding.welcome.serverTitle": "サーバー全体がすぐ手元に",
   "onboarding.welcome.serverText": "ファイル、ターミナル、ブラウザ、サーバーの画面を1つのウィンドウで。SSH より簡単で、エージェントもあなたが見ている画面を見られます。",
   "onboarding.welcome.hasAccount": "すでにアカウントを持っています",

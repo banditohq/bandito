@@ -12,7 +12,8 @@ struct ServerOverview: View {
     @State private var monitor: HostMonitor
     @State private var setup = SetupModel()
     @State private var release = ReleaseStatus()
-    @State private var daemonUpdate = DaemonUpdateModel()
+    /// The app's one daemon update (see `AppModel.daemonUpdate`).
+    private var daemonUpdate: DaemonUpdateModel { app.daemonUpdate }
     @State private var secrets: [SecretInfo] = []
     @State private var stopping: ProcessRow?
     @State private var actionError: UserFacingMessage?

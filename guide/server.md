@@ -26,7 +26,8 @@ When the daemon on the server has a newer release, a card at the top says Versio
 Где: Server → Overview (Обзор) → Update server (Обновить сервер)
 1. Click Update server (Обновить сервер) and confirm Update (Обновить). The server downloads the release, checks its signature, and restarts. The connection drops for a few seconds, then comes back by itself.
 2. The card then says The server runs X now (Сервер работает на версии X). If the server does not come back within two minutes, the card says so: check the server in Terminal.
-3. The server list in the Bandito menu shows a dot next to a server whose daemon has an update.
+3. The same update shows in the sidebar, above your profile, as a card: On the server X, version Y is available (На сервере X доступна версия Y), with the button Update server (Обновить сервер). The card installs it after the same confirmation and shows the same progress and failure. The close button (×) hides it for that version of that server; a newer release shows again. Bandito's own update comes first: one card at a time.
+4. The server list in the Bandito menu shows a dot and Update available (Доступно обновление) next to a server with an update. The item Update server (Обновить сервер) at the foot of the list installs it, for the selected server first.
 
 ## Stop an agent's processes (Stop)
 

@@ -2124,6 +2124,7 @@
 "serverSettings.support.hint" = "Versionen und System. Ohne Adressen, Token oder Pfade.";
 "serverSettings.support.title" = "Bericht für den Support";
 "serverSettings.unsupported" = "Dieser Server ist für diese Einstellungen zu alt. Aktualisieren Sie den Server, um sie zu ändern.";
+"serverUpdate.banner.title" = "Auf dem Server %1$@ ist Version %2$@ verfügbar";
 "settings.account.intro" = "Melden Sie sich an, um Server, Tastenkürzel und Prompts zwischen Ihren Geräten zu synchronisieren.";
 "settings.account.openProfile" = "Profil öffnen";
 "settings.account.openProfileHint" = "Name, Farbe, Code dieses Mac, Geräte und Synchronisierung.";
