@@ -30,8 +30,9 @@ enum WidgetMood: String, Codable, CaseIterable, Sendable {
 
 /// The picture the widgets read: how many things wait for the person, and up to four agents for the crew widget.
 struct WidgetSnapshot: Codable, Equatable, Sendable {
-    /// The crew widget shows at most this many agents.
+    /// The crew widget shows at most this many agents; the small widget names and draws at most this many waiting ones.
     static let agentLimit = 4
+    static let waitingLimit = 3
 
     struct Agent: Codable, Equatable, Sendable {
         /// The server's id (a UUID string) for the deep link. Never its address.
@@ -46,16 +47,33 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// Everything that waits for the person on the connected servers (the Inbox's count).
     var pending: Int
     var agents: [Agent]
+    /// The agents that wait for the person, in the team's order: the first `waitingLimit` of them.
+    var waiting: [Agent]
+    /// How many agents wait for the person in all (`waiting` holds at most `waitingLimit` of them).
+    var waitingCount: Int
 
-    init(generatedAt: Date, pending: Int, agents: [Agent]) {
+    init(generatedAt: Date, pending: Int, agents: [Agent], waiting: [Agent] = [], waitingCount: Int? = nil) {
         self.generatedAt = generatedAt
         self.pending = max(0, pending)
         self.agents = Array(agents.prefix(Self.agentLimit))
+        self.waiting = Array(waiting.prefix(Self.waitingLimit))
+        self.waitingCount = max(waitingCount ?? waiting.count, self.waiting.count)
+    }
+
+    /// The names on the small widget's line: at most two of the waiting agents.
+    var waitingNames: [String] {
+        waiting.prefix(2).map(\.name)
+    }
+
+    /// How many waiting agents the line leaves out ("и ещё N"): none when there are two or fewer.
+    var waitingMore: Int {
+        max(0, waitingCount - 2)
     }
 
     /// The same picture whatever the time of writing: the app writes a snapshot only when this is false.
     func hasSameContent(as other: WidgetSnapshot) -> Bool {
-        pending == other.pending && agents == other.agents
+        pending == other.pending && agents == other.agents && waiting == other.waiting
+            && waitingCount == other.waitingCount
     }
 
     func encoded() throws -> Data {
@@ -72,15 +90,19 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     }
 
     /// What the gallery and the previews show: two things waiting, a team of four.
-    static let sample = WidgetSnapshot(
-        generatedAt: Date(timeIntervalSince1970: 0),
-        pending: 2,
-        agents: [
-            Agent(server: "sample", id: "forge", name: "Forge", status: .working, mood: .working),
-            Agent(server: "sample", id: "watch", name: "Watch", status: .needsYou, mood: .needsYou),
-            Agent(server: "sample", id: "scout", name: "Scout", status: .idle, mood: .idle),
-            Agent(server: "sample", id: "quill", name: "Quill", status: .error, mood: .error),
-        ])
+    static let sample: WidgetSnapshot = {
+        let watch = Agent(server: "sample", id: "watch", name: "Watch", status: .needsYou, mood: .needsYou)
+        let forge = Agent(server: "sample", id: "forge", name: "Forge", status: .needsYou, mood: .needsYou)
+        return WidgetSnapshot(
+            generatedAt: Date(timeIntervalSince1970: 0),
+            pending: 2,
+            agents: [
+                watch, forge,
+                Agent(server: "sample", id: "scout", name: "Scout", status: .working, mood: .working),
+                Agent(server: "sample", id: "quill", name: "Quill", status: .idle, mood: .idle),
+            ],
+            waiting: [watch, forge])
+    }()
 }
 
 /// The file of the snapshot. The app writes it through `write`, the widget reads it through `read`; nothing else.

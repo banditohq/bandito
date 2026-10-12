@@ -1048,6 +1048,7 @@
 "ios.widget.inbox.desc" = "Сколько дел ждут тебя в Bandito.";
 "ios.widget.inbox.name" = "Входящие";
 "ios.widget.lock.working" = "%1$@ работает";
+"ios.widget.more" = "%1$@ и ещё %2$lld";
 "ios.widget.open" = "Открой Bandito";
 "ios.widget.status.error" = "ошибка";
 "ios.widget.status.idle" = "свободен";

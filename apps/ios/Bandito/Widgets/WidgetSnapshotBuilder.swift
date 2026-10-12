@@ -11,25 +11,29 @@ enum WidgetSnapshotBuilder {
     /// waiting for the person first (the picker of the widget ranks them).
     static func make(servers: [ServerModel], now: Date = Date()) -> WidgetSnapshot {
         var agents: [WidgetSnapshot.Agent] = []
+        var waiting: [WidgetSnapshot.Agent] = []
         for server in servers where server.state == .connected {
             for agent in server.sortedAgents {
                 let raw = server.status(of: agent.id)
                 let summary = server.threadSummary(for: agent.id)
                 // An agent that waits for the person shows as waiting, whatever its own status says.
                 let waits = server.needsPerson(agent.id)
-                agents.append(
-                    WidgetSnapshot.Agent(
-                        server: server.id.uuidString,
-                        id: agent.id,
-                        name: agent.name,
-                        status: waits ? .needsYou : status(raw, paused: agent.paused),
-                        mood: waits ? .needsYou : mood(AvatarMood.crew(status: raw, turnRunning: summary.turnRunning, paused: agent.paused))))
+                let entry = WidgetSnapshot.Agent(
+                    server: server.id.uuidString,
+                    id: agent.id,
+                    name: agent.name,
+                    status: waits ? .needsYou : status(raw, paused: agent.paused),
+                    mood: waits ? .needsYou : mood(AvatarMood.crew(status: raw, turnRunning: summary.turnRunning, paused: agent.paused)))
+                agents.append(entry)
+                if waits { waiting.append(entry) }
             }
         }
         return WidgetSnapshot(
             generatedAt: now,
             pending: InboxRules.badge(of: servers),
-            agents: WidgetAgentPicker.pick(agents))
+            agents: WidgetAgentPicker.pick(agents),
+            waiting: waiting,
+            waitingCount: waiting.count)
     }
 
     /// A paused agent is not reachable for the widget: it reads as offline (the raccoon sleeps).

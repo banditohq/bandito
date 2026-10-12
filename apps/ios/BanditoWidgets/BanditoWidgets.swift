@@ -77,7 +77,9 @@ private struct InboxEntryView: View {
 
     var body: some View {
         InboxWidgetView(snapshot: entry.snapshot, family: family)
-            .containerBackground(Color.Bandito.bg, for: .widget)
+            .containerBackground(for: .widget) {
+                if family == .systemSmall { WidgetBackdrop() } else { Color.Bandito.bg }
+            }
     }
 }
 

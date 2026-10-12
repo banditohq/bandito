@@ -3206,5 +3206,6 @@
   "ios.widget.status.idle": "여유",
   "ios.widget.status.error": "오류",
   "ios.widget.status.offline": "오프라인",
+  "ios.widget.more": "{names} 외 {count}명",
   "ios.widget.open": "Bandito 열기"
 }

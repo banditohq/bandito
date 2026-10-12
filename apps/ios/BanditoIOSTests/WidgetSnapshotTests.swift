@@ -17,7 +17,7 @@ import Testing
             generatedAt: now, pending: 2,
             agents: [WidgetSnapshot.Agent(server: "S1", id: "forge", name: "Forge", status: .needsYou, mood: .needsYou)])
         let json = try #require(String(data: snapshot.encoded(), encoding: .utf8))
-        for key in ["\"generatedAt\"", "\"pending\"", "\"agents\"", "\"server\"", "\"id\"", "\"name\"", "\"status\"", "\"mood\""] {
+        for key in ["\"generatedAt\"", "\"pending\"", "\"agents\"", "\"waiting\"", "\"waitingCount\"", "\"server\"", "\"id\"", "\"name\"", "\"status\"", "\"mood\""] {
             #expect(json.contains(key), "the file has \(key)")
         }
         // No address and no token can be in it: the file holds only ids, names and states.
@@ -54,6 +54,36 @@ import Testing
         let later = WidgetSnapshot(generatedAt: now.addingTimeInterval(600), pending: 1, agents: [agent("forge", .working)])
         #expect(first.hasSameContent(as: later))
         #expect(first != later, "the time is part of the file, only not of the content")
+    }
+
+    @Test func theWaitingAgentsKeepAtMostThreeNamesAndTheTotal() {
+        let four = (1...4).map { agent("w\($0)", .needsYou) }
+        let snapshot = WidgetSnapshot(generatedAt: now, pending: 4, agents: [], waiting: four, waitingCount: 4)
+        #expect(snapshot.waiting.map(\.id) == ["w1", "w2", "w3"])
+        #expect(snapshot.waitingCount == 4)
+        // A total smaller than the names it came with is corrected, not trusted.
+        #expect(WidgetSnapshot(generatedAt: now, pending: 1, agents: [], waiting: four, waitingCount: 1).waitingCount == 3)
+    }
+
+    @Test func theSmallWidgetNamesTwoAndCountsTheRest() {
+        let names = ["Forge", "Watch", "Scout"]
+        func line(_ count: Int) -> (names: [String], more: Int) {
+            let waiting = names.prefix(count).map { agent($0.lowercased(), .needsYou) }
+            let snapshot = WidgetSnapshot(generatedAt: now, pending: count, agents: [], waiting: waiting, waitingCount: count)
+            return (snapshot.waitingNames, snapshot.waitingMore)
+        }
+        #expect(line(0).names.isEmpty && line(0).more == 0)
+        #expect(line(1).names == ["Forge"] && line(1).more == 0)
+        #expect(line(2).names == ["Forge", "Watch"] && line(2).more == 0)
+        #expect(line(3).names == ["Forge", "Watch"] && line(3).more == 1)
+        let many = WidgetSnapshot(generatedAt: now, pending: 9, agents: [], waiting: [agent("a", .needsYou)], waitingCount: 6)
+        #expect(many.waitingNames == ["A"] && many.waitingMore == 4)
+    }
+
+    @Test func aChangedWaitingListIsANewContent() {
+        let base = WidgetSnapshot(generatedAt: now, pending: 1, agents: [], waiting: [agent("forge", .needsYou)])
+        let other = WidgetSnapshot(generatedAt: now, pending: 1, agents: [], waiting: [agent("watch", .needsYou)])
+        #expect(!base.hasSameContent(as: other))
     }
 
     @Test func aChangedCountOrStatusIsANewContent() {

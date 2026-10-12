@@ -60,8 +60,86 @@ struct WidgetRaccoon: View {
     }
 }
 
-/// The Inbox widget: "Ждут тебя: N" (small), the count on the lock screen (circular), and the count with the working
-/// agent (rectangular). Zero is a sleeping raccoon, "All quiet". No snapshot yet: the placeholder.
+/// The background of the small widget: the brand's ground with a soft signal glow from the top-left corner (cream and
+/// warm in the light theme, the glow is lower there).
+struct WidgetBackdrop: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            Color.Bandito.bg
+            RadialGradient(
+                colors: [
+                    Color.Bandito.signal.opacity(colorScheme == .dark ? 0.24 : 0.14),
+                    Color.Bandito.signal.opacity(0),
+                ],
+                center: .topLeading,
+                startRadius: 0,
+                endRadius: 190)
+        }
+    }
+}
+
+/// The waiting agents as overlapping raccoons (the crew widget's faces, at 30 points), each on a ring of the ground's
+/// color so the overlap reads as a stack.
+struct WaitingAvatars: View {
+    let agents: [WidgetSnapshot.Agent]
+
+    var body: some View {
+        HStack(spacing: -8) {
+            ForEach(Array(agents.prefix(WidgetSnapshot.waitingLimit).enumerated()), id: \.offset) { _, agent in
+                WidgetRaccoon(name: agent.name, mood: agent.mood.avatarMood, tint: agent.status.tint, size: 30)
+                    .padding(2)
+                    .background(Circle().fill(Color.Bandito.bg))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The sleeping raccoon of the empty widget: the head of the logo drawn as its lights, the eyes shut, a small "z".
+struct SleepingRaccoon: View {
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Canvas { context, size in
+                guard let sample = RaccoonHead.sample() else { return }
+                let box = sample.box
+                let scale = min(size.width / box.width, size.height / box.height)
+                let offsetX = (size.width - box.width * scale) / 2 - box.minX * scale
+                let offsetY = (size.height - box.height * scale) / 2 - box.minY * scale
+                func map(_ point: CGPoint) -> CGPoint {
+                    CGPoint(x: point.x * scale + offsetX, y: point.y * scale + offsetY)
+                }
+                let light = RaccoonHead.gridStep * scale * 0.42
+                for point in sample.head {
+                    let centre = map(point)
+                    context.fill(
+                        Path(ellipseIn: CGRect(x: centre.x - light, y: centre.y - light, width: light * 2, height: light * 2)),
+                        with: .color(Color.Bandito.signal))
+                }
+                // Shut eyes: one dash per eye, as long as the eye's lights.
+                for (index, points) in sample.eyes.enumerated() where !points.isEmpty && index < sample.eyeCentres.count {
+                    let left = points.reduce(CGFloat.greatestFiniteMagnitude) { min($0, $1.x) }
+                    let right = points.reduce(-CGFloat.greatestFiniteMagnitude) { max($0, $1.x) }
+                    let y = sample.eyeCentres[index].y
+                    var dash = Path()
+                    dash.move(to: map(CGPoint(x: left, y: y)))
+                    dash.addLine(to: map(CGPoint(x: right, y: y)))
+                    context.stroke(dash, with: .color(Color.Bandito.text), style: StrokeStyle(lineWidth: light * 1.4, lineCap: .round))
+                }
+            }
+            Text("z")
+                .font(BanditoFont.display(size: 15, weight: 700))
+                .foregroundStyle(Color.Bandito.signal)
+                .offset(x: 6, y: -2)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The Inbox widget. Small: the count in signal, its caption, the waiting raccoons and their names; with nothing
+/// waiting, the sleeping raccoon and "All quiet". Lock screen: the count (circular) and the count with the working agent
+/// (rectangular). No snapshot yet: the placeholder.
 struct InboxWidgetView: View {
     let snapshot: WidgetSnapshot?
     let family: WidgetFamily
@@ -81,27 +159,39 @@ struct InboxWidgetView: View {
     }
 
     private var small: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(L10n.Ios.Widget.waitingTitle)
-                .font(BanditoFont.display(size: 12, weight: 600))
-                .foregroundStyle(Color.Bandito.text2)
-                .lineLimit(2)
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 0) {
             if let snapshot {
                 if snapshot.pending > 0 {
                     Text("\(snapshot.pending)")
-                        .font(BanditoFont.display(size: 46, weight: 700))
+                        .font(BanditoFont.display(size: 40, weight: 700))
                         .foregroundStyle(Color.Bandito.signal)
                         .minimumScaleFactor(0.5)
                         .lineLimit(1)
-                } else {
-                    HStack(spacing: 8) {
-                        WidgetRaccoon(name: "Inbox", mood: .sleeping, tint: Color.Bandito.surface3, size: 36)
-                        Text(L10n.Ios.Widget.allQuiet)
-                            .font(BanditoFont.text(size: 13, weight: 500))
-                            .foregroundStyle(Color.Bandito.text)
-                            .lineLimit(2)
+                    Text(L10n.Ios.Widget.waitingTitle)
+                        .font(BanditoFont.display(size: 11, weight: 600))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .lineLimit(1)
+                    Spacer(minLength: 6)
+                    if !snapshot.waiting.isEmpty {
+                        WaitingAvatars(agents: snapshot.waiting)
                     }
+                    if let line = waitingLine(snapshot) {
+                        Text(line)
+                            .font(BanditoFont.text(size: 12, weight: 500))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                            .padding(.top, 6)
+                    }
+                } else {
+                    Spacer(minLength: 0)
+                    SleepingRaccoon()
+                        .frame(width: 70, height: 70)
+                    Text(L10n.Ios.Widget.allQuiet)
+                        .font(BanditoFont.display(size: 14, weight: 600))
+                        .foregroundStyle(Color.Bandito.text)
+                        .lineLimit(1)
+                        .padding(.top, 6)
+                    Spacer(minLength: 0)
                 }
             } else {
                 Text(L10n.Ios.Widget.open)
@@ -112,6 +202,13 @@ struct InboxWidgetView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(14)
+    }
+
+    /// "Forge, Watch", or "Forge, Watch и ещё 1" when more wait than the line names; nil when nobody is named.
+    private func waitingLine(_ snapshot: WidgetSnapshot) -> String? {
+        let names = snapshot.waitingNames.joined(separator: ", ")
+        guard !names.isEmpty else { return nil }
+        return snapshot.waitingMore > 0 ? L10n.Ios.Widget.more(names: names, count: snapshot.waitingMore) : names
     }
 
     private var circular: some View {

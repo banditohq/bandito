@@ -1048,6 +1048,7 @@
 "ios.widget.inbox.desc" = "Bandito에서 기다리는 항목 수.";
 "ios.widget.inbox.name" = "받은 편지함";
 "ios.widget.lock.working" = "%1$@ 작업 중";
+"ios.widget.more" = "%1$@ 외 %2$lld명";
 "ios.widget.open" = "Bandito 열기";
 "ios.widget.status.error" = "오류";
 "ios.widget.status.idle" = "여유";

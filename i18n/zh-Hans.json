@@ -3206,5 +3206,6 @@
   "ios.widget.status.idle": "空闲",
   "ios.widget.status.error": "出错",
   "ios.widget.status.offline": "离线",
+  "ios.widget.more": "{names} 等 {count} 个",
   "ios.widget.open": "打开 Bandito"
 }

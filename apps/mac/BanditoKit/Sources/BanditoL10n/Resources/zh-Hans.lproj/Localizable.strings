@@ -1048,6 +1048,7 @@
 "ios.widget.inbox.desc" = "Bandito 中等待你处理的事项数量。";
 "ios.widget.inbox.name" = "收件箱";
 "ios.widget.lock.working" = "%1$@ 正在工作";
+"ios.widget.more" = "%1$@ 等 %2$lld 个";
 "ios.widget.open" = "打开 Bandito";
 "ios.widget.status.error" = "出错";
 "ios.widget.status.idle" = "空闲";

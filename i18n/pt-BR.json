@@ -3246,5 +3246,6 @@
   "ios.widget.status.idle": "livre",
   "ios.widget.status.error": "erro",
   "ios.widget.status.offline": "offline",
+  "ios.widget.more": "{names} e mais {count}",
   "ios.widget.open": "Abra o Bandito"
 }

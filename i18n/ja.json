@@ -3206,5 +3206,6 @@
   "ios.widget.status.idle": "空き",
   "ios.widget.status.error": "エラー",
   "ios.widget.status.offline": "オフライン",
+  "ios.widget.more": "{names}ほか{count}人",
   "ios.widget.open": "Bandito を開く"
 }

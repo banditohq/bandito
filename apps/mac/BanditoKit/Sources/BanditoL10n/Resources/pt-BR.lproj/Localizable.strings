@@ -1048,6 +1048,7 @@
 "ios.widget.inbox.desc" = "Quantas coisas esperam por você no Bandito.";
 "ios.widget.inbox.name" = "Caixa de entrada";
 "ios.widget.lock.working" = "%1$@ trabalhando";
+"ios.widget.more" = "%1$@ e mais %2$lld";
 "ios.widget.open" = "Abra o Bandito";
 "ios.widget.status.error" = "erro";
 "ios.widget.status.idle" = "livre";

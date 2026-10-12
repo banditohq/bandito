@@ -1531,6 +1531,7 @@ public enum L10n {
 
         public enum Widget {
             public static var allQuiet: String { L10n.tr("ios.widget.allQuiet") }
+            public static func more(names: String, count: Int) -> String { L10n.tr("ios.widget.more", names, count) }
             public static var `open`: String { L10n.tr("ios.widget.open") }
             public static var waitingTitle: String { L10n.tr("ios.widget.waitingTitle") }
 

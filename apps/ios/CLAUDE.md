@@ -43,8 +43,7 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
 
 - `AppIcon` is `brand/png/icon-1024.png` with an alpha channel; App Store Connect rejects an icon with alpha: flatten it
   before the first upload.
-- The pairing flow (QR, link, address) is a placeholder sheet. The `bandito://` URL scheme is registered, but no link
-  handler exists yet.
+- The pairing flow (QR, link, address) is a placeholder sheet. The `bandito://` links (`inbox`, `crew`, `agent/<server>/<agent>`) are read by `BanditoLink` (`Shared/WidgetSnapshot.swift`) and opened in `RootView`: the tab switches, and an agent opens its row in the Crew (the chat is still a stub).
 - The chat, the agent's creation and the server's pairing are stubs (Crew shows them as "coming soon").
 - The button styles (`.signal`, `.quiet`) exist only in `BanditoUI`; `SignalButtonStyle` in `Crew/TeamViews.swift` is a
   copy for this target until they move to `BanditoDesign`.

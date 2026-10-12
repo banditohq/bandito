@@ -3329,5 +3329,6 @@
   "ios.widget.status.idle": "свободен",
   "ios.widget.status.error": "ошибка",
   "ios.widget.status.offline": "не в сети",
+  "ios.widget.more": "{names} и ещё {count}",
   "ios.widget.open": "Открой Bandito"
 }

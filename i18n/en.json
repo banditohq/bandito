@@ -3246,5 +3246,6 @@
   "ios.widget.status.idle": "free",
   "ios.widget.status.error": "error",
   "ios.widget.status.offline": "offline",
+  "ios.widget.more": "{names} and {count} more",
   "ios.widget.open": "Open Bandito"
 }

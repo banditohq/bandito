@@ -1048,6 +1048,7 @@
 "ios.widget.inbox.desc" = "Bandito で確認待ちの件数。";
 "ios.widget.inbox.name" = "受信トレイ";
 "ios.widget.lock.working" = "%1$@が作業中";
+"ios.widget.more" = "%1$@ほか%2$lld人";
 "ios.widget.open" = "Bandito を開く";
 "ios.widget.status.error" = "エラー";
 "ios.widget.status.idle" = "空き";
