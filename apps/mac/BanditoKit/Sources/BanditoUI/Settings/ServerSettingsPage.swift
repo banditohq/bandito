@@ -9,16 +9,18 @@ import SwiftUI
 struct ServerSettingsPage: View {
     let server: ServerModel
     let onBack: () -> Void
+    let previewDevices: [Device]?
     @State private var model: ServerSettingsModel
 
     /// `preview` and `previewStats` show the given values without a connection (the layout audit); a live page reads
     /// them from the server.
     init(
         server: ServerModel, onBack: @escaping () -> Void,
-        preview: ServerSettingsSnapshot? = nil, previewStats: HostStats? = nil
+        preview: ServerSettingsSnapshot? = nil, previewStats: HostStats? = nil, previewDevices: [Device]? = nil
     ) {
         self.server = server
         self.onBack = onBack
+        self.previewDevices = previewDevices
         _model = State(initialValue: ServerSettingsModel(server: server, snapshot: preview, stats: previewStats))
     }
 
@@ -35,6 +37,7 @@ struct ServerSettingsPage: View {
             notice
             ServerMainSection(server: server)
             ServerConnectionSection(server: server, onBack: onBack)
+            ServerPhoneSection(server: server, model: model, previewDevices: previewDevices)
             ServerAgentDefaultsSection(server: server, model: model)
             ServerMaintenanceSection(server: server, model: model)
             ServerInfoSection(server: server, model: model)

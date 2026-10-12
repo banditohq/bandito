@@ -167,7 +167,8 @@ struct PairSheet: View {
                     .font(BanditoFont.mono(size: 26, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .textSelection(.enabled)
-                QRCodeView(text: PairLink.url(code: code.code, host: host))
+                // A server with phone access gives the link the iPhone app reads; any other gets the plain code link.
+                QRCodeView(text: code.link ?? PairLink.url(code: code.code, host: host))
                 Text(L10n.Devices.pairExpires(minutes: String(code.expiresInMs / 60_000)))
                     .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)

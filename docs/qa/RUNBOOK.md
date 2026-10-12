@@ -56,6 +56,30 @@ Unknown commands are logged by the app as `QA unknown command …` (Console.app,
 - Do not point a QA copy at a real server: `-qa.server` takes a loopback URL made by `server.sh`.
   The onboarding flow can reach the account service; do not sign in with a real account from a QA copy.
 
+## Phone access (QA of the iPhone listener)
+
+Check it on a QA pair (never the installed daemon). The listener needs an address that is not loopback, so a QA daemon
+turns it on with `phone_access = lan` (port 7879 by default; give `phone_port` another one if two QA daemons run).
+
+1. `scripts/qa/server.sh up 1`, then ask the QA daemon over its own socket: `bandito --home ~/.cache/bandito-qa/1/home pair --phone`
+   says "phone access is off" (nothing listens besides 127.0.0.1:17881).
+2. In the QA app copy: Settings → Servers → the QA server → iPhone. Choose "On the local network". The line under the switch
+   says "Listening on [::]:7879, 0.0.0.0:7879" (or the failure). Look at German and Russian at the narrowest window.
+   `tailscale` with no Tailscale on the machine says "No Tailscale address…" and listens on nothing.
+3. `~/.cache/bandito-qa/1/home/tls/` holds `phone-cert.pem` and `phone-key.pem`, both mode 0600; the folder 0700.
+   `openssl x509 -in …/phone-cert.pem -outform der | shasum -a 256` equals `tls_fingerprint` in `daemon.info` and `fp=` in the link.
+4. "Connect iPhone" shows the QR code, the six words and the addresses. `bandito … pair --phone` prints the same kind of link
+   (`bandito://pair?v=1&code=…&fp=…&name=…&host=…`). A phone, or `openssl s_client -connect <lan ip>:7879 -tls1_3`, reaches the
+   TLS handshake; `openssl s_client -tls1_2` and plain `curl http://<lan ip>:7879/v1/health` get nothing.
+5. Without a device token every route but the anonymous hello and `pair.redeem` is refused: `curl -k https://<lan ip>:7879/v1/files/raw?path=/etc/hosts` is 401.
+   Eleven anonymous WebSocket upgrades from one address within ten minutes: the eleventh is 429.
+6. Switch the setting off: the port closes at once and open phone connections end; switch it on again: the fingerprint is the same.
+   Restart the QA daemon (`server.sh down 1`, `up 1`): the same.
+7. Disconnect a device in the list: its open connection ends and the next request with its token is 401.
+
+The daemon's own tests do all of this on loopback (`cargo test phone`); the app's rules are in `PhoneAccessRulesTests` and
+`PhonePairLinkTests`, the layout in the `settings-server-detail` and `sheet-phone-pair` cases of the layout audit.
+
 ## Cleaning up
 
 ```sh
