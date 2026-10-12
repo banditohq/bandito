@@ -153,7 +153,7 @@ struct MessageContainer<Bubble: View>: View {
                     .fill(chat.accent.opacity(flashing ? 0.2 : 0))
             )
             .padding(-6)
-            .banditoAnimation(.easeOut(duration: 0.3), value: flashing)
+            .banditoAnimation(.easeOut(duration: BanditoMotion.slow), value: flashing)
             // The row hangs under the bubble, from its edge, and is drawn over the reserved space below it.
             // It exists only while it is drawn: a thread of hundreds of messages would otherwise hold hundreds of
             // hidden buttons, menus and hover areas, and update them all on every scroll.
@@ -163,7 +163,7 @@ struct MessageContainer<Bubble: View>: View {
                         .transition(.opacity)
                 }
             }
-            .banditoAnimation(.easeOut(duration: 0.12), value: rowOpacity > 0)
+            .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: rowOpacity > 0)
             if !fromUser { Spacer(minLength: 120) }
         }
         .padding(.bottom, MessageActionsPlacement.reservedBelow)
@@ -219,7 +219,7 @@ struct MessageContainer<Bubble: View>: View {
         .opacity(rowOpacity)
         .allowsHitTesting(rowOpacity > 0)
         .onHover(perform: setHover)
-        .banditoAnimation(.easeOut(duration: 0.12), value: rowOpacity)
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: rowOpacity)
     }
 
     private var copyButton: some View {

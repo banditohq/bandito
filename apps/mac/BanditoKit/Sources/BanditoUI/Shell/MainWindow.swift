@@ -56,6 +56,7 @@ struct MainWindow: View {
                     .transition(.opacity)
             }
         }
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: router.paletteOpen)
         .overlay {
             if let viewer = router.imageViewer {
                 ImageViewer(request: viewer)

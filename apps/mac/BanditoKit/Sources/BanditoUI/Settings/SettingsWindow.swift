@@ -63,7 +63,13 @@ public struct SettingsWindow: View {
                 .background(Color.Bandito.bg)
             // A page can never push the navigation out of the window: it gets the leftover width and clips the rest.
             GeometryReader { _ in
-                content
+                // One section fades into the next, both in one place.
+                ZStack(alignment: .topLeading) {
+                    content
+                        .id(section)
+                        .transition(.opacity)
+                }
+                .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: section)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()

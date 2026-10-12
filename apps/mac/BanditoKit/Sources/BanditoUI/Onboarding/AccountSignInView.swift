@@ -152,7 +152,7 @@ struct AccountSignInView: View {
 
             VStack(alignment: .leading, spacing: 16) {
                 Button {
-                    withAnimation(BanditoMotion.ease) { showEmail.toggle() }
+                    withBanditoAnimation(BanditoMotion.ease) { showEmail.toggle() }
                 } label: {
                     Text(L10n.Onboarding.Account.emailToggle)
                         .font(BanditoFont.text(size: 13.5, weight: 500))

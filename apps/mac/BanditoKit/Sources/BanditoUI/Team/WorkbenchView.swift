@@ -213,7 +213,7 @@ private struct WorkbenchHeader: View {
             }
             .onChange(of: paneState.selected, initial: true) { _, selected in
                 guard let selected else { return }
-                withAnimation(.easeOut(duration: BanditoMotion.fast)) { strip.scrollTo(selected) }
+                withBanditoAnimation(.easeOut(duration: BanditoMotion.fast)) { strip.scrollTo(selected) }
             }
             }
             .frame(maxWidth: .infinity)

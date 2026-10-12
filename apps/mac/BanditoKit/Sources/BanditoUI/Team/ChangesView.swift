@@ -829,7 +829,7 @@ private struct LineReveal: ViewModifier {
             .offset(x: visible ? 0 : -6)
             .onAppear {
                 guard !shown, !reduceMotion, let delay else { return }
-                withAnimation(.easeOut(duration: 0.3).delay(delay)) { shown = true }
+                withBanditoAnimation(.easeOut(duration: BanditoMotion.slow).delay(delay)) { shown = true }
             }
     }
 }

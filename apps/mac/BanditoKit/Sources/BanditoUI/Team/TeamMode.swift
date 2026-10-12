@@ -92,12 +92,16 @@ struct TeamMode: View {
                         .contentShape(Rectangle())
                         .onTapGesture { router.closeWorkbenchPanel(agentID: agent.id) }
                         .transition(.opacity)
+                        .zIndex(1)
                 }
                 if open {
                     // A slide of the finished panel (fixed width): only its position changes, so nothing inside
                     // is laid out again. No fade: it would draw the whole panel off screen on every frame.
+                    // On top while it leaves too: a view going out of a ZStack loses its place in the order, so the
+                    // panel slid out under the chat and seemed to close at once.
                     panel(server: server, agent: agent, width: width, modeWidth: modeWidth, covers: covers)
                         .transition(.move(edge: .trailing))
+                        .zIndex(2)
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -105,7 +109,7 @@ struct TeamMode: View {
         }
         .banditoAnimation(WorkbenchLayout.slide, value: open)
         // The ground takes no clicks, so the title band behind the mode gets the empty space (double-click zooms).
-        .background { Color.Bandito.bg.allowsHitTesting(false) }
+        .modeGround()
         // The agent on screen stays the chosen one, so an approval or status change elsewhere does not move it.
         // Not remembered as the last opened agent: only an explicit choice is (Router.selectAgent). Kept under
         // another mode, the chat changes no choice.
@@ -228,7 +232,7 @@ private struct EmptyTeam: View {
     var body: some View {
         if app.currentServer == nil {
             NoServerView(symbol: "bubble.left.and.text.bubble.right")
-                .background { Color.Bandito.bg.allowsHitTesting(false) }
+                .modeGround()
         } else {
             VStack(spacing: 14) {
                 Image(systemName: "bubble.left.and.text.bubble.right")
@@ -252,7 +256,7 @@ private struct EmptyTeam: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background { Color.Bandito.bg.allowsHitTesting(false) }
+            .modeGround()
         }
     }
 }

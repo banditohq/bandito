@@ -1,3 +1,4 @@
+import BanditoDesign
 import BanditoKit
 import Foundation
 import SwiftUI
@@ -315,7 +316,7 @@ enum WorkbenchLayout {
 
     /// The panel's move in and out: a spring on its position. Light damping only, so the panel does not swing past
     /// its place over the chat.
-    static let slide = Animation.spring(response: 0.36, dampingFraction: 0.9)
+    static let slide = BanditoMotion.slide
 
     /// The room the chat gives the panel on its right edge: the whole panel when it sits beside the chat, nothing when
     /// it is closed or lies over the chat. Set at once, never animated (see `TeamMode`).
