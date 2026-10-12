@@ -31,8 +31,8 @@ struct WhatNeedsMeSnippet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             Button(intent: OpenInboxIntent()) {
                 Text(L10n.Ios.Intent.Open.inbox)
-                    .font(BanditoFont.text(size: 15, weight: 600))
             }
+            .buttonStyle(SignalButtonStyle())
         }
         .padding(BanditoSpace.s2)
     }
