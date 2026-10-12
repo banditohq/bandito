@@ -3316,5 +3316,6 @@
   "shortcut.title.openInbox": "打开收件箱",
   "ios.intent.ask.failed": "无法发送给 {name}，请重试。",
   "ios.settings.servers.leftOnServerTitle": "已从这台 iPhone 移除",
-  "ios.settings.servers.leftOnServerMessage": "无法连接到服务器，因此服务器仍把这台 iPhone 列为设备。请在 Mac 上移除：设置 → 服务器 → 该服务器 → iPhone → 断开。"
+  "ios.settings.servers.leftOnServerMessage": "无法连接到服务器，因此服务器仍把这台 iPhone 列为设备。请在 Mac 上移除：设置 → 服务器 → 该服务器 → iPhone → 断开。",
+  "serverSettings.phone.pair.expired": "此代码已过期。请用“新代码”重新生成。"
 }

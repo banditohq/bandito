@@ -55,12 +55,19 @@ enum PhoneAccessRules {
     enum PairState: Equatable {
         /// The link passed the check: draw its QR code, the code, and the addresses.
         case ready(link: String, code: String, hosts: [String], expiresInMinutes: Int)
+        /// The code ran out of time: nothing of it stays on the screen.
+        case expired
         /// The daemon gave no link: phone access is off or not listening.
         case notListening
         /// The link is of a version this app does not know.
         case updateApp
         /// The link did not pass the check: no QR code is drawn.
         case invalid
+    }
+
+    /// How long the code is shown: its lifetime, less a moment so a code that is about to run out is not read off the screen.
+    static func shownFor(_ reply: PairCode) -> Duration {
+        .milliseconds(max(0, reply.expiresInMs - 2_000))
     }
 
     static func pairState(for reply: PairCode) -> PairState {

@@ -2363,6 +2363,7 @@
 "serverSettings.phone.mode.tailscale" = "Через Tailscale";
 "serverSettings.phone.notListening" = "Пока не слушает. Сервер пробует снова каждые 30 секунд.";
 "serverSettings.phone.pair.codeLabel" = "Или введите этот код";
+"serverSettings.phone.pair.expired" = "Этот код истёк. Создайте новый кнопкой «Новый код».";
 "serverSettings.phone.pair.expires" = "Действует %1$@ мин. Работает один раз.";
 "serverSettings.phone.pair.hosts" = "Адреса: %1$@";
 "serverSettings.phone.pair.invalid" = "Сервер создал ссылку, которая выглядит неверно, поэтому QR-код не показан. Попробуйте ещё раз и обновите сервер, если повторяется.";

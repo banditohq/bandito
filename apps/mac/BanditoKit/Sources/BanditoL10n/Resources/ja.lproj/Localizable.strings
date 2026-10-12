@@ -2363,6 +2363,7 @@
 "serverSettings.phone.mode.tailscale" = "Tailscale 経由";
 "serverSettings.phone.notListening" = "まだ待ち受けていません。サーバーは 30 秒ごとに再試行します。";
 "serverSettings.phone.pair.codeLabel" = "または次のコードを入力";
+"serverSettings.phone.pair.expired" = "このコードは期限切れです。「新しいコード」で作り直してください。";
 "serverSettings.phone.pair.expires" = "有効期間は %1$@ 分。一度だけ使えます。";
 "serverSettings.phone.pair.hosts" = "アドレス: %1$@";
 "serverSettings.phone.pair.invalid" = "サーバーが正しくないリンクを作成したため、QR コードは表示されません。もう一度試し、繰り返す場合はサーバーを更新してください。";

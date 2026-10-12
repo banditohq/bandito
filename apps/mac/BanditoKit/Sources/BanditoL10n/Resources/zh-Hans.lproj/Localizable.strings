@@ -2363,6 +2363,7 @@
 "serverSettings.phone.mode.tailscale" = "通过 Tailscale";
 "serverSettings.phone.notListening" = "尚未监听。服务器每 30 秒重试一次。";
 "serverSettings.phone.pair.codeLabel" = "或输入此代码";
+"serverSettings.phone.pair.expired" = "此代码已过期。请用“新代码”重新生成。";
 "serverSettings.phone.pair.expires" = "%1$@ 分钟内有效，仅可使用一次。";
 "serverSettings.phone.pair.hosts" = "地址：%1$@";
 "serverSettings.phone.pair.invalid" = "服务器生成的链接看起来不正确，因此不显示二维码。请重试；若仍出现，请更新服务器。";

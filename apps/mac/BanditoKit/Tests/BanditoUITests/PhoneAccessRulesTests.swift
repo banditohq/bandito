@@ -72,6 +72,14 @@ import Testing
         }
     }
 
+    @Test func aCodeIsShownForItsLifetimeLessAMoment() {
+        let tenMinutes = PairCode(code: "a", expiresInMs: 600_000)
+        #expect(PhoneAccessRules.shownFor(tenMinutes) == .milliseconds(598_000))
+        #expect(PhoneAccessRules.shownFor(PairCode(code: "a", expiresInMs: 1_000)) == .zero, "a code with no time left is not shown")
+        #expect(PhoneAccessRules.shownFor(PairCode(code: "a", expiresInMs: 0)) == .zero)
+        #expect(PhoneAccessRules.PairState.expired != .notListening)
+    }
+
     @Test func theSwitchChangeBecomesAPatchAndIsShownAtOnce() {
         let current = ServerSettingValues(
             screenIdleMinutes: 30, maxRunningAgents: 0, backupEveryHours: 24, backupKeep: 14, autoUpdate: .notify,

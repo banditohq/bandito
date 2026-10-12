@@ -3400,6 +3400,7 @@ public enum L10n {
 
             public enum Pair {
                 public static var codeLabel: String { L10n.tr("serverSettings.phone.pair.codeLabel") }
+                public static var expired: String { L10n.tr("serverSettings.phone.pair.expired") }
                 public static func expires(minutes: String) -> String { L10n.tr("serverSettings.phone.pair.expires", minutes) }
                 public static func hosts(hosts: String) -> String { L10n.tr("serverSettings.phone.pair.hosts", hosts) }
                 public static var invalid: String { L10n.tr("serverSettings.phone.pair.invalid") }

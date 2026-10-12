@@ -2363,6 +2363,7 @@
 "serverSettings.phone.mode.tailscale" = "Via Tailscale";
 "serverSettings.phone.notListening" = "Pas encore à l’écoute. Le serveur réessaie toutes les 30 secondes.";
 "serverSettings.phone.pair.codeLabel" = "Ou saisis ce code";
+"serverSettings.phone.pair.expired" = "Ce code a expiré. Crée-en un nouveau avec « Nouveau code ».";
 "serverSettings.phone.pair.expires" = "Valable %1$@ min. Utilisable une seule fois.";
 "serverSettings.phone.pair.hosts" = "Adresses : %1$@";
 "serverSettings.phone.pair.invalid" = "Le serveur a créé un lien qui semble incorrect : aucun code QR n’est affiché. Réessaie et mets le serveur à jour si cela continue.";

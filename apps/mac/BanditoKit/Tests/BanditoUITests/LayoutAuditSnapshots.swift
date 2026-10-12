@@ -136,6 +136,9 @@ import Testing
         AuditCase(name: "sheet-phone-pair", width: 420, selfSized: true) { env in
             AnyView(PhonePairSheet(server: env.server, preview: phonePairPreview))
         },
+        AuditCase(name: "sheet-phone-pair-expired", width: 420, selfSized: true) { env in
+            AnyView(PhonePairSheet(server: env.server, preview: .expired))
+        },
         AuditCase(name: "sheet-phone-pair-off", width: 420, selfSized: true) { env in
             AnyView(PhonePairSheet(server: env.server, preview: .notListening))
         },

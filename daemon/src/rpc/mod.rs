@@ -178,8 +178,9 @@ pub struct App {
     pub migrate: crate::migrate::Registry,
     /// The TLS listener for phones (see docs/ARCHITECTURE.md#phone-access). Off until the owner switches it on.
     pub phone: Arc<crate::phone::PhoneAccess>,
-    /// The ids of revoked devices: a connection of a revoked device ends at once (see [`serve`]).
-    revoked: broadcast::Sender<String>,
+    /// One cancellation token per paired device: revoking the device cancels it, and every long connection of the device
+    /// (RPC, tunnel, DevTools, a file or preview stream) ends with it (see [`App::device_cancel`]).
+    device_cancels: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
 }
 
 impl App {
@@ -249,9 +250,35 @@ impl App {
             creations: team_create::Creations::default(),
             migrate: crate::migrate::Registry::default(),
             phone: Arc::new(crate::phone::PhoneAccess::new(data_home.clone(), me.clone())),
-            revoked: broadcast::channel(64).0,
+            device_cancels: Mutex::new(HashMap::new()),
             data_home,
         })
+    }
+
+    /// The token that is cancelled when the device is revoked. A device that is already gone gets a cancelled token, so a
+    /// connection that was authenticated just before the revoke ends at once too.
+    pub fn device_cancel(&self, device_id: &str) -> tokio_util::sync::CancellationToken {
+        let gone = !self.sup.hub().store.device_exists(device_id).unwrap_or(true);
+        let mut map = self.device_cancels.lock().unwrap_or_else(|e| e.into_inner());
+        if gone {
+            map.remove(device_id);
+            let token = tokio_util::sync::CancellationToken::new();
+            token.cancel();
+            return token;
+        }
+        map.entry(device_id.to_string()).or_default().clone()
+    }
+
+    /// Ends every long connection of the device (it was revoked).
+    pub fn cancel_device(&self, device_id: &str) {
+        let token = self
+            .device_cancels
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(device_id);
+        if let Some(token) = token {
+            token.cancel();
+        }
     }
 
     /// Puts the daemon in safe mode, with the reason. Called once, at start, by `main`.
@@ -1786,8 +1813,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let Id { id } = params(p)?;
             let revoked = store.device_revoke(&id)?;
             if revoked {
-                // Its open connections end now, not when the app next reconnects.
-                let _ = app.revoked.send(id);
+                // Its open connections (RPC, tunnels, DevTools, file and preview streams) end now.
+                app.cancel_device(&id);
             }
             ok(json!({ "revoked": revoked }))
         }
@@ -3042,10 +3069,10 @@ async fn recv_event(rx: &mut Option<broadcast::Receiver<Event>>) -> Result<Event
     }
 }
 
-/// The next revoked device id, or never for a connection that is no device's.
-async fn recv_revoked(rx: &mut Option<broadcast::Receiver<String>>) -> Result<String, broadcast::error::RecvError> {
-    match rx {
-        Some(r) => r.recv().await,
+/// Ends when the token is cancelled, or never for a connection that has none.
+async fn cancelled_or_never(token: &Option<tokio_util::sync::CancellationToken>) {
+    match token {
+        Some(token) => token.cancelled().await,
         None => std::future::pending().await,
     }
 }
@@ -3066,30 +3093,13 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
     let mut last: i64 = 0;
     let mut terms = term::Stream::default();
     // A paired device whose pairing is revoked while it is connected is cut off (also if it is revoked right now).
-    let device_id = match &peer {
-        Peer::Device(device) => Some(device.id.clone()),
+    let device_cancel = match &peer {
+        Peer::Device(device) => Some(app.device_cancel(&device.id)),
         _ => None,
     };
-    let mut revoked = device_id.as_ref().map(|_| app.revoked.subscribe());
-    if let Some(id) = &device_id
-        && !app.sup.hub().store.device_exists(id).unwrap_or(true)
-    {
-        return;
-    }
     loop {
         tokio::select! {
-            gone = recv_revoked(&mut revoked) => {
-                let ends = match gone {
-                    Ok(id) => device_id.as_deref() == Some(id.as_str()),
-                    // Missed some: look the device up.
-                    Err(_) => device_id
-                        .as_ref()
-                        .is_some_and(|id| !app.sup.hub().store.device_exists(id).unwrap_or(true)),
-                };
-                if ends {
-                    break;
-                }
-            }
+            () = cancelled_or_never(&device_cancel) => break,
             msg = inbox.recv() => {
                 let Some(msg) = msg else { break };
                 let req: Request = match serde_json::from_str::<Value>(&msg) {

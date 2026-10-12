@@ -82,6 +82,8 @@ struct PhonePairSheet: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            case .expired:
+                problem(L10n.ServerSettings.Phone.Pair.expired)
             case .notListening:
                 problem(L10n.ServerSettings.Phone.Pair.notListening)
             case .updateApp:
@@ -109,6 +111,11 @@ struct PhonePairSheet: View {
             // A newer request replaced this one (New code pressed again): keep the newer answer.
             guard !Task.isCancelled else { return }
             state = PhoneAccessRules.pairState(for: reply)
+            // The code is taken off the screen when its time is up: no dead code and QR stay to be scanned.
+            if case .ready = state {
+                try await Task.sleep(for: PhoneAccessRules.shownFor(reply))
+                state = .expired
+            }
         } catch {
             guard !Task.isCancelled else { return }
             self.error = UserFacingError.message(for: error)

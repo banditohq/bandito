@@ -3316,5 +3316,6 @@
   "shortcut.title.openInbox": "受信トレイを開く",
   "ios.intent.ask.failed": "{name}に送信できませんでした。もう一度お試しください。",
   "ios.settings.servers.leftOnServerTitle": "この iPhone から削除しました",
-  "ios.settings.servers.leftOnServerMessage": "サーバーに接続できなかったため、この iPhone はサーバーの端末一覧に残っています。Mac で「設定」→「サーバー」→ 対象のサーバー → iPhone →「切断」から削除してください。"
+  "ios.settings.servers.leftOnServerMessage": "サーバーに接続できなかったため、この iPhone はサーバーの端末一覧に残っています。Mac で「設定」→「サーバー」→ 対象のサーバー → iPhone →「切断」から削除してください。",
+  "serverSettings.phone.pair.expired": "このコードは期限切れです。「新しいコード」で作り直してください。"
 }

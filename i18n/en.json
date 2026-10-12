@@ -3358,5 +3358,6 @@
   "shortcut.title.openInbox": "Open Inbox",
   "ios.intent.ask.failed": "Could not send to {name}. Try again.",
   "ios.settings.servers.leftOnServerTitle": "Removed from this iPhone",
-  "ios.settings.servers.leftOnServerMessage": "The server could not be reached, so it still lists this iPhone as a device. Remove it on the Mac: Settings → Servers → the server → iPhone → Disconnect."
+  "ios.settings.servers.leftOnServerMessage": "The server could not be reached, so it still lists this iPhone as a device. Remove it on the Mac: Settings → Servers → the server → iPhone → Disconnect.",
+  "serverSettings.phone.pair.expired": "This code has expired. Make a new one with New code."
 }

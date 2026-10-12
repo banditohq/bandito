@@ -40,8 +40,28 @@ pub const ATTEMPT_WINDOW_MS: i64 = 10 * 60 * 1000;
 const MAX_SOURCES: usize = 4096;
 /// Open connections one phone listener keeps. More are closed at once.
 const MAX_CONNECTIONS: usize = 256;
+/// Open connections one source (an IPv4 address, or an IPv6 /64) may hold on the phone listeners together.
+#[cfg(not(test))]
+pub const MAX_PER_SOURCE: usize = 32;
+#[cfg(test)]
+pub const MAX_PER_SOURCE: usize = 8;
+/// Anonymous WebSockets (the only way to pair) one source may hold at once.
+pub const MAX_ANONYMOUS_PER_SOURCE: usize = 3;
 /// A TLS handshake that takes longer is dropped.
+#[cfg(not(test))]
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(test)]
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_millis(800);
+/// An anonymous WebSocket that has sent no `pair.redeem` in this time is closed.
+#[cfg(not(test))]
+pub const ANONYMOUS_IDLE: Duration = Duration::from_secs(30);
+#[cfg(test)]
+pub const ANONYMOUS_IDLE: Duration = Duration::from_millis(800);
+/// After its `pair.redeem` an anonymous WebSocket lives this much longer at most (the app reconnects with its token).
+#[cfg(not(test))]
+pub const ANONYMOUS_AFTER_REDEEM: Duration = Duration::from_secs(60);
+#[cfg(test)]
+pub const ANONYMOUS_AFTER_REDEEM: Duration = Duration::from_secs(3);
 /// Time a client has to send a request's headers (also between two requests of one connection).
 const HEADER_TIMEOUT: Duration = Duration::from_secs(20);
 /// How often the listeners are matched to the machine's addresses (Tailscale may come up after the daemon).
@@ -53,13 +73,30 @@ const MAX_NAME_CHARS: usize = 64;
 /// The version of the pairing link (`v=`). An app that does not know it asks for an update.
 pub const LINK_VERSION: u32 = 1;
 
+/// An address of this machine and the name of the interface that carries it (`en0`, `utun4`, `tailscale0`).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct IfaceAddr {
+    pub name: String,
+    pub ip: IpAddr,
+}
+
+impl IfaceAddr {
+    pub fn new(name: &str, ip: IpAddr) -> Self {
+        Self {
+            name: name.to_string(),
+            ip,
+        }
+    }
+}
+
 /// Where the machine's addresses come from. Replaced in tests.
-pub type Ifaces = Arc<dyn Fn() -> Vec<IpAddr> + Send + Sync>;
+pub type Ifaces = Arc<dyn Fn() -> Vec<IfaceAddr> + Send + Sync>;
 /// Which addresses a mode listens on. Replaced in tests, to listen on loopback with a port the system picks.
 type Planner = Arc<dyn Fn(PhoneMode, u16) -> Vec<SocketAddr> + Send + Sync>;
 
-/// Whether `ip` is a Tailscale address: `100.64.0.0/10` or `fd7a:115c:a1e0::/48`.
-pub fn is_tailscale(ip: IpAddr) -> bool {
+/// Whether `ip` is in a range Tailscale uses: `100.64.0.0/10` or `fd7a:115c:a1e0::/48`. Other carriers use the
+/// 100.64.0.0/10 block too, so the range alone does not make an address Tailscale's: see [`is_tailscale`].
+pub fn is_tailscale_range(ip: IpAddr) -> bool {
     match ip.to_canonical() {
         IpAddr::V4(v4) => v4.octets()[0] == 100 && v4.octets()[1] & 0xC0 == 64,
         IpAddr::V6(v6) => {
@@ -69,9 +106,21 @@ pub fn is_tailscale(ip: IpAddr) -> bool {
     }
 }
 
-/// Whether `ip` is a private address of a local network (not Tailscale, not link-local, not loopback).
-fn is_lan(ip: IpAddr) -> bool {
-    if is_tailscale(ip) {
+/// Whether an interface of this name is Tailscale's: `tailscale*`, `ts*`, or a `utun*` (macOS names it so).
+pub fn is_tailscale_iface(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.starts_with("tailscale") || name.starts_with("ts") || name.starts_with("utun")
+}
+
+/// Whether the address is a Tailscale address: in Tailscale's range and on an interface of Tailscale's name.
+pub fn is_tailscale(addr: &IfaceAddr) -> bool {
+    is_tailscale_range(addr.ip) && is_tailscale_iface(&addr.name)
+}
+
+/// Whether `ip` is a private address of a local network: RFC 1918 or `fc00::/7`. Not Tailscale's range, not
+/// link-local, not loopback, and never a public address.
+fn is_private(ip: IpAddr) -> bool {
+    if is_tailscale_range(ip) {
         return false;
     }
     match ip.to_canonical() {
@@ -80,9 +129,27 @@ fn is_lan(ip: IpAddr) -> bool {
     }
 }
 
-/// The addresses of the interfaces that are up, loopback left out. Empty when the list cannot be read.
-pub fn interface_addrs() -> Vec<IpAddr> {
-    let mut out = Vec::new();
+/// An address the `lan` mode may listen on and the pairing link may name: private (a local network) or Tailscale's.
+fn is_phone_reachable(addr: &IfaceAddr) -> bool {
+    is_private(addr.ip) || is_tailscale(addr)
+}
+
+/// The key a source is counted under: an IPv4 address, or the /64 of an IPv6 one (a host can use any address of its
+/// /64, so counting single addresses would let it step around a limit).
+pub fn source_key(ip: IpAddr) -> String {
+    match ip.to_canonical() {
+        IpAddr::V4(v4) => v4.to_string(),
+        IpAddr::V6(v6) => {
+            let s = v6.segments();
+            format!("{:x}:{:x}:{:x}:{:x}::/64", s[0], s[1], s[2], s[3])
+        }
+    }
+}
+
+/// The addresses of the interfaces that are up, loopback left out, each with its interface's name. Empty when the list
+/// cannot be read.
+pub fn interface_addrs() -> Vec<IfaceAddr> {
+    let mut out: Vec<IfaceAddr> = Vec::new();
     let mut head: *mut libc::ifaddrs = std::ptr::null_mut();
     // SAFETY: `getifaddrs` fills `head` with a list that `freeifaddrs` releases; the list is only read in between.
     if unsafe { libc::getifaddrs(&mut head) } != 0 {
@@ -113,9 +180,15 @@ pub fn interface_addrs() -> Vec<IpAddr> {
         if let Some(ip) = ip
             && !ip.is_loopback()
             && !ip.is_unspecified()
-            && !out.contains(&ip)
         {
-            out.push(ip);
+            // SAFETY: `ifa_name` is a NUL-terminated string of the node.
+            let name = unsafe { std::ffi::CStr::from_ptr(node.ifa_name) }
+                .to_string_lossy()
+                .into_owned();
+            let entry = IfaceAddr { name, ip };
+            if !out.contains(&entry) {
+                out.push(entry);
+            }
         }
     }
     // SAFETY: `head` came from `getifaddrs` and nothing points into the list any more.
@@ -123,29 +196,28 @@ pub fn interface_addrs() -> Vec<IpAddr> {
     out
 }
 
-/// The addresses the daemon listens on for `mode` and `port`, given the machine's `ifaces`.
-pub fn plan(mode: PhoneMode, port: u16, ifaces: &[IpAddr]) -> Vec<SocketAddr> {
-    match mode {
-        PhoneMode::Off => Vec::new(),
-        PhoneMode::Tailscale => {
-            let mut ips: Vec<IpAddr> = ifaces.iter().copied().filter(|ip| is_tailscale(*ip)).collect();
-            ips.sort();
-            ips.dedup();
-            ips.into_iter().map(|ip| SocketAddr::new(ip, port)).collect()
-        }
-        PhoneMode::Lan => vec![
-            SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port),
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port),
-        ],
-    }
+/// The addresses the daemon listens on for `mode` and `port`, given the machine's `ifaces`. Never a wildcard and never a
+/// public address: `tailscale` takes Tailscale's addresses, `lan` takes those and the private ones (RFC 1918,
+/// `fc00::/7`). Link-local IPv6 (`fe80::/10`) is left out: it needs the interface's scope to be bound or named in a
+/// link, and no phone pairs through it.
+pub fn plan(mode: PhoneMode, port: u16, ifaces: &[IfaceAddr]) -> Vec<SocketAddr> {
+    let wanted = |addr: &&IfaceAddr| match mode {
+        PhoneMode::Off => false,
+        PhoneMode::Tailscale => is_tailscale(addr),
+        PhoneMode::Lan => is_phone_reachable(addr),
+    };
+    let mut ips: Vec<IpAddr> = ifaces.iter().filter(wanted).map(|a| a.ip).collect();
+    ips.sort();
+    ips.dedup();
+    ips.into_iter().map(|ip| SocketAddr::new(ip, port)).collect()
 }
 
 /// The `host:port` strings a phone can try for this machine, the best first: Tailscale, then the local network
 /// (not in `tailscale` mode). IPv6 is in square brackets.
-pub fn pair_hosts(mode: PhoneMode, port: u16, ifaces: &[IpAddr]) -> Vec<String> {
+pub fn pair_hosts(mode: PhoneMode, port: u16, ifaces: &[IfaceAddr]) -> Vec<String> {
     let mut hosts: Vec<IpAddr> = Vec::new();
-    let mut push = |filter: &dyn Fn(IpAddr) -> bool| {
-        let mut found: Vec<IpAddr> = ifaces.iter().copied().filter(|ip| filter(*ip)).collect();
+    let mut push = |filter: &dyn Fn(&IfaceAddr) -> bool| {
+        let mut found: Vec<IpAddr> = ifaces.iter().filter(|a| filter(a)).map(|a| a.ip).collect();
         // IPv4 first: it is the one every phone network has.
         found.sort_by_key(|ip| (ip.is_ipv6(), *ip));
         hosts.extend(found);
@@ -155,7 +227,7 @@ pub fn pair_hosts(mode: PhoneMode, port: u16, ifaces: &[IpAddr]) -> Vec<String> 
         PhoneMode::Tailscale => push(&is_tailscale),
         PhoneMode::Lan => {
             push(&is_tailscale);
-            push(&is_lan);
+            push(&|a: &IfaceAddr| is_private(a.ip));
         }
     }
     hosts.dedup();
@@ -197,14 +269,17 @@ fn percent_encode(s: &str) -> String {
     out
 }
 
-/// Anonymous upgrades by address and time: at most [`ATTEMPT_MAX`] in [`ATTEMPT_WINDOW_MS`] from one address.
+/// Anonymous upgrades by source and time: at most [`ATTEMPT_MAX`] in [`ATTEMPT_WINDOW_MS`] from one source (an IPv4
+/// address or an IPv6 /64, see [`source_key`]).
 #[derive(Default)]
 pub struct AttemptLimiter {
     by_source: Mutex<HashMap<String, VecDeque<i64>>>,
 }
 
 impl AttemptLimiter {
-    /// Counts an attempt of `source` at `now` (unix ms). False when it is over the limit (and then not counted).
+    /// Counts an attempt of `source` at `now` (unix ms). False when it is over the limit (and then not counted). A full
+    /// table drops the source that was quiet the longest to make room: flooding it with new sources pushes out the
+    /// oldest records, it never locks everybody else out.
     pub fn attempt(&self, source: &str, now: i64) -> bool {
         let mut map = self.by_source.lock().unwrap_or_else(|e| e.into_inner());
         map.retain(|_, times| {
@@ -214,7 +289,13 @@ impl AttemptLimiter {
             !times.is_empty()
         });
         if !map.contains_key(source) && map.len() >= MAX_SOURCES {
-            return false;
+            let oldest = map
+                .iter()
+                .min_by_key(|(_, times)| times.back().copied().unwrap_or(i64::MIN))
+                .map(|(key, _)| key.clone());
+            if let Some(key) = oldest {
+                map.remove(&key);
+            }
         }
         let times = map.entry(source.to_string()).or_default();
         if times.len() >= ATTEMPT_MAX {
@@ -222,6 +303,82 @@ impl AttemptLimiter {
         }
         times.push_back(now);
         true
+    }
+}
+
+/// Open connections per source, with a ceiling. A slot is held for the life of the connection and freed on drop.
+pub struct ConnLimiter {
+    max: usize,
+    open: Mutex<HashMap<String, usize>>,
+}
+
+/// One open connection of a source.
+pub struct ConnSlot {
+    limiter: Arc<ConnLimiter>,
+    key: String,
+}
+
+impl ConnLimiter {
+    pub fn new(max: usize) -> Arc<Self> {
+        Arc::new(Self {
+            max,
+            open: Mutex::new(HashMap::new()),
+        })
+    }
+
+    /// A slot for `key`, or None when the source already holds the most it may.
+    pub fn acquire(self: &Arc<Self>, key: &str) -> Option<ConnSlot> {
+        let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
+        let count = open.entry(key.to_string()).or_insert(0);
+        if *count >= self.max {
+            return None;
+        }
+        *count += 1;
+        Some(ConnSlot {
+            limiter: self.clone(),
+            key: key.to_string(),
+        })
+    }
+
+    /// How many connections `key` holds now.
+    pub fn held(&self, key: &str) -> usize {
+        self.open
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(key)
+            .copied()
+            .unwrap_or(0)
+    }
+}
+
+impl Drop for ConnSlot {
+    fn drop(&mut self) {
+        let mut open = self.limiter.open.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(count) = open.get_mut(&self.key) {
+            *count -= 1;
+            if *count == 0 {
+                open.remove(&self.key);
+            }
+        }
+    }
+}
+
+/// What the phone listeners share against floods: pairing attempts, anonymous WebSockets and open connections per
+/// source.
+#[derive(Clone)]
+pub struct PhoneLimits {
+    pub attempts: Arc<AttemptLimiter>,
+    pub anonymous: Arc<ConnLimiter>,
+    pub connections: Arc<ConnLimiter>,
+}
+
+impl Default for PhoneLimits {
+    fn default() -> Self {
+        Self {
+            attempts: Arc::default(),
+            anonymous: ConnLimiter::new(MAX_ANONYMOUS_PER_SOURCE),
+            connections: ConnLimiter::new(MAX_PER_SOURCE),
+        }
     }
 }
 
@@ -300,7 +457,7 @@ pub struct PhoneAccess {
     running: tokio::sync::Mutex<Running>,
     status: Mutex<Status>,
     tls: Mutex<Option<Arc<Tls>>>,
-    limiter: Arc<AttemptLimiter>,
+    limits: PhoneLimits,
 }
 
 impl PhoneAccess {
@@ -321,7 +478,7 @@ impl PhoneAccess {
             }),
             status: Mutex::new(Status::off()),
             tls: Mutex::new(None),
-            limiter: Arc::new(AttemptLimiter::default()),
+            limits: PhoneLimits::default(),
         }
     }
 
@@ -354,9 +511,9 @@ impl PhoneAccess {
         self.status().to_json(self.fingerprint().as_deref())
     }
 
-    /// The anonymous-upgrade limit shared by every phone listener.
-    pub fn limiter(&self) -> Arc<AttemptLimiter> {
-        self.limiter.clone()
+    /// The limits shared by every phone listener.
+    pub fn limits(&self) -> PhoneLimits {
+        self.limits.clone()
     }
 
     /// The link and hosts for a pairing `code`, from what is listening now.
@@ -462,10 +619,16 @@ impl PhoneAccess {
             match TcpListener::bind(addr).await {
                 Ok(tcp) => {
                     let bound = tcp.local_addr().unwrap_or(*addr);
-                    let router = ws::router_phone(app.clone(), bound.ip(), self.limiter.clone());
+                    let router = ws::router_phone(app.clone(), bound.ip(), self.limits.clone());
                     let cancel = CancellationToken::new();
                     let acceptor = TlsAcceptor::from(tls.config.clone());
-                    let task = tokio::spawn(accept_loop(tcp, acceptor, router, cancel.clone()));
+                    let task = tokio::spawn(accept_loop(
+                        tcp,
+                        acceptor,
+                        router,
+                        cancel.clone(),
+                        self.limits.connections.clone(),
+                    ));
                     tracing::info!(%bound, "phone access: listening (TLS)");
                     state.listeners.insert(*addr, Listener { cancel, task, bound });
                 }
@@ -493,7 +656,7 @@ impl PhoneAccess {
         }
         let home = self.home.clone();
         let hostname = hostname.to_string();
-        let ips = (self.sources().ifaces)();
+        let ips: Vec<IpAddr> = (self.sources().ifaces)().into_iter().map(|a| a.ip).collect();
         let tls = tokio::task::spawn_blocking(move || load_or_create(&home, &hostname, &ips))
             .await
             .map_err(|e| anyhow!("certificate task failed: {e}"))??;
@@ -526,7 +689,13 @@ impl PhoneAccess {
 }
 
 /// Accepts connections until `cancel`, then drops the listener and every open connection.
-async fn accept_loop(tcp: TcpListener, acceptor: TlsAcceptor, router: axum::Router, cancel: CancellationToken) {
+async fn accept_loop(
+    tcp: TcpListener,
+    acceptor: TlsAcceptor,
+    router: axum::Router,
+    cancel: CancellationToken,
+    per_source: Arc<ConnLimiter>,
+) {
     let mut connections: JoinSet<()> = JoinSet::new();
     loop {
         let accepted = tokio::select! {
@@ -548,10 +717,17 @@ async fn accept_loop(tcp: TcpListener, acceptor: TlsAcceptor, router: axum::Rout
             continue;
         }
         let peer = SocketAddr::new(peer.ip().to_canonical(), peer.port());
+        // One source (an address, or an IPv6 /64) holds only so many connections: a slow or idle client cannot take
+        // every slot of the listener. The slot is held until the connection ends.
+        let Some(slot) = per_source.acquire(&source_key(peer.ip())) else {
+            drop(stream);
+            continue;
+        };
         let acceptor = acceptor.clone();
         let router = router.clone().layer(axum::Extension(axum::extract::ConnectInfo(peer)));
         let cancel = cancel.clone();
         connections.spawn(async move {
+            let _slot = slot;
             let tls = match tokio::time::timeout(HANDSHAKE_TIMEOUT, acceptor.accept(stream)).await {
                 Ok(Ok(tls)) => tls,
                 // A scanner, a client that does not trust or speak TLS 1.3, a stalled handshake: nothing to log loudly.
@@ -858,8 +1034,17 @@ mod tests {
         fp: &str,
         headers: &[(&str, &str)],
     ) -> Result<Ws, tokio_tungstenite::tungstenite::Error> {
+        ws_path(addr, fp, "/v1/rpc", headers).await
+    }
+
+    async fn ws_path(
+        addr: SocketAddr,
+        fp: &str,
+        path: &str,
+        headers: &[(&str, &str)],
+    ) -> Result<Ws, tokio_tungstenite::tungstenite::Error> {
         let tls = tls_connect(addr, fp).await.expect("TLS handshake");
-        let mut req = format!("ws://localhost:{}/v1/rpc", addr.port())
+        let mut req = format!("ws://localhost:{}{path}", addr.port())
             .into_client_request()
             .unwrap();
         for (k, v) in headers {
@@ -884,6 +1069,32 @@ mod tests {
                 Message::Text(t) => return serde_json::from_str(&t).unwrap(),
                 _ => continue,
             }
+        }
+    }
+
+    fn ia(name: &str, ip: &str) -> IfaceAddr {
+        IfaceAddr::new(name, ip.parse().unwrap())
+    }
+
+    /// Waits until the closed anonymous sockets have given their slots back (the server notices a close a moment later).
+    async fn wait_no_anonymous(app: &Arc<App>) {
+        let limits = app.phone.limits();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
+        while limits.anonymous.held("127.0.0.1") > 0 {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "the anonymous slots were not freed"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    /// The HTTP status of a refused upgrade (0 when it was accepted).
+    fn status_of(result: Result<Ws, tokio_tungstenite::tungstenite::Error>) -> u16 {
+        match result {
+            Err(tokio_tungstenite::tungstenite::Error::Http(res)) => res.status().as_u16(),
+            Err(other) => panic!("expected an HTTP refusal, got {other:?}"),
+            Ok(_) => 0,
         }
     }
 
@@ -913,7 +1124,7 @@ mod tests {
             PhoneMode::Off => Vec::new(),
             _ => vec!["127.0.0.1:0".parse().unwrap()],
         });
-        let ifaces: Ifaces = Arc::new(|| vec!["100.101.102.103".parse().unwrap(), "192.168.1.5".parse().unwrap()]);
+        let ifaces: Ifaces = Arc::new(|| vec![ia("tailscale0", "100.101.102.103"), ia("en0", "192.168.1.5")]);
         app.phone.set_sources(ifaces, Some(planner));
         World { app, home }
     }
@@ -1074,14 +1285,313 @@ mod tests {
         let fp = w.app.phone.fingerprint().unwrap();
         for i in 0..ATTEMPT_MAX {
             assert!(ws(addr, &fp, &[]).await.is_ok(), "attempt {i}");
+            wait_no_anonymous(&w.app).await;
         }
-        match ws(addr, &fp, &[]).await {
-            Err(tokio_tungstenite::tungstenite::Error::Http(res)) => assert_eq!(res.status().as_u16(), 429),
-            other => panic!("expected 429, got {:?}", other.map(|_| ())),
-        }
+        assert_eq!(status_of(ws(addr, &fp, &[]).await), 429);
         // A paired device is not held back by it.
         let auth = format!("Bearer {TOKEN}");
         assert!(ws(addr, &fp, &[("Authorization", &auth)]).await.is_ok());
+        w.app.phone.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn a_wrong_scheme_of_authorization_is_still_anonymous_and_still_counted() {
+        let w = world();
+        set(&w.app, json!({"phone_access": "lan"})).await;
+        let addr = bound(&w.app);
+        let fp = w.app.phone.fingerprint().unwrap();
+        let headers = [
+            "Basic dXNlcjpwYXNz",
+            "Basic",
+            "Digest x=1",
+            "bearer lowercase",
+            "Bearer",
+            "Token abc",
+        ];
+        for header in headers {
+            // No device token in it: an anonymous upgrade, counted, whatever the header says.
+            let mut socket = ws(addr, &fp, &[("Authorization", header)])
+                .await
+                .unwrap_or_else(|e| panic!("{header}: {e}"));
+            assert_eq!(
+                rpc_call(&mut socket, "daemon.hello").await["result"]["authenticated"],
+                json!(false),
+                "{header}"
+            );
+            let _ = socket.close(None).await;
+            wait_no_anonymous(&w.app).await;
+        }
+        // A bearer token that no device has is refused as one, and is not an anonymous upgrade.
+        assert_eq!(
+            status_of(ws(addr, &fp, &[("Authorization", "Bearer bdt_not_a_device")]).await),
+            401
+        );
+        let basic = [("Authorization", "Basic dXNlcjpwYXNz")];
+        let counted = ATTEMPT_MAX - headers.len();
+        for i in 0..counted {
+            let result = ws(addr, &fp, &basic).await;
+            assert_eq!(status_of(result), 0, "attempt {i}");
+            wait_no_anonymous(&w.app).await;
+        }
+        assert_eq!(
+            status_of(ws(addr, &fp, &basic).await),
+            429,
+            "the limit is reached with Basic headers too"
+        );
+        assert_eq!(
+            status_of(ws(addr, &fp, &[]).await),
+            429,
+            "and it is one limit for the source"
+        );
+        w.app.phone.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn a_source_may_hold_only_a_few_anonymous_sockets_and_a_closed_one_frees_its_place() {
+        let w = world();
+        set(&w.app, json!({"phone_access": "lan"})).await;
+        let addr = bound(&w.app);
+        let fp = w.app.phone.fingerprint().unwrap();
+        let mut open = Vec::new();
+        for i in 0..MAX_ANONYMOUS_PER_SOURCE {
+            open.push(ws(addr, &fp, &[]).await.unwrap_or_else(|e| panic!("socket {i}: {e}")));
+        }
+        assert_eq!(
+            status_of(ws(addr, &fp, &[]).await),
+            429,
+            "one more than the source may hold"
+        );
+        // A paired device is not held by the anonymous slots.
+        let auth = format!("Bearer {TOKEN}");
+        assert!(ws(addr, &fp, &[("Authorization", &auth)]).await.is_ok());
+        let mut first = open.remove(0);
+        first.close(None).await.unwrap();
+        drop(first);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
+        loop {
+            if status_of(ws(addr, &fp, &[]).await) == 0 {
+                break;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "the freed place was never usable"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        w.app.phone.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn an_anonymous_socket_that_does_not_pair_in_time_is_closed_and_a_paired_one_is_not() {
+        let w = world();
+        set(&w.app, json!({"phone_access": "lan"})).await;
+        let addr = bound(&w.app);
+        let fp = w.app.phone.fingerprint().unwrap();
+        let auth = format!("Bearer {TOKEN}");
+        let mut paired = ws(addr, &fp, &[("Authorization", &auth)]).await.unwrap();
+        // Silent, and hello only: neither asks to pair.
+        let mut silent = ws(addr, &fp, &[]).await.unwrap();
+        let mut hello = ws(addr, &fp, &[]).await.unwrap();
+        assert!(rpc_call(&mut hello, "daemon.hello").await["result"].is_object());
+        for socket in [&mut silent, &mut hello] {
+            let ended = tokio::time::timeout(ANONYMOUS_IDLE + Duration::from_secs(3), async {
+                while let Some(Ok(_)) = socket.next().await {}
+            })
+            .await;
+            assert!(ended.is_ok(), "an anonymous socket without a pairing request is closed");
+        }
+        // One that asks to pair gets longer, but not forever.
+        let mut redeeming = ws(addr, &fp, &[]).await.unwrap();
+        redeeming
+            .send(Message::Text(
+                json!({"jsonrpc":"2.0","id":1,"method":"pair.redeem","params":{"code":"nope-nope-nope-nope-nope-nope","device_name":"x"}})
+                    .to_string()
+                    .into(),
+            ))
+            .await
+            .unwrap();
+        let ended = tokio::time::timeout(
+            ANONYMOUS_IDLE + ANONYMOUS_AFTER_REDEEM + Duration::from_secs(3),
+            async { while let Some(Ok(_)) = redeeming.next().await {} },
+        )
+        .await;
+        assert!(ended.is_ok(), "even one that asked to pair does not stay for ever");
+        // The paired socket lived through all of that.
+        assert!(rpc_call(&mut paired, "devices.list").await["result"].is_array());
+        w.app.phone.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn a_client_that_never_finishes_the_tls_handshake_does_not_keep_its_place() {
+        let w = world();
+        set(&w.app, json!({"phone_access": "lan"})).await;
+        let addr = bound(&w.app);
+        // Connect and say nothing: the handshake times out and the connection is closed.
+        let mut idle = TcpStream::connect(addr).await.unwrap();
+        let mut buf = [0u8; 16];
+        let read = tokio::time::timeout(Duration::from_secs(5), idle.read(&mut buf)).await;
+        assert!(matches!(read, Ok(Ok(0)) | Ok(Err(_))), "the server closed it: {read:?}");
+        w.app.phone.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn one_source_cannot_fill_the_listener_with_idle_connections() {
+        let w = world();
+        set(&w.app, json!({"phone_access": "lan"})).await;
+        let addr = bound(&w.app);
+        let fp = w.app.phone.fingerprint().unwrap();
+        let mut held = Vec::new();
+        for _ in 0..MAX_PER_SOURCE {
+            held.push(TcpStream::connect(addr).await.unwrap());
+        }
+        // The next one from the same source is closed at once, before any handshake.
+        let mut extra = TcpStream::connect(addr).await.unwrap();
+        let mut buf = [0u8; 16];
+        let read = tokio::time::timeout(Duration::from_millis(400), extra.read(&mut buf)).await;
+        assert!(
+            matches!(read, Ok(Ok(0)) | Ok(Err(_))),
+            "the source is over its share: {read:?}"
+        );
+        // When the idle ones time out, the source can connect again.
+        drop(held);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            if https(addr, &fp, "/v1/health", &[]).await.0 == 200 {
+                break;
+            }
+            assert!(tokio::time::Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        w.app.phone.shutdown().await;
+    }
+
+    /// A TCP target on loopback that sends a never-ending HTTP answer, slowly. For the tunnel and the preview proxy.
+    async fn endless_server() -> u16 {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    return;
+                };
+                tokio::spawn(async move {
+                    let mut request = [0u8; 2048];
+                    let _ = socket.read(&mut request).await;
+                    if socket
+                        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000000000\r\nContent-Type: application/octet-stream\r\n\r\n")
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                    let chunk = vec![7u8; 16 * 1024];
+                    while socket.write_all(&chunk).await.is_ok() {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                });
+            }
+        });
+        port
+    }
+
+    /// Reads until the connection ends, within `within`. Returns how many bytes came.
+    async fn read_until_end(tls: &mut tokio_rustls::client::TlsStream<TcpStream>, within: Duration) -> Option<usize> {
+        let mut total = 0;
+        let mut buf = vec![0u8; 64 * 1024];
+        let finished = tokio::time::timeout(within, async {
+            loop {
+                match tls.read(&mut buf).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => total += n,
+                }
+            }
+        })
+        .await;
+        finished.ok().map(|()| total)
+    }
+
+    #[tokio::test]
+    async fn revoking_a_device_ends_its_rpc_tunnel_file_and_preview_connections_within_a_second() {
+        let w = world();
+        set(&w.app, json!({"phone_access": "lan"})).await;
+        let addr = bound(&w.app);
+        let fp = w.app.phone.fingerprint().unwrap();
+        let auth = format!("Bearer {TOKEN}");
+        let id = w.app.sup.hub().store.device_list().unwrap()[0].id.clone();
+
+        // RPC.
+        let mut rpc_socket = ws(addr, &fp, &[("Authorization", &auth)]).await.unwrap();
+        assert!(rpc_call(&mut rpc_socket, "daemon.hello").await["result"].is_object());
+        // A tunnel to a TCP target that accepts and holds.
+        let target = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let target_port = target.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((socket, _)) = target.accept().await {
+                held.push(socket);
+            }
+        });
+        let mut tunnel = ws_path(
+            addr,
+            &fp,
+            &format!("/v1/tunnel?port={target_port}"),
+            &[("Authorization", &auth)],
+        )
+        .await
+        .unwrap();
+        // A file the client does not read: the server is blocked in the middle of it.
+        let size = 48usize << 20;
+        std::fs::write(w.home.path().join("big.bin"), vec![1u8; size]).unwrap();
+        let mut file = tls_connect(addr, &fp).await.unwrap();
+        let request = format!(
+            "GET /v1/files/raw?path={} HTTP/1.1\r\nHost: localhost\r\nAuthorization: {auth}\r\n\r\n",
+            w.home.path().join("big.bin").display()
+        );
+        file.write_all(request.as_bytes()).await.unwrap();
+        let mut head = [0u8; 512];
+        let n = file.read(&mut head).await.unwrap();
+        assert!(String::from_utf8_lossy(&head[..n]).starts_with("HTTP/1.1 200"));
+        // The preview proxy, to a server that never stops.
+        let endless = endless_server().await;
+        let mut proxy = tls_connect(addr, &fp).await.unwrap();
+        proxy
+            .write_all(
+                format!("GET /v1/proxy/{endless}/x HTTP/1.1\r\nHost: localhost\r\nAuthorization: {auth}\r\n\r\n")
+                    .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let n = proxy.read(&mut head).await.unwrap();
+        assert!(String::from_utf8_lossy(&head[..n]).starts_with("HTTP/1.1 200"));
+
+        let revoked = rpc::dispatch(&w.app, &Peer::Local, "devices.revoke", json!({"id": id}))
+            .await
+            .unwrap();
+        assert_eq!(revoked["revoked"], json!(true));
+
+        let one_second = Duration::from_secs(1);
+        let rpc_ended =
+            tokio::time::timeout(one_second, async { while let Some(Ok(_)) = rpc_socket.next().await {} }).await;
+        assert!(rpc_ended.is_ok(), "the RPC socket ended");
+        let tunnel_ended =
+            tokio::time::timeout(one_second, async { while let Some(Ok(_)) = tunnel.next().await {} }).await;
+        assert!(tunnel_ended.is_ok(), "the tunnel ended");
+        let file_bytes = read_until_end(&mut file, one_second)
+            .await
+            .expect("the file stream ended");
+        assert!(
+            file_bytes + n < size,
+            "the file stopped before its end ({file_bytes} of {size})"
+        );
+        assert!(
+            read_until_end(&mut proxy, one_second).await.is_some(),
+            "the preview stream ended"
+        );
+        // And the token opens nothing any more, not even a new tunnel.
+        assert!(
+            matches!(ws_path(addr, &fp, "/v1/tunnel?port=1", &[("Authorization", &auth)]).await,
+            Err(tokio_tungstenite::tungstenite::Error::Http(res)) if res.status().as_u16() == 401)
+        );
         w.app.phone.shutdown().await;
     }
 
@@ -1102,17 +1612,62 @@ mod tests {
     }
 
     #[test]
-    fn a_full_table_of_addresses_refuses_new_ones() {
+    fn a_full_table_makes_room_by_dropping_the_quietest_source_not_by_refusing_everyone() {
         let limiter = AttemptLimiter::default();
         for i in 0..MAX_SOURCES {
-            assert!(limiter.attempt(&format!("src-{i}"), 5));
+            assert!(limiter.attempt(&format!("src-{i}"), 5 + i as i64));
         }
-        assert!(!limiter.attempt("one-more", 6));
-        assert!(limiter.attempt("src-1", 6), "a known address still counts");
+        // A new source is let in; the one that was quiet the longest (src-0) is forgotten for it.
+        assert!(limiter.attempt("one-more", 100_000));
+        for _ in 0..ATTEMPT_MAX - 1 {
+            assert!(limiter.attempt("one-more", 100_001));
+        }
         assert!(
-            limiter.attempt("one-more", 5 + ATTEMPT_WINDOW_MS + 1),
-            "old entries make room"
+            !limiter.attempt("one-more", 100_002),
+            "and it is limited like any other"
         );
+        // src-0 lost its record: it starts over (the others kept theirs).
+        for _ in 0..ATTEMPT_MAX {
+            assert!(limiter.attempt("src-0", 100_003));
+        }
+        assert!(!limiter.attempt("src-0", 100_004));
+        assert!(
+            limiter.attempt("src-1", 100_005),
+            "a source with older records is let in too"
+        );
+    }
+
+    #[test]
+    fn sources_are_counted_per_ipv4_address_and_per_ipv6_64() {
+        let key = |s: &str| source_key(s.parse().unwrap());
+        assert_eq!(key("203.0.113.7"), "203.0.113.7");
+        assert_eq!(key("::ffff:203.0.113.7"), "203.0.113.7");
+        assert_eq!(key("2001:db8:1:2:aaaa:bbbb:cccc:dddd"), key("2001:db8:1:2:1::1"));
+        assert_ne!(key("2001:db8:1:2::1"), key("2001:db8:1:3::1"));
+        let limiter = AttemptLimiter::default();
+        // A host steps through addresses of its /64: all of them are one source.
+        for i in 0..ATTEMPT_MAX {
+            assert!(limiter.attempt(&key(&format!("2001:db8:1:2::{i:x}")), 10));
+        }
+        assert!(!limiter.attempt(&key("2001:db8:1:2:ffff::1"), 11));
+        assert!(
+            limiter.attempt(&key("2001:db8:1:99::1"), 11),
+            "another /64 is another source"
+        );
+    }
+
+    #[test]
+    fn a_source_holds_only_so_many_connections() {
+        let limiter = ConnLimiter::new(2);
+        let first = limiter.acquire("a").unwrap();
+        let second = limiter.acquire("a").unwrap();
+        assert!(limiter.acquire("a").is_none());
+        assert!(limiter.acquire("b").is_some(), "another source has its own");
+        drop(first);
+        assert_eq!(limiter.held("a"), 1);
+        let third = limiter.acquire("a").expect("a freed slot is usable");
+        drop((second, third));
+        assert_eq!(limiter.held("a"), 0);
     }
 
     #[tokio::test]
@@ -1298,7 +1853,7 @@ mod tests {
     }
 
     #[test]
-    fn tailscale_addresses_are_the_cgnat_block_and_the_tailscale_ula() {
+    fn tailscale_ranges_are_the_cgnat_block_and_the_tailscale_ula() {
         for yes in [
             "100.64.0.0",
             "100.100.1.2",
@@ -1307,7 +1862,7 @@ mod tests {
             "fd7a:115c:a1e0:ab12::9",
             "::ffff:100.64.0.1",
         ] {
-            assert!(is_tailscale(yes.parse().unwrap()), "{yes}");
+            assert!(is_tailscale_range(yes.parse().unwrap()), "{yes}");
         }
         for no in [
             "100.63.255.255",
@@ -1320,24 +1875,46 @@ mod tests {
             "fe80::1",
             "2001:db8::1",
         ] {
-            assert!(!is_tailscale(no.parse().unwrap()), "{no}");
+            assert!(!is_tailscale_range(no.parse().unwrap()), "{no}");
         }
     }
 
     #[test]
-    fn the_plan_follows_the_mode() {
-        let ifaces: Vec<IpAddr> = [
-            "192.168.1.5",
-            "100.101.102.103",
-            "10.0.0.2",
-            "fd7a:115c:a1e0::5",
-            "fe80::1",
-            "100.64.0.9",
-            "100.101.102.103",
+    fn a_tailscale_address_is_on_an_interface_of_tailscales_name() {
+        for name in ["tailscale0", "utun4", "ts0", "Tailscale"] {
+            assert!(is_tailscale(&ia(name, "100.101.102.103")), "{name}");
+        }
+        // The same range on another carrier (a mobile network's CGNAT, another VPN) is not Tailscale.
+        for name in ["en0", "wlan0", "ppp0", "eth0", "wg0", "bridge100"] {
+            assert!(!is_tailscale(&ia(name, "100.101.102.103")), "{name}");
+        }
+        // The name alone is not enough either.
+        assert!(!is_tailscale(&ia("utun4", "192.168.1.5")));
+        assert!(!is_tailscale(&ia("tailscale0", "10.0.0.1")));
+    }
+
+    fn machine() -> Vec<IfaceAddr> {
+        vec![
+            ia("en0", "192.168.1.5"),
+            ia("tailscale0", "100.101.102.103"),
+            ia("en0", "10.0.0.2"),
+            ia("tailscale0", "fd7a:115c:a1e0::5"),
+            ia("en0", "fe80::1"),
+            ia("utun3", "100.64.0.9"),
+            ia("tailscale0", "100.101.102.103"),
+            ia("ppp0", "100.80.0.7"),
+            ia("en1", "203.0.113.50"),
+            ia("en1", "2001:db8::77"),
+            ia("en0", "172.16.4.4"),
+            ia("en0", "fd12::7"),
+            ia("en0", "172.32.0.1"),
+            ia("en0", "169.254.7.7"),
         ]
-        .iter()
-        .map(|s| s.parse().unwrap())
-        .collect();
+    }
+
+    #[test]
+    fn the_plan_follows_the_mode_and_never_names_a_wildcard_or_a_public_address() {
+        let ifaces = machine();
         assert!(plan(PhoneMode::Off, 7879, &ifaces).is_empty());
         let ts: Vec<String> = plan(PhoneMode::Tailscale, 7879, &ifaces)
             .iter()
@@ -1352,36 +1929,58 @@ mod tests {
             .iter()
             .map(ToString::to_string)
             .collect();
-        assert_eq!(lan, vec!["[::]:7900", "0.0.0.0:7900"]);
+        assert_eq!(
+            lan,
+            vec![
+                "10.0.0.2:7900",
+                "100.64.0.9:7900",
+                "100.101.102.103:7900",
+                "172.16.4.4:7900",
+                "192.168.1.5:7900",
+                "[fd12::7]:7900",
+                "[fd7a:115c:a1e0::5]:7900",
+            ]
+        );
+        for mode in [PhoneMode::Tailscale, PhoneMode::Lan] {
+            for addr in plan(mode, 7879, &ifaces) {
+                assert!(!addr.ip().is_unspecified(), "{addr}");
+                let public = [
+                    "203.0.113.50",
+                    "2001:db8::77",
+                    "172.32.0.1",
+                    "100.80.0.7",
+                    "169.254.7.7",
+                    "fe80::1",
+                ];
+                assert!(
+                    !public.contains(&addr.ip().to_string().as_str()),
+                    "{addr} is not for a phone"
+                );
+            }
+        }
+        assert!(
+            plan(PhoneMode::Lan, 7879, &[ia("en1", "203.0.113.50")]).is_empty(),
+            "only a public address: nothing listens"
+        );
     }
 
     #[test]
     fn the_hosts_put_tailscale_first_then_the_local_network() {
-        let ifaces: Vec<IpAddr> = [
-            "192.168.1.5",
-            "fd7a:115c:a1e0::5",
-            "100.101.102.103",
-            "fe80::1",
-            "fd12::7",
-            "172.17.0.1",
-            "8.8.8.8",
-        ]
-        .iter()
-        .map(|s| s.parse().unwrap())
-        .collect();
+        let ifaces = machine();
         assert_eq!(
             pair_hosts(PhoneMode::Lan, 7879, &ifaces),
             vec![
+                "100.64.0.9:7879",
                 "100.101.102.103:7879",
                 "[fd7a:115c:a1e0::5]:7879",
-                "172.17.0.1:7879",
-                "192.168.1.5:7879",
-                "[fd12::7]:7879"
+                "10.0.0.2:7879",
+                "172.16.4.4:7879",
+                "192.168.1.5:7879"
             ]
         );
         assert_eq!(
             pair_hosts(PhoneMode::Tailscale, 7879, &ifaces),
-            vec!["100.101.102.103:7879", "[fd7a:115c:a1e0::5]:7879"]
+            vec!["100.64.0.9:7879", "100.101.102.103:7879", "[fd7a:115c:a1e0::5]:7879"]
         );
         assert!(pair_hosts(PhoneMode::Off, 7879, &ifaces).is_empty());
     }
@@ -1408,8 +2007,9 @@ mod tests {
 
     #[test]
     fn the_interface_list_never_has_loopback() {
-        for ip in interface_addrs() {
-            assert!(!ip.is_loopback() && !ip.is_unspecified(), "{ip}");
+        for addr in interface_addrs() {
+            assert!(!addr.ip.is_loopback() && !addr.ip.is_unspecified(), "{addr:?}");
+            assert!(!addr.name.is_empty());
         }
     }
 }

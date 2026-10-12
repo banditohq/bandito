@@ -70,8 +70,15 @@ pub(super) async fn cdp_browser(
         Ok(client) => client,
         Err(_) => return not_running(),
     };
+    let cancel = app.device_cancel(&device.id);
     ws.max_message_size(CDP_MESSAGE_LIMIT)
-        .on_upgrade(move |socket| pump(socket, client, slot))
+        .on_upgrade(move |socket| async move {
+            // Revoking the device ends the DevTools socket.
+            tokio::select! {
+                () = cancel.cancelled() => {}
+                () = pump(socket, client, slot) => {}
+            }
+        })
 }
 
 /// `GET /v1/browser/cdp/page/<target_id>?workspace=`: a WebSocket on one tab, as a plain CDP
@@ -107,8 +114,14 @@ pub(super) async fn cdp_page(
         }
         Err(LinkError::Closed) => return not_running(),
     };
+    let cancel = app.device_cancel(&device.id);
     ws.max_message_size(CDP_MESSAGE_LIMIT)
-        .on_upgrade(move |socket| pump(socket, page, slot))
+        .on_upgrade(move |socket| async move {
+            tokio::select! {
+                () = cancel.cancelled() => {}
+                () = pump(socket, page, slot) => {}
+            }
+        })
 }
 
 /// Carries one DevTools socket: each text message from the app is a command, and each answer or

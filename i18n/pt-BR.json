@@ -3358,5 +3358,6 @@
   "shortcut.title.openInbox": "Abrir caixa de entrada",
   "ios.intent.ask.failed": "Não foi possível enviar para {name}. Tente de novo.",
   "ios.settings.servers.leftOnServerTitle": "Removido deste iPhone",
-  "ios.settings.servers.leftOnServerMessage": "Não foi possível alcançar o servidor, então ele ainda lista este iPhone como dispositivo. Remova-o no Mac: Ajustes → Servidores → o servidor → iPhone → Desconectar."
+  "ios.settings.servers.leftOnServerMessage": "Não foi possível alcançar o servidor, então ele ainda lista este iPhone como dispositivo. Remova-o no Mac: Ajustes → Servidores → o servidor → iPhone → Desconectar.",
+  "serverSettings.phone.pair.expired": "Este código expirou. Crie outro com “Novo código”."
 }
