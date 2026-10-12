@@ -16,10 +16,13 @@ final class PairingS4ScreenshotTests: XCTestCase {
     private static let link =
         "bandito://pair?v=1&code=otter-lava-mint-orbit-crane-fig&fp=\(String(repeating: "ab", count: 32))&name=Studio%20Mac&host=100.101.102.103:7879&host=192.168.1.5:7879"
 
-    private func launch(_ arguments: [String], language: String) -> XCUIApplication {
+    private var appearance = "dark"
+
+    private func launch(_ arguments: [String], keepServers: Bool = false, language: String) -> XCUIApplication {
         let app = XCUIApplication()
+        // The app's own theme setting is given as a launch default: the screens then follow it whatever the device says.
         app.launchArguments =
-            ["-resetServers", "-AppleLanguages", "(\(language))", "-AppleLocale", language == "ru" ? "ru_RU" : "en_US"] + arguments
+            ["-ios.appearance.theme", appearance] + (keepServers ? [] : ["-resetServers"]) + ["-AppleLanguages", "(\(language))", "-AppleLocale", language == "ru" ? "ru_RU" : "en_US"] + arguments
         app.launch()
         return app
     }
@@ -40,12 +43,12 @@ final class PairingS4ScreenshotTests: XCTestCase {
         }
     }
 
-    func testFirstRunDarkEnglish() throws { try firstRun(.dark, "dark", "en") }
-    func testFirstRunDarkRussian() throws { try firstRun(.dark, "dark", "ru") }
-    func testFirstRunLightRussian() throws { try firstRun(.light, "light", "ru") }
+    func testFirstRunDarkEnglish() throws { try firstRun("dark", "en") }
+    func testFirstRunDarkRussian() throws { try firstRun("dark", "ru") }
+    func testFirstRunLightRussian() throws { try firstRun("light", "ru") }
 
-    private func firstRun(_ style: XCUIDevice.Appearance, _ appearance: String, _ language: String) throws {
-        XCUIDevice.shared.appearance = style
+    private func firstRun(_ appearance: String, _ language: String) throws {
+        self.appearance = appearance
         let daemon = try FakeDaemon()
         self.daemon = daemon
         // A scanned code asks first.
@@ -71,6 +74,12 @@ final class PairingS4ScreenshotTests: XCTestCase {
         _ = app.buttons["notifications.ask.later"].waitForExistence(timeout: 10)
         shoot("notifications-ask", appearance, language)
         app.buttons["notifications.ask.later"].tap()
+        Thread.sleep(forTimeInterval: 3)
+        shoot("crew-first-run", appearance, language)
+        // The paired server is kept: a new launch opens on its Crew, with the theme asked for.
+        app.terminate()
+        app = launch([], keepServers: true, language: language)
+        _ = app.tabBars.buttons.firstMatch.waitForExistence(timeout: 15)
         Thread.sleep(forTimeInterval: 3)
         shoot("crew", appearance, language)
         let tabs = app.tabBars.buttons
