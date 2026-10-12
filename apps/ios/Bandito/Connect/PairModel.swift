@@ -39,7 +39,7 @@ final class PairModel {
         case choose, manual
     }
 
-    private(set) var phase: Phase = .choose
+    private(set) var phase: Phase
     let session: ServerSession
     private let redeem: @Sendable (PairRequest, String, String) async throws -> PairedDevice
     private let probe: @Sendable (DirectHost) async -> String?
@@ -50,7 +50,7 @@ final class PairModel {
     private var lastIgnored: (text: String, at: Date)?
 
     init(
-        session: ServerSession, deviceName: String = UIDevice.current.name,
+        session: ServerSession, startsOnTypedForm: Bool = false, deviceName: String = UIDevice.current.name,
         redeem: @escaping @Sendable (PairRequest, String, String) async throws -> PairedDevice = { request, fingerprint, name in
             try await DevicePairing.redeem(request, fingerprint: fingerprint, deviceName: name)
         },
@@ -58,6 +58,7 @@ final class PairModel {
         revoke: @escaping @Sendable (PairedDevice) async -> Void = { await DevicePairing.revoke($0) }
     ) {
         self.session = session
+        phase = startsOnTypedForm ? .manual : .choose
         self.deviceName = deviceName
         self.redeem = redeem
         self.probe = probe

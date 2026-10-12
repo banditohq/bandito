@@ -10,11 +10,11 @@ struct RootView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// The servers: the paired ones (saved list and Keychain tokens), or the `-demo` world.
     @State private var session = ServerSession.shared
-    @State private var showsConnect = false
+    /// The connect sheet, with the way the person chose before it opened (the sheet is built from this value, not from
+    /// state read later: a sheet built from `isPresented` saw the old choice).
+    @State private var connect: ConnectRequest?
     /// A `bandito://pair` link opened from outside, until the connect sheet takes it.
     @State private var incomingLink: String?
-    /// How the person chose to connect on the onboarding's last step (opens the sheet on that way).
-    @State private var connectMode = OnboardingConnectMode.scanCode
     /// The explanation before the system's notification question, shown after the first server is connected.
     @State private var asksNotifications = false
     @State private var tab = AppTab.requested(in: ProcessInfo.processInfo.arguments)
@@ -57,8 +57,7 @@ struct RootView: View {
 
             if showsOnboarding {
                 OnboardingView(store: onboarding, motion: settings.motion, onConnect: { mode in
-                    connectMode = mode
-                    showsConnect = true
+                    connect = ConnectRequest(mode: mode)
                 })
                     .id(dynamicTypeSize)
                     .transition(.opacity)
@@ -82,7 +81,7 @@ struct RootView: View {
             if url.scheme?.lowercased() == "bandito", url.host?.lowercased() == "pair" {
                 // A pairing link: the connect sheet shows it and asks before anything is sent.
                 incomingLink = url.absoluteString
-                showsConnect = true
+                connect = ConnectRequest(mode: .scanCode)
             } else if let link = BanditoLink(url: url) {
                 openLink(link)
             }
@@ -125,12 +124,12 @@ struct RootView: View {
             session.loadIfNeeded()
             if PairingLaunchHooks.opensConnect() {
                 incomingLink = PairingLaunchHooks.link()
-                showsConnect = true
+                connect = ConnectRequest(mode: .scanCode)
             }
         }
-        .sheet(isPresented: $showsConnect, onDismiss: { Task { await askNotificationsIfFirstServer() } }) {
+        .sheet(item: $connect, onDismiss: { Task { await askNotificationsIfFirstServer() } }) { request in
             ConnectServerView(
-                session: session, incomingLink: $incomingLink, start: connectMode, onClose: { showsConnect = false })
+                session: session, incomingLink: $incomingLink, start: request.mode, onClose: { connect = nil })
         }
         .sheet(isPresented: $asksNotifications) {
             NotificationAskSheet(onDone: { asksNotifications = false })
@@ -140,8 +139,7 @@ struct RootView: View {
 
     /// Opens the connect sheet on the camera (the Crew's and Settings' "Connect a server").
     private func openConnect() {
-        connectMode = .scanCode
-        showsConnect = true
+        connect = ConnectRequest(mode: .scanCode)
     }
 
     /// The first time a server is connected, explains and then asks for notifications ("just in time", docs/IOS_APP.md).
@@ -226,4 +224,10 @@ struct ComingSoonTab: View {
             .navigationTitle(title)
         }
     }
+}
+
+/// A request to open the connect sheet, and the way to connect it starts on.
+struct ConnectRequest: Identifiable {
+    let id = UUID()
+    let mode: OnboardingConnectMode
 }

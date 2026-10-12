@@ -4,6 +4,7 @@ import Foundation
 ///
 ///     -openConnect                    opens the connect sheet at launch
 ///     -pairLink <text>                hands the sheet a link, as if it was opened from outside
+///     -pairLinkScanned                the link comes as if it was scanned (the screen words it as a code)
 ///     -pairCamera notAsked|denied|allowed|unavailable   shows that state of the camera permission
 enum PairingLaunchHooks {
     #if DEBUG
@@ -20,6 +21,10 @@ enum PairingLaunchHooks {
         value(after: "-pairLink", in: arguments)
     }
 
+    static func linkOrigin(in arguments: [String] = ProcessInfo.processInfo.arguments) -> LinkOrigin {
+        arguments.contains("-pairLinkScanned") ? .scan : .url
+    }
+
     static func camera(in arguments: [String] = ProcessInfo.processInfo.arguments) -> CameraAccess? {
         switch value(after: "-pairCamera", in: arguments) {
         case "notAsked": .notAsked
@@ -32,6 +37,7 @@ enum PairingLaunchHooks {
     #else
     static func opensConnect(in arguments: [String] = []) -> Bool { false }
     static func link(in arguments: [String] = []) -> String? { nil }
+    static func linkOrigin(in arguments: [String] = []) -> LinkOrigin { .url }
     static func camera(in arguments: [String] = []) -> CameraAccess? { nil }
     #endif
 }

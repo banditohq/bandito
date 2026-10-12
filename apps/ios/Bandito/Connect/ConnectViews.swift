@@ -25,7 +25,8 @@ struct ConnectServerView: View {
         _incomingLink = incomingLink
         self.start = start
         self.onClose = onClose
-        _model = State(initialValue: PairModel(session: session))
+        // "Type an address" on the onboarding opens the sheet on the form itself.
+        _model = State(initialValue: PairModel(session: session, startsOnTypedForm: start == .typeAddress && incomingLink.wrappedValue == nil))
     }
 
     var body: some View {
@@ -68,14 +69,10 @@ struct ConnectServerView: View {
                 }
             }
         }
-        .task {
-            // "Type an address" on the onboarding goes straight to the form; a link from outside has its own way in.
-            if start == .typeAddress, incomingLink == nil { model.showManual() }
-        }
         .task(id: incomingLink) {
             guard let link = incomingLink else { return }
             incomingLink = nil
-            model.submitLink(link, origin: .url)
+            model.submitLink(link, origin: PairingLaunchHooks.linkOrigin())
         }
         .onDisappear { model.cancel() }
         .interactiveDismissDisabled(model.isWorking)

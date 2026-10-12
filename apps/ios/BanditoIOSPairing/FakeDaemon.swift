@@ -16,6 +16,19 @@ final class FakeDaemon: @unchecked Sendable {
         fileprivate var base64: String { self == .a ? FakeDaemon.p12A : FakeDaemon.p12B }
     }
 
+    /// The agents `agents.list` answers: a small team, so the Crew screen has something to show.
+    static let team: [[String: Any]] = [
+        ["Forge", "Builder", "claude", "working"], ["Scout", "Researcher", "codex", "idle"],
+        ["Watch", "On call", "grok", "idle"],
+    ].enumerated().map { index, row in
+        [
+            "id": "fake-\(index + 1)", "name": row[0], "role": row[1], "runtime": row[2], "cwd": "/work/\(row[0].lowercased())",
+            "approval_mode": "risky", "created_at": 1, "updated_at": 1, "memory_mode": "smart", "context_tokens": 0,
+            "chapter": 1, "workspace_id": "shared", "paused": false, "lead": index == 0, "pending_approvals": 0,
+            "status": row[3],
+        ]
+    }
+
     private let listener: NWListener
     private let queue = DispatchQueue(label: "fake-daemon")
     private let lock = NSLock()
@@ -97,7 +110,9 @@ final class FakeDaemon: @unchecked Sendable {
                 "version": "0.1.15", "hostname": "fake", "os": "macos", "arch": "arm64", "started_at": 1, "last_seq": 0,
                 "features": ["phone_access"],
             ]
-        case "agents.list", "runtimes.status":
+        case "agents.list":
+            reply["result"] = Self.team
+        case "runtimes.status":
             reply["result"] = [Any]()
         case "events.subscribe":
             reply["result"] = ["last_seq": 0]
