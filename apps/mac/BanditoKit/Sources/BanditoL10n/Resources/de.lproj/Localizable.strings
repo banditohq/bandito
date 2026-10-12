@@ -1096,6 +1096,8 @@
 "ios.settings.servers.disconnect" = "Trennen";
 "ios.settings.servers.disconnectMessage" = "%1$@ und sein Gerätetoken werden von diesem iPhone entfernt. Der Server selbst bleibt unverändert.";
 "ios.settings.servers.disconnectTitle" = "%1$@ trennen?";
+"ios.settings.servers.leftOnServerMessage" = "Der Server war nicht erreichbar und führt dieses iPhone deshalb weiter als Gerät. Entferne es auf dem Mac: Einstellungen → Server → der Server → iPhone → Trennen.";
+"ios.settings.servers.leftOnServerTitle" = "Von diesem iPhone entfernt";
 "ios.settings.servers.removeFailed" = "Der Server konnte nicht getrennt werden. Versuchen Sie es noch einmal.";
 "ios.settings.servers.rename" = "Umbenennen";
 "ios.settings.servers.renameTitle" = "Server umbenennen";

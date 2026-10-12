@@ -3315,5 +3315,7 @@
   "shortcut.phrase.askAgent": "${applicationName}で${agent}に聞く",
   "shortcut.phrase.openAgent": "${applicationName}で${agent}を開く",
   "shortcut.title.openInbox": "受信トレイを開く",
-  "ios.intent.ask.failed": "{name}に送信できませんでした。もう一度お試しください。"
+  "ios.intent.ask.failed": "{name}に送信できませんでした。もう一度お試しください。",
+  "ios.settings.servers.leftOnServerTitle": "この iPhone から削除しました",
+  "ios.settings.servers.leftOnServerMessage": "サーバーに接続できなかったため、この iPhone はサーバーの端末一覧に残っています。Mac で「設定」→「サーバー」→ 対象のサーバー → iPhone →「切断」から削除してください。"
 }

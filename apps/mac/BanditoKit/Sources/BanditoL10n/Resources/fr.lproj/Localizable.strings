@@ -1096,6 +1096,8 @@
 "ios.settings.servers.disconnect" = "Déconnecter";
 "ios.settings.servers.disconnectMessage" = "%1$@ et son jeton d'appareil seront supprimés de cet iPhone. Le serveur lui-même ne change pas.";
 "ios.settings.servers.disconnectTitle" = "Déconnecter %1$@ ?";
+"ios.settings.servers.leftOnServerMessage" = "Le serveur n’a pas pu être joint et liste donc encore cet iPhone comme appareil. Retire-le sur le Mac : Réglages → Serveurs → le serveur → iPhone → Déconnecter.";
+"ios.settings.servers.leftOnServerTitle" = "Retiré de cet iPhone";
 "ios.settings.servers.removeFailed" = "Impossible de déconnecter le serveur. Réessayez.";
 "ios.settings.servers.rename" = "Renommer";
 "ios.settings.servers.renameTitle" = "Renommer le serveur";

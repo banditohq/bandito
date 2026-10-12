@@ -1,6 +1,7 @@
 import BanditoKit
 import Foundation
 import Observation
+import UIKit
 
 /// The servers this iPhone is connected to: the saved list (`servers.v1`, without tokens), the device tokens in the
 /// Keychain (one item per server, readable after the first unlock, never copied to another device), and a live
@@ -19,7 +20,13 @@ final class ServerSession {
     private(set) var servers: [ServerModel] = []
     /// The servers of the `-demo` launch (nothing is saved for them). Empty otherwise.
     private(set) var demo: [ServerModel] = []
+    /// Whether the saved list was read completely. Until then nothing is written (a list read in part would overwrite
+    /// the rest): a read that cannot be done yet (the phone was not unlocked since its restart) is tried again.
     private(set) var loaded = false
+    /// Servers whose disconnecting is under way (a second tap does nothing).
+    private(set) var disconnecting: Set<UUID> = []
+    @ObservationIgnored private var didReset = false
+    @ObservationIgnored private var unlockObserver: NSObjectProtocol?
 
     /// What the screens show: the demo world when there is one, else the paired servers.
     var current: [ServerModel] { demo.isEmpty ? servers : demo }
@@ -30,17 +37,23 @@ final class ServerSession {
     @ObservationIgnored private let store: ServerStore
     @ObservationIgnored private let secrets: SecretStore
     /// Connects a new model. Replaced in tests, so no network is touched.
-    @ObservationIgnored private let connect: @MainActor (ServerModel) -> Void
+    @ObservationIgnored private let connectOverride: (@MainActor (ServerModel) -> Void)?
     /// Asks a server to forget this device. Replaced in tests.
+    /// Called when a new server has connected for the first time: the notification cursor starts at its tail.
+    @ObservationIgnored var onFirstConnected: @MainActor (ServerModel) -> Void = { server in
+        IOSNotifications.shared.cursor.baseline(for: server)
+    }
+    /// Called when a server is forgotten: its notification cursor goes too.
+    @ObservationIgnored var forgetCursor: @MainActor (UUID) -> Void = { IOSNotifications.shared.cursor.forget(serverID: $0) }
     @ObservationIgnored var revokeSelf: @Sendable (ServerConfig) async -> Bool = { await DevicePairing.revokeSelf(config: $0) }
 
     init(
         store: ServerStore = ServerStore(), secrets: SecretStore = ServerSession.deviceSecrets(),
-        connect: @escaping @MainActor (ServerModel) -> Void = { model in Task { await model.connect() } }
+        connect: (@MainActor (ServerModel) -> Void)? = nil
     ) {
         self.store = store
         self.secrets = secrets
-        self.connect = connect
+        self.connectOverride = connect
     }
 
     /// Where device tokens are kept: the Keychain. On the Simulator an unsigned build (the project builds that way) has
@@ -58,19 +71,57 @@ final class ServerSession {
         #endif
     }
 
-    /// Reads the saved servers and connects them. Once. A server whose token is missing is not connected: it would be
-    /// refused anyway, and the person pairs it again.
+    /// Reads the saved servers and connects them. A server whose token is missing is not connected: it would be refused
+    /// anyway, and the person pairs it again. When the list or a token cannot be read yet (before the first unlock after
+    /// a restart) the read stays open: the next call, and the moment the phone's data becomes available, read it again.
     func loadIfNeeded(arguments: [String] = ProcessInfo.processInfo.arguments) {
         guard !loaded else { return }
-        loaded = true
-        if arguments.contains(Self.resetArgument) { reset() }
-        for config in store.load() {
-            guard let token = (try? secrets.load(account: config.id.uuidString)).flatMap({ $0 }).flatMap({ String(data: $0, encoding: .utf8) }),
-                !token.isEmpty
-            else { continue }
-            var withToken = config
-            withToken.token = token
-            start(withToken)
+        if arguments.contains(Self.resetArgument), !didReset {
+            didReset = true
+            reset()
+        }
+        var complete = true
+        switch store.read() {
+        case .empty:
+            break
+        case .unavailable:
+            complete = false
+        case .unreadable:
+            // Not a list: it stays as it is (the first save moves it aside), and the app starts with none.
+            break
+        case .configs(let configs, _):
+            for config in configs where !servers.contains(where: { $0.id == config.id }) {
+                let token: Data?
+                do {
+                    token = try secrets.load(account: config.id.uuidString)
+                } catch {
+                    complete = false
+                    continue
+                }
+                guard let token, let text = String(data: token, encoding: .utf8), !text.isEmpty else { continue }
+                var withToken = config
+                withToken.token = text
+                start(withToken)
+            }
+        }
+        loaded = complete
+        if !complete { waitForUnlock() }
+    }
+
+    /// Reads again when protected data becomes available (the first unlock).
+    private func waitForUnlock() {
+        guard unlockObserver == nil else { return }
+        unlockObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.loadIfNeeded(arguments: [])
+                if self.loaded, let observer = self.unlockObserver {
+                    NotificationCenter.default.removeObserver(observer)
+                    self.unlockObserver = nil
+                }
+            }
         }
     }
 
@@ -79,6 +130,9 @@ final class ServerSession {
     /// gets the new token.
     func add(_ config: ServerConfig) throws {
         guard let token = config.token, !token.isEmpty else { throw SessionError.noToken }
+        // The saved list is read before it is written to; one that cannot be read yet is not written over.
+        loadIfNeeded(arguments: [])
+        guard loaded else { throw SessionError.notReady }
         var config = config
         var replaced: UUID?
         if case .direct(_, let fingerprint) = config.endpoint,
@@ -114,27 +168,33 @@ final class ServerSession {
         case keychainRefused
         /// No such server here (a demo server).
         case unknown
+        /// Already being disconnected.
+        case busy
     }
 
-    /// Disconnects a server: asks it to forget this device (best effort, it may be off), then removes the token, the
-    /// record and the remembered address. The token goes first of the local steps: when the Keychain refuses, nothing
-    /// is removed.
+    /// Disconnects a server. The token is removed first (when the Keychain refuses, nothing else happens), then the model
+    /// is disconnected (so it does not retry with a token that is about to be revoked), then the server is asked to
+    /// forget this device (best effort, it may be off), and last the record, the remembered address and the notification
+    /// cursor go.
     func disconnect(_ id: UUID) async -> Disconnected {
+        guard !disconnecting.contains(id) else { return .busy }
         guard let server = servers.first(where: { $0.id == id }) else { return .unknown }
+        disconnecting.insert(id)
+        defer { disconnecting.remove(id) }
         let config = server.config
-        var revoked = false
-        if case .direct = config.endpoint {
-            var withToken = config
-            withToken.token = (try? secrets.load(account: id.uuidString)).flatMap { $0 }.flatMap { String(data: $0, encoding: .utf8) }
-            revoked = await revokeSelf(withToken)
-        }
+        var withToken = config
+        withToken.token = (try? secrets.load(account: id.uuidString)).flatMap { $0 }.flatMap { String(data: $0, encoding: .utf8) }
         do {
             try secrets.save(nil, account: id.uuidString)
         } catch {
             return .keychainRefused
         }
+        await server.disconnect()
+        var revoked = false
+        if case .direct = config.endpoint { revoked = await revokeSelf(withToken) }
         if case .direct(_, let fingerprint) = config.endpoint { DirectHostMemory.shared.forget(fingerprint) }
         drop(id)
+        forgetCursor(id)
         save()
         return .removed(revokedOnServer: revoked)
     }
@@ -148,6 +208,7 @@ final class ServerSession {
     func remove(_ id: UUID) {
         guard drop(id) else { return }
         try? secrets.save(nil, account: id.uuidString)
+        forgetCursor(id)
         save()
     }
 
@@ -172,15 +233,26 @@ final class ServerSession {
         case noToken
         /// The Keychain refused the token.
         case keychain
+        /// The saved list could not be read yet (the phone is locked since its restart).
+        case notReady
     }
 
     private func start(_ config: ServerConfig) {
         let model = ServerModel(config: config)
         servers.append(model)
-        connect(model)
+        if let connectOverride {
+            connectOverride(model)
+        } else {
+            Task { @MainActor in
+                await model.connect()
+                onFirstConnected(model)
+            }
+        }
     }
 
     private func save() {
+        // Before the saved list was read completely, writing would drop what was not read.
+        guard loaded else { return }
         store.save(servers.map(\.config))
     }
 

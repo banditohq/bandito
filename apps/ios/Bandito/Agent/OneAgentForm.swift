@@ -221,6 +221,8 @@ struct OneAgentForm: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        // The keyboard goes at the first swipe of the form, so Create (at its foot) is never left under it.
+        .scrollDismissesKeyboard(.immediately)
         .background(Color.Bandito.bg.ignoresSafeArea())
         .sensoryFeedback(.success, trigger: creation?.madeCount ?? 0)
         // The install is a task of the form: leaving the sheet cancels the watching of it.

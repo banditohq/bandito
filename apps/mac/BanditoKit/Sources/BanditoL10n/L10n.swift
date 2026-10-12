@@ -1630,6 +1630,8 @@ public enum L10n {
                 public static var disconnect: String { L10n.tr("ios.settings.servers.disconnect") }
                 public static func disconnectMessage(name: String) -> String { L10n.tr("ios.settings.servers.disconnectMessage", name) }
                 public static func disconnectTitle(name: String) -> String { L10n.tr("ios.settings.servers.disconnectTitle", name) }
+                public static var leftOnServerMessage: String { L10n.tr("ios.settings.servers.leftOnServerMessage") }
+                public static var leftOnServerTitle: String { L10n.tr("ios.settings.servers.leftOnServerTitle") }
                 public static var removeFailed: String { L10n.tr("ios.settings.servers.removeFailed") }
                 public static var rename: String { L10n.tr("ios.settings.servers.rename") }
                 public static var renameTitle: String { L10n.tr("ios.settings.servers.renameTitle") }

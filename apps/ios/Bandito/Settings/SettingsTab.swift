@@ -18,6 +18,8 @@ struct SettingsTab: View {
     @State private var renaming: ServerModel?
     @State private var renameDraft = ""
     @State private var disconnectFailed = false
+    /// A server that was off when it was disconnected: it still lists this iPhone, and the alert says how to remove it.
+    @State private var leftOnServer = false
     @State private var faceIDRefused = false
     @State private var page: WebPage?
 
@@ -61,6 +63,11 @@ struct SettingsTab: View {
             .alert(L10n.Ios.Settings.Servers.removeFailed, isPresented: $disconnectFailed) {
                 Button(L10n.Common.close, role: .cancel) {}
             }
+            .alert(L10n.Ios.Settings.Servers.leftOnServerTitle, isPresented: $leftOnServer) {
+                Button(L10n.Common.close, role: .cancel) {}
+            } message: {
+                Text(L10n.Ios.Settings.Servers.leftOnServerMessage)
+            }
             .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea() }
         }
     }
@@ -81,6 +88,7 @@ struct SettingsTab: View {
                         } label: {
                             Label(L10n.Ios.Settings.Servers.disconnect, systemImage: "xmark.circle")
                         }
+                        .disabled(session.disconnecting.contains(server.id))
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
                         Button {
@@ -265,7 +273,11 @@ struct SettingsTab: View {
 
     private func disconnect(_ server: ServerModel) {
         Task {
-            if await session.disconnect(server.id) == .keychainRefused { disconnectFailed = true }
+            switch await session.disconnect(server.id) {
+            case .keychainRefused: disconnectFailed = true
+            case .removed(let revokedOnServer): leftOnServer = !revokedOnServer
+            case .unknown, .busy: break
+            }
         }
     }
 

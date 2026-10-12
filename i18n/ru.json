@@ -3442,5 +3442,7 @@
   "shortcut.phrase.askAgent": "Спросить ${agent} в ${applicationName}",
   "shortcut.phrase.openAgent": "Открыть ${agent} в ${applicationName}",
   "shortcut.title.openInbox": "Открыть входящие",
-  "ios.intent.ask.failed": "Не удалось отправить агенту {name}. Попробуйте снова."
+  "ios.intent.ask.failed": "Не удалось отправить агенту {name}. Попробуйте снова.",
+  "ios.settings.servers.leftOnServerTitle": "Удалено на этом iPhone",
+  "ios.settings.servers.leftOnServerMessage": "Сервер был недоступен, поэтому он всё ещё считает этот iPhone своим устройством. Удалите его на Mac: Настройки → Серверы → сервер → iPhone → Отключить."
 }

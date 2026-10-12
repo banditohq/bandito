@@ -1096,6 +1096,8 @@
 "ios.settings.servers.disconnect" = "Disconnect";
 "ios.settings.servers.disconnectMessage" = "This removes %1$@ and its device token from this iPhone. The server itself is not changed.";
 "ios.settings.servers.disconnectTitle" = "Disconnect %1$@?";
+"ios.settings.servers.leftOnServerMessage" = "The server could not be reached, so it still lists this iPhone as a device. Remove it on the Mac: Settings → Servers → the server → iPhone → Disconnect.";
+"ios.settings.servers.leftOnServerTitle" = "Removed from this iPhone";
 "ios.settings.servers.removeFailed" = "Could not remove the server. Try again.";
 "ios.settings.servers.rename" = "Rename";
 "ios.settings.servers.renameTitle" = "Rename server";

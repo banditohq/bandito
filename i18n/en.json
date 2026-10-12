@@ -3357,5 +3357,7 @@
   "shortcut.phrase.askAgent": "Ask ${agent} in ${applicationName}",
   "shortcut.phrase.openAgent": "Open ${agent} in ${applicationName}",
   "shortcut.title.openInbox": "Open Inbox",
-  "ios.intent.ask.failed": "Could not send to {name}. Try again."
+  "ios.intent.ask.failed": "Could not send to {name}. Try again.",
+  "ios.settings.servers.leftOnServerTitle": "Removed from this iPhone",
+  "ios.settings.servers.leftOnServerMessage": "The server could not be reached, so it still lists this iPhone as a device. Remove it on the Mac: Settings → Servers → the server → iPhone → Disconnect."
 }

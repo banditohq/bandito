@@ -3315,5 +3315,7 @@
   "ios.newAgent.tabOne": "에이전트 하나",
   "ios.newAgent.teamsEmpty": "이 서버에는 아직 준비된 팀이 없습니다.",
   "ios.demo.schedule.nightly": "디스크를 확인하고 80%를 넘을 때만 알려 줘.",
-  "ios.demo.schedule.weekly": "이번 주 디스크 사용량을 요약해 줘."
+  "ios.demo.schedule.weekly": "이번 주 디스크 사용량을 요약해 줘.",
+  "ios.settings.servers.leftOnServerTitle": "이 iPhone에서 삭제했습니다",
+  "ios.settings.servers.leftOnServerMessage": "서버에 연결할 수 없어 서버 목록에 이 iPhone이 기기로 남아 있습니다. Mac에서 설정 → 서버 → 해당 서버 → iPhone → 연결 해제로 삭제하세요."
 }

@@ -1096,6 +1096,8 @@
 "ios.settings.servers.disconnect" = "Отключить";
 "ios.settings.servers.disconnectMessage" = "Сервер %1$@ и его токен устройства будут удалены с этого iPhone. Сам сервер не меняется.";
 "ios.settings.servers.disconnectTitle" = "Отключить %1$@?";
+"ios.settings.servers.leftOnServerMessage" = "Сервер был недоступен, поэтому он всё ещё считает этот iPhone своим устройством. Удалите его на Mac: Настройки → Серверы → сервер → iPhone → Отключить.";
+"ios.settings.servers.leftOnServerTitle" = "Удалено на этом iPhone";
 "ios.settings.servers.removeFailed" = "Не удалось отключить сервер. Попробуйте ещё раз.";
 "ios.settings.servers.rename" = "Переименовать";
 "ios.settings.servers.renameTitle" = "Переименовать сервер";

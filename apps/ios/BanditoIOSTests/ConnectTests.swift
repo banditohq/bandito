@@ -10,10 +10,12 @@ final class MemorySecrets: SecretStore, @unchecked Sendable {
     private var items: [String: Data] = [:]
     var failsToSave = false
     var failsToDelete = false
+    var failsToLoad = false
 
     func load(account: String) throws -> Data? {
         lock.lock()
         defer { lock.unlock() }
+        if failsToLoad { throw SecretStoreError.keychain(-25308) }
         return items[account]
     }
 
@@ -496,5 +498,207 @@ actor PairCalls {
         #expect(source.servers.isEmpty)
         let events = try await source.events(after: 0, serverID: UUID())
         #expect(events.isEmpty, "an unknown server has no events")
+    }
+}
+
+/// The saved list on disk: a damaged record, a file that is not a list, a file that is locked, and the names in it.
+@MainActor
+@Suite struct ServerStoreTests {
+    private func store() -> ServerStore {
+        ServerStore(
+            fileURL: FileManager.default.temporaryDirectory.appending(path: "bandito-\(UUID().uuidString)/servers.json"),
+            defaults: UserDefaults(suiteName: "ios-store-\(UUID().uuidString)")!)
+    }
+
+    private func config(_ name: String, _ host: String = "10.0.0.2:7879") -> ServerConfig {
+        ServerConfig(name: name, endpoint: .direct(hosts: [host], fingerprint: ConnectTests.fp), token: "tok")
+    }
+
+    private func write(_ text: String, to store: ServerStore) throws {
+        try FileManager.default.createDirectory(at: store.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(text.utf8).write(to: store.fileURL)
+    }
+
+    @Test func aDamagedRecordIsSkippedAndTheOthersLoad() throws {
+        let store = store()
+        let good = try String(decoding: JSONEncoder().encode(config("Good")), as: UTF8.self)
+        try write("[\(good), {\"id\": 5, \"endpoint\": \"nonsense\"}, \(good.replacingOccurrences(of: "Good", with: "Second"))]", to: store)
+        guard case .configs(let configs, let skipped) = store.read() else {
+            Issue.record("the list did not read")
+            return
+        }
+        #expect(configs.map(\.name) == ["Good", "Second"])
+        #expect(skipped == 1)
+    }
+
+    @Test func savingAfterADamagedRecordKeepsTheOldFileAside() throws {
+        let store = store()
+        let good = try String(decoding: JSONEncoder().encode(config("Good")), as: UTF8.self)
+        let original = "[\(good), {\"broken\": true}]"
+        try write(original, to: store)
+        #expect(store.save([config("New")]))
+        #expect(store.load().map(\.name) == ["New"])
+        let aside = try #require(store.asideFiles.first)
+        #expect(try String(contentsOf: aside, encoding: .utf8) == original, "nothing the person had is lost")
+    }
+
+    @Test func aFileThatIsNotAListIsMovedAsideNotWrittenOver() throws {
+        let store = store()
+        try write("this is not json at all", to: store)
+        #expect(store.read() == .unreadable)
+        #expect(store.load().isEmpty)
+        #expect(store.save([config("New")]))
+        #expect(store.load().map(\.name) == ["New"])
+        #expect(try String(contentsOf: try #require(store.asideFiles.first), encoding: .utf8) == "this is not json at all")
+    }
+
+    @Test func aGoodFileLeavesNothingAside() throws {
+        let store = store()
+        #expect(store.save([config("A")]))
+        #expect(store.save([config("A"), config("B")]))
+        #expect(store.asideFiles.isEmpty)
+        #expect(store.load().count == 2)
+    }
+
+    @Test func aFileThatCannotBeReadNowIsNotTouched() throws {
+        let store = store()
+        #expect(store.save([config("Keep")]))
+        // Locked, as a protected file is before the first unlock after a restart.
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: store.fileURL.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: store.fileURL.path) }
+        #expect(store.read() == .unavailable)
+        #expect(!store.save([config("Other")]), "nothing is written over a file that could not be read")
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: store.fileURL.path)
+        #expect(store.load().map(\.name) == ["Keep"])
+        #expect(store.asideFiles.isEmpty)
+    }
+
+    @Test func namesFromOldRecordsAreCleaned() throws {
+        let store = store()
+        #expect(store.save([config("Mac\u{202E}gpj\u{200B}"), config("\u{202E}", "192.168.1.9:7879")]))
+        let names = store.load().map(\.name)
+        #expect(names == ["Macgpj", "192.168.1.9:7879"], "an empty name falls back to the address")
+    }
+}
+
+@MainActor
+@Suite struct ServerSessionSafetyTests {
+    private func session(secrets: MemorySecrets = MemorySecrets(), store: ServerStore? = nil) -> (ServerSession, MemorySecrets, ServerStore) {
+        let store = store ?? ServerStore(
+            fileURL: FileManager.default.temporaryDirectory.appending(path: "bandito-\(UUID().uuidString)/servers.json"),
+            defaults: UserDefaults(suiteName: "ios-safety-\(UUID().uuidString)")!)
+        let session = ServerSession(store: store, secrets: secrets, connect: { _ in })
+        session.forgetCursor = { _ in }
+        return (session, secrets, store)
+    }
+
+    private func config(_ name: String = "Mac", fingerprint: String = ConnectTests.fp) -> ServerConfig {
+        ServerConfig(name: name, endpoint: .direct(hosts: ["10.0.0.2:7879"], fingerprint: fingerprint), token: "tok")
+    }
+
+    @Test func aListThatCannotBeReadYetIsReadAgainAndNeverWrittenMeanwhile() throws {
+        let (first, secrets, store) = session()
+        try first.add(config("Keep"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: store.fileURL.path)
+        let (later, _, _) = session(secrets: secrets, store: store)
+        later.loadIfNeeded(arguments: [])
+        #expect(!later.loaded, "not loaded: the read stays open")
+        #expect(later.servers.isEmpty)
+        // A pairing in this state does not write the half-known list over the saved one.
+        try? later.add(config("Another", fingerprint: String(repeating: "cd", count: 32)))
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: store.fileURL.path)
+        #expect(store.load().map(\.name) == ["Keep"], "the saved servers are intact")
+        // Unlocked: the next call reads them.
+        later.loadIfNeeded(arguments: [])
+        #expect(later.loaded)
+        #expect(Set(later.servers.map(\.config.name)).contains("Keep"))
+    }
+
+    @Test func aTokenThatCannotBeReadYetKeepsTheReadOpen() throws {
+        let (first, secrets, store) = session()
+        try first.add(config("Keep"))
+        secrets.failsToLoad = true
+        let (later, _, _) = session(secrets: secrets, store: store)
+        later.loadIfNeeded(arguments: [])
+        #expect(!later.loaded)
+        secrets.failsToLoad = false
+        later.loadIfNeeded(arguments: [])
+        #expect(later.loaded)
+        #expect(later.servers.count == 1)
+    }
+
+    @Test func disconnectingRemovesTheTokenBeforeAskingTheServerAndForgetsTheCursor() async throws {
+        let (session, secrets, store) = session()
+        var forgotten: [UUID] = []
+        session.forgetCursor = { forgotten.append($0) }
+        try session.add(config())
+        let id = try #require(session.servers.first?.id)
+        final class Seen: @unchecked Sendable {
+            var token: String?
+            var keychainEmpty = false
+        }
+        let seen = Seen()
+        session.revokeSelf = { config in
+            seen.token = config.token
+            seen.keychainEmpty = ((try? secrets.load(account: id.uuidString)) ?? nil) == nil
+            return true
+        }
+        #expect(await session.disconnect(id) == .removed(revokedOnServer: true))
+        #expect(seen.token == "tok", "the call to the server still carries the token")
+        #expect(seen.keychainEmpty, "the Keychain no longer holds it")
+        #expect(forgotten == [id])
+        #expect(store.load().isEmpty)
+    }
+
+    @Test func aSecondDisconnectWhileOneRunsDoesNothing() async throws {
+        let (session, _, _) = session()
+        try session.add(config())
+        let id = try #require(session.servers.first?.id)
+        let gate = AsyncGate()
+        session.revokeSelf = { _ in
+            await gate.wait()
+            return true
+        }
+        let first = Task { await session.disconnect(id) }
+        for _ in 0..<200 where !session.disconnecting.contains(id) { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(session.disconnecting.contains(id))
+        #expect(await session.disconnect(id) == .busy)
+        await gate.open()
+        #expect(await first.value == .removed(revokedOnServer: true))
+        #expect(!session.disconnecting.contains(id))
+        #expect(session.servers.isEmpty)
+    }
+
+    @Test func aNewServersCursorStartsAtItsTail() async throws {
+        let defaults = UserDefaults(suiteName: "ios-cursor-\(UUID().uuidString)")!
+        let cursor = NotificationCursor(defaults: defaults)
+        let demo = await IOSDemo.start()
+        defer { Task { await demo.disconnect() } }
+        #expect(demo.currentSeq > 0)
+        #expect(cursor.seq(for: demo.id) == 0)
+        cursor.baseline(for: demo)
+        #expect(cursor.seq(for: demo.id) == demo.currentSeq, "the first check shows nothing of what came before")
+        // A server that already has a cursor keeps it.
+        cursor.baseline(for: demo)
+        #expect(cursor.seq(for: demo.id) == demo.currentSeq)
+        cursor.forget(serverID: demo.id)
+        #expect(cursor.seq(for: demo.id) == 0)
+    }
+}
+
+/// Holds a call until `open`, for the tests of two calls at once.
+actor AsyncGate {
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private var isOpen = false
+
+    func wait() async {
+        if isOpen { return }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+
+    func open() {
+        isOpen = true
+        for waiter in waiting { waiter.resume() }
+        waiting = []
     }
 }

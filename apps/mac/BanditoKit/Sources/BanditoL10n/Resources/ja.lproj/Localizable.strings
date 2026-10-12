@@ -1096,6 +1096,8 @@
 "ios.settings.servers.disconnect" = "切断";
 "ios.settings.servers.disconnectMessage" = "%1$@ とそのデバイストークンをこの iPhone から削除します。サーバー自体は変わりません。";
 "ios.settings.servers.disconnectTitle" = "%1$@ を切断しますか？";
+"ios.settings.servers.leftOnServerMessage" = "サーバーに接続できなかったため、この iPhone はサーバーの端末一覧に残っています。Mac で「設定」→「サーバー」→ 対象のサーバー → iPhone →「切断」から削除してください。";
+"ios.settings.servers.leftOnServerTitle" = "この iPhone から削除しました";
 "ios.settings.servers.removeFailed" = "サーバーを切断できませんでした。もう一度お試しください。";
 "ios.settings.servers.rename" = "名前を変更";
 "ios.settings.servers.renameTitle" = "サーバー名を変更";

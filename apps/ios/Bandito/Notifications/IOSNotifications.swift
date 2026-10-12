@@ -202,6 +202,18 @@ final class NotificationCursor {
         defaults.set(Int(seq), forKey: Self.key(serverID))
     }
 
+    /// A server's cursor is dropped when the server is forgotten.
+    func forget(serverID: UUID) {
+        defaults.removeObject(forKey: Self.key(serverID))
+    }
+
+    /// A server that has just connected for the first time: the cursor starts at the tail of its history, so the first
+    /// background check shows nothing of what happened before the pairing. A server with a cursor is left alone.
+    func baseline(for server: ServerModel) {
+        guard seq(for: server.id) == 0, server.currentSeq > 0 else { return }
+        advance(serverID: server.id, to: server.currentSeq)
+    }
+
     private static func key(_ serverID: UUID) -> String {
         "ios.notifications.cursor.\(serverID.uuidString)"
     }

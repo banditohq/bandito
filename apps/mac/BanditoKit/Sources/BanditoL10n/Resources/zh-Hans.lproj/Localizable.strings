@@ -1096,6 +1096,8 @@
 "ios.settings.servers.disconnect" = "断开连接";
 "ios.settings.servers.disconnectMessage" = "将从这台 iPhone 移除 %1$@ 及其设备令牌。服务器本身不会改变。";
 "ios.settings.servers.disconnectTitle" = "断开 %1$@？";
+"ios.settings.servers.leftOnServerMessage" = "无法连接到服务器，因此服务器仍把这台 iPhone 列为设备。请在 Mac 上移除：设置 → 服务器 → 该服务器 → iPhone → 断开。";
+"ios.settings.servers.leftOnServerTitle" = "已从这台 iPhone 移除";
 "ios.settings.servers.removeFailed" = "无法断开服务器，请重试。";
 "ios.settings.servers.rename" = "重命名";
 "ios.settings.servers.renameTitle" = "重命名服务器";

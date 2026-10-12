@@ -323,6 +323,8 @@ public final class ServerModel: Identifiable {
     private var decodeFailureCount = 0
     /// Highest persisted event applied. Reconnects resume from here.
     private var lastSeq: Int64 = 0
+    /// The same, for readers outside the model (`currentSeq`).
+    var lastSeqApplied: Int64 { lastSeq }
     /// Oldest persisted event loaded per agent. `loadOlder` pages before it.
     private var oldestSeq: [String: Int64] = [:]
     private let makeTransport: @Sendable (ServerConfig) -> RPCTransport
