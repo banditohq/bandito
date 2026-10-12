@@ -36,6 +36,18 @@ struct FrameStats: Equatable, Codable, Sendable {
     /// display link did not tick. Not frames of this window: counted apart, with the longest.
     var sheetSlides: Int = 0
     var sheetSlideWorstMs: Double = 0
+    /// The frames over 50 ms (their gap or their work), at most 12 of the worst: where a hitch came from.
+    var longFrames: [LongFrame]? = nil
+
+    /// One long frame: its place in the run, its gap, the main thread's work and processor time in it, and whether its
+    /// gap was a sheet's slide.
+    struct LongFrame: Equatable, Codable, Sendable {
+        var index: Int
+        var gapMs: Double
+        var workMs: Double
+        var cpuMs: Double
+        var slide: Bool
+    }
 
     /// - Parameters:
     ///   - intervals: seconds between each frame callback and the one before.
@@ -76,6 +88,16 @@ struct FrameStats: Equatable, Codable, Sendable {
         let dropped = intervals.reduce(0) { total, gap in
             gap > 1.5 * duration ? total + max(0, Int((gap / duration).rounded()) - 1) : total
         }
+        var long: [LongFrame] = []
+        for index in allIntervals.indices {
+            let gap = allIntervals[index]
+            let busy = index < work.count ? work[index] : 0
+            guard gap > 0.05 || busy > 0.05 else { continue }
+            long.append(LongFrame(
+                index: index, gapMs: gap * 1000, workMs: busy * 1000, cpuMs: (index < cpu.count ? cpu[index] : 0) * 1000,
+                slide: isSlide(index)))
+        }
+        long = Array(long.sorted { max($0.gapMs, $0.workMs) > max($1.gapMs, $1.workMs) }.prefix(12))
         return FrameStats(
             frames: intervals.count, missed: missed, droppedEstimate: dropped,
             worstFrameMs: (sorted.last ?? 0) * 1000, p50Ms: percentile(sorted, 0.5) * 1000,
@@ -84,7 +106,7 @@ struct FrameStats: Equatable, Codable, Sendable {
             workWorstMs: (sortedWork.last ?? 0) * 1000, cpuP50Ms: percentile(sortedCPU, 0.5) * 1000,
             cpuP95Ms: percentile(sortedCPU, 0.95) * 1000, shareOver8Ms: rounded(over8), shareOver16Ms: rounded(over16),
             stretchesOver100Ms: longStretches, sheetSlides: slid.count,
-            sheetSlideWorstMs: (slid.map { allIntervals[$0] }.max() ?? 0) * 1000)
+            sheetSlideWorstMs: (slid.map { allIntervals[$0] }.max() ?? 0) * 1000, longFrames: long.isEmpty ? nil : long)
     }
 
     /// The owner's bar for a release: on the screen that measures, no frame is late (p95 of the gaps within 15 % of its
@@ -344,11 +366,22 @@ enum PerfScroller {
         return main(under: root)
     }
 
+    /// Drawn at no opacity (a page kept alive under another, as the main window under Settings in the check).
+    static func isFaded(_ view: NSView) -> Bool {
+        var layer = view.layer
+        while let current = layer {
+            if current.opacity == 0 || current.isHidden { return true }
+            layer = current.superlayer
+        }
+        return false
+    }
+
     static func main(under root: NSView) -> NSScrollView? {
         var best: (NSScrollView, CGFloat)?
         func visit(_ view: NSView) {
             if !view.isHidden, let scroll = view as? NSScrollView, let document = scroll.documentView,
-                document.frame.height > scroll.contentView.bounds.height + 100, scroll.window != nil
+                document.frame.height > scroll.contentView.bounds.height + 100, scroll.window != nil,
+                !PerfScroller.isFaded(scroll)
             {
                 let area = scroll.contentView.bounds.width * scroll.contentView.bounds.height
                 if best == nil || area > best!.1 { best = (scroll, area) }

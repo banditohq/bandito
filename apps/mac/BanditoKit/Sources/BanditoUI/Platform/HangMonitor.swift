@@ -65,6 +65,14 @@ enum SheetSlideRule {
         guard let sheetMovedAt, sheetMovedAt >= start, sheetMovedAt <= end else { return end - start }
         return min(cpu, end - start)
     }
+
+    /// The part of a stretch still running that falls in one frame, from `from` to `to`, `cpu` of it on the processor:
+    /// all of it, or only `cpu` once a sheet moved in the stretch. A frame of the window can come right after a slide,
+    /// before the stretch ends: its work is the sheet's, not the slide's waiting.
+    static func part(from: UInt64, to: UInt64, cpu: UInt64, sheetMoved: Bool) -> UInt64 {
+        guard to > from else { return 0 }
+        return sheetMoved ? min(cpu, to - from) : to - from
+    }
 }
 
 /// Finds freezes of the main thread, in release builds too. One run loop observer on the main thread (a lock and two
@@ -99,6 +107,10 @@ public enum HangMonitor {
         var sheetsKnown = 0
         /// Sheet slides since the last `takeSlides`: not freezes, counted apart.
         var slides = 0
+        /// The main thread's processor time at the later of the stretch's start and the last `takeBusy`.
+        var cpuFrom: UInt64 = 0
+        /// The slide of the stretch in progress was already handed out by `takeSlides` (a frame came before its end).
+        var slideTaken = false
     }
 
     /// A busy stretch this long (nanoseconds) is counted by the smoothness check: a freeze anyone sees.
@@ -150,6 +162,8 @@ public enum HangMonitor {
                     if shared.tracker.busySince == nil {
                         shared.meterFrom = at
                         shared.cpuAtWake = cpu
+                        shared.cpuFrom = cpu
+                        shared.slideTaken = false
                     }
                     shared.tracker.wake(at: at)
                 }
@@ -179,13 +193,16 @@ public enum HangMonitor {
                     var hang = shared.tracker.sleep(at: at)
                     if slide {
                         // A sheet slid: its waiting in AppKit's loop is not work, and not a freeze.
-                        shared.slides += 1
+                        if !shared.slideTaken { shared.slides += 1 }
                         hang = busy >= HangTracker.threshold ? busy : nil
                     }
                     if shared.metering, start != nil {
-                        shared.busyAccum &+= slide ? busy : at &- max(shared.meterFrom, shared.lastTake)
+                        shared.busyAccum &+= SheetSlideRule.part(
+                            from: max(shared.meterFrom, shared.lastTake), to: at,
+                            cpu: cpu &- max(shared.cpuFrom, shared.cpuAtWake), sheetMoved: slide)
                         if busy >= longStretch { shared.longStretches += 1 }
                     }
+                    shared.slideTaken = false
                     return hang.map { ($0, shared.screen, shared.action, shared.actionAt) }
                 }
                 if let result { MainActor.assumeIsolated { finished(result.0, result.1, result.2, result.3) } }
@@ -225,10 +242,15 @@ public enum HangMonitor {
         state.withLock { $0.sheetMovedAt = at }
     }
 
-    /// The sheet slides that ended since the last call, and back to zero.
+    /// The sheet slides since the last call, and back to zero: those of stretches that ended, and the one of the
+    /// stretch in progress when a sheet moved in it (a frame can come between the slide and the stretch's end).
     static func takeSlides() -> Int {
         state.withLock { shared in
             defer { shared.slides = 0 }
+            if let start = shared.tracker.busySince, let moved = shared.sheetMovedAt, moved >= start, !shared.slideTaken {
+                shared.slideTaken = true
+                return shared.slides + 1
+            }
             return shared.slides
         }
     }
@@ -241,12 +263,28 @@ public enum HangMonitor {
         }
     }
 
-    /// The busy time in nanoseconds since the last call, and back to zero. A stretch still going counts up to now.
+    /// The busy time in nanoseconds since the last call, and back to zero. A stretch still going counts up to now:
+    /// whole, or its processor time once a sheet moved in it (the frame right after a slide).
     static func takeBusy() -> UInt64 {
-        state.withLock { shared in
+        let cpu = threadCPU()
+        // After a long gap a sheet may have come or gone with no notification yet: count the sheets.
+        let long: Bool = state.withLock { shared in
+            shared.tracker.busySince != nil && now() &- max(shared.meterFrom, shared.lastTake) >= 50_000_000
+        }
+        let sheets = long ? attachedSheets() : nil
+        return state.withLock { shared in
             let at = now()
-            if shared.tracker.busySince != nil { shared.busyAccum &+= at &- max(shared.meterFrom, shared.lastTake) }
+            if let start = shared.tracker.busySince {
+                if let sheets, sheets != shared.sheetsKnown {
+                    shared.sheetMovedAt = at
+                    shared.sheetsKnown = sheets
+                }
+                let moved = shared.sheetMovedAt.map { $0 >= start } ?? false
+                shared.busyAccum &+= SheetSlideRule.part(
+                    from: max(shared.meterFrom, shared.lastTake), to: at, cpu: cpu &- shared.cpuFrom, sheetMoved: moved)
+            }
             shared.lastTake = at
+            shared.cpuFrom = cpu
             defer { shared.busyAccum = 0 }
             return shared.busyAccum
         }
