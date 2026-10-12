@@ -6,21 +6,42 @@ same version: without it, "Add a server" fails.
 
 Both parts are built by GitHub Actions. Nobody builds a release on a laptop.
 
-| Step | What | Where |
-|---|---|---|
-| 1 | Pick the version: `X.Y.Z` (stable) or `X.Y.Z-beta.N` (beta) | — |
-| 2 | Tag the release commit `v<version>` | release-please or by hand |
-| 3 | Server release: binaries, `install.sh`, `SHA256SUMS` and its signature | `release.yml` |
-| 4 | Mac app: build, sign, notarize, staple, zip, dmg, Sparkle signature | `release-app.yml` |
-| 5 | Approve the run in the `stable` environment (stable only) | GitHub Actions UI |
-| 6 | Review and merge the appcast PR in `banditohq/platform` | platform repo |
+## The release in three moves
+
+1. `scripts/release.sh X.Y.Z` (add `--dry-run` first to see the diff and the notes). It bumps the version in
+   `apps/mac/project.yml`, `daemon/Cargo.toml` and `daemon/Cargo.lock`, pushes `release/X.Y.Z` and opens the PR
+   `release: Bandito X.Y.Z`. Edit the PR description: it becomes the release notes. When CI is green, squash-merge.
+2. Nothing to do: `release-flow` tags the merge commit, builds the server into a draft release (`release.yml`),
+   publishes it (latest) and starts `release-app`.
+3. **Approve** the `release-app` run: Actions → release-app → Review deployments → `stable`. The app is built, signed,
+   notarized and uploaded; then the run opens the appcast PR in `banditohq/platform` and merges it when its checks pass.
+   A Telegram message says when it is done (`notify.yml`). Betas (`X.Y.Z-beta.N`) use the `beta` environment, no approval.
+
+`scripts/test_bump_version.sh` tests the version bump. The check "appcast == newest release with a zip" lives in
+`uptime.yml`, not here.
+
+## When a step fails
+
+Every step can be run again. First fix the cause (the run log says what), then:
+
+| Failed | Do |
+|---|---|
+| `release.sh` stops | It prints why (dirty tree, tag exists, version not newer). Rerun after fixing; an open PR is just printed again. |
+| `release-flow` → tag and draft (version files disagree) | Fix the three files in a new PR to `main` (`scripts/bump-version.sh X.Y.Z`), merge, then run `release-flow` by hand with the version. Never move a tag. |
+| `release-flow` → server binaries or publish | Actions → release-flow → Run workflow, `version=X.Y.Z`: it reuses the tag and the draft and builds again. Manual fallback: `gh workflow run release.yml -f tag=vX.Y.Z`, wait, then `gh release edit vX.Y.Z --draft=false --latest`. |
+| `release-flow` never started (title or branch changed) | Same: run `release-flow` by hand with the version. By hand entirely: `git tag -a vX.Y.Z -m "Bandito X.Y.Z" <merge commit> && git push origin vX.Y.Z`, `gh release create vX.Y.Z --draft --notes-file notes.md`, then the line above. |
+| `release-app` not started | `gh workflow run release-app.yml -f version=X.Y.Z -f channel=stable` (or beta). |
+| `release-app` build fails | Fix, then run it again with the same inputs (it uploads with `--clobber`). The zip is not on the release until it succeeds. |
+| Appcast PR not merged (checks red, no checks, App lacks rights) | The run is red but the zip is already on the release. Download artifact `appcast-X.Y.Z`, put it in `banditohq/platform` as `public/appcast.xml`, PR, merge. Until that is merged the apps do not see the update. |
+
+# Details
 
 ## 1. Version and tag
 
 - Versions are `X.Y.Z` or `X.Y.Z-beta.N`. The beta channel takes beta versions only; the stable channel takes
   versions without a suffix. `release-app.yml` refuses a mismatch.
-- The tag is `v<version>` and sits on the release commit. release-please creates the tag and the GitHub release when
-  its release PR is merged. To tag by hand:
+- The tag is `v<version>` and sits on the release (merge) commit. `release-flow` creates it. (release-please is not
+  used for releases; its PRs are not merged.) To tag by hand:
 
   ```sh
   git tag -a v0.1.6 -m "Bandito 0.1.6" <commit>
@@ -32,17 +53,16 @@ Both parts are built by GitHub Actions. Nobody builds a release on a laptop.
 
 ## 2. Server release (`release.yml`)
 
-`release.yml` runs when a GitHub release is published. It builds `bandito` for Linux (x86_64, aarch64) and macOS
+`release.yml` is called by `release-flow` on the draft release (and also runs when a release is published by hand, or
+from the Actions tab with a tag). It builds `bandito` for Linux (x86_64, aarch64) and macOS
 (x86_64, aarch64), uploads the tarballs, `install.sh`, `SHA256SUMS` and `SHA256SUMS.sig` to the release.
 
-GitHub does not start workflows from events made with the `GITHUB_TOKEN`, so a release created by release-please may
-not start it. Then start it by hand: Actions → `release` → Run workflow → tag `v<version>`.
-
-Wait until `SHA256SUMS.sig` is on the release before starting the app release.
+`release-flow` publishes the release only after `SHA256SUMS.sig` and all four binaries are on it. By hand: Actions →
+`release` → Run workflow → tag `v<version>`.
 
 ## 3. Mac app (`release-app.yml`)
 
-Actions → `release-app` → Run workflow. Inputs:
+`release-flow` starts it. By hand: Actions → `release-app` → Run workflow. Inputs:
 
 - `version`: `X.Y.Z` or `X.Y.Z-beta.N`. The tag `v<version>` must exist.
 - `channel`: `stable` or `beta`. It selects the environment of the run (`stable` or `beta`).
@@ -57,16 +77,17 @@ The single job (macOS 15 runner) does this:
    secrets are set. It stops with a message if any is missing.
 2. Checks out the tag with full history.
 3. Installs XcodeGen and Rust, and Sparkle 2.10.0 from the official release (SHA-256 checked).
-4. Gets the base appcast: from the `banditohq/platform` checkout when `PLATFORM_TOKEN` is set, otherwise from
-   `https://bandito.dev/appcast.xml` (no PR is opened then).
+4. Gets the base appcast from a checkout of `banditohq/platform` (token of the Bandito Bot App).
 5. Imports the Developer ID certificate into a temporary keychain with a random password, and writes the App Store
    Connect key and the Sparkle key to temporary files.
 6. Runs `apps/mac/scripts/release-app.sh <version> --appcast-out <file>`: Release build, Developer ID signing with the
    hardened runtime, notarization with the API key, staple, dmg, Sparkle signature of the zip.
 7. Uploads `Bandito-<version>.zip` and `Bandito-<version>.dmg` to the release `v<version>` (clobbering older files).
 8. Uploads the new `appcast.xml` as a run artifact `appcast-<version>`.
-9. If `PLATFORM_TOKEN` is set, pushes branch `appcast-<version>` to `banditohq/platform` with the new item and opens a
-   PR against its default branch. It never pushes to `main`.
+9. Makes a second App token (the first expires after an hour), pushes branch `appcast-<version>` to
+   `banditohq/platform`, opens a PR and waits for its checks (the repo has no auto-merge): all green → squash-merge;
+   red, none after 3 minutes, or still pending after 30 minutes → the run fails and the PR stays for you. It never
+   pushes to `main`.
 10. Deletes the temporary keychain and key files (always, even on failure).
 
 ## 4. Approval (stable)
@@ -77,10 +98,10 @@ gate. Only users with write access can start a run.
 
 ## 5. Appcast
 
-Merge the `appcast-<version>` PR in `banditohq/platform` once the release is checked. The site serves
-`public/appcast.xml` at `https://bandito.dev/appcast.xml`; deploying the site is a separate step in that repo.
+The run merges the `appcast-<version>` PR in `banditohq/platform` itself. The site serves `public/appcast.xml` at
+`https://bandito.dev/appcast.xml`; deploying the site is a separate step in that repo.
 
-Check the release before merging: download the zip, then `spctl -a -vvv -t exec Bandito.app` must print
+Check a release after it: download the zip, then `spctl -a -vvv -t exec Bandito.app` must print
 `accepted` and `source=Notarized Developer ID`.
 
 ## Secrets
@@ -96,7 +117,7 @@ an issue or a chat. Use `gh secret set <NAME> < file` or `gh secret set <NAME>` 
 | `ASC_KEY_ID` | release-app | The key ID of that API key (10 characters) | Shown in the Team Keys list. |
 | `ASC_ISSUER_ID` | release-app | The issuer ID of the team (a UUID) | Shown at the top of the Team Keys page. |
 | `SPARKLE_ED_KEY` | release-app | Sparkle EdDSA private key, one line | Export it from the release Mac: `generate_keys -x <file>` with Sparkle's `generate_keys` (the copy unpacked under `~/.cache/sparkle/2.10.0/extracted/bin`). It is in that Mac's login Keychain now, from the original `generate_keys`. Then `gh secret set SPARKLE_ED_KEY < <file>` and remove the file. Keep one offline backup in the owner's password manager. The public key is `SUPublicEDKey` in `apps/mac/project.yml`; it must match this key. |
-| `PLATFORM_TOKEN` | release-app (optional) | Token that can push a branch and open a PR in `banditohq/platform` | A fine-grained personal access token limited to `banditohq/platform`: Contents read and write, Pull requests read and write. Without it the run still produces the appcast as an artifact, and no PR is opened. |
+| `BANDITO_BOT_APP_ID`, `BANDITO_BOT_PRIVATE_KEY` | release-app, renovate, gallery | The Bandito Bot GitHub App (installed on the whole organization). release-app makes tokens for `banditohq/platform` | The App needs **Contents: read and write** and **Pull requests: read and write** (Settings → Developer settings → GitHub Apps → Bandito Bot → Permissions; accept the new request in the organization). If the run says "Resource not accessible by integration", this is the missing piece. `PLATFORM_TOKEN` is no longer used and can be deleted. |
 | `RELEASE_SIGNING_KEY` | release (server) | Ed25519 private key that signs `SHA256SUMS` | Made by `sh scripts/release-key.sh`, run once by the owner. Not used by release-app. |
 
 Rules that matter:
