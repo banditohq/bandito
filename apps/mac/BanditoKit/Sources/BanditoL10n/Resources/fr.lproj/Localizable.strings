@@ -925,6 +925,17 @@
 "integrations.status.unchecked" = "Pas encore vérifiée";
 "integrations.title" = "Intégrations";
 "integrations.toolsFound" = "Outils : %1$@";
+"ios.activity.chatSoon" = "Le chat avec %1$@ s'ouvrira ici bientôt. Événement %2$@.";
+"ios.activity.emptyErrors" = "Aucune erreur.";
+"ios.activity.emptyMessage" = "Ici apparaissent les réponses terminées et les exécutions planifiées qui ont dit quelque chose.";
+"ios.activity.emptyTitle" = "Rien pour l'instant";
+"ios.activity.emptyUnread" = "Rien de non lu.";
+"ios.activity.failed" = "%1$@ : erreur";
+"ios.activity.filter.all" = "Tout";
+"ios.activity.filter.errors" = "Erreurs";
+"ios.activity.filter.unread" = "Non lus";
+"ios.activity.finished" = "%1$@ a terminé";
+"ios.activity.scheduled" = "%1$@ · %2$@";
 "ios.connect.placeholder" = "La connexion d'un serveur depuis l'iPhone arrive bientôt.";
 "ios.crew.chatSoon" = "Le chat avec %1$@ arrive bientôt.";
 "ios.crew.createAgent" = "Créer un agent";

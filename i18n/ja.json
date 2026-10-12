@@ -3141,5 +3141,16 @@
   "ios.inbox.service": "サービス",
   "ios.inbox.connectOnMac": "サービスの接続は、今のところ Mac で行います。",
   "ios.inbox.send": "送信",
-  "ios.inbox.openHint": "詳細を開きます"
+  "ios.inbox.openHint": "詳細を開きます",
+  "ios.activity.filter.all": "すべて",
+  "ios.activity.filter.unread": "未読",
+  "ios.activity.filter.errors": "エラー",
+  "ios.activity.finished": "{name}が完了",
+  "ios.activity.scheduled": "{name} · {schedule}",
+  "ios.activity.failed": "{name}: エラー",
+  "ios.activity.emptyTitle": "今のところ静かです",
+  "ios.activity.emptyMessage": "完了した返信と、何か知らせたスケジュール実行がここに表示されます。",
+  "ios.activity.emptyUnread": "未読はありません。",
+  "ios.activity.emptyErrors": "エラーはありません。",
+  "ios.activity.chatSoon": "{name}とのチャットはまもなくここで開きます。イベント {event}。"
 }

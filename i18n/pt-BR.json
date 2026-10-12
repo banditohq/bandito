@@ -3181,5 +3181,16 @@
   "ios.inbox.service": "Serviço",
   "ios.inbox.connectOnMac": "Por enquanto, a conexão de serviços é feita no Mac.",
   "ios.inbox.send": "Enviar",
-  "ios.inbox.openHint": "Abre os detalhes"
+  "ios.inbox.openHint": "Abre os detalhes",
+  "ios.activity.filter.all": "Tudo",
+  "ios.activity.filter.unread": "Não lidos",
+  "ios.activity.filter.errors": "Erros",
+  "ios.activity.finished": "{name} terminou",
+  "ios.activity.scheduled": "{name} · {schedule}",
+  "ios.activity.failed": "{name}: erro",
+  "ios.activity.emptyTitle": "Tudo tranquilo por enquanto",
+  "ios.activity.emptyMessage": "Aqui aparecem as respostas concluídas e as execuções agendadas que tiveram algo a dizer.",
+  "ios.activity.emptyUnread": "Nada não lido.",
+  "ios.activity.emptyErrors": "Nenhum erro.",
+  "ios.activity.chatSoon": "O chat com {name} abre aqui em breve. Evento {event}."
 }

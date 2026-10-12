@@ -3,8 +3,7 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// The four tabs of the app: Crew (home), Inbox, Activity and Settings. Activity is a placeholder until its screen is built
-/// (docs/IOS_APP.md).
+/// The four tabs of the app: Crew (home), Inbox, Activity and Settings (docs/IOS_APP.md).
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -28,8 +27,9 @@ struct RootView: View {
                 .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
                 .badge(InboxRules.badge(of: demoServers))
                 .tag(AppTab.inbox)
-            ComingSoonTab(title: L10n.Ios.Tab.activity)
+            ActivityScreen(servers: demoServers)
                 .id(dynamicTypeSize)
+                .badge(ActivityFacts.unreadCount(servers: demoServers))
                 .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
                 .tag(AppTab.activity)
             SettingsTab(settings: settings, servers: servers, biometrics: biometrics, onConnect: { showsConnect = true })

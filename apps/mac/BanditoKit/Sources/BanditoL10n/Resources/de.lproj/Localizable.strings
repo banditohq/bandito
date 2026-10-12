@@ -925,6 +925,17 @@
 "integrations.status.unchecked" = "Noch nicht geprüft";
 "integrations.title" = "Integrationen";
 "integrations.toolsFound" = "Werkzeuge: %1$@";
+"ios.activity.chatSoon" = "Der Chat mit %1$@ öffnet sich hier bald. Ereignis %2$@.";
+"ios.activity.emptyErrors" = "Keine Fehler.";
+"ios.activity.emptyMessage" = "Hier erscheinen abgeschlossene Antworten und geplante Läufe mit einer Meldung.";
+"ios.activity.emptyTitle" = "Bisher ruhig";
+"ios.activity.emptyUnread" = "Nichts Ungelesenes.";
+"ios.activity.failed" = "%1$@: Fehler";
+"ios.activity.filter.all" = "Alle";
+"ios.activity.filter.errors" = "Fehler";
+"ios.activity.filter.unread" = "Ungelesen";
+"ios.activity.finished" = "%1$@ hat beendet";
+"ios.activity.scheduled" = "%1$@ · %2$@";
 "ios.connect.placeholder" = "Das Verbinden eines Servers vom iPhone kommt bald.";
 "ios.crew.chatSoon" = "Der Chat mit %1$@ kommt bald.";
 "ios.crew.createAgent" = "Agent anlegen";

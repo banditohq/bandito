@@ -3181,5 +3181,16 @@
   "ios.inbox.service": "Service",
   "ios.inbox.connectOnMac": "Connecting a service is done on your Mac for now.",
   "ios.inbox.send": "Send",
-  "ios.inbox.openHint": "Opens the details"
+  "ios.inbox.openHint": "Opens the details",
+  "ios.activity.filter.all": "All",
+  "ios.activity.filter.unread": "Unread",
+  "ios.activity.filter.errors": "Errors",
+  "ios.activity.finished": "{name} finished",
+  "ios.activity.scheduled": "{name} · {schedule}",
+  "ios.activity.failed": "{name}: error",
+  "ios.activity.emptyTitle": "All quiet for now",
+  "ios.activity.emptyMessage": "Finished replies and scheduled runs that had something to say show up here.",
+  "ios.activity.emptyUnread": "Nothing unread.",
+  "ios.activity.emptyErrors": "No errors.",
+  "ios.activity.chatSoon": "The chat with {name} opens here soon. Event {event}."
 }

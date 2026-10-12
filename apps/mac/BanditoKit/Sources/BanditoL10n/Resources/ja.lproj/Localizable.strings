@@ -925,6 +925,17 @@
 "integrations.status.unchecked" = "未確認";
 "integrations.title" = "連携";
 "integrations.toolsFound" = "ツール: %1$@";
+"ios.activity.chatSoon" = "%1$@とのチャットはまもなくここで開きます。イベント %2$@。";
+"ios.activity.emptyErrors" = "エラーはありません。";
+"ios.activity.emptyMessage" = "完了した返信と、何か知らせたスケジュール実行がここに表示されます。";
+"ios.activity.emptyTitle" = "今のところ静かです";
+"ios.activity.emptyUnread" = "未読はありません。";
+"ios.activity.failed" = "%1$@: エラー";
+"ios.activity.filter.all" = "すべて";
+"ios.activity.filter.errors" = "エラー";
+"ios.activity.filter.unread" = "未読";
+"ios.activity.finished" = "%1$@が完了";
+"ios.activity.scheduled" = "%1$@ · %2$@";
 "ios.connect.placeholder" = "iPhone からのサーバー接続は近日対応予定です。";
 "ios.crew.chatSoon" = "%1$@ とのチャットは近日対応予定です。";
 "ios.crew.createAgent" = "エージェントを作成";
