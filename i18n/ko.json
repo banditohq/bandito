@@ -3189,5 +3189,22 @@
   "ios.onboarding.connect.scan": "Mac의 코드 스캔하기",
   "ios.onboarding.connect.paste": "링크 붙여넣기",
   "ios.onboarding.connect.type": "주소 입력하기",
-  "ios.onboarding.connect.hint": "Mac에서: 설정 → 서버 → iPhone 연결"
+  "ios.onboarding.connect.hint": "Mac에서: 설정 → 서버 → iPhone 연결",
+  "ios.widget.inbox.name": "받은 편지함",
+  "ios.widget.inbox.desc": "Bandito에서 기다리는 항목 수.",
+  "ios.widget.crew.name": "크루",
+  "ios.widget.crew.desc": "에이전트와 하고 있는 일.",
+  "ios.widget.waitingTitle": "나를 기다림",
+  "ios.widget.allQuiet": "모두 조용함",
+  "ios.widget.lock.waiting": {
+    "one": "{count}건 대기 중",
+    "other": "{count}건 대기 중"
+  },
+  "ios.widget.lock.working": "{name} 작업 중",
+  "ios.widget.status.working": "작업 중",
+  "ios.widget.status.needsYou": "확인 필요",
+  "ios.widget.status.idle": "여유",
+  "ios.widget.status.error": "오류",
+  "ios.widget.status.offline": "오프라인",
+  "ios.widget.open": "Bandito 열기"
 }

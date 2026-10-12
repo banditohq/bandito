@@ -1528,6 +1528,35 @@ public enum L10n {
         public enum Welcome {
             public static var title: String { L10n.tr("ios.welcome.title") }
         }
+
+        public enum Widget {
+            public static var allQuiet: String { L10n.tr("ios.widget.allQuiet") }
+            public static var `open`: String { L10n.tr("ios.widget.open") }
+            public static var waitingTitle: String { L10n.tr("ios.widget.waitingTitle") }
+
+            public enum Crew {
+                public static var desc: String { L10n.tr("ios.widget.crew.desc") }
+                public static var name: String { L10n.tr("ios.widget.crew.name") }
+            }
+
+            public enum Inbox {
+                public static var desc: String { L10n.tr("ios.widget.inbox.desc") }
+                public static var name: String { L10n.tr("ios.widget.inbox.name") }
+            }
+
+            public enum Lock {
+                public static func waiting(count: Int) -> String { L10n.tr("ios.widget.lock.waiting", count) }
+                public static func working(name: String) -> String { L10n.tr("ios.widget.lock.working", name) }
+            }
+
+            public enum Status {
+                public static var error: String { L10n.tr("ios.widget.status.error") }
+                public static var idle: String { L10n.tr("ios.widget.status.idle") }
+                public static var needsYou: String { L10n.tr("ios.widget.status.needsYou") }
+                public static var offline: String { L10n.tr("ios.widget.status.offline") }
+                public static var working: String { L10n.tr("ios.widget.status.working") }
+            }
+        }
     }
 
     public enum Journal {

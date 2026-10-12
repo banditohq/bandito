@@ -3229,5 +3229,22 @@
   "ios.onboarding.connect.scan": "Escanear o código do Mac",
   "ios.onboarding.connect.paste": "Colar um link",
   "ios.onboarding.connect.type": "Digitar um endereço",
-  "ios.onboarding.connect.hint": "No Mac: Ajustes → Servidores → Conectar iPhone"
+  "ios.onboarding.connect.hint": "No Mac: Ajustes → Servidores → Conectar iPhone",
+  "ios.widget.inbox.name": "Caixa de entrada",
+  "ios.widget.inbox.desc": "Quantas coisas esperam por você no Bandito.",
+  "ios.widget.crew.name": "Equipe",
+  "ios.widget.crew.desc": "Seus agentes e o que estão fazendo.",
+  "ios.widget.waitingTitle": "Esperando por você",
+  "ios.widget.allQuiet": "Tudo tranquilo",
+  "ios.widget.lock.waiting": {
+    "one": "{count} espera",
+    "other": "{count} esperam"
+  },
+  "ios.widget.lock.working": "{name} trabalhando",
+  "ios.widget.status.working": "trabalhando",
+  "ios.widget.status.needsYou": "espera por você",
+  "ios.widget.status.idle": "livre",
+  "ios.widget.status.error": "erro",
+  "ios.widget.status.offline": "offline",
+  "ios.widget.open": "Abra o Bandito"
 }

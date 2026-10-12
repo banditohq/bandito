@@ -3229,5 +3229,22 @@
   "ios.onboarding.connect.scan": "Scan the code from your Mac",
   "ios.onboarding.connect.paste": "Paste a link",
   "ios.onboarding.connect.type": "Type an address",
-  "ios.onboarding.connect.hint": "On your Mac: Settings → Servers → Connect iPhone"
+  "ios.onboarding.connect.hint": "On your Mac: Settings → Servers → Connect iPhone",
+  "ios.widget.inbox.name": "Inbox",
+  "ios.widget.inbox.desc": "How many things wait for you in Bandito.",
+  "ios.widget.crew.name": "Crew",
+  "ios.widget.crew.desc": "Your agents and what they are doing.",
+  "ios.widget.waitingTitle": "Waiting for you",
+  "ios.widget.allQuiet": "All quiet",
+  "ios.widget.lock.waiting": {
+    "one": "{count} waits",
+    "other": "{count} wait"
+  },
+  "ios.widget.lock.working": "{name} working",
+  "ios.widget.status.working": "working",
+  "ios.widget.status.needsYou": "waiting for you",
+  "ios.widget.status.idle": "free",
+  "ios.widget.status.error": "error",
+  "ios.widget.status.offline": "offline",
+  "ios.widget.open": "Open Bandito"
 }

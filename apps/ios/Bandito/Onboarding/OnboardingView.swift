@@ -85,7 +85,7 @@ private struct OnboardingHeader: View {
         }
         .font(BanditoFont.text(size: 15, weight: 500))
         .padding(.horizontal, BanditoSpace.s5)
-        .frame(height: 52)
+        .frame(minHeight: 52)
     }
 }
 

@@ -3189,5 +3189,22 @@
   "ios.onboarding.connect.scan": "扫描 Mac 上的二维码",
   "ios.onboarding.connect.paste": "粘贴链接",
   "ios.onboarding.connect.type": "输入地址",
-  "ios.onboarding.connect.hint": "在 Mac 上：设置 → 服务器 → 连接 iPhone"
+  "ios.onboarding.connect.hint": "在 Mac 上：设置 → 服务器 → 连接 iPhone",
+  "ios.widget.inbox.name": "收件箱",
+  "ios.widget.inbox.desc": "Bandito 中等待你处理的事项数量。",
+  "ios.widget.crew.name": "团队",
+  "ios.widget.crew.desc": "你的代理以及它们正在做的事。",
+  "ios.widget.waitingTitle": "等待你",
+  "ios.widget.allQuiet": "一切平静",
+  "ios.widget.lock.waiting": {
+    "one": "{count} 项等待",
+    "other": "{count} 项等待"
+  },
+  "ios.widget.lock.working": "{name} 正在工作",
+  "ios.widget.status.working": "工作中",
+  "ios.widget.status.needsYou": "等待你",
+  "ios.widget.status.idle": "空闲",
+  "ios.widget.status.error": "出错",
+  "ios.widget.status.offline": "离线",
+  "ios.widget.open": "打开 Bandito"
 }

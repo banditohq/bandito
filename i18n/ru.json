@@ -3312,5 +3312,22 @@
   "ios.onboarding.connect.scan": "Сканировать код с Mac",
   "ios.onboarding.connect.paste": "Вставить ссылку",
   "ios.onboarding.connect.type": "Ввести адрес",
-  "ios.onboarding.connect.hint": "На Mac: Настройки → Серверы → Подключить iPhone"
+  "ios.onboarding.connect.hint": "На Mac: Настройки → Серверы → Подключить iPhone",
+  "ios.widget.inbox.name": "Входящие",
+  "ios.widget.inbox.desc": "Сколько дел ждут тебя в Bandito.",
+  "ios.widget.crew.name": "Команда",
+  "ios.widget.crew.desc": "Твои агенты и то, что они делают.",
+  "ios.widget.waitingTitle": "Ждут тебя",
+  "ios.widget.allQuiet": "Всё спокойно",
+  "ios.widget.lock.waiting": {
+    "one": "{count} ждёт",
+    "other": "{count} ждут"
+  },
+  "ios.widget.lock.working": "{name} работает",
+  "ios.widget.status.working": "работает",
+  "ios.widget.status.needsYou": "ждёт тебя",
+  "ios.widget.status.idle": "свободен",
+  "ios.widget.status.error": "ошибка",
+  "ios.widget.status.offline": "не в сети",
+  "ios.widget.open": "Открой Bandito"
 }

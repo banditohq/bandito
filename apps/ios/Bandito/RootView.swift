@@ -16,6 +16,8 @@ struct RootView: View {
     @State private var appLock = AppLock()
     /// The approval item the Inbox opens (a notification's route), cleared by the Inbox once it is open.
     @State private var inboxFocus: String?
+    /// The agent a widget or a `bandito://agent/...` link asked the Crew to open.
+    @State private var crewFocus: CrewFocus?
     /// The first run's progress; the flow covers the app until a server is paired (docs/IOS_APP.md, Onboarding).
     @State private var onboarding = OnboardingStore.launch(arguments: ProcessInfo.processInfo.arguments)
     private let biometrics = DeviceAuthenticator()
@@ -25,7 +27,7 @@ struct RootView: View {
         let showsOnboarding = onboarding.shows(hasServers: !servers.servers.isEmpty)
         ZStack {
             TabView(selection: $tab) {
-                CrewScreen(servers: demoServers, onConnect: { showsConnect = true })
+                CrewScreen(servers: demoServers, onConnect: { showsConnect = true }, focus: crewFocus)
                     .id(dynamicTypeSize)
                     .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
                     .tag(AppTab.crew)
@@ -48,6 +50,7 @@ struct RootView: View {
 
             if showsOnboarding {
                 OnboardingView(store: onboarding, motion: settings.motion, onConnect: { _ in showsConnect = true })
+                    .id(dynamicTypeSize)
                     .transition(.opacity)
             }
         }
@@ -65,6 +68,10 @@ struct RootView: View {
         .onChange(of: notifications.route) { _, route in
             open(route)
         }
+        .onOpenURL { url in
+            guard let link = BanditoLink(url: url) else { return }
+            openLink(link)
+        }
         .onChange(of: servers.servers.isEmpty, initial: true) { _, isEmpty in
             if !isEmpty { onboarding.markCompleted() }
         }
@@ -74,6 +81,7 @@ struct RootView: View {
             appLock.start(enabled: settings.faceIDLock)
             let arguments = ProcessInfo.processInfo.arguments
             notifications.settings = settings
+            WidgetSnapshotWriter.shared.watch { demoServers }
             guard demoServers.isEmpty, IOSDemo.isRequested(in: arguments) else { return }
             demoServers = await IOSDemo.startServers(withTeam: !IOSDemo.isEmptyRequested(in: arguments))
             notifications.source = StaticNotificationSource(servers: demoServers)
@@ -95,6 +103,21 @@ struct RootView: View {
             tab = .inbox
         }
         notifications.consumeRoute()
+    }
+
+    /// Opens the place a widget or a link names: a tab, or an agent in the Crew.
+    private func openLink(_ link: BanditoLink) {
+        switch link {
+        case .inbox:
+            tab = .inbox
+        case .crew:
+            tab = .crew
+        case .agent(let server, let id):
+            tab = .crew
+            if let serverID = UUID(uuidString: server) {
+                crewFocus = CrewFocus(serverID: serverID, agentID: id, request: UUID())
+            }
+        }
     }
 
     /// Asks for Face ID (or the passcode) and opens the app when the owner passes. Without any way to check the owner
