@@ -257,6 +257,24 @@ pub fn check_quick_replies(args: &serde_json::Value) -> Result<QuickReplies, Str
 
 /// An https address a person may open: a host (letters, digits, `-`, `.`, with an optional port), no user name, no
 /// spaces or control characters, at most [`QUICK_URL_CHARS`] characters.
+/// The `reason` of `nothing_to_report`, cleaned for the record: line breaks and other control characters become a space,
+/// bidi controls go, and runs of spaces collapse. At most 200 characters after that. `Ok(None)` when nothing is left.
+pub fn clean_quiet_reason(text: &str) -> Result<Option<String>, String> {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        // Embedding, override and isolate controls, and the direction marks: they reorder what the thread shows.
+        if matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{200E}' | '\u{200F}') {
+            continue;
+        }
+        out.push(if c.is_control() { ' ' } else { c });
+    }
+    let cleaned = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    if cleaned.chars().count() > 200 {
+        return Err("reason must be text of at most 200 characters".into());
+    }
+    Ok((!cleaned.is_empty()).then_some(cleaned))
+}
+
 fn check_https(url: &str) -> Result<(), String> {
     let bad = || "the link must be an https address, like https://example.com/page".to_string();
     if url.chars().count() > QUICK_URL_CHARS {
@@ -495,5 +513,31 @@ mod tests {
     fn the_reply_quote_is_cut_at_300_characters() {
         let out = runtime_text("ok", None, Some(&"а".repeat(301)), &[], None);
         assert!(out.starts_with(&format!("В ответ на: > {}…\n\nok", "а".repeat(300))));
+    }
+}
+
+#[cfg(test)]
+mod quiet_reason_tests {
+    use super::clean_quiet_reason;
+
+    #[test]
+    fn line_breaks_controls_and_bidi_marks_are_cleaned() {
+        assert_eq!(
+            clean_quiet_reason("  a\u{2066}b\u{2069}\r\n\tc\u{0007}  d\u{202E}e\u{200F} ").unwrap(),
+            Some("ab c de".to_string())
+        );
+        assert_eq!(clean_quiet_reason("\n\u{202A} \t").unwrap(), None);
+        assert_eq!(clean_quiet_reason("").unwrap(), None);
+    }
+
+    #[test]
+    fn the_limit_is_two_hundred_characters_after_cleaning() {
+        let long = "x".repeat(200);
+        assert_eq!(clean_quiet_reason(&long).unwrap(), Some(long.clone()));
+        // Spaces and line breaks around the text do not count.
+        let padded = format!("  {}\n\n", "x ".repeat(100).trim_end());
+        assert!(clean_quiet_reason(&padded).is_ok());
+        assert!(clean_quiet_reason(&"x".repeat(201)).is_err());
+        assert!(clean_quiet_reason(&format!("{}\u{202E}", "x".repeat(201))).is_err());
     }
 }

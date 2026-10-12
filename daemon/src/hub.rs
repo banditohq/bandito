@@ -55,6 +55,11 @@ impl Hub {
         ev
     }
 
+    /// Broadcasts an event that is already stored, such as the mark of `Store::mark_quiet_turn`.
+    pub fn publish(&self, ev: &Event) {
+        let _ = self.tx.send(ev.clone());
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.tx.subscribe()
     }

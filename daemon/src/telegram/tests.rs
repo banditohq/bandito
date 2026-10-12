@@ -1138,8 +1138,11 @@ async fn a_quiet_turn_is_not_forwarded_to_any_chat() {
     rig.set_answers(12, "all");
     let forge = rig.agent.clone();
 
-    // The run ends quietly: its text (if the agent wrote one) goes to no chat.
-    rig.sup.send(&rig.agent, Inbound::user("a quiet run")).await.unwrap();
+    // The run is a scheduled one and ends quietly: its text (if the agent wrote one) goes to no chat.
+    rig.sup
+        .send(&rig.agent, Inbound::schedule("a quiet run"))
+        .await
+        .unwrap();
     rig.wait_log_prefix("send a quiet run").await;
     let started = rig.feed_until(|b| matches!(b, EventBody::TurnStarted { .. })).await;
     let EventBody::TurnStarted { turn_id, .. } = started.body else {
@@ -1152,6 +1155,28 @@ async fn a_quiet_turn_is_not_forwarded_to_any_chat() {
     rig.push(&forge, done()).await;
     rig.feed_until(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
     assert!(rig.fake.sent_to(12).is_empty(), "{:?}", rig.fake.sent_to(12));
+}
+
+#[tokio::test]
+async fn a_quiet_mark_on_a_persons_turn_does_not_silence_its_answer() {
+    let mut rig = rig().await;
+    rig.link(12);
+    rig.set_answers(12, "all");
+    let forge = rig.agent.clone();
+    // Only a scheduled run can end quietly: a mark on the person's turn is ignored by Telegram too.
+    rig.sup.send(&rig.agent, Inbound::user("from the app")).await.unwrap();
+    rig.wait_log_prefix("send from the app").await;
+    let started = rig.feed_until(|b| matches!(b, EventBody::TurnStarted { .. })).await;
+    let EventBody::TurnStarted { turn_id, .. } = started.body else {
+        unreachable!()
+    };
+    rig.sup
+        .hub()
+        .emit(&forge, EventBody::TurnQuiet { turn_id, reason: None });
+    rig.push(&forge, assistant("App answer")).await;
+    rig.push(&forge, done()).await;
+    rig.feed_until(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+    assert_eq!(rig.fake.sent_to(12).len(), 1);
 }
 
 #[tokio::test]

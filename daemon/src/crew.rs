@@ -540,7 +540,7 @@ fn nothing_to_report_tool() -> Value {
         "inputSchema": {
             "type": "object",
             "properties": {
-                "reason": { "type": "string", "maxLength": 200, "description": "Why nothing is worth telling, for the record (optional)" },
+                "reason": { "type": "string", "description": "Why nothing is worth telling, for the record (optional). Line breaks are removed; at most 200 characters" },
             },
         },
     })
@@ -675,8 +675,8 @@ async fn reply_buttons(args: &Value, backend: &dyn CrewBackend) -> Result<String
 async fn nothing_to_report(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
     let reason = match args.get("reason") {
         None | Some(Value::Null) => None,
-        Some(Value::String(text)) if text.chars().count() <= 200 => Some(text.trim()).filter(|t| !t.is_empty()),
-        Some(_) => return Err("reason must be text of at most 200 characters".into()),
+        Some(Value::String(text)) => crate::chat::clean_quiet_reason(text)?,
+        Some(_) => return Err("reason must be text".into()),
     };
     backend
         .nothing_to_report(json!({ "reason": reason }))
@@ -2543,6 +2543,19 @@ mod tests {
             backend.quiet.lock().unwrap().as_slice(),
             &[json!({ "reason": "no mail today" }), json!({ "reason": null })]
         );
+        // A reason of only line breaks and bidi controls is nothing: no reason is sent.
+        let r = replies_with(
+            &format!(
+                "{}\n",
+                tool_call("nothing_to_report", json!({ "reason": "\n\u{202E} \t" }))
+            ),
+            &backend,
+            &[],
+        )
+        .await
+        .remove(0);
+        assert_eq!(r["result"]["isError"], json!(false));
+        assert_eq!(backend.quiet.lock().unwrap().last(), Some(&json!({ "reason": null })));
         // Too long a reason is a tool error the agent can fix, and reaches no one.
         let long = "x".repeat(201);
         let r = replies_with(
@@ -2553,7 +2566,25 @@ mod tests {
         .await
         .remove(0);
         assert_eq!(r["result"]["isError"], json!(true));
-        assert_eq!(backend.quiet.lock().unwrap().len(), 2);
+        assert_eq!(backend.quiet.lock().unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_refused_quiet_end_is_a_tool_error() {
+        // The daemon refuses a turn that is not a scheduled run: the agent hears why.
+        let backend = MockBackend {
+            fail: Some("only scheduled runs can be quiet".into()),
+            ..MockBackend::default()
+        };
+        let r = replies_with(
+            &format!("{}\n", tool_call("nothing_to_report", json!({}))),
+            &backend,
+            &[],
+        )
+        .await
+        .remove(0);
+        assert_eq!(r["result"]["isError"], json!(true));
+        assert!(backend.quiet.lock().unwrap().is_empty());
     }
 
     #[tokio::test]

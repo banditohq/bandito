@@ -256,6 +256,8 @@ struct State {
     last_answer: HashMap<String, String>,
     /// Turns that ended quietly (`turn.quiet`): their answer is not forwarded.
     quiet_turns: HashSet<String>,
+    /// Turns a schedule started that are still running. Only these can be quiet.
+    scheduled_turns: HashSet<String>,
     /// Approval id to the chat whose press decided it.
     decided_here: HashMap<String, i64>,
 }
@@ -277,6 +279,9 @@ impl State {
         cap(&mut self.last_answer);
         if self.quiet_turns.len() > MAP_LIMIT {
             self.quiet_turns.clear();
+        }
+        if self.scheduled_turns.len() > MAP_LIMIT {
+            self.scheduled_turns.clear();
         }
         cap(&mut self.decided_here);
     }
@@ -320,6 +325,7 @@ impl State {
         self.turn_chats.clear();
         self.last_answer.clear();
         self.quiet_turns.clear();
+        self.scheduled_turns.clear();
         self.decided_here.clear();
     }
 }

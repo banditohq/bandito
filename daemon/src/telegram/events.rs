@@ -74,7 +74,14 @@ impl Telegram {
                 source,
                 message_seq,
                 ..
-            } => self.on_turn_started(&agent, turn_id, source, message_seq),
+            } => {
+                if source == Source::Schedule {
+                    let mut st = self.lock();
+                    st.scheduled_turns.insert(turn_id.clone());
+                    st.bound();
+                }
+                self.on_turn_started(&agent, turn_id, source, message_seq)
+            }
             EventBody::MessageUser {
                 text, source, queued, ..
             } => self.on_message_user(&agent, &text, source, queued, ev.seq),
@@ -84,8 +91,11 @@ impl Telegram {
                 st.bound();
             }
             EventBody::TurnQuiet { turn_id, .. } => {
+                // The same condition as the daemon's: only a scheduled run can end quietly.
                 let mut st = self.lock();
-                st.quiet_turns.insert(turn_id);
+                if st.scheduled_turns.contains(&turn_id) {
+                    st.quiet_turns.insert(turn_id);
+                }
                 st.bound();
             }
             EventBody::TurnCompleted { turn_id, status, .. } => self.on_turn_completed(&agent, &turn_id, status).await,
@@ -165,6 +175,7 @@ impl Telegram {
         self.stop_typing(turn_id);
         let (origin, text, quiet) = {
             let mut st = self.lock();
+            st.scheduled_turns.remove(turn_id);
             (
                 st.turn_chats.remove(turn_id),
                 st.last_answer.remove(agent_id),

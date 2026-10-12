@@ -7,7 +7,7 @@ use crate::chat;
 use crate::event::{EventBody, ReactionBy};
 use crate::forms::{self, Outcome};
 use crate::mentions::{self, Mention, MentionKind};
-use crate::store::{Agent, FormStatus};
+use crate::store::{Agent, FormStatus, QuietMark};
 use crate::supervisor::{APPROVAL_TTL_MS, FormReply};
 use base64::Engine;
 use serde::Deserialize;
@@ -175,32 +175,21 @@ pub async fn dispatch(app: &App, _peer: &Peer, method: &str, p: Value) -> RpcRes
                 .to_string();
             let reason = match p.get("reason") {
                 None | Some(Value::Null) => None,
-                Some(Value::String(text)) if text.chars().count() <= 200 => {
-                    Some(text.trim()).filter(|t| !t.is_empty()).map(str::to_string)
+                Some(Value::String(text)) => {
+                    chat::clean_quiet_reason(text).map_err(|e| RpcError::new(INVALID_PARAMS, e))?
                 }
-                Some(_) => {
-                    return Err(RpcError::new(
-                        INVALID_PARAMS,
-                        "reason must be text of at most 200 characters",
-                    ));
-                }
+                Some(_) => return Err(RpcError::new(INVALID_PARAMS, "reason must be text")),
             };
-            let store = &app.sup.hub().store;
-            let (started, turn_id) = store
-                .open_turn(&agent_id)
+            let hub = app.sup.hub();
+            match hub
+                .store
+                .mark_quiet_turn(&agent_id, reason, |ev| hub.publish(ev))
                 .map_err(server)?
-                .ok_or_else(|| RpcError::new(INVALID_PARAMS, "no turn is running"))?;
-            // Once per turn: a second call finds the mark and adds nothing.
-            let marked = store
-                .last_event_of_kind(&agent_id, "turn.quiet")
-                .map_err(server)?
-                .is_some_and(|q| {
-                    q.seq > started && matches!(&q.body, EventBody::TurnQuiet { turn_id: t, .. } if *t == turn_id)
-                });
-            if !marked {
-                app.sup.hub().emit(&agent_id, EventBody::TurnQuiet { turn_id, reason });
+            {
+                QuietMark::Marked(_) | QuietMark::Already => ok(json!({ "quiet": true })),
+                QuietMark::NoTurn => Err(RpcError::new(INVALID_PARAMS, "no turn is running")),
+                QuietMark::NotScheduled => Err(RpcError::new(INVALID_PARAMS, "only scheduled runs can be quiet")),
             }
-            ok(json!({ "quiet": true }))
         }
         "attachments.upload" => {
             let u: UploadParams = params(p)?;

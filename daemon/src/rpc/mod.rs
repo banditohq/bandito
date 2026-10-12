@@ -2453,6 +2453,72 @@ mod crew_tests {
         );
     }
 
+    #[tokio::test]
+    async fn nothing_to_report_is_refused_for_a_persons_turn_and_cleans_the_reason() {
+        let (app, forge, _scout) = app_with_crew();
+        let quiet_events = |app: &App| -> usize {
+            app.sup
+                .hub()
+                .store
+                .events_since(0, 100, Some(&forge))
+                .unwrap()
+                .iter()
+                .filter(|e| matches!(e.body, EventBody::TurnQuiet { .. }))
+                .count()
+        };
+        let turn = |turn_id: &str, source: crate::event::Source| EventBody::TurnStarted {
+            turn_id: turn_id.into(),
+            source,
+            reactions_until: None,
+            message_seq: None,
+        };
+        // The person's own turn: refused, and no event is made.
+        app.sup.hub().emit(&forge, turn("t1", crate::event::Source::User));
+        let err = dispatch(
+            &app,
+            &Peer::Agent(forge.clone()),
+            "messages.agent.nothing_to_report",
+            json!({}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.message, "only scheduled runs can be quiet");
+        assert_eq!(quiet_events(&app), 0);
+        app.sup.hub().emit(
+            &forge,
+            EventBody::TurnCompleted {
+                turn_id: "t1".into(),
+                status: crate::event::TurnStatus::Ok,
+                usage: None,
+                cost_usd: None,
+            },
+        );
+
+        // A scheduled run: accepted, and the reason is cleaned (bidi controls and line breaks go).
+        app.sup.hub().emit(&forge, turn("t2", crate::event::Source::Schedule));
+        let args = json!({ "reason": "no\u{202E} mail\n   today\u{200F}" });
+        assert_eq!(
+            dispatch(
+                &app,
+                &Peer::Agent(forge.clone()),
+                "messages.agent.nothing_to_report",
+                args
+            )
+            .await
+            .unwrap(),
+            json!({ "quiet": true })
+        );
+        let stored = app.sup.hub().store.events_since(0, 100, Some(&forge)).unwrap();
+        let reasons: Vec<Option<String>> = stored
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::TurnQuiet { reason, .. } => Some(reason),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(reasons, vec![Some("no mail today".to_string())]);
+    }
+
     #[test]
     fn the_new_features_are_announced_and_a_creation_may_hold_the_connection() {
         let list = features();

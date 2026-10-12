@@ -137,10 +137,19 @@ Reading it is the client's job: the newest `agent.quick_replies` of a thread is 
 
 ## Quiet turns
 
-A scheduled run ("check the mail, and if nothing important, write nothing") can end quietly. The agent calls the crew tool `nothing_to_report{reason?}` (every agent, no capability; `reason` at most 200 characters), which is the agent method `messages.agent.nothing_to_report`. The daemon stores `turn.quiet {turn_id, reason?}` for the turn that runs (once per turn; with no turn running the call is refused). The tool answers "Ок, ход завершится без сообщения. Не пиши текст после этого."; the agent writes no text after it. The feature is `"quiet_schedules"`.
+Only a scheduled run can end quietly. Its prompt ("check the mail, and if nothing important, write nothing") ends with a note for the runtime: when there is nothing worth telling, call `nothing_to_report{reason?}` and end the turn without a message. The tool is for every agent (no capability); it is the agent method `messages.agent.nothing_to_report`, and the feature is `"quiet_schedules"`. The crew tool passes the daemon's answer through: a refusal is a tool error.
+
+The daemon checks and stores in one step, under the store's connection lock (`Store::mark_quiet_turn`), with the event published before the lock is released, so the subscribers see the agent's events in `seq` order:
+- the running turn must have been started by a schedule (`turn.started.source == "schedule"`); a person's or a crew's turn is refused with "only scheduled runs can be quiet", and no event is made;
+- the turn must not have ended (`turn.completed`): a call that lands after it finds no turn;
+- once per turn: a second call adds nothing and still answers `{quiet: true}`.
+
+The daemon stores `turn.quiet {turn_id, reason?}`. `reason` is cleaned first: line breaks and other control characters become spaces, bidi controls (U+202A–U+202E, U+2066–U+2069, U+200E, U+200F) go, runs of spaces collapse, and at most 200 characters remain after that. A reason that is empty after cleaning is no reason.
+
+A command the runtime runs itself (for example `/compact` on Claude) goes to it as typed, so it gets no note and can never be quiet.
 
 A quiet turn is still a turn: its `turn.started` and `turn.completed` stay, and so do its events. What it changes:
-- Text the agent writes after `turn.quiet` is stored and hidden by clients. Text written before it stays in the thread: it was said before the agent chose to be quiet. The daemon forwards no answer of a quiet turn to Telegram, whatever its place in the turn.
+- Text the agent writes after `turn.quiet` is stored and hidden by clients. Text written before it stays in the thread: it was said before the agent chose to be quiet. The daemon forwards no answer of a quiet turn to Telegram, whatever its place in the turn (the Telegram bot reads the same condition: a mark on a turn that was not a scheduled run is ignored).
 - It raises no notification (a Mac notification, a Telegram answer) and no unread count, and it leaves a sidebar's preview as it was.
 - The clients show the turn's tool calls folded under one line, "Nothing new", with the reason when there is one.
 
@@ -420,7 +429,7 @@ Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule
 - `at` and `days`: `09:00` with `mon`…`fri` becomes `0 9 * * 1-5`; no days means every day.
 - the time zone is the server's (`TZ`, else `/etc/localtime`, else UTC).
 
-**A run's event.** A scheduled run is a `message.user` with `source: "schedule"` and `schedule: {id, name, fired_at}`. Its `text` (and `typed`) is the prompt as the person wrote it, so the thread shows the prompt alone. The runtime also gets a note after the prompt, in English: when there is nothing worth telling the person, call `nothing_to_report` and end the turn without a message (see [Quiet turns](#quiet-turns)). The note is never in an event, so no client shows it.
+**A run's event.** A scheduled run is a `message.user` with `source: "schedule"` and `schedule: {id, name, fired_at}`. Its `text` (and `typed`) is the prompt as the person wrote it, so the thread shows the prompt alone. The runtime also gets a note after the prompt, in English: when there is nothing worth telling the person, call `nothing_to_report` and end the turn without a message (see [Quiet turns](#quiet-turns)). The note is never in an event, so no client shows it. A command the runtime runs itself goes as typed, with no note.
 
 Limits for an agent: runs must come at least 5 minutes apart (two consecutive firings of the cron are compared, so every form is checked); at most 20 schedules per agent; a prompt of at most 4000 characters; a title of at most 80. Refusals are `INVALID_PARAMS`.
 
