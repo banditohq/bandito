@@ -63,6 +63,8 @@ enum PerfScenarios {
         HangMonitor.observeHangs { length in tally.add(length) }
         defer { HangMonitor.observeHangs(nil) }
         PerfTrace.write("\(scenario.rawValue): start")
+        // What the app warms at idle after launch is warmed before measuring, never in the middle of it.
+        IdleWarmup.finishNow()
         let steps = PerfSteps(stage: stage)
         await steps.reset()
         let memoryStart = physicalFootprintBytes()

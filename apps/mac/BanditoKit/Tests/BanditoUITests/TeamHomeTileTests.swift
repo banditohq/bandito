@@ -5,7 +5,7 @@ import Testing
 @testable import BanditoUI
 
 /// Pure logic of the team home tiles: the template tiles and the status word of a recent agent.
-@Suite struct TeamHomeTileTests {
+@Suite(.language("en")) struct TeamHomeTileTests {
     @Test func everyTemplateHasItsOwnTileColor() {
         let colors = AgentTemplate.allCases.map { TeamHomeLogic.tile(for: $0).color.rawValue }
         #expect(Set(colors).count == AgentTemplate.allCases.count)

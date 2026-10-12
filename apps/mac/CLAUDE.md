@@ -95,9 +95,12 @@ list or animation is done:
   once out of sight, the choice from their widths) or a rule over measured widths (`MarketHeaderFit`). Only for a
   header or a toolbar: in a row that is made often (action rows, settings rows, card feet) `FirstFit` builds its
   candidates twice in its first frame and made pages open slower (a settings page 65 → 108 ms); rows keep a small
-  `ViewThatFits` of the words. A toolbar made again at each visit gives `FirstFit` a `memory` key (and `persists` for
-  the first visit after a launch): the widths are kept (`FirstFitMemory`) and nothing is measured again (Files' toolbar
-  and trail, 30 ms a visit). A `ViewThatFits` next to a `Spacer` in an `HStack` (the Journal's header) still costs about
+  `ViewThatFits` of the words, or a `Layout` that makes the same choice over one copy of each view
+  (`SettingsRowLayout`, the same pixels in the layout audit; a server's settings page 59 → 45 ms). A toolbar made
+  again at each visit gives `FirstFit` a `memory` key (and `persists` for the first visit after a launch): the widths
+  are kept (`FirstFitMemory`), nothing is measured again, and the first frame builds the remembered choice only, checked
+  against the width as soon as it is known (Files 87 → 59 ms a visit). A picture made in one pass (audit, snapshot)
+  turns that off (`firstFitRememberedFirst`): it has no second frame to correct a choice made for another width. A `ViewThatFits` next to a `Spacer` in an `HStack` (the Journal's header) still costs about
   40 ms a layout; replacing it changes where it switches, so it waits for a decision.
 - A page's header that does not change with the page is an `Equatable` view of its own (`MarketHeader`), and a search
   text lives in a reference that only the field and the results read (`MarketSearch`): a category or a letter rebuilt
@@ -110,6 +113,16 @@ list or animation is done:
   A chat with its workbench panel open is not kept (a terminal or a browser would go on running). The chat stays built
   under the team home too. Other modes are made at each visit: they hold live views (terminals, the screen, the
   browser) or poll.
+- The Marketplace's Bots and Skills pages stay built under the page in front once shown, and are built ahead a moment
+  after the Marketplace opens, their shelves one a frame (`MarketView.keptPage`, `marketShelvesAhead`): the first
+  switch to Bots built the whole page in the frame of the click (140 ms). A kept page is an `Equatable` view of what it
+  shows (`KeptMarketPage`) and reads no search while hidden: otherwise a category opened on Services rebuilt both pages
+  and every shelf in them.
+- A popover's open state belongs to the view that shows it (`OpenableMetricTile`): one `@State` in the Server overview
+  rebuilt the passport, the banners and every card in the frame the popover opened.
+- First-use costs that no click should pay (Swift Charts' first chart) are paid once, offscreen, when nobody has
+  touched the Mac for a second shortly after launch (`IdleWarmup`); the smoothness check runs what is left before it
+  measures.
 - A side list that reads things from the server at each visit starts from what the last visit read (`FilesSidebarExtras`)
   and writes a value only when it changed: the places and the disk came in one by one, each a new layout.
 - A symbol drawn tinted in an AppKit row is made once (`NativeSymbols`), not tinted at each draw.

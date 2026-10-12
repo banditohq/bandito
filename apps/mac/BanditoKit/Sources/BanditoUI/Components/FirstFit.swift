@@ -16,8 +16,9 @@ import SwiftUI
 /// frame is already the right candidate.
 ///
 /// With a `memory` key, the widths outlive the view (`FirstFitMemory`): the same toolbar made again (a return to
-/// Files) measures nothing: the first layout is a `ViewThatFits`, and the choice is made from the remembered widths as
-/// soon as the width offered is known. The key must name everything the candidates' widths depend on. With `persists`, they are kept in the
+/// Files) measures nothing and builds one candidate: the one the remembered widths chose for the width offered last
+/// time, checked again as soon as this width is known (`firstFitRememberedFirst`). The key must name everything the
+/// candidates' widths depend on. With `persists`, they are kept in the
 /// defaults too (for this build), so the first visit after a launch is quick as well.
 struct FirstFit<Candidate: View>: View {
     let count: Int
@@ -30,13 +31,16 @@ struct FirstFit<Candidate: View>: View {
     @State private var chosen: Int?
     @State private var sizes = FirstFitSizes()
     @Environment(\.locale) private var locale
+    @Environment(\.firstFitRememberedFirst) private var rememberedFirst
 
     var body: some View {
         let remembered = rememberedWidths
         Group {
-            // The remembered widths come with the width offered last time, not this one: until this one is known the
-            // `ViewThatFits` chooses (a narrower window would otherwise get last time's wider candidate).
-            if let shown = chosen {
+            // With remembered widths the first frame already shows one candidate: the one that fitted the width offered
+            // last time (the same window, almost always), checked against this width as soon as it is known. Building
+            // the `ViewThatFits` first and the chosen candidate a frame later made the Files toolbar three times over
+            // at every return to Files. Without them, the `ViewThatFits` chooses until the copies are measured.
+            if let shown = chosen ?? eagerChoice(remembered) {
                 candidate(shown, false)
             } else {
                 ViewThatFits(in: .horizontal) {
@@ -75,6 +79,12 @@ struct FirstFit<Candidate: View>: View {
             }
     }
 
+    /// The candidate the remembered widths give for the width offered last time, when the first frame may use it.
+    private func eagerChoice(_ remembered: FirstFitMemory.Entry?) -> Int? {
+        guard rememberedFirst, let remembered else { return nil }
+        return FirstFitRule.index(available: remembered.available, widths: remembered.widths, count: count)
+    }
+
     /// The widths kept under `memory` for this language, with the width offered last time.
     private var rememberedWidths: FirstFitMemory.Entry? {
         guard let memory, let entry = FirstFitMemory.entry(memory, locale: locale.identifier, persists: persists),
@@ -95,6 +105,13 @@ struct FirstFit<Candidate: View>: View {
         let index = FirstFitRule.index(available: available, widths: widths, count: count)
         if chosen != index { chosen = index }
     }
+}
+
+extension EnvironmentValues {
+    /// Whether a `FirstFit` with remembered widths shows the remembered choice in its first frame. A picture made in
+    /// one pass (the layout audit, a snapshot, a size measured once) turns it off: it has no second frame in which a
+    /// choice made for another width would be corrected, so its `ViewThatFits` chooses for the width it is offered.
+    @Entry var firstFitRememberedFirst = true
 }
 
 /// The widths of `FirstFit` candidates by key and language, kept for the life of the app: a view made again chooses

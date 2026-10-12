@@ -112,11 +112,16 @@ enum MarketShelfReveal {
     static func atOnce(_ order: Int) -> Bool { order < atOnceCount }
 
     static func delay(_ order: Int) -> Duration { .milliseconds(17 * max(1, order - atOnceCount + 1)) }
+
+    /// On a page built ahead, out of sight (`marketShelvesAhead`): every shelf a frame after the one above.
+    static func aheadDelay(_ order: Int) -> Duration { .milliseconds(17 * (order + 1)) }
 }
 
 extension EnvironmentValues {
     /// The place of a shelf on its page, from the top (`MarketShelfReveal`).
     @Entry var marketShelfOrder = 0
+    /// The page is built out of sight, ahead of being shown: all its shelves come one a frame (`MarketShelfReveal`).
+    @Entry var marketShelvesAhead = false
 }
 
 /// The row of cards. It is lazy sideways: only the cards near the window are built. It snaps to a card (`viewAligned`),
@@ -131,17 +136,18 @@ struct MarketShelfLane<Item: Identifiable, Card: View>: View {
     @State private var scroll = MarketShelfScrollModel()
     /// The shelf's place on its page (`MarketShelfReveal`).
     @Environment(\.marketShelfOrder) private var order
+    @Environment(\.marketShelvesAhead) private var ahead
     @State private var revealed = false
 
     var body: some View {
-        if revealed || MarketShelfReveal.atOnce(order) {
+        if revealed || (MarketShelfReveal.atOnce(order) && !ahead) {
             lane
         } else {
             // Below the first screen: its cards come a few frames after the page, not in its first frame.
             Color.clear
                 .frame(height: MarketShelfMetrics.laneHeight(card: cardHeight))
                 .task {
-                    try? await Task.sleep(for: MarketShelfReveal.delay(order))
+                    try? await Task.sleep(for: ahead ? MarketShelfReveal.aheadDelay(order) : MarketShelfReveal.delay(order))
                     if !Task.isCancelled { revealed = true }
                 }
         }
