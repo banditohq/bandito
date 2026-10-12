@@ -936,10 +936,12 @@
 "ios.activity.filter.unread" = "읽지 않음";
 "ios.activity.finished" = "%1$@ 완료";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "에이전트 삭제";
+"ios.agent.error" = "저장하지 못했습니다: %1$@";
+"ios.agent.noSchedules" = "아직 예약된 실행이 없습니다.";
 "ios.connect.placeholder" = "iPhone에서 서버를 연결하는 기능은 곧 나옵니다.";
 "ios.crew.chatSoon" = "%1$@와(과)의 대화는 곧 지원됩니다.";
 "ios.crew.createAgent" = "에이전트 만들기";
-"ios.crew.createSoon" = "iPhone에서 에이전트 만들기는 곧 지원됩니다.";
 "ios.crew.emptyMessage" = "이 서버에는 에이전트가 없습니다. 첫 에이전트를 만들어 팀을 시작하세요.";
 "ios.crew.emptyTitle" = "아직 에이전트가 없습니다";
 "ios.crew.lead" = "리더";
@@ -966,6 +968,9 @@
 "ios.inbox.risky" = "위험";
 "ios.inbox.send" = "보내기";
 "ios.inbox.service" = "서비스";
+"ios.newAgent.tabOne" = "에이전트 하나";
+"ios.newAgent.tabTeams" = "바로 쓸 수 있는 팀";
+"ios.newAgent.teamsEmpty" = "이 서버에는 아직 준비된 팀이 없습니다.";
 "ios.onboarding.connect.hint" = "Mac에서: 설정 → 서버 → iPhone 연결";
 "ios.onboarding.connect.paste" = "링크 붙여넣기";
 "ios.onboarding.connect.scan" = "Mac의 코드 스캔하기";

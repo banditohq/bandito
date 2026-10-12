@@ -936,10 +936,12 @@
 "ios.activity.filter.unread" = "No leídos";
 "ios.activity.finished" = "%1$@ terminó";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "Eliminar agente";
+"ios.agent.error" = "No se pudo guardar: %1$@";
+"ios.agent.noSchedules" = "Todavía no hay horarios.";
 "ios.connect.placeholder" = "Conectar un servidor desde el iPhone llegará pronto.";
 "ios.crew.chatSoon" = "El chat con %1$@ llegará pronto.";
 "ios.crew.createAgent" = "Crear agente";
-"ios.crew.createSoon" = "Crear agentes desde el iPhone llegará pronto.";
 "ios.crew.emptyMessage" = "Este servidor no tiene agentes. Crea el primero para que el equipo empiece a trabajar.";
 "ios.crew.emptyTitle" = "Aún no hay agentes";
 "ios.crew.lead" = "Líder";
@@ -966,6 +968,9 @@
 "ios.inbox.risky" = "Arriesgado";
 "ios.inbox.send" = "Enviar";
 "ios.inbox.service" = "Servicio";
+"ios.newAgent.tabOne" = "Un agente";
+"ios.newAgent.tabTeams" = "Equipos listos";
+"ios.newAgent.teamsEmpty" = "Este servidor aún no tiene equipos listos.";
 "ios.onboarding.connect.hint" = "En tu Mac: Ajustes → Servidores → Conectar iPhone";
 "ios.onboarding.connect.paste" = "Pegar un enlace";
 "ios.onboarding.connect.scan" = "Escanear el código del Mac";

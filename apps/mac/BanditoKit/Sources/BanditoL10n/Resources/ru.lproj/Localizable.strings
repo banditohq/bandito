@@ -936,10 +936,12 @@
 "ios.activity.filter.unread" = "Непрочитанные";
 "ios.activity.finished" = "%1$@ закончил";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "Удалить агента";
+"ios.agent.error" = "Не сохранилось: %1$@";
+"ios.agent.noSchedules" = "Расписаний пока нет.";
 "ios.connect.placeholder" = "Подключение сервера с iPhone появится скоро.";
 "ios.crew.chatSoon" = "Чат с %1$@ появится скоро.";
 "ios.crew.createAgent" = "Создать агента";
-"ios.crew.createSoon" = "Создание агентов с iPhone появится скоро.";
 "ios.crew.emptyMessage" = "На этом сервере нет агентов. Создайте первого, чтобы команда начала работать.";
 "ios.crew.emptyTitle" = "Агентов пока нет";
 "ios.crew.lead" = "Главный";
@@ -966,6 +968,9 @@
 "ios.inbox.risky" = "Рискованно";
 "ios.inbox.send" = "Отправить";
 "ios.inbox.service" = "Сервис";
+"ios.newAgent.tabOne" = "Один агент";
+"ios.newAgent.tabTeams" = "Готовые команды";
+"ios.newAgent.teamsEmpty" = "На этом сервере пока нет готовых команд.";
 "ios.onboarding.connect.hint" = "На Mac: Настройки → Серверы → Подключить iPhone";
 "ios.onboarding.connect.paste" = "Вставить ссылку";
 "ios.onboarding.connect.scan" = "Сканировать код с Mac";

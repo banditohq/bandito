@@ -45,6 +45,10 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
   before the first upload.
 - The pairing flow (QR, link, address) is a placeholder sheet. The `bandito://` URL scheme is registered, but no link
   handler exists yet.
-- The chat, the agent's creation and the server's pairing are stubs (Crew shows them as "coming soon").
+- The chat and the server's pairing are stubs (Crew shows the chat as "coming soon").
+- The agent card (`Agent/AgentDetailView.swift`) and the creation sheet (`Agent/NewAgentSheet.swift`, `OneAgentForm.swift`)
+  are built. `Agent/AgentRules.swift` and `AgentPermission` port the Mac's rules from `BanditoUI` (`NewAgentModelRules`,
+  `NewAgentFolderRules`, `ReadyTeamsLogic`, `AgentCapability`), which is macOS only. Move the rules to `BanditoKit` in their
+  own change, then delete the copies here.
 - The button styles (`.signal`, `.quiet`) exist only in `BanditoUI`; `SignalButtonStyle` in `Crew/TeamViews.swift` is a
   copy for this target until they move to `BanditoDesign`.

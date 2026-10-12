@@ -936,10 +936,12 @@
 "ios.activity.filter.unread" = "未读";
 "ios.activity.finished" = "%1$@ 已完成";
 "ios.activity.scheduled" = "%1$@ · %2$@";
+"ios.agent.delete.button" = "删除智能体";
+"ios.agent.error" = "无法保存：%1$@";
+"ios.agent.noSchedules" = "还没有定时任务。";
 "ios.connect.placeholder" = "从 iPhone 连接服务器的功能即将推出。";
 "ios.crew.chatSoon" = "与 %1$@ 的聊天即将推出。";
 "ios.crew.createAgent" = "创建智能体";
-"ios.crew.createSoon" = "在 iPhone 上创建智能体即将推出。";
 "ios.crew.emptyMessage" = "这台服务器还没有智能体。创建第一个，让团队开始工作。";
 "ios.crew.emptyTitle" = "还没有智能体";
 "ios.crew.lead" = "主理人";
@@ -966,6 +968,9 @@
 "ios.inbox.risky" = "有风险";
 "ios.inbox.send" = "发送";
 "ios.inbox.service" = "服务";
+"ios.newAgent.tabOne" = "单个智能体";
+"ios.newAgent.tabTeams" = "现成团队";
+"ios.newAgent.teamsEmpty" = "此服务器暂无现成团队。";
 "ios.onboarding.connect.hint" = "在 Mac 上：设置 → 服务器 → 连接 iPhone";
 "ios.onboarding.connect.paste" = "粘贴链接";
 "ios.onboarding.connect.scan" = "扫描 Mac 上的二维码";
