@@ -93,4 +93,39 @@ enum NativeColors {
 
     @MainActor private static var resolved: [Key: CGColor] = [:]
 }
+
+/// SF Symbols in one colour, made once per symbol, size, weight, colour and appearance. Tinting a symbol at each draw
+/// made a new image every time a tool group or a code block's copy button came into view.
+enum NativeSymbols {
+    @MainActor
+    static func image(
+        _ name: String, pointSize: CGFloat, weight: NSFont.Weight, color: Color, in appearance: NSAppearance
+    ) -> NSImage? {
+        let key = Key(name: name, pointSize: pointSize, weight: weight.rawValue, color: color, appearance: appearance.name)
+        if let known = made[key] { return known }
+        guard
+            let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight))
+        else { return nil }
+        let tint = NSColor(cgColor: NativeColors.cg(color, in: appearance)) ?? .labelColor
+        let image = NSImage(size: symbol.size, flipped: false) { rect in
+            symbol.draw(in: rect)
+            tint.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        made[key] = image
+        return image
+    }
+
+    private struct Key: Hashable {
+        var name: String
+        var pointSize: CGFloat
+        var weight: CGFloat
+        var color: Color
+        var appearance: NSAppearance.Name
+    }
+
+    @MainActor private static var made: [Key: NSImage] = [:]
+}
 #endif

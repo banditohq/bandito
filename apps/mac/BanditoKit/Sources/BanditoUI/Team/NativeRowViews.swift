@@ -207,11 +207,13 @@ final class NativeToolGroupView: NSView {
         NSColor(Color.Bandito.line).setStroke()
         edge.stroke()
         // The status: a bold check (or cross) at 10 pt in a 13 pt column.
-        let symbol = NSImage(systemSymbolName: failed ? "xmark" : "checkmark", accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .bold))
+        let appearance = effectiveAppearance
         var x = box.minX + 10
-        if let symbol {
-            draw(symbol, tint: NSColor(failed ? Color.Bandito.danger : Color.Bandito.ok), centeredIn: CGRect(x: x, y: 0, width: 13, height: box.height))
+        if let symbol = NativeSymbols.image(
+            failed ? "xmark" : "checkmark", pointSize: 10, weight: .bold,
+            color: failed ? Color.Bandito.danger : Color.Bandito.ok, in: appearance)
+        {
+            draw(symbol, centeredIn: CGRect(x: x, y: 0, width: 13, height: box.height))
         }
         x += 13 + 8
         let text = NSAttributedString(
@@ -220,24 +222,17 @@ final class NativeToolGroupView: NSView {
         let size = text.size()
         text.draw(at: CGPoint(x: x, y: (box.height - size.height) / 2))
         // The chevron, turned to point right while the group is folded.
-        if let chevron = NSImage(systemSymbolName: "chevron.right", accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 9, weight: .semibold))
+        if let chevron = NativeSymbols.image(
+            "chevron.right", pointSize: 9, weight: .semibold, color: Color.Bandito.text3, in: appearance)
         {
             let width = chevron.size.width
-            draw(chevron, tint: NSColor(Color.Bandito.text3), centeredIn: CGRect(x: box.maxX - 10 - max(width, 9), y: 0, width: max(width, 9), height: box.height))
+            draw(chevron, centeredIn: CGRect(x: box.maxX - 10 - max(width, 9), y: 0, width: max(width, 9), height: box.height))
         }
     }
 
-    private func draw(_ image: NSImage, tint: NSColor, centeredIn rect: CGRect) {
+    private func draw(_ image: NSImage, centeredIn rect: CGRect) {
         let size = image.size
-        let tinted = NSImage(size: size, flipped: false) { bounds in
-            image.draw(in: bounds)
-            tint.set()
-            bounds.fill(using: .sourceAtop)
-            return true
-        }
-        let y = rect.midY - size.height / 2
-        tinted.draw(in: CGRect(x: rect.midX - size.width / 2, y: y, width: size.width, height: size.height))
+        image.draw(in: CGRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2, width: size.width, height: size.height))
     }
 
     override func updateTrackingAreas() {
@@ -721,14 +716,11 @@ final class NativeCopyButton: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if let icon {
-            let size = icon.size
-            let tinted = NSImage(size: size, flipped: false) { rect in
-                icon.draw(in: rect)
-                self.color.set()
-                rect.fill(using: .sourceAtop)
-                return true
-            }
+        if let tinted = NativeSymbols.image(
+            copied ? "checkmark" : "doc.on.doc", pointSize: 11, weight: .medium,
+            color: copied ? Color.Bandito.ok : Color.Bandito.text2, in: effectiveAppearance)
+        {
+            let size = tinted.size
             tinted.draw(in: CGRect(x: 8, y: (bounds.height - size.height) / 2, width: size.width, height: size.height))
         }
         let text = word
