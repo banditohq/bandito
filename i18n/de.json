@@ -3246,5 +3246,28 @@
   "ios.widget.status.error": "Fehler",
   "ios.widget.status.offline": "offline",
   "ios.widget.more": "{names} und {count} weitere",
-  "ios.widget.open": "Bandito öffnen"
+  "ios.widget.open": "Bandito öffnen",
+  "ios.intent.needsMe.none": "Nichts wartet auf dich",
+  "ios.intent.needsMe.waiting": {
+    "one": "{count} wartet: {names}",
+    "other": "{count} warten: {names}"
+  },
+  "ios.intent.needsMe.countOnly": {
+    "one": "{count} wartet auf dich",
+    "other": "{count} warten auf dich"
+  },
+  "ios.intent.open.inbox": "Posteingang öffnen",
+  "ios.intent.ask.sent": "An {name} gesendet",
+  "ios.intent.ask.notConnected": "{name} ist gerade nicht erreichbar. Öffne Bandito und versuche es erneut.",
+  "ios.intent.ask.empty": "Die Nachricht ist leer.",
+  "shortcut.title.whatNeedsMe": "Was wartet auf mich",
+  "shortcut.title.askAgent": "Einen Agenten fragen",
+  "shortcut.title.openAgent": "Einen Agenten öffnen",
+  "shortcut.title.agentType": "Agent",
+  "shortcut.title.messageParam": "Nachricht",
+  "shortcut.phrase.whatNeedsMe": "Was wartet auf mich in ${applicationName}",
+  "shortcut.phrase.askAgent": "${agent} in ${applicationName} fragen",
+  "shortcut.phrase.openAgent": "${agent} in ${applicationName} öffnen",
+  "shortcut.title.openInbox": "Posteingang öffnen",
+  "ios.intent.ask.failed": "Konnte nicht an {name} gesendet werden. Versuche es erneut."
 }

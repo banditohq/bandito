@@ -3207,5 +3207,26 @@
   "ios.widget.status.error": "エラー",
   "ios.widget.status.offline": "オフライン",
   "ios.widget.more": "{names}ほか{count}人",
-  "ios.widget.open": "Bandito を開く"
+  "ios.widget.open": "Bandito を開く",
+  "ios.intent.needsMe.none": "あなたを待っているものはありません",
+  "ios.intent.needsMe.waiting": {
+    "other": "{count}件があなたを待っています: {names}"
+  },
+  "ios.intent.needsMe.countOnly": {
+    "other": "{count}件があなたを待っています"
+  },
+  "ios.intent.open.inbox": "受信トレイを開く",
+  "ios.intent.ask.sent": "{name}に送信しました",
+  "ios.intent.ask.notConnected": "{name}に今は接続できません。Banditoを開いてもう一度お試しください。",
+  "ios.intent.ask.empty": "メッセージが空です。",
+  "shortcut.title.whatNeedsMe": "私に必要なこと",
+  "shortcut.title.askAgent": "エージェントに頼む",
+  "shortcut.title.openAgent": "エージェントを開く",
+  "shortcut.title.agentType": "エージェント",
+  "shortcut.title.messageParam": "メッセージ",
+  "shortcut.phrase.whatNeedsMe": "${applicationName}で私に必要なこと",
+  "shortcut.phrase.askAgent": "${applicationName}で${agent}に聞く",
+  "shortcut.phrase.openAgent": "${applicationName}で${agent}を開く",
+  "shortcut.title.openInbox": "受信トレイを開く",
+  "ios.intent.ask.failed": "{name}に送信できませんでした。もう一度お試しください。"
 }

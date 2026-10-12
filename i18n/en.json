@@ -3247,5 +3247,28 @@
   "ios.widget.status.error": "error",
   "ios.widget.status.offline": "offline",
   "ios.widget.more": "{names} and {count} more",
-  "ios.widget.open": "Open Bandito"
+  "ios.widget.open": "Open Bandito",
+  "ios.intent.needsMe.none": "Nothing needs you",
+  "ios.intent.needsMe.waiting": {
+    "one": "{count} waits: {names}",
+    "other": "{count} wait: {names}"
+  },
+  "ios.intent.needsMe.countOnly": {
+    "one": "{count} waits for you",
+    "other": "{count} wait for you"
+  },
+  "ios.intent.open.inbox": "Open Inbox",
+  "ios.intent.ask.sent": "Sent to {name}",
+  "ios.intent.ask.notConnected": "{name} is not reachable right now. Open Bandito and try again.",
+  "ios.intent.ask.empty": "The message is empty.",
+  "shortcut.title.whatNeedsMe": "What needs me",
+  "shortcut.title.askAgent": "Ask an agent",
+  "shortcut.title.openAgent": "Open an agent",
+  "shortcut.title.agentType": "Agent",
+  "shortcut.title.messageParam": "Message",
+  "shortcut.phrase.whatNeedsMe": "What needs me in ${applicationName}",
+  "shortcut.phrase.askAgent": "Ask ${agent} in ${applicationName}",
+  "shortcut.phrase.openAgent": "Open ${agent} in ${applicationName}",
+  "shortcut.title.openInbox": "Open Inbox",
+  "ios.intent.ask.failed": "Could not send to {name}. Try again."
 }

@@ -3247,5 +3247,28 @@
   "ios.widget.status.error": "erreur",
   "ios.widget.status.offline": "hors ligne",
   "ios.widget.more": "{names} et {count} de plus",
-  "ios.widget.open": "Ouvrez Bandito"
+  "ios.widget.open": "Ouvrez Bandito",
+  "ios.intent.needsMe.none": "Rien ne t'attend",
+  "ios.intent.needsMe.waiting": {
+    "one": "{count} attend : {names}",
+    "other": "{count} attendent : {names}"
+  },
+  "ios.intent.needsMe.countOnly": {
+    "one": "{count} attend une réponse",
+    "other": "{count} attendent une réponse"
+  },
+  "ios.intent.open.inbox": "Ouvrir la boîte de réception",
+  "ios.intent.ask.sent": "Envoyé à {name}",
+  "ios.intent.ask.notConnected": "{name} est injoignable pour le moment. Ouvre Bandito et réessaie.",
+  "ios.intent.ask.empty": "Le message est vide.",
+  "shortcut.title.whatNeedsMe": "Ce qui m'attend",
+  "shortcut.title.askAgent": "Demander à un agent",
+  "shortcut.title.openAgent": "Ouvrir un agent",
+  "shortcut.title.agentType": "Agent",
+  "shortcut.title.messageParam": "Message",
+  "shortcut.phrase.whatNeedsMe": "Ce qui m'attend dans ${applicationName}",
+  "shortcut.phrase.askAgent": "Demande à ${agent} dans ${applicationName}",
+  "shortcut.phrase.openAgent": "Ouvre ${agent} dans ${applicationName}",
+  "shortcut.title.openInbox": "Ouvrir la boîte de réception",
+  "ios.intent.ask.failed": "Impossible d'envoyer à {name}. Réessaie."
 }

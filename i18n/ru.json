@@ -3330,5 +3330,30 @@
   "ios.widget.status.error": "ошибка",
   "ios.widget.status.offline": "не в сети",
   "ios.widget.more": "{names} и ещё {count}",
-  "ios.widget.open": "Открой Bandito"
+  "ios.widget.open": "Открой Bandito",
+  "ios.intent.needsMe.none": "Ничего не ждёт",
+  "ios.intent.needsMe.waiting": {
+    "one": "{count} ждёт: {names}",
+    "few": "{count} ждут: {names}",
+    "many": "{count} ждут: {names}",
+    "other": "{count} ждут: {names}"
+  },
+  "ios.intent.needsMe.countOnly": {
+    "one": "{count} ждёт вас",
+    "other": "{count} ждут вас"
+  },
+  "ios.intent.open.inbox": "Открыть входящие",
+  "ios.intent.ask.sent": "Отправлено: {name}",
+  "ios.intent.ask.notConnected": "{name} сейчас не на связи. Откройте Bandito и попробуйте снова.",
+  "ios.intent.ask.empty": "Сообщение пустое.",
+  "shortcut.title.whatNeedsMe": "Что ждёт меня",
+  "shortcut.title.askAgent": "Спросить агента",
+  "shortcut.title.openAgent": "Открыть агента",
+  "shortcut.title.agentType": "Агент",
+  "shortcut.title.messageParam": "Сообщение",
+  "shortcut.phrase.whatNeedsMe": "Что ждёт меня в ${applicationName}",
+  "shortcut.phrase.askAgent": "Спросить ${agent} в ${applicationName}",
+  "shortcut.phrase.openAgent": "Открыть ${agent} в ${applicationName}",
+  "shortcut.title.openInbox": "Открыть входящие",
+  "ios.intent.ask.failed": "Не удалось отправить агенту {name}. Попробуйте снова."
 }

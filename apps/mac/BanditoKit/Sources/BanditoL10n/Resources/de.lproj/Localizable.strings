@@ -966,6 +966,12 @@
 "ios.inbox.risky" = "Riskant";
 "ios.inbox.send" = "Senden";
 "ios.inbox.service" = "Dienst";
+"ios.intent.ask.empty" = "Die Nachricht ist leer.";
+"ios.intent.ask.failed" = "Konnte nicht an %1$@ gesendet werden. Versuche es erneut.";
+"ios.intent.ask.notConnected" = "%1$@ ist gerade nicht erreichbar. Öffne Bandito und versuche es erneut.";
+"ios.intent.ask.sent" = "An %1$@ gesendet";
+"ios.intent.needsMe.none" = "Nichts wartet auf dich";
+"ios.intent.open.inbox" = "Posteingang öffnen";
 "ios.onboarding.connect.hint" = "Auf dem Mac: Einstellungen → Server → iPhone verbinden";
 "ios.onboarding.connect.paste" = "Link einfügen";
 "ios.onboarding.connect.scan" = "Code vom Mac scannen";

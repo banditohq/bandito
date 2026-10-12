@@ -966,6 +966,12 @@
 "ios.inbox.risky" = "위험";
 "ios.inbox.send" = "보내기";
 "ios.inbox.service" = "서비스";
+"ios.intent.ask.empty" = "메시지가 비어 있습니다.";
+"ios.intent.ask.failed" = "%1$@에게 보내지 못했습니다. 다시 시도하세요.";
+"ios.intent.ask.notConnected" = "%1$@에 지금 연결할 수 없습니다. Bandito를 열고 다시 시도하세요.";
+"ios.intent.ask.sent" = "%1$@에게 보냈습니다";
+"ios.intent.needsMe.none" = "나를 기다리는 것이 없습니다";
+"ios.intent.open.inbox" = "받은 편지함 열기";
 "ios.onboarding.connect.hint" = "Mac에서: 설정 → 서버 → iPhone 연결";
 "ios.onboarding.connect.paste" = "링크 붙여넣기";
 "ios.onboarding.connect.scan" = "Mac의 코드 스캔하기";

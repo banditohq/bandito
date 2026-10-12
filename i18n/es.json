@@ -3247,5 +3247,28 @@
   "ios.widget.status.error": "error",
   "ios.widget.status.offline": "sin conexión",
   "ios.widget.more": "{names} y {count} más",
-  "ios.widget.open": "Abre Bandito"
+  "ios.widget.open": "Abre Bandito",
+  "ios.intent.needsMe.none": "Nada te necesita",
+  "ios.intent.needsMe.waiting": {
+    "one": "{count} espera: {names}",
+    "other": "{count} esperan: {names}"
+  },
+  "ios.intent.needsMe.countOnly": {
+    "one": "{count} te espera",
+    "other": "{count} te esperan"
+  },
+  "ios.intent.open.inbox": "Abrir bandeja",
+  "ios.intent.ask.sent": "Enviado a {name}",
+  "ios.intent.ask.notConnected": "{name} no está disponible ahora. Abre Bandito e inténtalo de nuevo.",
+  "ios.intent.ask.empty": "El mensaje está vacío.",
+  "shortcut.title.whatNeedsMe": "Qué me necesita",
+  "shortcut.title.askAgent": "Preguntar a un agente",
+  "shortcut.title.openAgent": "Abrir un agente",
+  "shortcut.title.agentType": "Agente",
+  "shortcut.title.messageParam": "Mensaje",
+  "shortcut.phrase.whatNeedsMe": "Qué me necesita en ${applicationName}",
+  "shortcut.phrase.askAgent": "Pregunta a ${agent} en ${applicationName}",
+  "shortcut.phrase.openAgent": "Abre a ${agent} en ${applicationName}",
+  "shortcut.title.openInbox": "Abrir bandeja",
+  "ios.intent.ask.failed": "No se pudo enviar a {name}. Inténtalo de nuevo."
 }

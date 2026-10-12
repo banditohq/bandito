@@ -966,6 +966,12 @@
 "ios.inbox.risky" = "リスクあり";
 "ios.inbox.send" = "送信";
 "ios.inbox.service" = "サービス";
+"ios.intent.ask.empty" = "メッセージが空です。";
+"ios.intent.ask.failed" = "%1$@に送信できませんでした。もう一度お試しください。";
+"ios.intent.ask.notConnected" = "%1$@に今は接続できません。Banditoを開いてもう一度お試しください。";
+"ios.intent.ask.sent" = "%1$@に送信しました";
+"ios.intent.needsMe.none" = "あなたを待っているものはありません";
+"ios.intent.open.inbox" = "受信トレイを開く";
 "ios.onboarding.connect.hint" = "Mac で: 設定 → サーバー → iPhone を接続";
 "ios.onboarding.connect.paste" = "リンクを貼り付け";
 "ios.onboarding.connect.scan" = "Mac のコードを読み取る";

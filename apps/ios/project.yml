@@ -33,7 +33,7 @@ targets:
       path: Bandito/Info.plist
       properties:
         CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ru]
+        CFBundleLocalizations: [en, ru, de, es, fr, ja, ko, pt-BR, zh-Hans]
         CFBundleDisplayName: Bandito
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

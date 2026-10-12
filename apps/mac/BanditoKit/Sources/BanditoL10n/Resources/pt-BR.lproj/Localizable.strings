@@ -966,6 +966,12 @@
 "ios.inbox.risky" = "Arriscado";
 "ios.inbox.send" = "Enviar";
 "ios.inbox.service" = "Serviço";
+"ios.intent.ask.empty" = "A mensagem está vazia.";
+"ios.intent.ask.failed" = "Não foi possível enviar para %1$@. Tente de novo.";
+"ios.intent.ask.notConnected" = "%1$@ não está acessível agora. Abra o Bandito e tente de novo.";
+"ios.intent.ask.sent" = "Enviado para %1$@";
+"ios.intent.needsMe.none" = "Nada precisa de você";
+"ios.intent.open.inbox" = "Abrir caixa de entrada";
 "ios.onboarding.connect.hint" = "No Mac: Ajustes → Servidores → Conectar iPhone";
 "ios.onboarding.connect.paste" = "Colar um link";
 "ios.onboarding.connect.scan" = "Escanear o código do Mac";

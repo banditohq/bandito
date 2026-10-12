@@ -3207,5 +3207,26 @@
   "ios.widget.status.error": "오류",
   "ios.widget.status.offline": "오프라인",
   "ios.widget.more": "{names} 외 {count}명",
-  "ios.widget.open": "Bandito 열기"
+  "ios.widget.open": "Bandito 열기",
+  "ios.intent.needsMe.none": "나를 기다리는 것이 없습니다",
+  "ios.intent.needsMe.waiting": {
+    "other": "{count}개가 기다리는 중: {names}"
+  },
+  "ios.intent.needsMe.countOnly": {
+    "other": "{count}개가 응답을 기다립니다"
+  },
+  "ios.intent.open.inbox": "받은 편지함 열기",
+  "ios.intent.ask.sent": "{name}에게 보냈습니다",
+  "ios.intent.ask.notConnected": "{name}에 지금 연결할 수 없습니다. Bandito를 열고 다시 시도하세요.",
+  "ios.intent.ask.empty": "메시지가 비어 있습니다.",
+  "shortcut.title.whatNeedsMe": "나에게 필요한 것",
+  "shortcut.title.askAgent": "에이전트에게 요청",
+  "shortcut.title.openAgent": "에이전트 열기",
+  "shortcut.title.agentType": "에이전트",
+  "shortcut.title.messageParam": "메시지",
+  "shortcut.phrase.whatNeedsMe": "${applicationName}에서 나에게 필요한 것",
+  "shortcut.phrase.askAgent": "${applicationName}에서 ${agent}에게 묻기",
+  "shortcut.phrase.openAgent": "${applicationName}에서 ${agent} 열기",
+  "shortcut.title.openInbox": "받은 편지함 열기",
+  "ios.intent.ask.failed": "{name}에게 보내지 못했습니다. 다시 시도하세요."
 }

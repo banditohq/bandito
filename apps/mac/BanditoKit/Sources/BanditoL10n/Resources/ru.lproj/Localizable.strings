@@ -966,6 +966,12 @@
 "ios.inbox.risky" = "Рискованно";
 "ios.inbox.send" = "Отправить";
 "ios.inbox.service" = "Сервис";
+"ios.intent.ask.empty" = "Сообщение пустое.";
+"ios.intent.ask.failed" = "Не удалось отправить агенту %1$@. Попробуйте снова.";
+"ios.intent.ask.notConnected" = "%1$@ сейчас не на связи. Откройте Bandito и попробуйте снова.";
+"ios.intent.ask.sent" = "Отправлено: %1$@";
+"ios.intent.needsMe.none" = "Ничего не ждёт";
+"ios.intent.open.inbox" = "Открыть входящие";
 "ios.onboarding.connect.hint" = "На Mac: Настройки → Серверы → Подключить iPhone";
 "ios.onboarding.connect.paste" = "Вставить ссылку";
 "ios.onboarding.connect.scan" = "Сканировать код с Mac";

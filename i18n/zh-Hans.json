@@ -3207,5 +3207,26 @@
   "ios.widget.status.error": "出错",
   "ios.widget.status.offline": "离线",
   "ios.widget.more": "{names} 等 {count} 个",
-  "ios.widget.open": "打开 Bandito"
+  "ios.widget.open": "打开 Bandito",
+  "ios.intent.needsMe.none": "没有需要你处理的事",
+  "ios.intent.needsMe.waiting": {
+    "other": "{count} 项等待你处理：{names}"
+  },
+  "ios.intent.needsMe.countOnly": {
+    "other": "{count} 项等待你处理"
+  },
+  "ios.intent.open.inbox": "打开收件箱",
+  "ios.intent.ask.sent": "已发送给 {name}",
+  "ios.intent.ask.notConnected": "{name} 当前无法连接。请打开 Bandito 后重试。",
+  "ios.intent.ask.empty": "消息为空。",
+  "shortcut.title.whatNeedsMe": "什么在等我处理",
+  "shortcut.title.askAgent": "询问代理",
+  "shortcut.title.openAgent": "打开代理",
+  "shortcut.title.agentType": "代理",
+  "shortcut.title.messageParam": "消息",
+  "shortcut.phrase.whatNeedsMe": "在${applicationName}里什么在等我处理",
+  "shortcut.phrase.askAgent": "在${applicationName}中询问${agent}",
+  "shortcut.phrase.openAgent": "在${applicationName}中打开${agent}",
+  "shortcut.title.openInbox": "打开收件箱",
+  "ios.intent.ask.failed": "无法发送给 {name}，请重试。"
 }
