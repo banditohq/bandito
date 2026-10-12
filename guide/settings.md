@@ -239,6 +239,13 @@ A notification when an agent stops because of a failure.
 Где: Settings (⌘,) → Notifications (Уведомления) → Error (Ошибка)
 1. Turn the switch on or off. It is on by default.
 
+## Notify: Dock icon (notify.dockBadge)
+
+<!-- id: set-notify-dock-badge; covers: setting:notify.dockBadge -->
+The Bandito icon in the Dock shows how many replies from the connected servers you have not looked at yet: a number, 99+ above 99. Nothing is shown when there are none. A reply is looked at when its chat is open in the active window and follows the newest message.
+Где: Settings (⌘,) → Notifications (Уведомления) → Dock icon (Значок в Dock)
+1. Turn the switch on or off. It is on by default. Turned off, the icon shows no number.
+
 ## Telegram
 
 <!-- id: set-telegram; covers: settings:telegram -->

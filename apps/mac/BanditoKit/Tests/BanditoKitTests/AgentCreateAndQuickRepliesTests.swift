@@ -240,7 +240,7 @@ import Testing
     @Test func aButtonPressReadsFromTheWireAndIsMarkedInTheThread() throws {
         let e = try decode(
             #"{"seq":8,"agent_id":"a","ts":9,"kind":"message.user","payload":{"text":"Connected","source":"user","via_button":true}}"#)
-        guard case .messageUser(_, _, _, _, _, _, _, let pressed) = e.body else {
+        guard case .messageUser(_, _, _, _, _, _, _, let pressed, _) = e.body else {
             Issue.record("wrong body \(e.body)")
             return
         }

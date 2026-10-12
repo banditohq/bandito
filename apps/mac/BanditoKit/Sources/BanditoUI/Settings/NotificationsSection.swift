@@ -12,6 +12,7 @@ struct NotificationsSection: View {
     @AppStorage("notify.needsYou") private var needsYou = true
     @AppStorage("notify.finished") private var finished = true
     @AppStorage("notify.error") private var failed = true
+    @AppStorage("notify.dockBadge") private var dockBadge = true
     @State private var status: UNAuthorizationStatus = .notDetermined
 
     var body: some View {
@@ -52,6 +53,11 @@ struct NotificationsSection: View {
                 toggle(
                     L10n.Settings.Notifications.failed, L10n.Settings.Notifications.failedHint, $failed,
                     symbol: "xmark.octagon.fill", tint: BanditoPalette.badgeRed)
+            }
+            SettingsGroup(title: L10n.Settings.Notifications.dockGroup) {
+                toggle(
+                    L10n.Settings.Notifications.dockBadge, L10n.Settings.Notifications.dockBadgeHint, $dockBadge,
+                    symbol: "app.badge.fill", tint: BanditoPalette.badgeRed)
             }
         }
         .task { await refresh() }

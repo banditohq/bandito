@@ -74,13 +74,28 @@ impl Telegram {
                 source,
                 message_seq,
                 ..
-            } => self.on_turn_started(&agent, turn_id, source, message_seq),
+            } => {
+                if source == Source::Schedule {
+                    let mut st = self.lock();
+                    st.scheduled_turns.insert(turn_id.clone());
+                    st.bound();
+                }
+                self.on_turn_started(&agent, turn_id, source, message_seq)
+            }
             EventBody::MessageUser {
                 text, source, queued, ..
             } => self.on_message_user(&agent, &text, source, queued, ev.seq),
             EventBody::MessageAssistant { text } => {
                 let mut st = self.lock();
                 st.last_answer.insert(agent, text);
+                st.bound();
+            }
+            EventBody::TurnQuiet { turn_id, .. } => {
+                // The same condition as the daemon's: only a scheduled run can end quietly.
+                let mut st = self.lock();
+                if st.scheduled_turns.contains(&turn_id) {
+                    st.quiet_turns.insert(turn_id);
+                }
                 st.bound();
             }
             EventBody::TurnCompleted { turn_id, status, .. } => self.on_turn_completed(&agent, &turn_id, status).await,
@@ -158,10 +173,19 @@ impl Telegram {
     async fn on_turn_completed(&self, agent_id: &str, turn_id: &str, status: TurnStatus) {
         // Whatever the status, the turn no longer shows "typing…".
         self.stop_typing(turn_id);
-        let (origin, text) = {
+        let (origin, text, quiet) = {
             let mut st = self.lock();
-            (st.turn_chats.remove(turn_id), st.last_answer.remove(agent_id))
+            st.scheduled_turns.remove(turn_id);
+            (
+                st.turn_chats.remove(turn_id),
+                st.last_answer.remove(agent_id),
+                st.quiet_turns.remove(turn_id),
+            )
         };
+        // A quiet turn (`nothing_to_report`) has nothing to say to the chats.
+        if quiet {
+            return;
+        }
         let Some(text) = text.filter(|t| !t.trim().is_empty()) else {
             return;
         };

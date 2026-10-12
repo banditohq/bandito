@@ -40,6 +40,7 @@ Each agent has one status. Agents that need you are sorted to the top and get th
 
 <!-- id: team-sidebar-menu; covers: -->
 Pinned agents are listed at the top. The context menu of an agent has Pin (Закрепить) or Unpin (Открепить), Pause (Приостановить) or Resume (Продолжить), and Move to… (Перенести на…) when another connected server takes moved agents, and Delete… (Удалить…). A paused agent shows a pause mark next to its name, and its avatar sleeps.
+A reply the agent wrote that you have not looked at yet is counted on its row: a capsule with the number (99+ above 99), the name and the preview turn bolder, and a pinned agent's avatar gets a dot. The chat is looked at when it is open in the active window and shows the newest message; the count is kept per Mac.
 Где: Team → sidebar → agent → right click
 1. Right-click an agent and choose Pause (Приостановить). The mark appears and the avatar goes to sleep.
 2. Right-click it again and choose Resume (Продолжить) to bring it back.
@@ -304,6 +305,8 @@ Runs a prompt for the agent at a set time, for example every morning. A schedule
 2. Choose how often in Repeat (Повтор): Every, Every day, Weekdays, Days of the week, or Other (cron). Set the time in At (В) and the request in Prompt (Запрос). Only Other (cron) takes a cron expression.
 3. Click Add schedule (Добавить) to save. The list shows Next run (Next run …) for each schedule.
 4. Use the switch in a row to pause or resume it.
+5. In the chat a run is one quiet line, not a message: Scheduled run (Запуск по расписанию) · the schedule's name · when it ran (today, 20:45). Click the line to see the prompt it ran with; click again to fold it.
+6. When the agent finds nothing to report, the run makes no noise: no notice, no sound, no unread mark. Its steps fold into a dim line Nothing new (Ничего нового) under the run, with the agent's reason when it gave one. Click it to see what the agent did.
 
 ## Where it runs tab
 

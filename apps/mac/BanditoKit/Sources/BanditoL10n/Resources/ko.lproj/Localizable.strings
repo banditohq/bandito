@@ -2222,6 +2222,9 @@
 "settings.nav.usage" = "구독과 한도";
 "settings.notifications" = "알림";
 "settings.notifications.allow" = "허용";
+"settings.notifications.dockBadge" = "아이콘에 읽지 않은 개수 표시";
+"settings.notifications.dockBadgeHint" = "연결된 서버에서 아직 확인하지 않은 답장입니다.";
+"settings.notifications.dockGroup" = "Dock 아이콘";
 "settings.notifications.failed" = "오류";
 "settings.notifications.failedHint" = "에이전트가 오류로 멈췄어요.";
 "settings.notifications.finished" = "완료";
@@ -2686,6 +2689,8 @@
 "thread.notDelivered" = "전달되지 않음";
 "thread.placeholder" = "작업이나 질문을 입력하세요…";
 "thread.queued" = "대기 중";
+"thread.quietTurn.showSteps" = "이 실행에서 에이전트가 한 일을 보여 줍니다";
+"thread.quietTurn.title" = "새 소식 없음";
 "thread.react" = "반응";
 "thread.reply" = "답장";
 "thread.reviewApproved" = "%1$@이(가) 변경 사항을 검토 · 승인";
@@ -2693,6 +2698,12 @@
 "thread.runtimeLimitUntil" = "%1$@ 한도가 떨어져서 %3$@까지 %2$@(으)로 계속할게요";
 "thread.runtimeReturned" = "%1$@(으)로 돌아왔어요";
 "thread.savingMemory" = "새 챕터 전에 메모리 저장 중";
+"thread.scheduleRun.date" = "%1$@ %2$@";
+"thread.scheduleRun.folded" = "접힘";
+"thread.scheduleRun.open" = "펼침";
+"thread.scheduleRun.showPrompt" = "이 실행을 시작한 지시를 보여 줍니다";
+"thread.scheduleRun.today" = "오늘 %1$@";
+"thread.scheduleRun.yesterday" = "어제 %1$@";
 "thread.scheduledRun" = "예약 실행";
 "thread.send" = "보내기";
 "thread.stop" = "중지";

@@ -21,6 +21,8 @@ struct ThreadView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Kept built under another mode (`KeptMode`): the list's views are hidden (no pointer shapes, no hover).
     @Environment(\.modeHidden) private var hidden
+    /// The window is inactive when the person works elsewhere: the chat is not looked at then (its replies stay unread).
+    @Environment(\.controlActiveState) private var controlActiveState
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
     /// Files are dragged over the chat.
     @State private var dropTargeted = false
@@ -173,8 +175,21 @@ struct ThreadView: View {
 
     /// Writes the flags only when they really change: a scroll reports many times, the flags rarely change.
     private func setAtBottom(_ value: Bool) {
-        if atBottom != value { atBottom = value }
+        if atBottom != value {
+            atBottom = value
+            if value { lookedAt() }
+        }
         if value && unseen != 0 { unseen = 0 }
+    }
+
+    /// The chat is looked at now (`UnreadRules.isLookedAt`): its replies are read, for the team list's unread counts.
+    /// Called where the chat's state changes; the mark moves only when there is a new reply to read.
+    private func lookedAt() {
+        guard UnreadRules.isLookedAt(
+            onScreen: sessions.onScreen, hidden: hidden, windowActive: controlActiveState != .inactive,
+            atBottom: atBottom, sendPinned: scroll.sendPinned)
+        else { return }
+        summary.markRead()
     }
 
     private func setJumpVisible(_ value: Bool) {
@@ -368,6 +383,7 @@ struct ThreadView: View {
                     scroll.alive = true
                     attachList()
                     restore()
+                    lookedAt()
                 }
                 .onChange(of: scrollRequest) { _, request in
                     guard let request else { return }
@@ -430,6 +446,7 @@ struct ThreadView: View {
             await loadHistory()
             // What is read now is the old history: a message that comes after it is new (see `ThreadArrival`).
             arrival.settle(thread.items)
+            lookedAt()
             // A thread shorter than the screen sits at its top: its older history is read now, not when scrolled to.
             if scroll.nearTop, scroll.contentHeight <= scroll.containerHeight { topReached() }
             await loadChanges()
@@ -480,6 +497,8 @@ struct ThreadView: View {
             readNewReply()
         }
         .onChange(of: agent.id) { _, _ in agentChanged() }
+        .onChange(of: controlActiveState) { _, _ in lookedAt() }
+        .onChange(of: hidden) { _, _ in lookedAt() }
     }
 
     /// Another agent is shown in this view: the place of the one left is kept, as leaving the chat keeps it, and the new
@@ -493,12 +512,15 @@ struct ThreadView: View {
                 atBottom: left.session.atBottom, topRowID: left.session.scroll.topRow)
         }
         restore()
+        lookedAt()
     }
 
     /// A new last item: the echo of the person's own message (and the answer to it) is looked at; else the bottom is
     /// followed while it is on screen. Prepending older history, or reading further up, must not jump to the bottom.
     /// (Growth of the last item, a stream or an opened card, is followed from the scroll geometry.)
     private func lastItemChanged() {
+        // A reply that is finished in place (a stream) changes the last row, not the count: it is looked at here.
+        lookedAt()
         if scroll.sendPinned {
             followArrival()
             return
@@ -515,6 +537,7 @@ struct ThreadView: View {
             // not): the follow takes it.
             followArrival()
         }
+        lookedAt()
     }
 
     /// Older rows were put above the one on top (the list keeps it where it was): the follow of the bottom comes back

@@ -16,6 +16,9 @@
   "sidebar.team": "チーム",
   "sidebar.sharedChat": "共有チャット · {count}",
   "sidebar.needsYou": "要対応",
+  "sidebar.unread": {
+    "other": "未読 {count} 件"
+  },
   "sidebar.serverSummary": "{transport} 経由 · {agents} · {working}",
   "sidebar.messageTeam": "チームにメッセージ…",
   "sidebar.pinned": "ピン留め",
@@ -1574,6 +1577,9 @@
   "settings.notifications.finishedHint": "タスクが完了しました。",
   "settings.notifications.failed": "エラー",
   "settings.notifications.failedHint": "エージェントが失敗のため停止しました。",
+  "settings.notifications.dockGroup": "Dockのアイコン",
+  "settings.notifications.dockBadge": "アイコンに未読数を表示",
+  "settings.notifications.dockBadgeHint": "接続中のサーバーで、まだ見ていない返信です。",
   "settings.appearance.intro": "アプリの見た目と動きです。",
   "settings.appearance.theme": "テーマ",
   "settings.appearance.themeHint": "ライトとシステムのテーマは後日追加されます。",
@@ -3022,5 +3028,13 @@
   "perfCheck.page.settings": "設定",
   "perfCheck.page.modes": "モードとサーバー",
   "perfCheck.page.overlays": "メニュー、シート、通知",
-  "perfCheck.quit": "終了"
+  "perfCheck.quit": "終了",
+  "thread.scheduleRun.today": "今日 {time}",
+  "thread.scheduleRun.yesterday": "昨日 {time}",
+  "thread.scheduleRun.date": "{date} {time}",
+  "thread.scheduleRun.showPrompt": "この実行の指示を表示します",
+  "thread.scheduleRun.open": "展開中",
+  "thread.scheduleRun.folded": "折りたたみ中",
+  "thread.quietTurn.title": "新しいことはありません",
+  "thread.quietTurn.showSteps": "この実行でエージェントが行ったことを表示します"
 }

@@ -16,6 +16,9 @@
   "sidebar.team": "팀",
   "sidebar.sharedChat": "공유 채팅 · {count}",
   "sidebar.needsYou": "확인 필요",
+  "sidebar.unread": {
+    "other": "읽지 않음 {count}개"
+  },
   "sidebar.serverSummary": "{transport} 경유 · {agents} · {working}",
   "sidebar.messageTeam": "팀에 메시지…",
   "sidebar.pinned": "고정됨",
@@ -1574,6 +1577,9 @@
   "settings.notifications.finishedHint": "작업이 끝났어요.",
   "settings.notifications.failed": "오류",
   "settings.notifications.failedHint": "에이전트가 오류로 멈췄어요.",
+  "settings.notifications.dockGroup": "Dock 아이콘",
+  "settings.notifications.dockBadge": "아이콘에 읽지 않은 개수 표시",
+  "settings.notifications.dockBadgeHint": "연결된 서버에서 아직 확인하지 않은 답장입니다.",
   "settings.appearance.intro": "앱의 모양과 움직임이에요.",
   "settings.appearance.theme": "테마",
   "settings.appearance.themeHint": "밝은 테마와 시스템 테마는 나중에 나와요.",
@@ -3022,5 +3028,13 @@
   "perfCheck.page.settings": "설정",
   "perfCheck.page.modes": "모드와 서버",
   "perfCheck.page.overlays": "메뉴, 시트, 알림",
-  "perfCheck.quit": "종료"
+  "perfCheck.quit": "종료",
+  "thread.scheduleRun.today": "오늘 {time}",
+  "thread.scheduleRun.yesterday": "어제 {time}",
+  "thread.scheduleRun.date": "{date} {time}",
+  "thread.scheduleRun.showPrompt": "이 실행을 시작한 지시를 보여 줍니다",
+  "thread.scheduleRun.open": "펼침",
+  "thread.scheduleRun.folded": "접힘",
+  "thread.quietTurn.title": "새 소식 없음",
+  "thread.quietTurn.showSteps": "이 실행에서 에이전트가 한 일을 보여 줍니다"
 }

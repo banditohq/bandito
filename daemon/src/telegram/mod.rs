@@ -26,7 +26,7 @@ use api::{Api, ApiError, updates_body};
 use format::{MESSAGE_LIMIT, plain_from_html, truncate_chars, utf16_len};
 use futures_util::FutureExt;
 use serde_json::{Value, json};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -254,6 +254,10 @@ struct State {
     turn_chats: HashMap<String, i64>,
     /// Agent to its newest message of the turn that runs.
     last_answer: HashMap<String, String>,
+    /// Turns that ended quietly (`turn.quiet`): their answer is not forwarded.
+    quiet_turns: HashSet<String>,
+    /// Turns a schedule started that are still running. Only these can be quiet.
+    scheduled_turns: HashSet<String>,
     /// Approval id to the chat whose press decided it.
     decided_here: HashMap<String, i64>,
 }
@@ -273,6 +277,12 @@ impl State {
         cap(&mut self.last_turn);
         cap(&mut self.turn_chats);
         cap(&mut self.last_answer);
+        if self.quiet_turns.len() > MAP_LIMIT {
+            self.quiet_turns.clear();
+        }
+        if self.scheduled_turns.len() > MAP_LIMIT {
+            self.scheduled_turns.clear();
+        }
         cap(&mut self.decided_here);
     }
 
@@ -314,6 +324,8 @@ impl State {
         self.last_turn.clear();
         self.turn_chats.clear();
         self.last_answer.clear();
+        self.quiet_turns.clear();
+        self.scheduled_turns.clear();
         self.decided_here.clear();
     }
 }

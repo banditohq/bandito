@@ -16,6 +16,9 @@
   "sidebar.team": "团队",
   "sidebar.sharedChat": "共享聊天 · {count}",
   "sidebar.needsYou": "等待处理",
+  "sidebar.unread": {
+    "other": "{count} 条未读"
+  },
   "sidebar.serverSummary": "通过 {transport} · {agents} · {working}",
   "sidebar.messageTeam": "给团队发消息…",
   "sidebar.pinned": "已置顶",
@@ -1574,6 +1577,9 @@
   "settings.notifications.finishedHint": "任务已完成。",
   "settings.notifications.failed": "错误",
   "settings.notifications.failedHint": "代理因故障而停止。",
+  "settings.notifications.dockGroup": "Dock 图标",
+  "settings.notifications.dockBadge": "在图标上显示未读数",
+  "settings.notifications.dockBadgeHint": "已连接服务器中你还没查看的回复。",
   "settings.appearance.intro": "应用的外观和动效。",
   "settings.appearance.theme": "主题",
   "settings.appearance.themeHint": "浅色和跟随系统的主题将在之后推出。",
@@ -3022,5 +3028,13 @@
   "perfCheck.page.settings": "设置",
   "perfCheck.page.modes": "模式与服务器",
   "perfCheck.page.overlays": "菜单、面板与提示",
-  "perfCheck.quit": "退出"
+  "perfCheck.quit": "退出",
+  "thread.scheduleRun.today": "今天 {time}",
+  "thread.scheduleRun.yesterday": "昨天 {time}",
+  "thread.scheduleRun.date": "{date} {time}",
+  "thread.scheduleRun.showPrompt": "显示这次运行所用的指令",
+  "thread.scheduleRun.open": "已展开",
+  "thread.scheduleRun.folded": "已折叠",
+  "thread.quietTurn.title": "没有新情况",
+  "thread.quietTurn.showSteps": "显示代理在这次运行中做了什么"
 }

@@ -436,6 +436,20 @@
 			<string>전체 로그 보기 (%1$lld줄)</string>
 		</dict>
 	</dict>
+	<key>sidebar.unread</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>읽지 않음 %1$lld개</string>
+		</dict>
+	</dict>
 	<key>terminals.dock.lines</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

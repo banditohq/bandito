@@ -35,6 +35,10 @@
   "sidebar.team": "Team",
   "sidebar.sharedChat": "shared chat · {count}",
   "sidebar.needsYou": "NEEDS YOU",
+  "sidebar.unread": {
+    "one": "{count} unread",
+    "other": "{count} unread"
+  },
   "sidebar.serverSummary": "via {transport} · {agents} · {working}",
   "sidebar.messageTeam": "Message the team…",
   "sidebar.pinned": "Pinned",
@@ -1458,6 +1462,9 @@
   "settings.notifications.finishedHint": "A task is complete.",
   "settings.notifications.failed": "Error",
   "settings.notifications.failedHint": "An agent stopped because of a failure.",
+  "settings.notifications.dockGroup": "Dock icon",
+  "settings.notifications.dockBadge": "Unread count on the icon",
+  "settings.notifications.dockBadgeHint": "Replies from the connected servers that you have not looked at yet.",
   "settings.appearance.intro": "How the app looks and moves.",
   "settings.appearance.theme": "Theme",
   "settings.appearance.themeHint": "Light and system themes come later.",
@@ -3060,5 +3067,13 @@
   "perfCheck.page.settings": "Settings",
   "perfCheck.page.modes": "Modes and servers",
   "perfCheck.page.overlays": "Menus, sheets and toasts",
-  "perfCheck.quit": "Quit"
+  "perfCheck.quit": "Quit",
+  "thread.scheduleRun.today": "today, {time}",
+  "thread.scheduleRun.yesterday": "yesterday, {time}",
+  "thread.scheduleRun.date": "{date}, {time}",
+  "thread.scheduleRun.showPrompt": "Shows the prompt the run started with",
+  "thread.scheduleRun.open": "Open",
+  "thread.scheduleRun.folded": "Folded",
+  "thread.quietTurn.title": "Nothing new",
+  "thread.quietTurn.showSteps": "Shows what the agent did in this run"
 }

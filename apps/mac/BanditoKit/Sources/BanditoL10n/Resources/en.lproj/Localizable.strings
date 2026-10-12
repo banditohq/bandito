@@ -2222,6 +2222,9 @@
 "settings.nav.usage" = "Subscriptions and limits";
 "settings.notifications" = "Notifications";
 "settings.notifications.allow" = "Allow";
+"settings.notifications.dockBadge" = "Unread count on the icon";
+"settings.notifications.dockBadgeHint" = "Replies from the connected servers that you have not looked at yet.";
+"settings.notifications.dockGroup" = "Dock icon";
 "settings.notifications.failed" = "Error";
 "settings.notifications.failedHint" = "An agent stopped because of a failure.";
 "settings.notifications.finished" = "Done";
@@ -2686,6 +2689,8 @@
 "thread.notDelivered" = "Not delivered";
 "thread.placeholder" = "Write a task or a question…";
 "thread.queued" = "Queued";
+"thread.quietTurn.showSteps" = "Shows what the agent did in this run";
+"thread.quietTurn.title" = "Nothing new";
 "thread.react" = "React";
 "thread.reply" = "Reply";
 "thread.reviewApproved" = "%1$@ reviewed the changes · approved";
@@ -2693,6 +2698,12 @@
 "thread.runtimeLimitUntil" = "%1$@ limit ran out — continuing on %2$@ until %3$@";
 "thread.runtimeReturned" = "Back on %1$@";
 "thread.savingMemory" = "Saving memory before a new chapter";
+"thread.scheduleRun.date" = "%1$@, %2$@";
+"thread.scheduleRun.folded" = "Folded";
+"thread.scheduleRun.open" = "Open";
+"thread.scheduleRun.showPrompt" = "Shows the prompt the run started with";
+"thread.scheduleRun.today" = "today, %1$@";
+"thread.scheduleRun.yesterday" = "yesterday, %1$@";
 "thread.scheduledRun" = "Scheduled run";
 "thread.send" = "Send";
 "thread.stop" = "Stop";

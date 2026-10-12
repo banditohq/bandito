@@ -71,6 +71,11 @@ pub trait CrewBackend: Send + Sync {
         let _ = params;
         bail!("reply_buttons is not available here")
     }
+    /// Ends the agent's turn without a message (`messages.agent.nothing_to_report`).
+    async fn nothing_to_report(&self, params: Value) -> Result<Value> {
+        let _ = params;
+        bail!("nothing_to_report is not available here")
+    }
     /// One `schedules.agent.*` RPC method with its parameters. Returns the daemon's result.
     async fn schedules(&self, method: &str, params: Value) -> Result<Value>;
     /// One `team.*` RPC method (the main agent's tools) with its parameters. Returns the daemon's result.
@@ -159,6 +164,10 @@ impl CrewBackend for DaemonBackend {
 
     async fn reply_buttons(&self, params: Value) -> Result<Value> {
         call_agent(&self.sock, &self.token, "messages.agent.quick_replies", params).await
+    }
+
+    async fn nothing_to_report(&self, params: Value) -> Result<Value> {
+        call_agent(&self.sock, &self.token, "messages.agent.nothing_to_report", params).await
     }
 
     async fn schedules(&self, method: &str, params: Value) -> Result<Value> {
@@ -339,6 +348,7 @@ fn tools_list(on: &[Capability], lead: bool) -> Vec<Value> {
         request_connection_tool(),
         react_tool(),
         reply_buttons_tool(),
+        nothing_to_report_tool(),
     ];
     tools.extend(screen_tools());
     tools.extend(browser_tool_defs());
@@ -523,6 +533,19 @@ fn reply_buttons_tool() -> Value {
     })
 }
 
+fn nothing_to_report_tool() -> Value {
+    json!({
+        "name": "nothing_to_report",
+        "description": "Use it on a scheduled run when, by its task, there is nothing worth telling the person (for example, no important mail). The turn then ends quietly: no message, no notification, nothing unread. Call it instead of writing that there is nothing new, and write no text after it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "reason": { "type": "string", "description": "Why nothing is worth telling, for the record (optional). Line breaks are removed; at most 200 characters" },
+            },
+        },
+    })
+}
+
 fn history_day_tool() -> Value {
     json!({
         "name": "history_day",
@@ -553,6 +576,7 @@ async fn call_tool(params: &Value, backend: &dyn CrewBackend, on: &[Capability],
         "request_connection" => Ok(tool_result(request_connection(&args, backend).await)),
         "react" => Ok(tool_result(react(&args, backend).await)),
         "reply_buttons" => Ok(tool_result(reply_buttons(&args, backend).await)),
+        "nothing_to_report" => Ok(tool_result(nothing_to_report(&args, backend).await)),
         "crew_create_agent" => Ok(tool_result(create_agent(&args, backend).await)),
         "team_list" => Ok(tool_result(team_list(backend).await)),
         "team_assign" => Ok(tool_result(team_assign(&args, backend).await)),
@@ -645,6 +669,20 @@ async fn reply_buttons(args: &Value, backend: &dyn CrewBackend) -> Result<String
         .await
         .map_err(|e| format!("{e:#}"))?;
     Ok("Buttons shown. Now finish your turn: the person's choice arrives as their next message.".into())
+}
+
+/// `nothing_to_report`: the turn ends without a message (see docs/ARCHITECTURE.md#quiet-turns). The reason is checked here.
+async fn nothing_to_report(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    let reason = match args.get("reason") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(text)) => crate::chat::clean_quiet_reason(text)?,
+        Some(_) => return Err("reason must be text".into()),
+    };
+    backend
+        .nothing_to_report(json!({ "reason": reason }))
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    Ok("Ок, ход завершится без сообщения. Не пиши текст после этого.".into())
 }
 
 /// `crew_create_agent`: the fields are forwarded; the daemon checks them all, so the answer names what to fix.
@@ -1363,6 +1401,8 @@ mod tests {
         /// Every form the agent asked, and every reaction it put (as sent to the daemon).
         forms: Mutex<Vec<Value>>,
         reactions: Mutex<Vec<Value>>,
+        /// Every quiet end of a turn the agent asked for (as sent to the daemon).
+        quiet: Mutex<Vec<Value>>,
         /// Every set of quick replies the agent showed (as sent to the daemon).
         buttons: Mutex<Vec<Value>>,
         /// Method and parameters of every schedules call.
@@ -1435,6 +1475,14 @@ mod tests {
                 anyhow::bail!("{e}");
             }
             self.buttons.lock().unwrap().push(params);
+            Ok(json!({}))
+        }
+
+        async fn nothing_to_report(&self, params: Value) -> Result<Value> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.quiet.lock().unwrap().push(params);
             Ok(json!({}))
         }
 
@@ -1647,6 +1695,7 @@ mod tests {
                 "request_connection",
                 "react",
                 "reply_buttons",
+                "nothing_to_report",
                 "screen_screenshot",
                 "screen_click",
                 "screen_move",
@@ -2124,6 +2173,7 @@ mod tests {
                 "request_connection",
                 "react",
                 "reply_buttons",
+                "nothing_to_report",
                 "schedule_list",
                 "schedule_create",
                 "schedule_delete",
@@ -2139,6 +2189,7 @@ mod tests {
                 "request_connection",
                 "react",
                 "reply_buttons",
+                "nothing_to_report",
                 "schedule_list",
                 "schedule_create",
                 "schedule_delete",
@@ -2458,6 +2509,82 @@ mod tests {
         .remove(0);
         assert_eq!(r["result"]["isError"], json!(false));
         assert_eq!(backend.buttons.lock().unwrap().as_slice(), &[args]);
+    }
+
+    #[tokio::test]
+    async fn nothing_to_report_is_a_tool_of_every_agent_and_ends_the_turn_quietly() {
+        assert!(listed(&[]).await.iter().any(|n| n == "nothing_to_report"));
+        let backend = MockBackend::default();
+        let r = replies_with(
+            &format!(
+                "{}\n",
+                tool_call("nothing_to_report", json!({ "reason": " no mail today " }))
+            ),
+            &backend,
+            &[],
+        )
+        .await
+        .remove(0);
+        assert_eq!(r["result"]["isError"], json!(false));
+        assert_eq!(
+            r["result"]["content"][0]["text"],
+            json!("Ок, ход завершится без сообщения. Не пиши текст после этого.")
+        );
+        // The reason is trimmed; without one it is null.
+        let r = replies_with(
+            &format!("{}\n", tool_call("nothing_to_report", json!({}))),
+            &backend,
+            &[],
+        )
+        .await
+        .remove(0);
+        assert_eq!(r["result"]["isError"], json!(false));
+        assert_eq!(
+            backend.quiet.lock().unwrap().as_slice(),
+            &[json!({ "reason": "no mail today" }), json!({ "reason": null })]
+        );
+        // A reason of only line breaks and bidi controls is nothing: no reason is sent.
+        let r = replies_with(
+            &format!(
+                "{}\n",
+                tool_call("nothing_to_report", json!({ "reason": "\n\u{202E} \t" }))
+            ),
+            &backend,
+            &[],
+        )
+        .await
+        .remove(0);
+        assert_eq!(r["result"]["isError"], json!(false));
+        assert_eq!(backend.quiet.lock().unwrap().last(), Some(&json!({ "reason": null })));
+        // Too long a reason is a tool error the agent can fix, and reaches no one.
+        let long = "x".repeat(201);
+        let r = replies_with(
+            &format!("{}\n", tool_call("nothing_to_report", json!({ "reason": long }))),
+            &backend,
+            &[],
+        )
+        .await
+        .remove(0);
+        assert_eq!(r["result"]["isError"], json!(true));
+        assert_eq!(backend.quiet.lock().unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_refused_quiet_end_is_a_tool_error() {
+        // The daemon refuses a turn that is not a scheduled run: the agent hears why.
+        let backend = MockBackend {
+            fail: Some("only scheduled runs can be quiet".into()),
+            ..MockBackend::default()
+        };
+        let r = replies_with(
+            &format!("{}\n", tool_call("nothing_to_report", json!({}))),
+            &backend,
+            &[],
+        )
+        .await
+        .remove(0);
+        assert_eq!(r["result"]["isError"], json!(true));
+        assert!(backend.quiet.lock().unwrap().is_empty());
     }
 
     #[tokio::test]

@@ -3130,6 +3130,9 @@ public enum L10n {
 
         public enum Notifications {
             public static var allow: String { L10n.tr("settings.notifications.allow") }
+            public static var dockBadge: String { L10n.tr("settings.notifications.dockBadge") }
+            public static var dockBadgeHint: String { L10n.tr("settings.notifications.dockBadgeHint") }
+            public static var dockGroup: String { L10n.tr("settings.notifications.dockGroup") }
             public static var failed: String { L10n.tr("settings.notifications.failed") }
             public static var failedHint: String { L10n.tr("settings.notifications.failedHint") }
             public static var finished: String { L10n.tr("settings.notifications.finished") }
@@ -3463,6 +3466,7 @@ public enum L10n {
         public static var servers: String { L10n.tr("sidebar.servers") }
         public static func sharedChat(count: Int) -> String { L10n.tr("sidebar.sharedChat", count) }
         public static var team: String { L10n.tr("sidebar.team") }
+        public static func unread(count: Int) -> String { L10n.tr("sidebar.unread", count) }
 
         public enum NoServer {
             public static var connect: String { L10n.tr("sidebar.noServer.connect") }
@@ -3801,6 +3805,20 @@ public enum L10n {
                 public static var meetTeam: String { L10n.tr("thread.empty.suggest.meetTeam") }
                 public static var news: String { L10n.tr("thread.empty.suggest.news") }
             }
+        }
+
+        public enum QuietTurn {
+            public static var showSteps: String { L10n.tr("thread.quietTurn.showSteps") }
+            public static var title: String { L10n.tr("thread.quietTurn.title") }
+        }
+
+        public enum ScheduleRun {
+            public static func date(date: String, time: String) -> String { L10n.tr("thread.scheduleRun.date", date, time) }
+            public static var folded: String { L10n.tr("thread.scheduleRun.folded") }
+            public static var `open`: String { L10n.tr("thread.scheduleRun.open") }
+            public static var showPrompt: String { L10n.tr("thread.scheduleRun.showPrompt") }
+            public static func today(time: String) -> String { L10n.tr("thread.scheduleRun.today", time) }
+            public static func yesterday(time: String) -> String { L10n.tr("thread.scheduleRun.yesterday", time) }
         }
     }
 

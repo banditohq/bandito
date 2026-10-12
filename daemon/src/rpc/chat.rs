@@ -7,7 +7,7 @@ use crate::chat;
 use crate::event::{EventBody, ReactionBy};
 use crate::forms::{self, Outcome};
 use crate::mentions::{self, Mention, MentionKind};
-use crate::store::{Agent, FormStatus};
+use crate::store::{Agent, FormStatus, QuietMark};
 use crate::supervisor::{APPROVAL_TTL_MS, FormReply};
 use base64::Engine;
 use serde::Deserialize;
@@ -165,6 +165,31 @@ pub async fn dispatch(app: &App, _peer: &Peer, method: &str, p: Value) -> RpcRes
                 },
             );
             ok(json!({ "shown": shown }))
+        }
+        "messages.agent.nothing_to_report" => {
+            // `agent_id` is the agent the session's token names (filled in by `bind_to_agent`).
+            let agent_id = p
+                .get("agent_id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| RpcError::new(INVALID_PARAMS, "no agent"))?
+                .to_string();
+            let reason = match p.get("reason") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(text)) => {
+                    chat::clean_quiet_reason(text).map_err(|e| RpcError::new(INVALID_PARAMS, e))?
+                }
+                Some(_) => return Err(RpcError::new(INVALID_PARAMS, "reason must be text")),
+            };
+            let hub = app.sup.hub();
+            match hub
+                .store
+                .mark_quiet_turn(&agent_id, reason, |ev| hub.publish(ev))
+                .map_err(server)?
+            {
+                QuietMark::Marked(_) | QuietMark::Already => ok(json!({ "quiet": true })),
+                QuietMark::NoTurn => Err(RpcError::new(INVALID_PARAMS, "no turn is running")),
+                QuietMark::NotScheduled => Err(RpcError::new(INVALID_PARAMS, "only scheduled runs can be quiet")),
+            }
         }
         "attachments.upload" => {
             let u: UploadParams = params(p)?;
@@ -824,6 +849,7 @@ mod tests {
                     attachments: Vec::new(),
                     mentions: Vec::new(),
                     via_button: false,
+                    schedule: None,
                     queued: false,
                 },
             )
@@ -868,6 +894,7 @@ mod tests {
             attachments: Vec::new(),
             mentions: Vec::new(),
             via_button: false,
+            schedule: None,
             queued,
         };
         let turn = |message_seq| EventBody::TurnStarted {

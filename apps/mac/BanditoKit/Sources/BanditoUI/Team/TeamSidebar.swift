@@ -169,6 +169,10 @@ struct TeamSidebar: View {
                                 AgentAvatarView(
                                     agent: agent, server: server, size: 36,
                                     mood: AvatarMood.make(status: status, turnRunning: facts.turnRunning, paused: agent.paused))
+                                    .overlay(alignment: .topTrailing) {
+                                        UnreadDot(count: facts.unread, ring: Color.Bandito.surface1)
+                                            .offset(x: 2, y: -2)
+                                    }
                                 StatusDot(status: status, size: 10, ringColor: Color.Bandito.surface1)
                             }
                             Text(agent.name)
@@ -211,6 +215,7 @@ struct TeamSidebar: View {
                             .truncationMode(.tail)
                         if !agent.role.isEmpty { Chip(text: agent.role) }
                         Spacer(minLength: 4)
+                        UnreadBadge(count: facts.unread)
                         Text(TeamTime.label(ms: facts.lastActivityMs))
                             .font(BanditoFont.text(size: 11, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
@@ -363,6 +368,8 @@ struct SidebarThreadFacts: Equatable {
     var turnRunning: Bool
     /// The title of the oldest approval that waits, if any.
     var pendingTitle: String?
+    /// Replies the person has not looked at yet. Changes only with a new reply or a read, never with a token.
+    var unread: Int
 
     /// From the thread's summary: a streamed token changes none of it once the preview is full.
     @MainActor init(summary: AgentThreadState, agent: Agent?) {
@@ -370,13 +377,15 @@ struct SidebarThreadFacts: Equatable {
         lastActivityMs = agent.map { AgentPreview.timestamp(summary: summary, agent: $0) } ?? 0
         turnRunning = summary.turnRunning
         pendingTitle = summary.firstPendingApprovalTitle
+        unread = summary.unreadCount
     }
 
-    init(thread: AgentThread, agent: Agent?) {
+    init(thread: AgentThread, agent: Agent?, unread: Int = 0) {
         preview = agent.flatMap { AgentPreview.text(thread: thread, agent: $0) }
         lastActivityMs = agent.map { AgentPreview.timestamp(thread: thread, agent: $0) } ?? 0
         turnRunning = thread.turnRunning
         pendingTitle = thread.pendingApprovals.first?.title
+        self.unread = unread
     }
 }
 
@@ -458,7 +467,7 @@ struct AgentRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(agent.name)
-                        .font(BanditoFont.display(size: 12.5, weight: 600))
+                        .font(BanditoFont.display(size: 12.5, weight: facts.unread > 0 ? 700 : 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     if agent.paused {
@@ -471,6 +480,7 @@ struct AgentRow: View {
                     if !agent.role.isEmpty { Chip(text: agent.role) }
                     if let place { WorkspaceChip(text: place) }
                     Spacer(minLength: 4)
+                    UnreadBadge(count: facts.unread)
                     if !lastActivity.isEmpty {
                         Text(lastActivity)
                             .font(BanditoFont.text(size: 11, weight: 400))
@@ -478,8 +488,10 @@ struct AgentRow: View {
                     }
                 }
                 Text(facts.preview ?? L10n.Team.noMessages)
-                    .font(BanditoFont.text(size: 12.5, weight: 400))
-                    .foregroundStyle(status == .needsYou ? Color.Bandito.signalGlow : Color.Bandito.text3)
+                    .font(BanditoFont.text(size: 12.5, weight: facts.unread > 0 ? 500 : 400))
+                    .foregroundStyle(
+                        status == .needsYou ? Color.Bandito.signalGlow
+                            : facts.unread > 0 ? Color.Bandito.text2 : Color.Bandito.text3)
                     .lineLimit(1)
             }
         }

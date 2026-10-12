@@ -46,10 +46,31 @@ targets:
             exit 1
           fi
           target="${CARGO_TARGET_DIR:-$HOME/.cache/bandito-target-app}"
-          (cd "$SRCROOT/../../daemon" && CARGO_TARGET_DIR="$target" cargo build --release --locked -p bandito)
           helpers="$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/Helpers"
           mkdir -p "$helpers"
-          cp -f "$target/release/bandito" "$helpers/bandito"
+          # A universal app (ARCHS has arm64 and x86_64, as release-app.sh builds it) gets one daemon for each
+          # architecture, joined by lipo. A one-architecture build (Debug) builds only the host's, as before.
+          universal=0
+          case " $ARCHS " in
+            *" arm64 "*) case " $ARCHS " in *" x86_64 "*) universal=1 ;; esac ;;
+          esac
+          if [ "$universal" = 1 ]; then
+            command -v rustup >/dev/null 2>&1 || { echo "error: rustup not found: the universal daemon needs it for the x86_64 target" >&2; exit 1; }
+            for triple in aarch64-apple-darwin x86_64-apple-darwin; do
+              rustup target list --installed | grep -qx "$triple" || {
+                echo "error: the Rust target $triple is not installed. Run: rustup target add $triple" >&2
+                exit 1
+              }
+            done
+            for triple in aarch64-apple-darwin x86_64-apple-darwin; do
+              (cd "$SRCROOT/../../daemon" && CARGO_TARGET_DIR="$target" cargo build --release --locked -p bandito --target "$triple")
+            done
+            lipo -create -output "$helpers/bandito" \
+              "$target/aarch64-apple-darwin/release/bandito" "$target/x86_64-apple-darwin/release/bandito"
+          else
+            (cd "$SRCROOT/../../daemon" && CARGO_TARGET_DIR="$target" cargo build --release --locked -p bandito)
+            cp -f "$target/release/bandito" "$helpers/bandito"
+          fi
           # Ad-hoc ("-", Debug and CI) needs no timestamp server; a real identity (Developer ID) needs one.
           identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
           if [ "$identity" = "-" ]; then timestamp="--timestamp=none"; else timestamp="--timestamp"; fi
@@ -95,7 +116,7 @@ targets:
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         PRODUCT_NAME: Bandito
         PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.mac
-        MARKETING_VERSION: 0.1.12
+        MARKETING_VERSION: 0.1.13
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: 270
         GENERATE_INFOPLIST_FILE: YES

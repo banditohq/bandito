@@ -91,6 +91,19 @@ pub fn new_id() -> String {
     uuid::Uuid::now_v7().to_string()
 }
 
+/// What [`Store::mark_quiet_turn`] found and did.
+#[derive(Debug, Clone, PartialEq)]
+pub enum QuietMark {
+    /// No turn runs for the agent.
+    NoTurn,
+    /// The running turn was not started by a schedule: only a scheduled run may end quietly.
+    NotScheduled,
+    /// The turn is quiet already: nothing is added.
+    Already,
+    /// The mark was stored (and published).
+    Marked(Box<Event>),
+}
+
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
         restrict_to_owner(path)?;
@@ -261,6 +274,67 @@ impl Store {
         Ok(self
             .conn()
             .query_row("SELECT COALESCE(MAX(seq), 0) FROM events", [], |r| r.get(0))?)
+    }
+
+    /// Stores `turn.quiet` for the turn that runs for the agent. Only a turn a schedule started can end quietly, and
+    /// only while it runs. The checks and the write happen under one hold of the connection, so no turn ends between
+    /// them, and two calls cannot store two marks. `publish` gets the stored event while the connection is still held,
+    /// so the subscribers see the events of the agent in `seq` order.
+    pub fn mark_quiet_turn(
+        &self,
+        agent_id: &str,
+        reason: Option<String>,
+        publish: impl FnOnce(&Event),
+    ) -> Result<QuietMark> {
+        let conn = self.conn();
+        let started: Option<(i64, String)> = conn
+            .query_row(
+                "SELECT seq, payload FROM events WHERE agent_id = ?1 AND kind = 'turn.started' ORDER BY seq DESC LIMIT 1",
+                params![agent_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        let Some((started_seq, payload)) = started else {
+            return Ok(QuietMark::NoTurn);
+        };
+        let started = crate::event::EventBody::from_parts("turn.started", serde_json::from_str(&payload)?)?;
+        let crate::event::EventBody::TurnStarted { turn_id, source, .. } = started else {
+            return Ok(QuietMark::NoTurn);
+        };
+        let ended: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM events WHERE agent_id = ?1 AND kind = 'turn.completed' AND seq > ?2)",
+            params![agent_id, started_seq],
+            |r| r.get(0),
+        )?;
+        if ended {
+            return Ok(QuietMark::NoTurn);
+        }
+        if source != crate::event::Source::Schedule {
+            return Ok(QuietMark::NotScheduled);
+        }
+        let marked: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM events WHERE agent_id = ?1 AND kind = 'turn.quiet' AND seq > ?2)",
+            params![agent_id, started_seq],
+            |r| r.get(0),
+        )?;
+        if marked {
+            return Ok(QuietMark::Already);
+        }
+        let body = crate::event::EventBody::TurnQuiet { turn_id, reason };
+        let (kind, payload) = body.to_parts();
+        let ts = now_ms();
+        conn.execute(
+            "INSERT INTO events (agent_id, ts, kind, payload) VALUES (?1, ?2, ?3, ?4)",
+            params![agent_id, ts, kind, payload.to_string()],
+        )?;
+        let event = Event {
+            seq: conn.last_insert_rowid(),
+            agent_id: agent_id.to_string(),
+            ts,
+            body,
+        };
+        publish(&event);
+        Ok(QuietMark::Marked(Box::new(event)))
     }
 
     /// The newest event of an agent of this kind (`agent.quick_replies`), if there is one.
@@ -750,5 +824,117 @@ mod tests {
                 plan: None,
             }]
         );
+    }
+}
+
+#[cfg(test)]
+mod quiet_mark_tests {
+    use super::*;
+    use crate::event::Source;
+
+    fn started(store: &Store, source: Source) {
+        store
+            .append_event(
+                "a",
+                EventBody::TurnStarted {
+                    turn_id: "t".into(),
+                    source,
+                    reactions_until: None,
+                    message_seq: None,
+                },
+            )
+            .unwrap();
+    }
+
+    fn quiet_marks(store: &Store) -> usize {
+        store
+            .events_since(0, 1000, Some("a"))
+            .unwrap()
+            .iter()
+            .filter(|e| matches!(e.body, EventBody::TurnQuiet { .. }))
+            .count()
+    }
+
+    #[test]
+    fn only_a_scheduled_turn_takes_the_mark_and_publishes_it() {
+        let store = Store::open_in_memory().unwrap();
+        assert_eq!(store.mark_quiet_turn("a", None, |_| {}).unwrap(), QuietMark::NoTurn);
+
+        started(&store, Source::User);
+        assert_eq!(
+            store.mark_quiet_turn("a", None, |_| {}).unwrap(),
+            QuietMark::NotScheduled
+        );
+        assert_eq!(quiet_marks(&store), 0);
+
+        // A scheduled turn: the mark is stored with its reason, and the publish sees the stored event.
+        let store = Store::open_in_memory().unwrap();
+        started(&store, Source::Schedule);
+        let mut published = None;
+        let mark = store
+            .mark_quiet_turn("a", Some("no mail".into()), |ev| published = Some(ev.clone()))
+            .unwrap();
+        let QuietMark::Marked(ev) = mark else {
+            panic!("expected a mark");
+        };
+        let ev = *ev;
+        assert_eq!(published, Some(ev.clone()));
+        assert!(ev.seq > 0);
+        assert_eq!(
+            ev.body,
+            EventBody::TurnQuiet {
+                turn_id: "t".into(),
+                reason: Some("no mail".into()),
+            }
+        );
+        assert_eq!(quiet_marks(&store), 1);
+    }
+
+    #[test]
+    fn a_second_call_in_the_same_turn_adds_nothing() {
+        let store = Store::open_in_memory().unwrap();
+        started(&store, Source::Schedule);
+        assert!(matches!(
+            store.mark_quiet_turn("a", None, |_| {}).unwrap(),
+            QuietMark::Marked(_)
+        ));
+        assert_eq!(store.mark_quiet_turn("a", None, |_| {}).unwrap(), QuietMark::Already);
+        assert_eq!(quiet_marks(&store), 1);
+    }
+
+    #[test]
+    fn a_turn_that_has_ended_takes_no_mark() {
+        // The boundary with `turn.completed`: once the turn is completed, a late call finds no turn.
+        let store = Store::open_in_memory().unwrap();
+        started(&store, Source::Schedule);
+        store
+            .append_event(
+                "a",
+                EventBody::TurnCompleted {
+                    turn_id: "t".into(),
+                    status: crate::event::TurnStatus::Ok,
+                    usage: None,
+                    cost_usd: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(store.mark_quiet_turn("a", None, |_| {}).unwrap(), QuietMark::NoTurn);
+        assert_eq!(quiet_marks(&store), 0);
+    }
+
+    #[test]
+    fn parallel_calls_store_one_mark() {
+        let store = std::sync::Arc::new(Store::open_in_memory().unwrap());
+        started(&store, Source::Schedule);
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let store = store.clone();
+                std::thread::spawn(move || store.mark_quiet_turn("a", None, |_| {}).unwrap())
+            })
+            .collect();
+        let marks: Vec<QuietMark> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        assert_eq!(marks.iter().filter(|m| matches!(m, QuietMark::Marked(_))).count(), 1);
+        assert_eq!(marks.iter().filter(|m| **m == QuietMark::Already).count(), 7);
+        assert_eq!(quiet_marks(&store), 1);
     }
 }

@@ -39,6 +39,12 @@
   "sidebar.team": "Команда",
   "sidebar.sharedChat": "общий чат · {count}",
   "sidebar.needsYou": "ЖДУТ ВАС",
+  "sidebar.unread": {
+    "one": "{count} непрочитанное",
+    "few": "{count} непрочитанных",
+    "many": "{count} непрочитанных",
+    "other": "{count} непрочитанных"
+  },
   "sidebar.serverSummary": "по {transport} · {agents} · {working}",
   "sidebar.messageTeam": "Написать команде…",
   "sidebar.pinned": "Закреплённые",
@@ -1503,6 +1509,9 @@
   "settings.notifications.finishedHint": "Задача завершена.",
   "settings.notifications.failed": "Ошибка",
   "settings.notifications.failedHint": "Агент остановился из-за ошибки.",
+  "settings.notifications.dockGroup": "Значок в Dock",
+  "settings.notifications.dockBadge": "Число непрочитанных на значке",
+  "settings.notifications.dockBadgeHint": "Ответы подключённых серверов, которые вы ещё не открывали.",
   "settings.appearance.intro": "Как приложение выглядит и двигается.",
   "settings.appearance.theme": "Тема",
   "settings.appearance.themeHint": "Светлая и системная темы появятся позже.",
@@ -3139,5 +3148,13 @@
   "perfCheck.page.settings": "Настройки",
   "perfCheck.page.modes": "Режимы и серверы",
   "perfCheck.page.overlays": "Меню, листы и плашки",
-  "perfCheck.quit": "Выйти"
+  "perfCheck.quit": "Выйти",
+  "thread.scheduleRun.today": "сегодня, {time}",
+  "thread.scheduleRun.yesterday": "вчера, {time}",
+  "thread.scheduleRun.date": "{date}, {time}",
+  "thread.scheduleRun.showPrompt": "Показывает задание, с которым начался запуск",
+  "thread.scheduleRun.open": "Раскрыто",
+  "thread.scheduleRun.folded": "Свёрнуто",
+  "thread.quietTurn.title": "Ничего нового",
+  "thread.quietTurn.showSteps": "Показывает, что агент сделал в этом запуске"
 }

@@ -16,6 +16,10 @@
   "sidebar.team": "Equipe",
   "sidebar.sharedChat": "chat compartilhado · {count}",
   "sidebar.needsYou": "PRECISAM DE VOCÊ",
+  "sidebar.unread": {
+    "one": "{count} não lida",
+    "other": "{count} não lidas"
+  },
   "sidebar.serverSummary": "via {transport} · {agents} · {working}",
   "sidebar.messageTeam": "Escreva para a equipe…",
   "sidebar.pinned": "Fixados",
@@ -1598,6 +1602,9 @@
   "settings.notifications.finishedHint": "Uma tarefa foi concluída.",
   "settings.notifications.failed": "Erro",
   "settings.notifications.failedHint": "Um agente parou por causa de uma falha.",
+  "settings.notifications.dockGroup": "Ícone no Dock",
+  "settings.notifications.dockBadge": "Número de não lidas no ícone",
+  "settings.notifications.dockBadgeHint": "Respostas dos servidores conectados que você ainda não viu.",
   "settings.appearance.intro": "Como o app se parece e se movimenta.",
   "settings.appearance.theme": "Tema",
   "settings.appearance.themeHint": "Os temas claro e do sistema chegam depois.",
@@ -3060,5 +3067,13 @@
   "perfCheck.page.settings": "Ajustes",
   "perfCheck.page.modes": "Modos e servidores",
   "perfCheck.page.overlays": "Menus, folhas e avisos",
-  "perfCheck.quit": "Sair"
+  "perfCheck.quit": "Sair",
+  "thread.scheduleRun.today": "hoje, {time}",
+  "thread.scheduleRun.yesterday": "ontem, {time}",
+  "thread.scheduleRun.date": "{date}, {time}",
+  "thread.scheduleRun.showPrompt": "Mostra a instrução com que a execução começou",
+  "thread.scheduleRun.open": "Aberto",
+  "thread.scheduleRun.folded": "Recolhido",
+  "thread.quietTurn.title": "Nada de novo",
+  "thread.quietTurn.showSteps": "Mostra o que o agente fez nesta execução"
 }

@@ -7,7 +7,7 @@
 //! fields (`min hour dom mon dow`) and are evaluated in an IANA time zone.
 
 use crate::commands::Prepared;
-use crate::event::Source;
+use crate::event::{ScheduleRun, Source};
 use crate::store::{NextRun, Schedule, SchedulePatch, Store, now_ms};
 use crate::supervisor::{Inbound, Supervisor};
 use anyhow::{Result, anyhow, bail};
@@ -122,8 +122,13 @@ pub async fn tick(sup: &Supervisor, now_ms: i64) -> Result<usize> {
     Ok(fired)
 }
 
+/// Added after the prompt of a scheduled run, for the runtime only: the thread shows the prompt alone.
+pub const SCHEDULE_NOTE: &str = "This is a scheduled run. If, by the task above, there is nothing worth telling the person, call nothing_to_report and end the turn without a message.";
+
 /// The message for one run of a schedule. A slash command in the prompt is expanded for the
-/// runtime, as `agents.send` does; if that fails, the prompt goes as written.
+/// runtime, as `agents.send` does; if that fails, the prompt goes as written. The thread shows what the
+/// person wrote (the prompt, or the command as typed); the runtime also gets [`SCHEDULE_NOTE`], except for a
+/// command the runtime runs itself: that one goes as typed, with nothing added.
 fn schedule_message(store: &Store, s: &Schedule) -> Inbound {
     let prepared = store
         .agent_get(&s.agent_id)
@@ -132,7 +137,19 @@ fn schedule_message(store: &Store, s: &Schedule) -> Inbound {
         tracing::warn!(schedule = %s.id, "could not expand the command, sending the prompt as written: {e:#}");
         Prepared::plain(&s.prompt)
     });
-    prepared.into_inbound(Source::Schedule)
+    let runtime_native = prepared.command.is_some() && prepared.typed.is_none();
+    let shown = prepared.typed.clone().unwrap_or_else(|| prepared.text.clone());
+    let mut msg = prepared.into_inbound(Source::Schedule);
+    if !runtime_native {
+        msg.text = format!("{}\n\n{SCHEDULE_NOTE}", msg.text);
+        msg.typed = Some(shown);
+    }
+    msg.schedule = Some(ScheduleRun {
+        id: s.id.clone(),
+        name: s.title.clone().unwrap_or_default(),
+        fired_at: now_ms(),
+    });
+    msg
 }
 
 /// Fire one schedule now, as an explicit user action. Its next occurrence stays as it was.
@@ -517,9 +534,59 @@ mod tests {
             )
             .unwrap();
         let msg = schedule_message(&store, &s);
-        assert_eq!(msg.text, "Deploy to prod.");
+        // The runtime gets the expansion and the note; the thread shows the command as typed.
+        assert_eq!(msg.text, format!("Deploy to prod.\n\n{SCHEDULE_NOTE}"));
         assert_eq!(msg.typed.as_deref(), Some("/deploy prod"));
         assert_eq!(msg.command.as_deref(), Some("deploy"));
+        assert_eq!(msg.source, crate::event::Source::Schedule);
+        assert_eq!(msg.schedule.as_ref().map(|r| r.id.as_str()), Some(s.id.as_str()));
+    }
+
+    #[test]
+    fn a_runtime_native_command_goes_as_typed_without_the_note() {
+        // Claude runs its own commands: `/compact` from the project's commands folder is one of them.
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let cwd = tempfile::tempdir().unwrap();
+        let dir = cwd.path().join(".claude/commands");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("compact.md"), "Compact now.").unwrap();
+        let agent = store
+            .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
+                integrations: None,
+                name: "Scout".into(),
+                role: String::new(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: cwd.path().display().to_string(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
+            })
+            .unwrap();
+        let s = store
+            .schedule_create(
+                NewSchedule {
+                    agent_id: agent.id.clone(),
+                    cron: "0 * * * *".into(),
+                    tz: "UTC".into(),
+                    prompt: "/compact".into(),
+                    enabled: true,
+                    title: None,
+                },
+                Some(ms("2026-10-09T11:00:00Z")),
+            )
+            .unwrap();
+        let msg = schedule_message(&store, &s);
+        assert_eq!(msg.text, "/compact", "no note is added to a native command");
+        assert_eq!(msg.typed, None);
+        assert_eq!(msg.command.as_deref(), Some("compact"));
         assert_eq!(msg.source, crate::event::Source::Schedule);
     }
 }

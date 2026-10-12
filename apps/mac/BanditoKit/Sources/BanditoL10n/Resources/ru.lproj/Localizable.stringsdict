@@ -622,6 +622,26 @@
 			<string>Показать весь журнал (%1$lld строк)</string>
 		</dict>
 	</dict>
+	<key>sidebar.unread</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld непрочитанных</string>
+			<key>many</key>
+			<string>%1$lld непрочитанных</string>
+			<key>one</key>
+			<string>%1$lld непрочитанное</string>
+			<key>other</key>
+			<string>%1$lld непрочитанных</string>
+		</dict>
+	</dict>
 	<key>terminals.dock.lines</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

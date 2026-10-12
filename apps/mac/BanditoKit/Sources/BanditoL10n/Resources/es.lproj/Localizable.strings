@@ -2222,6 +2222,9 @@
 "settings.nav.usage" = "Suscripciones y límites";
 "settings.notifications" = "Notificaciones";
 "settings.notifications.allow" = "Permitir";
+"settings.notifications.dockBadge" = "Número de no leídos en el icono";
+"settings.notifications.dockBadgeHint" = "Respuestas de los servidores conectados que aún no has visto.";
+"settings.notifications.dockGroup" = "Icono del Dock";
 "settings.notifications.failed" = "Error";
 "settings.notifications.failedHint" = "Un agente se detuvo por un fallo.";
 "settings.notifications.finished" = "Terminado";
@@ -2686,6 +2689,8 @@
 "thread.notDelivered" = "No entregado";
 "thread.placeholder" = "Escribe una tarea o una pregunta…";
 "thread.queued" = "En cola";
+"thread.quietTurn.showSteps" = "Muestra lo que hizo el agente en esta ejecución";
+"thread.quietTurn.title" = "Nada nuevo";
 "thread.react" = "Reaccionar";
 "thread.reply" = "Responder";
 "thread.reviewApproved" = "%1$@ revisó los cambios · aprobado";
@@ -2693,6 +2698,12 @@
 "thread.runtimeLimitUntil" = "Se agotó el límite de %1$@ — sigo con %2$@ hasta %3$@";
 "thread.runtimeReturned" = "De vuelta en %1$@";
 "thread.savingMemory" = "Guardando memoria antes de un nuevo capítulo";
+"thread.scheduleRun.date" = "%1$@, %2$@";
+"thread.scheduleRun.folded" = "Plegado";
+"thread.scheduleRun.open" = "Abierto";
+"thread.scheduleRun.showPrompt" = "Muestra la instrucción con la que empezó la ejecución";
+"thread.scheduleRun.today" = "hoy, %1$@";
+"thread.scheduleRun.yesterday" = "ayer, %1$@";
 "thread.scheduledRun" = "Ejecución programada";
 "thread.send" = "Enviar";
 "thread.stop" = "Detener";

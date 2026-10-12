@@ -496,6 +496,22 @@
 			<string>Mostrar o registro completo (%1$lld linhas)</string>
 		</dict>
 	</dict>
+	<key>sidebar.unread</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld não lida</string>
+			<key>other</key>
+			<string>%1$lld não lidas</string>
+		</dict>
+	</dict>
 	<key>terminals.dock.lines</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

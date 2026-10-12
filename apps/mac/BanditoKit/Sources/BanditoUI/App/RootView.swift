@@ -8,6 +8,8 @@ import SwiftUI
 public struct RootView: View {
     @Environment(OnboardingModel.self) private var onboarding
     @Environment(AppModel.self) private var app
+    /// The Dock icon's unread count, kept for the window's life (see `DockBadge`).
+    @State private var dockIcon: DockBadge?
     @Environment(Router.self) private var router
     @Environment(TelemetryCenter.self) private var telemetry
 
@@ -58,6 +60,13 @@ public struct RootView: View {
         .task { QAHooks.start(router: router, onboarding: onboarding, telemetry: telemetry) }
         #endif
         .task { await app.keepUsageFresh() }
+        // The unread count on the Dock icon (see `DockBadge`), watched from the first appearance on.
+        .task {
+            guard dockIcon == nil else { return }
+            let badge = DockBadge(app: app)
+            dockIcon = badge
+            badge.start()
+        }
         #if os(macOS)
         // Help → (⌥) Smoothness check… (see `PerfCheck`).
         .task { PerfCheckMenu.install() }

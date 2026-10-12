@@ -15,6 +15,7 @@ final class NativeRowCell: NSTableCellView {
     private let message = NativeMessageView()
     private let label = NativeLabelView()
     private let tools = NativeToolGroupView()
+    private let line = NativeSystemLineView()
 
     override var isFlipped: Bool { true }
 
@@ -22,7 +23,7 @@ final class NativeRowCell: NSTableCellView {
         super.init(frame: .zero)
         identifier = Self.identifier
         wantsLayer = true
-        for view in [message, label, tools] as [NSView] {
+        for view in [message, label, tools, line] as [NSView] {
             view.isHidden = true
             addSubview(view)
         }
@@ -39,7 +40,16 @@ final class NativeRowCell: NSTableCellView {
         PerfCounters.hit("ThreadList.nativeRowShown")
         self.row = row
         tools.isHidden = true
+        line.isHidden = true
         switch row {
+        case .systemLine(let spec):
+            message.isHidden = true
+            label.isHidden = true
+            line.isHidden = false
+            line.show(spec) { [weak self] in
+                guard let self else { return }
+                self.list?.reload(self)
+            }
         case .message(let spec):
             label.isHidden = true
             message.isHidden = false
@@ -72,6 +82,7 @@ final class NativeRowCell: NSTableCellView {
         case .message?: message.geometry(forWidth: width).height
         case .day?, .note?: label.height(forWidth: width) + ThreadListView.rowSpacing
         case .tools?: NativeToolGroupView.height + ThreadListView.rowSpacing
+        case .systemLine?: SystemLineMetrics.height + ThreadListView.rowSpacing
         case nil: 1
         }
     }
@@ -79,7 +90,7 @@ final class NativeRowCell: NSTableCellView {
     override func layout() {
         super.layout()
         // Only the part that shows is laid out, and only when its size changed.
-        let shown: NSView = !tools.isHidden ? tools : message.isHidden ? label : message
+        let shown: NSView = !line.isHidden ? line : !tools.isHidden ? tools : message.isHidden ? label : message
         if shown.frame != bounds { shown.frame = bounds }
     }
 
@@ -155,6 +166,144 @@ final class NativeLabelView: NSView {
             text.wrapWidth = frame.width
             text.frame = frame
         }
+    }
+}
+
+/// A folded scheduled run or quiet turn, drawn as `SystemLine` draws it: the symbol in its column, the text, a chevron,
+/// centred in the line's column on a half point. A click opens it, and the open row is the SwiftUI one.
+final class NativeSystemLineView: NSView {
+    private var spec: SystemLineSpec?
+    private var hovering = false
+    private var onToggle: () -> Void = {}
+    private var tracking: NSTrackingArea?
+    /// The widths of the text and of the tail, for the spec they were measured for.
+    private var measured: (spec: SystemLineSpec, text: CGFloat, tail: CGFloat)?
+
+    override var isFlipped: Bool { true }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    func show(_ spec: SystemLineSpec, onToggle: @escaping () -> Void) {
+        self.spec = spec
+        self.onToggle = onToggle
+        hovering = false
+        setAccessibilityLabel(spec.spoken)
+        setAccessibilityHelp(spec.opens)
+        setAccessibilityValue(L10n.Thread.ScheduleRun.folded)
+        needsDisplay = true
+    }
+
+    private func attributed(_ string: String, color: NSColor) -> NSAttributedString {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        return NSAttributedString(
+            string: string,
+            attributes: [
+                .font: BanditoFont.appKitText(size: SystemLineMetrics.textSize, weight: 400), .foregroundColor: color,
+                .paragraphStyle: paragraph,
+            ])
+    }
+
+    private static func width(of text: NSAttributedString) -> CGFloat { ceil(text.size().width * 2) / 2 }
+
+    /// The parts' places: the symbol's column, the text (cut when it does not fit), the tail, the chevron; the whole
+    /// centred in the column.
+    private func layoutParts(_ spec: SystemLineSpec, chevron: CGSize)
+        -> (symbol: CGRect, text: CGRect, tail: CGRect, chevron: CGRect)
+    {
+        let (x, width) = NativeMessageGeometry.column(bounds.width)
+        let fixed = SystemLineMetrics.symbolColumn + SystemLineMetrics.spacing * 2 + chevron.width
+        let widths: (text: CGFloat, tail: CGFloat)
+        if let measured, measured.spec == spec {
+            widths = (measured.text, measured.tail)
+        } else {
+            widths = (
+                Self.width(of: attributed(spec.text, color: .white)),
+                spec.tail.map { Self.width(of: attributed($0, color: .white)) } ?? 0
+            )
+            measured = (spec, widths.text, widths.tail)
+        }
+        let textWidth = min(widths.text, max(0, width - fixed - widths.tail))
+        let total = fixed + textWidth + widths.tail
+        let left = ((x + (width - total) / 2) * 2).rounded() / 2
+        let height = SystemLineMetrics.height
+        let symbol = CGRect(x: left, y: 0, width: SystemLineMetrics.symbolColumn, height: height)
+        let text = CGRect(x: symbol.maxX + SystemLineMetrics.spacing, y: 0, width: textWidth, height: height)
+        let tail = CGRect(x: text.maxX, y: 0, width: widths.tail, height: height)
+        let chev = CGRect(x: tail.maxX + SystemLineMetrics.spacing, y: 0, width: chevron.width, height: height)
+        return (symbol, text, tail, chev)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let spec else { return }
+        let appearance = effectiveAppearance
+        var color = SystemLineMetrics.color(muted: spec.muted)
+        if hovering { color = Color(nsColor: NSColor(color).blended(withFraction: 0.07, of: .white) ?? NSColor(color)) }
+        let symbol = NativeSymbols.image(
+            spec.symbol, pointSize: SystemLineMetrics.symbolSize, weight: .medium, color: color, in: appearance)
+        let chevron = NativeSymbols.image(
+            "chevron.right", pointSize: SystemLineMetrics.chevronSize, weight: .semibold, color: color, in: appearance)
+        let parts = layoutParts(spec, chevron: chevron?.size ?? .zero)
+        if let symbol { draw(symbol, centeredIn: parts.symbol) }
+        let ink = NSColor(cgColor: NativeColors.cg(color, in: appearance)) ?? .labelColor
+        for (string, rect) in [(spec.text, parts.text), (spec.tail ?? "", parts.tail)] where !string.isEmpty {
+            let text = attributed(string, color: ink)
+            let size = text.size()
+            text.draw(
+                with: CGRect(x: rect.minX, y: (rect.height - size.height) / 2, width: rect.width + 0.5, height: size.height),
+                options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        }
+        if let chevron { draw(chevron, centeredIn: parts.chevron) }
+    }
+
+    private func draw(_ image: NSImage, centeredIn rect: CGRect) {
+        let size = image.size
+        image.draw(in: CGRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2, width: size.width, height: size.height))
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(
+            rect: bounds, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        if ThreadScrollActivity.isScrolling() { return }
+        hovering = true
+        needsDisplay = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hovering = false
+        needsDisplay = true
+    }
+
+    override func mouseDown(with event: NSEvent) {}
+
+    override func mouseUp(with event: NSEvent) {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        toggle()
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        toggle()
+        return true
+    }
+
+    private func toggle() {
+        guard let spec else { return }
+        ThreadDisclosure.shared.toggle(spec.key)
+        onToggle()
     }
 }
 
