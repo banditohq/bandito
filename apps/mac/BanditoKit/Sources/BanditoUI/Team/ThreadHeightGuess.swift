@@ -27,7 +27,7 @@ enum ThreadHeightGuess {
             text.isEmpty ? 96 : textHeight(text) + CGFloat(files.count) * 40
         case .assistant(_, let text, _), .streaming(let text):
             textHeight(text)
-        case .note, .runtimeSwitch: 34
+        case .note, .runtimeSwitch, .scheduleRun, .quietTurn: 34
         case .approval: 150
         case .form: 230
         case .connect: 130

@@ -2689,6 +2689,8 @@
 "thread.notDelivered" = "Не доставлено";
 "thread.placeholder" = "Напишите задачу или вопрос…";
 "thread.queued" = "В очереди";
+"thread.quietTurn.showSteps" = "Показывает, что агент сделал в этом запуске";
+"thread.quietTurn.title" = "Ничего нового";
 "thread.react" = "Реакция";
 "thread.reply" = "Ответить";
 "thread.reviewApproved" = "%1$@ проверил изменения · одобрил";
@@ -2696,6 +2698,12 @@
 "thread.runtimeLimitUntil" = "Лимит %1$@ кончился — продолжаю на %2$@ до %3$@";
 "thread.runtimeReturned" = "Вернулся на %1$@";
 "thread.savingMemory" = "Сохраняет память перед новой главой";
+"thread.scheduleRun.date" = "%1$@, %2$@";
+"thread.scheduleRun.folded" = "Свёрнуто";
+"thread.scheduleRun.open" = "Раскрыто";
+"thread.scheduleRun.showPrompt" = "Показывает задание, с которым начался запуск";
+"thread.scheduleRun.today" = "сегодня, %1$@";
+"thread.scheduleRun.yesterday" = "вчера, %1$@";
 "thread.scheduledRun" = "Запуск по расписанию";
 "thread.send" = "Отправить";
 "thread.stop" = "Остановить";

@@ -3067,5 +3067,13 @@
   "perfCheck.page.settings": "Settings",
   "perfCheck.page.modes": "Modes and servers",
   "perfCheck.page.overlays": "Menus, sheets and toasts",
-  "perfCheck.quit": "Quit"
+  "perfCheck.quit": "Quit",
+  "thread.scheduleRun.today": "today, {time}",
+  "thread.scheduleRun.yesterday": "yesterday, {time}",
+  "thread.scheduleRun.date": "{date}, {time}",
+  "thread.scheduleRun.showPrompt": "Shows the prompt the run started with",
+  "thread.scheduleRun.open": "Open",
+  "thread.scheduleRun.folded": "Folded",
+  "thread.quietTurn.title": "Nothing new",
+  "thread.quietTurn.showSteps": "Shows what the agent did in this run"
 }

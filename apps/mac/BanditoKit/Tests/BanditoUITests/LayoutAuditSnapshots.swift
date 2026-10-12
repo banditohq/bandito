@@ -21,7 +21,7 @@ import Testing
 
     static var cases: [AuditCase] {
         settings + sheets + dataSheets + serverScreens + marketScreens + marketShelfScreens + onboardingScreens
-            + flowSheets + browserScreens + approvalViews + messageTimeRows + perfCheckViews
+            + flowSheets + browserScreens + approvalViews + messageTimeRows + perfCheckViews + scheduleRunViews
     }
 
     /// The results of the smoothness check (Help → ⌥ Smoothness check…) in the narrowest window.
@@ -415,6 +415,31 @@ import Testing
         ],
         link: QuickReplyLink(label: "Gmail-Einstellungen öffnen und prüfen", url: "https://mail.google.com/mail/u/0/#settings"),
         progress: QuickReplyProgress(done: 2, total: 6), seq: 1)
+
+    /// A scheduled run's line and a quiet turn's line, folded and open, at the narrowest chat column.
+    static let scheduleRunViews: [AuditCase] = {
+        let ts = Int64(Date().timeIntervalSince1970 * 1000)
+        let run = ThreadItem.scheduleRun(
+            id: "audit-run", run: ScheduleRun(id: "s", name: "Postfach und Kalender jeden Morgen prüfen", firedAt: ts),
+            prompt: "Prüfe das Postfach und den Kalender. Wenn es nichts Wichtiges gibt, rufe nothing_to_report auf.", ts: ts)
+        let quiet = ThreadItem.quietTurn(
+            id: "audit-quiet", reason: "Keine neuen wichtigen E-Mails seit dem letzten Lauf",
+            steps: [
+                .tool(ToolRow(callId: "audit-c1", tool: "bash", title: "gmail search is:unread", ok: true, output: "")),
+                .assistant(id: "audit-t", text: "Ich prüfe das Postfach.", ts: ts),
+            ], ts: ts)
+        @MainActor func row(_ item: ThreadItem, open: Bool) -> AnyView {
+            let key = ScheduleRunLine.spec(of: item)?.key ?? ""
+            if ThreadDisclosure.shared.isOpen(key) != open { ThreadDisclosure.shared.toggle(key) }
+            return item.id == run.id ? AnyView(ScheduleRunRow(item: item)) : AnyView(QuietTurnRow(item: item))
+        }
+        return [
+            AuditCase(name: "schedule-run-line", width: 420) { _ in row(run, open: false) },
+            AuditCase(name: "schedule-run-open", width: 420) { _ in row(run, open: true) },
+            AuditCase(name: "quiet-turn-line", width: 420) { _ in row(quiet, open: false) },
+            AuditCase(name: "quiet-turn-open", width: 420) { _ in row(quiet, open: true) },
+        ]
+    }()
 
     static let approvalViews: [AuditCase] = [
         // The card's own glow (a shadow) paints just beyond its box on purpose: no spill check. The width check still runs.

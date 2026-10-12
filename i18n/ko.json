@@ -3028,5 +3028,13 @@
   "perfCheck.page.settings": "설정",
   "perfCheck.page.modes": "모드와 서버",
   "perfCheck.page.overlays": "메뉴, 시트, 알림",
-  "perfCheck.quit": "종료"
+  "perfCheck.quit": "종료",
+  "thread.scheduleRun.today": "오늘 {time}",
+  "thread.scheduleRun.yesterday": "어제 {time}",
+  "thread.scheduleRun.date": "{date} {time}",
+  "thread.scheduleRun.showPrompt": "이 실행을 시작한 지시를 보여 줍니다",
+  "thread.scheduleRun.open": "펼침",
+  "thread.scheduleRun.folded": "접힘",
+  "thread.quietTurn.title": "새 소식 없음",
+  "thread.quietTurn.showSteps": "이 실행에서 에이전트가 한 일을 보여 줍니다"
 }

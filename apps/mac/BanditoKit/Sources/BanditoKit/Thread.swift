@@ -21,6 +21,12 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
     case form(FormRow)
     /// A service the agent asked the person to connect (see docs/ARCHITECTURE.md#connect-requests).
     case connect(ConnectRow)
+    /// A run of a schedule (`message.user` with `schedule`, feature `quiet_schedules`): one quiet line with its
+    /// prompt folded under it, not a bubble.
+    case scheduleRun(id: String, run: ScheduleRun, prompt: String, ts: Int64)
+    /// A turn that ended with nothing to report (`turn.quiet`): its steps (tool calls, the text it wrote before it went
+    /// quiet) folded in one line.
+    indirect case quietTurn(id: String, reason: String?, steps: [ThreadItem], ts: Int64)
 
     public var id: String {
         switch self {
@@ -32,6 +38,8 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
         case .approval(let a): return "approval-\(a.approvalId)"
         case .form(let f): return "form-\(f.formId)"
         case .connect(let c): return "connect-\(c.requestId)"
+        case .scheduleRun(let id, _, _, _): return id
+        case .quietTurn(let id, _, _, _): return "quiet-\(id)"
         }
     }
 
@@ -80,6 +88,7 @@ extension ThreadItem {
         case .chapter(_, _, _, let ts): ts
         case .form(let f): f.ts
         case .connect(let c): c.ts
+        case .scheduleRun(_, _, _, let ts), .quietTurn(_, _, _, let ts): ts
         case .streaming, .tool, .approval: nil
         }
     }
@@ -145,6 +154,10 @@ public struct AgentThread: Sendable, Hashable {
     /// it counts as no unread reply. Set by `turn.quiet`, cleared by the next `turn.started`; it stays through the
     /// turn's `turn.completed`, so the notifications of that event can read it.
     public private(set) var quietTurn = false
+    /// Where the running turn's rows begin in `items` (set by `turn.started`): a quiet turn folds the rows from here.
+    private var turnItemsStart: Int?
+    /// The row of the quiet turn running now, which takes its further steps.
+    private var quietItemID: String?
     /// When the running turn began (Unix ms, the time of its `turn.started`); nil when no turn runs or its start is
     /// not in the loaded history. The "Thinking · N min" counter counts from here, not from the last message.
     public internal(set) var turnStartedAt: Int64?
@@ -230,8 +243,6 @@ public struct AgentThread: Sendable, Hashable {
         reactions[seq]?.chips ?? []
     }
 
-    /// Text of the newest message in the thread: a user or assistant message, or the reply still streaming.
-    /// Approvals and notes are not messages.
     /// The newest message is a reply still streaming.
     public var lastMessageIsStreaming: Bool {
         for item in items.reversed() {
@@ -244,6 +255,8 @@ public struct AgentThread: Sendable, Hashable {
         return false
     }
 
+    /// Text of the newest message in the thread: a user or assistant message, or the reply still streaming.
+    /// Approvals and notes are not messages.
     public var lastMessageText: String? {
         for item in items.reversed() {
             switch item {
@@ -279,19 +292,29 @@ public struct AgentThread: Sendable, Hashable {
             quickReplies = nil
             turnRunning = true
             quietTurn = false
+            quietItemID = nil
+            turnItemsStart = items.count
             turnStartedAt = e.ts
             if let messageSeq { startedAt[messageSeq] = e.seq }
         case .messageDropped(let seq, _):
             droppedAt[seq] = e.seq
-        case .turnQuiet:
+        case .turnQuiet(_, let reason):
             quietTurn = true
-        case .messageUser(let text, let source, let from, let replyTo, let files, let queued, let mentioned, let pressed, _):
+            foldQuietTurn(id: e.id, reason: reason, ts: e.ts)
+        case .messageUser(let text, let source, let from, let replyTo, let files, let queued, let mentioned, let pressed, let run):
             if queued, source != .system, e.seq > 0 { queuedSeqs.insert(e.seq) }
             if source != .system {
                 if let replyTo { replies[e.seq] = replyTo }
                 if !files.isEmpty { attachments[e.seq] = files }
                 if !mentioned.isEmpty { mentions[e.seq] = mentioned }
                 if pressed { viaButton.insert(e.seq) }
+            }
+            if let run, source != .system {
+                // A scheduled run: one line with its prompt folded under it (an older daemon sends no `schedule`
+                // and gets the note and the bubble below).
+                dropStreaming()
+                items.append(.scheduleRun(id: e.id, run: run, prompt: text, ts: e.ts))
+                break
             }
             switch source {
             case .user:
@@ -326,6 +349,18 @@ public struct AgentThread: Sendable, Hashable {
             dropStreaming()
             if !quietTurn { items.append(.assistant(id: e.id, text: text, ts: e.ts)) }
         case .toolCall(let callId, let tool, let title, _):
+            if quietTurn, let row = quietIndex() {
+                // A step of a quiet turn goes into its folded line.
+                updateQuietSteps(row) { steps in
+                    if let i = steps.lastIndex(where: { $0.id == "tool-\(callId)" }), case .tool(var tool) = steps[i] {
+                        tool.title = title
+                        steps[i] = .tool(tool)
+                    } else {
+                        steps.append(.tool(ToolRow(callId: callId, tool: tool, title: title, ok: nil, output: nil, startedAt: e.ts)))
+                    }
+                }
+                break
+            }
             finalizeStreaming(e)
             if let i = toolIndex(callId) {
                 if case .tool(var row) = items[i] {
@@ -337,6 +372,16 @@ public struct AgentThread: Sendable, Hashable {
                     .tool(ToolRow(callId: callId, tool: tool, title: title, ok: nil, output: nil, startedAt: e.ts)))
             }
         case .toolResult(let callId, let ok, let output):
+            if toolIndex(callId) == nil, let row = quietIndex(callId: callId) {
+                updateQuietSteps(row) { steps in
+                    if let i = steps.lastIndex(where: { $0.id == "tool-\(callId)" }), case .tool(var tool) = steps[i] {
+                        tool.ok = ok
+                        tool.output = output
+                        steps[i] = .tool(tool)
+                    }
+                }
+                break
+            }
             if let i = toolIndex(callId), case .tool(var row) = items[i] {
                 row.ok = ok
                 row.output = output
@@ -564,5 +609,53 @@ public struct AgentThread: Sendable, Hashable {
 
     private func toolIndex(_ callId: String) -> Int? {
         items.lastIndex(where: { $0.id == "tool-\(callId)" })
+    }
+
+    // MARK: quiet turns
+
+    /// Folds the running turn's steps into one line (`turn.quiet`): its tool calls and the text it wrote so far leave
+    /// the thread for the line; anything that waits for the person (an approval, a form, a request) stays. The line
+    /// stands where the first step stood, under the run's own line.
+    private mutating func foldQuietTurn(id: String, reason: String?, ts: Int64) {
+        guard quietItemID == nil else { return }
+        let start = min(turnItemsStart ?? items.count, items.count)
+        var steps: [ThreadItem] = []
+        var kept: [ThreadItem] = []
+        var place: Int?
+        for item in items[start...] {
+            switch item {
+            case .tool, .assistant:
+                if place == nil { place = start + kept.count }
+                steps.append(item)
+            case .streaming(let text):
+                if place == nil { place = start + kept.count }
+                steps.append(.assistant(id: id + "-hidden", text: text, ts: ts))
+            default:
+                kept.append(item)
+            }
+        }
+        let row = ThreadItem.quietTurn(id: id, reason: reason, steps: steps, ts: ts)
+        items.removeSubrange(start...)
+        items.append(contentsOf: kept)
+        items.insert(row, at: min(place ?? items.count, items.count))
+        quietItemID = row.id
+    }
+
+    /// The index of the running quiet turn's line, or of the quiet line that holds `callId`.
+    private func quietIndex(callId: String? = nil) -> Int? {
+        if let callId {
+            return items.lastIndex { item in
+                guard case .quietTurn(_, _, let steps, _) = item else { return false }
+                return steps.contains { $0.id == "tool-\(callId)" }
+            }
+        }
+        guard let quietItemID else { return nil }
+        return items.lastIndex { $0.id == quietItemID }
+    }
+
+    private mutating func updateQuietSteps(_ index: Int, _ change: (inout [ThreadItem]) -> Void) {
+        guard case .quietTurn(let id, let reason, var steps, let ts) = items[index] else { return }
+        change(&steps)
+        items[index] = .quietTurn(id: id, reason: reason, steps: steps, ts: ts)
     }
 }

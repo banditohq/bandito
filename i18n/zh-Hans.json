@@ -3028,5 +3028,13 @@
   "perfCheck.page.settings": "设置",
   "perfCheck.page.modes": "模式与服务器",
   "perfCheck.page.overlays": "菜单、面板与提示",
-  "perfCheck.quit": "退出"
+  "perfCheck.quit": "退出",
+  "thread.scheduleRun.today": "今天 {time}",
+  "thread.scheduleRun.yesterday": "昨天 {time}",
+  "thread.scheduleRun.date": "{date} {time}",
+  "thread.scheduleRun.showPrompt": "显示这次运行所用的指令",
+  "thread.scheduleRun.open": "已展开",
+  "thread.scheduleRun.folded": "已折叠",
+  "thread.quietTurn.title": "没有新情况",
+  "thread.quietTurn.showSteps": "显示代理在这次运行中做了什么"
 }

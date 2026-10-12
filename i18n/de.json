@@ -3066,5 +3066,13 @@
   "perfCheck.page.settings": "Einstellungen",
   "perfCheck.page.modes": "Modi und Server",
   "perfCheck.page.overlays": "Menüs, Fenster und Hinweise",
-  "perfCheck.quit": "Beenden"
+  "perfCheck.quit": "Beenden",
+  "thread.scheduleRun.today": "heute, {time}",
+  "thread.scheduleRun.yesterday": "gestern, {time}",
+  "thread.scheduleRun.date": "{date}, {time}",
+  "thread.scheduleRun.showPrompt": "Zeigt den Auftrag, mit dem der Lauf begann",
+  "thread.scheduleRun.open": "Geöffnet",
+  "thread.scheduleRun.folded": "Eingeklappt",
+  "thread.quietTurn.title": "Nichts Neues",
+  "thread.quietTurn.showSteps": "Zeigt, was der Agent in diesem Lauf getan hat"
 }

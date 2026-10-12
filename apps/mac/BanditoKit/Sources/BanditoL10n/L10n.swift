@@ -3806,6 +3806,20 @@ public enum L10n {
                 public static var news: String { L10n.tr("thread.empty.suggest.news") }
             }
         }
+
+        public enum QuietTurn {
+            public static var showSteps: String { L10n.tr("thread.quietTurn.showSteps") }
+            public static var title: String { L10n.tr("thread.quietTurn.title") }
+        }
+
+        public enum ScheduleRun {
+            public static func date(date: String, time: String) -> String { L10n.tr("thread.scheduleRun.date", date, time) }
+            public static var folded: String { L10n.tr("thread.scheduleRun.folded") }
+            public static var `open`: String { L10n.tr("thread.scheduleRun.open") }
+            public static var showPrompt: String { L10n.tr("thread.scheduleRun.showPrompt") }
+            public static func today(time: String) -> String { L10n.tr("thread.scheduleRun.today", time) }
+            public static func yesterday(time: String) -> String { L10n.tr("thread.scheduleRun.yesterday", time) }
+        }
     }
 
     public enum Tour {

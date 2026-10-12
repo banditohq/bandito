@@ -49,6 +49,16 @@ extension ScreenWorkSuites {
                 ]),
                 .toolGroup([ToolRow(callId: "c3", tool: "bash", title: "false", ok: false, output: "")]),
                 .day(Date()),
+                .item(
+                    .scheduleRun(
+                        id: "r1", run: ScheduleRun(id: "s1", name: "Morning digest", firedAt: ts), prompt: "Check the mail",
+                        ts: ts)),
+                .item(.quietTurn(id: "q1", reason: "no new mail", steps: [], ts: ts)),
+                // Too long for a narrow chat: the text gives way at its end.
+                .item(
+                    .quietTurn(
+                        id: "q2", reason: "no new mail since the last run, and the calendar has nothing for the next three days",
+                        steps: [], ts: ts)),
             ]
         }()
 

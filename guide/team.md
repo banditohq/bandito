@@ -305,6 +305,8 @@ Runs a prompt for the agent at a set time, for example every morning. A schedule
 2. Choose how often in Repeat (Повтор): Every, Every day, Weekdays, Days of the week, or Other (cron). Set the time in At (В) and the request in Prompt (Запрос). Only Other (cron) takes a cron expression.
 3. Click Add schedule (Добавить) to save. The list shows Next run (Next run …) for each schedule.
 4. Use the switch in a row to pause or resume it.
+5. In the chat a run is one quiet line, not a message: Scheduled run (Запуск по расписанию) · the schedule's name · when it ran (today, 20:45). Click the line to see the prompt it ran with; click again to fold it.
+6. When the agent finds nothing to report, the run makes no noise: no notice, no sound, no unread mark. Its steps fold into a dim line Nothing new (Ничего нового) under the run, with the agent's reason when it gave one. Click it to see what the agent did.
 
 ## Where it runs tab
 
