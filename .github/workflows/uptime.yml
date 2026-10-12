@@ -1,0 +1,90 @@
+name: uptime
+
+# Checks the public bandito.dev every 5 minutes (scripts/uptime.sh). A failing run opens an issue labelled `uptime`, a
+# healthy run after that closes it. The owner gets a Telegram message only on those state changes, not on every run.
+# Telegram needs the secrets UPTIME_TG_TOKEN and UPTIME_TG_CHAT; without them the run only writes to its log.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# Two runs must not both open an issue for the same outage.
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Get the probe script
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: scripts/uptime.sh
+          persist-credentials: false
+
+      - name: Probe bandito.dev
+        id: probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          bash scripts/uptime.sh > "$RUNNER_TEMP/probe.txt" 2>&1
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/probe.txt"
+          if [ "$code" -eq 0 ]; then down=false; else down=true; fi
+          echo "down=$down" >> "$GITHUB_OUTPUT"
+
+      - name: Update the issue and tell the owner on a state change
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DOWN: ${{ steps.probe.outputs.down }}
+          TG_TOKEN: ${{ secrets.UPTIME_TG_TOKEN }}
+          TG_CHAT: ${{ secrets.UPTIME_TG_CHAT }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          # tell TEXT: Telegram message to the owner; without the secrets it only logs.
+          tell() {
+            if [ -z "$TG_TOKEN" ] || [ -z "$TG_CHAT" ]; then
+              echo "::notice::UPTIME_TG_TOKEN/UPTIME_TG_CHAT не заданы, в Telegram не отправлено: $1"
+              return 0
+            fi
+            curl -fsS -o /dev/null "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${TG_CHAT}" --data-urlencode "text=$1" -d disable_web_page_preview=true \
+              || echo "::warning::Telegram не принял сообщение"
+          }
+
+          gh label create uptime -R "$REPO" --color D93F0B --description "bandito.dev is down" --force >/dev/null
+          open=$(gh issue list -R "$REPO" --label uptime --state open --json number,createdAt \
+            --jq '.[0] | select(.) | "\(.number) \(.createdAt)"')
+
+          if [ "$DOWN" = true ]; then
+            if [ -n "$open" ]; then
+              echo "Incident already open: $open"
+              exit 0
+            fi
+            failed=$(grep '^FAIL' "$RUNNER_TEMP/probe.txt" | sed 's/^FAIL //' || true)
+            [ -n "$failed" ] || failed="скрипт проверки завершился с ошибкой, см. лог"
+            body="Проверка упала ($(date -u '+%Y-%m-%d %H:%M UTC')):"$'\n\n'"$failed"$'\n\n'"Лог: $RUN_URL"
+            gh issue create -R "$REPO" --label uptime --title "bandito.dev недоступен" --body "$body" >/dev/null
+            summary=$(printf '%s' "$failed" | tr '\n' ';' | sed 's/;$//; s/;/; /g')
+            tell "🔴 bandito.dev: $summary"
+          else
+            if [ -z "$open" ]; then
+              echo "Site is up, no open incident."
+              exit 0
+            fi
+            read -r number created <<<"$open"
+            mins=$(( ( $(date -u +%s) - $(date -u -d "$created" +%s) ) / 60 ))
+            gh issue close "$number" -R "$REPO" --comment "Снова в порядке, было недоступно $mins мин. Лог: $RUN_URL" >/dev/null
+            tell "🟢 bandito.dev снова в порядке, было недоступно $mins мин"
+          fi
