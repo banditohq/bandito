@@ -985,6 +985,7 @@
 "ios.settings.notifications.allow" = "Autoriser les notifications";
 "ios.settings.notifications.answers" = "Réponses prêtes";
 "ios.settings.notifications.approvals" = "Approbations et questions";
+"ios.settings.notifications.background" = "Quand l'app est fermée, Bandito vérifie de temps en temps. Les notifications instantanées arriveront avec une mise à jour.";
 "ios.settings.notifications.denied" = "Les notifications de Bandito sont désactivées dans les réglages iOS.";
 "ios.settings.notifications.errors" = "Erreurs";
 "ios.settings.openSettings" = "Ouvrir les réglages iOS";
@@ -1439,12 +1440,17 @@
 "notify.deny" = "Refuser";
 "notify.failed" = "%1$@ : erreur";
 "notify.finished" = "%1$@ a terminé";
+"notify.form" = "%1$@ demande de remplir un formulaire";
 "notify.hiddenPreview" = "Ouvrez Bandito pour la voir";
 "notify.needsApproval" = "%1$@ attend une approbation";
 "notify.needsYou" = "%1$@ attend votre réponse : %2$@";
+"notify.question" = "%1$@ attend votre réponse";
+"notify.reply" = "Répondre";
+"notify.replyPlaceholder" = "Message";
 "notify.resolveFailed" = "Impossible de répondre : la demande est déjà traitée ou périmée";
 "notify.reviewLines" = "Commande de %1$lld lignes — ouvrez Bandito pour la vérifier";
 "notify.reviewLong" = "Commande longue — ouvrez Bandito pour la vérifier";
+"notify.wantsToRun" = "%1$@ veut exécuter";
 "onboarding.account.approvalHint" = "Ouvrez Bandito sur un autre Mac ou sur un iPhone : une demande y apparaît. Comparez le code affiché sur cet écran avec celui-ci.";
 "onboarding.account.approvalSubtitle" = "La connexion est faite. Pour utiliser vos serveurs ici, un autre de vos appareils doit approuver ce Mac.";
 "onboarding.account.approvalTitle" = "Confirmez ce Mac sur un autre appareil";

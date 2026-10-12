@@ -1,4 +1,3 @@
-import BanditoKit
 import BanditoL10n
 import Foundation
 import os
@@ -18,10 +17,16 @@ public enum AgentNotice: Equatable, Sendable {
     case failed(agentID: String, agentName: String, message: String?)
     /// The Allow/Deny answer could not be sent: the request is already answered, or it is stale.
     case resolveFailed(agentID: String)
+    /// The agent asked the person to fill in a form. The notification opens the app; it has no buttons.
+    case form(agentID: String, agentName: String, formID: String)
+    /// The agent waits for an answer. `text` is its last message (the notification's body).
+    case question(agentID: String, agentName: String, text: String?)
 
     public var agentID: String {
         switch self {
-        case .approval(let id, _, _, _, _, _), .finished(let id, _), .failed(let id, _, _), .resolveFailed(let id): id
+        case .approval(let id, _, _, _, _, _), .finished(let id, _), .failed(let id, _, _), .resolveFailed(let id),
+            .form(let id, _, _), .question(let id, _, _):
+            id
         }
     }
 
@@ -29,7 +34,7 @@ public enum AgentNotice: Equatable, Sendable {
     /// waiting approval, so it counts as `needsYou`.
     public var kind: ServerNoticeKind {
         switch self {
-        case .approval, .resolveFailed: .needsYou
+        case .approval, .resolveFailed, .form, .question: .needsYou
         case .finished: .finished
         case .failed: .failed
         }
@@ -67,7 +72,7 @@ public enum NotificationRules {
         switch notice {
         case .resolveFailed:
             return true
-        case .approval:
+        case .approval, .form, .question:
             return settings.needsYou && !windowActive
         case .failed:
             return settings.failed && !windowActive
@@ -89,8 +94,19 @@ public struct NotificationContent: Equatable, Sendable {
     public var agentID: String
     /// The approval the buttons answer, for approval notices. Also the notification's identifier.
     public var approvalID: String?
+    /// The form a form notice asks about.
+    public var formID: String?
     /// The server the notice came from, when the app knows it (`handle(_:serverID:)` sets it).
     public var serverID: UUID?
+    /// The daemon marks the request as risky (`ApprovalReason.isRisky`). Set by the caller that read the reason.
+    public var risky: Bool = false
+    /// The identifier of the system notification, when the caller has one (the event's sequence number on iOS):
+    /// a notice with the same key replaces the delivered one instead of adding a second. Nil: a fresh identifier.
+    public var key: String?
+    /// The agent's name, for the iPhone's title ("Forge хочет выполнить"); the Mac's title does not use it.
+    public var agentName: String = ""
+    /// The full command of an approval, for the iPhone's body. Nil when the notice has none.
+    public var command: String?
 
     /// Allow and Deny.
     public static let approvalCategory = "bandito.approval"
@@ -98,8 +114,13 @@ public struct NotificationContent: Equatable, Sendable {
     public static let approvalReviewCategory = "bandito.approval.review"
     public static let finishedCategory = "bandito.finished"
     public static let failedCategory = "bandito.failed"
+    /// A form: no buttons, the notification opens the app.
+    public static let formCategory = "bandito.form"
+    /// A question: a text reply (`replyAction`) and opening the app.
+    public static let questionCategory = "bandito.question"
     public static let allowAction = "bandito.approval.allow"
     public static let denyAction = "bandito.approval.deny"
+    public static let replyAction = "bandito.question.reply"
     /// Commands longer than this many characters are reviewed in the app, not allowed from the notification.
     public static let longCommandLimit = 160
 
@@ -119,26 +140,37 @@ public struct NotificationContent: Equatable, Sendable {
         switch notice {
         case .approval(let agentID, let agentName, let approvalID, let title, let command, let reviewOnly):
             let reviewed = reviewOnly || (command.map(needsReview) ?? false)
-            return NotificationContent(
+            var content = NotificationContent(
                 title: L10n.Notify.needsApproval(name: agentName),
                 body: reviewed ? reviewBody(command ?? "") : title,
                 categoryID: approvalCategoryID(command: command, reviewOnly: reviewOnly), agentID: agentID, approvalID: approvalID)
+            content.agentName = agentName
+            content.command = command
+            return content
         case .finished(let agentID, let agentName):
             return NotificationContent(
                 title: L10n.Notify.finished(name: agentName), body: "",
-                categoryID: finishedCategory, agentID: agentID, approvalID: nil)
+                categoryID: finishedCategory, agentID: agentID, approvalID: nil, agentName: agentName)
         case .failed(let agentID, let agentName, let message):
             return NotificationContent(
                 title: L10n.Notify.failed(name: agentName), body: message ?? "",
-                categoryID: failedCategory, agentID: agentID, approvalID: nil)
+                categoryID: failedCategory, agentID: agentID, approvalID: nil, agentName: agentName)
         case .resolveFailed(let agentID):
             return NotificationContent(
                 title: L10n.Notify.resolveFailed, body: "", categoryID: nil, agentID: agentID, approvalID: nil)
+        case .form(let agentID, let agentName, let formID):
+            return NotificationContent(
+                title: L10n.Notify.form(name: agentName), body: "", categoryID: formCategory, agentID: agentID,
+                approvalID: nil, formID: formID, agentName: agentName)
+        case .question(let agentID, let agentName, let text):
+            return NotificationContent(
+                title: L10n.Notify.question(name: agentName), body: text ?? "", categoryID: questionCategory,
+                agentID: agentID, approvalID: nil, agentName: agentName)
         }
     }
 
     /// "Команда из N строк — откройте, чтобы проверить" for a multi-line command, a sentence about its length otherwise.
-    static func reviewBody(_ command: String) -> String {
+    public static func reviewBody(_ command: String) -> String {
         let lines = command.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).count
         if lines > 1 {
             return L10n.Notify.reviewLines(count: lines)
@@ -180,15 +212,18 @@ public final class NotificationService {
     private let windowActive: () -> Bool
     private let selectedAgentID: () -> String?
     private let resolve: (_ agentID: String, _ approvalID: String, _ decision: Decision) async throws -> Void
+    private let reply: (_ agentID: String, _ text: String) async throws -> Void
     private let scope: (UUID) -> NotificationScope
 
     /// `scope` says which notifications each server sends (`ServerConfig.notifications`). The default lets all through.
+    /// `reply` sends a text answer to a question (iOS); nil means the platform does not offer one.
     public init(
         sink: Sink,
         settings: @escaping () -> NotificationSettings,
         windowActive: @escaping () -> Bool,
         selectedAgentID: @escaping () -> String?,
         resolve: @escaping (_ agentID: String, _ approvalID: String, _ decision: Decision) async throws -> Void,
+        reply: @escaping (_ agentID: String, _ text: String) async throws -> Void = { _, _ in throw AgentNotFoundError() },
         scope: @escaping (UUID) -> NotificationScope = { _ in .all }
     ) {
         self.sink = sink
@@ -196,17 +231,21 @@ public final class NotificationService {
         self.windowActive = windowActive
         self.selectedAgentID = selectedAgentID
         self.resolve = resolve
+        self.reply = reply
         self.scope = scope
     }
 
     /// Shows the notice when the rules allow it. With a `serverID`, the server's notification scope is checked first.
-    public func handle(_ notice: AgentNotice, serverID: UUID? = nil) {
+    /// `key` names the system notification (see `NotificationContent.key`); `risky` marks a risky approval.
+    public func handle(_ notice: AgentNotice, serverID: UUID? = nil, key: String? = nil, risky: Bool = false) {
         if let serverID, !scope(serverID).allows(notice.kind) { return }
         guard NotificationRules.shouldDeliver(
             notice, settings: settings(), windowActive: windowActive(), selectedAgentID: selectedAgentID())
         else { return }
         var content = NotificationContent.make(notice)
         content.serverID = serverID
+        content.key = key
+        content.risky = risky
         sink.post(content)
     }
 
@@ -225,6 +264,18 @@ public final class NotificationService {
         }
     }
 
+    /// The text the person typed into a question's notification. Empty text sends nothing.
+    public func handleReply(_ text: String, agentID: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        do {
+            try await reply(agentID, trimmed)
+        } catch {
+            Self.logger.error("question reply failed: \(Self.reason(of: error), privacy: .public)")
+            sink.post(NotificationContent.make(.resolveFailed(agentID: agentID)))
+        }
+    }
+
     /// The approval was answered in the app or on another device: its notification is no longer needed.
     public func approvalSettled(_ approvalID: String) {
         guard !approvalID.isEmpty else { return }
@@ -235,5 +286,27 @@ public final class NotificationService {
     static func reason(of error: Error) -> String {
         if let rpc = error as? RPCError { return "rpc code \(rpc.code)" }
         return String(describing: type(of: error))
+    }
+}
+
+extension AgentNotice {
+    /// The notice an agent event makes, if any: an approval waiting, a finished turn, or an error. A quiet turn
+    /// (`turn.quiet`) finishes without a notice. Shared by the Mac and the iPhone.
+    @MainActor
+    public static func notice(for event: Event, in server: ServerModel) -> AgentNotice? {
+        let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
+        switch event.body {
+        case .approvalRequested(let approvalID, _, let tool, let title, let command, _, _, _):
+            return .approval(
+                agentID: event.agentId, agentName: name, approvalID: approvalID, title: title, command: command,
+                reviewOnly: tool == AgentCreateSummary.tool)
+        case .turnCompleted(_, .ok, _, _):
+            if server.thread(for: event.agentId).quietTurn { return nil }
+            return .finished(agentID: event.agentId, agentName: name)
+        case .error(let message):
+            return .failed(agentID: event.agentId, agentName: name, message: message)
+        default:
+            return nil
+        }
     }
 }

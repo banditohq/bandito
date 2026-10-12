@@ -3192,5 +3192,11 @@
   "ios.activity.emptyMessage": "Finished replies and scheduled runs that had something to say show up here.",
   "ios.activity.emptyUnread": "Nothing unread.",
   "ios.activity.emptyErrors": "No errors.",
-  "ios.activity.chatSoon": "The chat with {name} opens here soon. Event {event}."
+  "ios.activity.chatSoon": "The chat with {name} opens here soon. Event {event}.",
+  "notify.wantsToRun": "{name} wants to run",
+  "notify.form": "{name} asks you to fill in a form",
+  "notify.question": "{name} waits for your answer",
+  "notify.reply": "Reply",
+  "notify.replyPlaceholder": "Message",
+  "ios.settings.notifications.background": "While the app is closed, Bandito checks now and then. Instant notifications come with a future update."
 }

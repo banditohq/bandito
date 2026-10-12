@@ -3152,5 +3152,11 @@
   "ios.activity.emptyMessage": "완료된 답변과 알릴 내용이 있었던 예약 실행이 여기에 표시됩니다.",
   "ios.activity.emptyUnread": "읽지 않은 항목이 없습니다.",
   "ios.activity.emptyErrors": "오류가 없습니다.",
-  "ios.activity.chatSoon": "{name}과의 채팅은 곧 여기서 열립니다. 이벤트 {event}."
+  "ios.activity.chatSoon": "{name}과의 채팅은 곧 여기서 열립니다. 이벤트 {event}.",
+  "notify.wantsToRun": "{name}이(가) 실행하려고 합니다",
+  "notify.form": "{name}이(가) 양식 작성을 요청했습니다",
+  "notify.question": "{name}이(가) 답변을 기다립니다",
+  "notify.reply": "답장",
+  "notify.replyPlaceholder": "메시지",
+  "ios.settings.notifications.background": "앱이 닫혀 있는 동안 Bandito는 가끔 확인합니다. 즉시 알림은 향후 업데이트와 함께 나옵니다."
 }

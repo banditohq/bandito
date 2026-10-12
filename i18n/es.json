@@ -3192,5 +3192,11 @@
   "ios.activity.emptyMessage": "Aquí aparecen las respuestas terminadas y las ejecuciones programadas que dijeron algo.",
   "ios.activity.emptyUnread": "Nada sin leer.",
   "ios.activity.emptyErrors": "Sin errores.",
-  "ios.activity.chatSoon": "El chat con {name} se abrirá aquí pronto. Evento {event}."
+  "ios.activity.chatSoon": "El chat con {name} se abrirá aquí pronto. Evento {event}.",
+  "notify.wantsToRun": "{name} quiere ejecutar",
+  "notify.form": "{name} te pide que rellenes un formulario",
+  "notify.question": "{name} espera tu respuesta",
+  "notify.reply": "Responder",
+  "notify.replyPlaceholder": "Mensaje",
+  "ios.settings.notifications.background": "Con la app cerrada, Bandito comprueba de vez en cuando. Las notificaciones instantáneas llegarán con una actualización."
 }

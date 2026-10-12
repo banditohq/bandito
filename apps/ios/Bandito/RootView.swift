@@ -14,7 +14,10 @@ struct RootView: View {
     @State private var settings = IOSSettings()
     @State private var servers = ConnectedServers.launch(demo: IOSDemo.isRequested(in: ProcessInfo.processInfo.arguments))
     @State private var appLock = AppLock()
+    /// The approval item the Inbox opens (a notification's route), cleared by the Inbox once it is open.
+    @State private var inboxFocus: String?
     private let biometrics = DeviceAuthenticator()
+    private let notifications = IOSNotifications.shared
 
     var body: some View {
         TabView(selection: $tab) {
@@ -22,7 +25,7 @@ struct RootView: View {
                 .id(dynamicTypeSize)
                 .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
                 .tag(AppTab.crew)
-            InboxScreen(servers: demoServers, settings: settings)
+            InboxScreen(servers: demoServers, settings: settings, focus: $inboxFocus)
                 .id(dynamicTypeSize)
                 .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
                 .badge(InboxRules.badge(of: demoServers))
@@ -46,18 +49,38 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             appLock.scenePhaseChanged(to: phase, enabled: settings.faceIDLock, timeout: settings.lockTimeout)
+            notifications.appActiveChanged(phase == .active)
+        }
+        .onChange(of: notifications.route) { _, route in
+            open(route)
         }
         // Accents are the brand's signal orange (a link, a menu's chevron); the tab bar itself stays cream on warm dark.
         .tint(Color.Bandito.signal)
         .task {
             appLock.start(enabled: settings.faceIDLock)
             let arguments = ProcessInfo.processInfo.arguments
+            notifications.settings = settings
             guard demoServers.isEmpty, IOSDemo.isRequested(in: arguments) else { return }
             demoServers = await IOSDemo.startServers(withTeam: !IOSDemo.isEmptyRequested(in: arguments))
+            notifications.source = StaticNotificationSource(servers: demoServers)
+            notifications.attach(demoServers)
         }
         .sheet(isPresented: $showsConnect) {
             ConnectPlaceholderSheet()
         }
+    }
+
+    /// Opens the place a notification's press leads to. A risky approval opens the Inbox on its sheet.
+    private func open(_ route: IOSNotifications.Route?) {
+        guard let route else { return }
+        switch route {
+        case .agent:
+            tab = .crew
+        case .approval(let approvalID, _):
+            inboxFocus = IOSNotifications.inboxItemID(approvalID: approvalID)
+            tab = .inbox
+        }
+        notifications.consumeRoute()
     }
 
     /// Asks for Face ID (or the passcode) and opens the app when the owner passes. Without any way to check the owner

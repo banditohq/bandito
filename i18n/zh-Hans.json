@@ -3152,5 +3152,11 @@
   "ios.activity.emptyMessage": "已完成的回复和有话要说的定时运行会显示在这里。",
   "ios.activity.emptyUnread": "没有未读内容。",
   "ios.activity.emptyErrors": "没有错误。",
-  "ios.activity.chatSoon": "与{name}的聊天即将在此打开。事件 {event}。"
+  "ios.activity.chatSoon": "与{name}的聊天即将在此打开。事件 {event}。",
+  "notify.wantsToRun": "{name} 想要执行",
+  "notify.form": "{name} 请您填写表单",
+  "notify.question": "{name} 等待您的回复",
+  "notify.reply": "回复",
+  "notify.replyPlaceholder": "消息",
+  "ios.settings.notifications.background": "应用关闭时，Bandito 会不定时检查。即时通知将随后续更新推出。"
 }

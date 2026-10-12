@@ -12,6 +12,8 @@ struct InboxScreen: View {
     let settings: IOSSettings
     /// The owner's check for risky approvals (Face ID, else the passcode).
     var authenticator: any BiometricAuthenticating = DeviceAuthenticator()
+    /// An Inbox item to open at once: a notice's route sets it (the approval's item id), and the screen clears it.
+    var focus: Binding<String?> = .constant(nil)
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The items answered here, hidden at once while the server takes the answer (the daemon's event removes them for good).
@@ -43,13 +45,26 @@ struct InboxScreen: View {
                 Button(L10n.Common.close, role: .cancel) {}
             }
         }
+        .onChange(of: focus.wrappedValue) { _, id in
+            openFocused(id, in: InboxRules.items(in: servers))
+        }
         .task(id: servers.map(\.id)) {
+            openFocused(focus.wrappedValue, in: InboxRules.items(in: servers))
             await loadUnlistedAgents()
             // The launch argument `-inbox-detail` opens the first item's sheet, for the screenshots.
             if ProcessInfo.processInfo.arguments.contains("-inbox-detail"), opened == nil {
                 opened = items.first
             }
         }
+    }
+
+    /// Opens the sheet of the focused item when it is in the list, then clears the focus (a notice's route).
+    private func openFocused(_ id: String?, in items: [InboxItem]) {
+        guard let id else { return }
+        if let item = items.first(where: { $0.id == id }) {
+            opened = item
+        }
+        focus.wrappedValue = nil
     }
 
     private func list(_ items: [InboxItem]) -> some View {

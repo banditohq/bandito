@@ -985,6 +985,7 @@
 "ios.settings.notifications.allow" = "允许通知";
 "ios.settings.notifications.answers" = "就绪的回复";
 "ios.settings.notifications.approvals" = "审批和问题";
+"ios.settings.notifications.background" = "应用关闭时，Bandito 会不定时检查。即时通知将随后续更新推出。";
 "ios.settings.notifications.denied" = "Bandito 的通知在 iOS 设置中已关闭。";
 "ios.settings.notifications.errors" = "错误";
 "ios.settings.openSettings" = "打开 iOS 设置";
@@ -1439,12 +1440,17 @@
 "notify.deny" = "拒绝";
 "notify.failed" = "%1$@：错误";
 "notify.finished" = "%1$@ 已完成";
+"notify.form" = "%1$@ 请您填写表单";
 "notify.hiddenPreview" = "打开 Bandito 查看";
 "notify.needsApproval" = "%1$@ 需要审批";
 "notify.needsYou" = "%1$@ 等待处理：%2$@";
+"notify.question" = "%1$@ 等待您的回复";
+"notify.reply" = "回复";
+"notify.replyPlaceholder" = "消息";
 "notify.resolveFailed" = "无法回复：该请求已处理或已过期";
 "notify.reviewLines" = "%1$lld 行的命令 — 请打开 Bandito 进行审查";
 "notify.reviewLong" = "较长的命令 — 请打开 Bandito 进行审查";
+"notify.wantsToRun" = "%1$@ 想要执行";
 "onboarding.account.approvalHint" = "在另一台 Mac 或 iPhone 上打开 Bandito，那里会出现一个请求。将该屏幕上显示的代码与这里的代码进行比对。";
 "onboarding.account.approvalSubtitle" = "登录已完成。要在这里使用服务器，另一台设备需要批准这台 Mac。";
 "onboarding.account.approvalTitle" = "请在另一台设备上确认这台 Mac";

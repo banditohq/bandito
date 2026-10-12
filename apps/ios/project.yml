@@ -37,6 +37,8 @@ targets:
         LSRequiresIPhoneOS: true
         NSCameraUsageDescription: Bandito uses the camera only to scan a server's pairing QR code.
         NSFaceIDUsageDescription: Bandito uses Face ID to lock the app and to confirm risky actions.
+        UIBackgroundModes: [fetch]
+        BGTaskSchedulerPermittedIdentifiers: [dev.bandito.ios.refresh]
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

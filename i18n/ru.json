@@ -3275,5 +3275,11 @@
   "ios.activity.emptyMessage": "Здесь появляются законченные ответы и запуски по расписанию, которые что-то сказали.",
   "ios.activity.emptyUnread": "Непрочитанного нет.",
   "ios.activity.emptyErrors": "Ошибок нет.",
-  "ios.activity.chatSoon": "Чат с {name} скоро откроется здесь. Событие {event}."
+  "ios.activity.chatSoon": "Чат с {name} скоро откроется здесь. Событие {event}.",
+  "notify.wantsToRun": "{name} хочет выполнить",
+  "notify.form": "{name} просит заполнить форму",
+  "notify.question": "{name} ждёт вашего ответа",
+  "notify.reply": "Ответить",
+  "notify.replyPlaceholder": "Сообщение",
+  "ios.settings.notifications.background": "Пока приложение закрыто, проверка раз в некоторое время; мгновенные уведомления появятся с обновлением."
 }

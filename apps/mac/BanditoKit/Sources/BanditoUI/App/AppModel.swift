@@ -291,23 +291,9 @@ public final class AppModel {
         }
     }
 
-    /// The notice an event makes, if any: an approval waiting, a finished turn, or an error.
+    /// The notice an event makes, if any (`AgentNotice.notice(for:in:)`, shared with the iPhone).
     static func notice(for event: Event, in server: ServerModel) -> AgentNotice? {
-        let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
-        switch event.body {
-        case .approvalRequested(let approvalID, _, let tool, let title, let command, _, _, _):
-            return .approval(
-                agentID: event.agentId, agentName: name, approvalID: approvalID, title: title, command: command,
-                reviewOnly: tool == AgentCreateSummary.tool)
-        case .turnCompleted(_, .ok, _, _):
-            // A quiet turn finishes without a notice.
-            if server.thread(for: event.agentId).quietTurn { return nil }
-            return .finished(agentID: event.agentId, agentName: name)
-        case .error(let message):
-            return .failed(agentID: event.agentId, agentName: name, message: message)
-        default:
-            return nil
-        }
+        AgentNotice.notice(for: event, in: server)
     }
 
     /// Marks the saved servers that are this Mac's daemon but were saved before the flag existed

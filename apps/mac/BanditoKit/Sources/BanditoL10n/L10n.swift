@@ -1430,6 +1430,7 @@ public enum L10n {
                 public static var allow: String { L10n.tr("ios.settings.notifications.allow") }
                 public static var answers: String { L10n.tr("ios.settings.notifications.answers") }
                 public static var approvals: String { L10n.tr("ios.settings.notifications.approvals") }
+                public static var background: String { L10n.tr("ios.settings.notifications.background") }
                 public static var denied: String { L10n.tr("ios.settings.notifications.denied") }
                 public static var errors: String { L10n.tr("ios.settings.notifications.errors") }
             }
@@ -2080,12 +2081,17 @@ public enum L10n {
         public static var deny: String { L10n.tr("notify.deny") }
         public static func failed(name: String) -> String { L10n.tr("notify.failed", name) }
         public static func finished(name: String) -> String { L10n.tr("notify.finished", name) }
+        public static func form(name: String) -> String { L10n.tr("notify.form", name) }
         public static var hiddenPreview: String { L10n.tr("notify.hiddenPreview") }
         public static func needsApproval(name: String) -> String { L10n.tr("notify.needsApproval", name) }
         public static func needsYou(name: String, title: String) -> String { L10n.tr("notify.needsYou", name, title) }
+        public static func question(name: String) -> String { L10n.tr("notify.question", name) }
+        public static var reply: String { L10n.tr("notify.reply") }
+        public static var replyPlaceholder: String { L10n.tr("notify.replyPlaceholder") }
         public static var resolveFailed: String { L10n.tr("notify.resolveFailed") }
         public static func reviewLines(count: Int) -> String { L10n.tr("notify.reviewLines", count) }
         public static var reviewLong: String { L10n.tr("notify.reviewLong") }
+        public static func wantsToRun(name: String) -> String { L10n.tr("notify.wantsToRun", name) }
     }
 
     public enum Onboarding {

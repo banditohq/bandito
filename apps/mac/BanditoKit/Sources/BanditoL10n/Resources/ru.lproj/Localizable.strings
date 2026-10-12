@@ -985,6 +985,7 @@
 "ios.settings.notifications.allow" = "Разрешить уведомления";
 "ios.settings.notifications.answers" = "Готовые ответы";
 "ios.settings.notifications.approvals" = "Одобрения и вопросы";
+"ios.settings.notifications.background" = "Пока приложение закрыто, проверка раз в некоторое время; мгновенные уведомления появятся с обновлением.";
 "ios.settings.notifications.denied" = "Уведомления для Bandito выключены в настройках iOS.";
 "ios.settings.notifications.errors" = "Ошибки";
 "ios.settings.openSettings" = "Открыть настройки iOS";
@@ -1439,12 +1440,17 @@
 "notify.deny" = "Отклонить";
 "notify.failed" = "%1$@: ошибка";
 "notify.finished" = "%1$@ закончил";
+"notify.form" = "%1$@ просит заполнить форму";
 "notify.hiddenPreview" = "Откройте Bandito, чтобы посмотреть";
 "notify.needsApproval" = "%1$@ ждёт одобрения";
 "notify.needsYou" = "%1$@ ждёт вас: %2$@";
+"notify.question" = "%1$@ ждёт вашего ответа";
+"notify.reply" = "Ответить";
+"notify.replyPlaceholder" = "Сообщение";
 "notify.resolveFailed" = "Не удалось: запрос уже решён или устарел";
 "notify.reviewLines" = "Команда из %1$lld строк — откройте, чтобы проверить";
 "notify.reviewLong" = "Длинная команда — откройте, чтобы проверить";
+"notify.wantsToRun" = "%1$@ хочет выполнить";
 "onboarding.account.approvalHint" = "Откройте Bandito на другом Mac или iPhone: там появится запрос. Сверьте код на том экране с этим.";
 "onboarding.account.approvalSubtitle" = "Вход выполнен. Чтобы пользоваться серверами здесь, одно из ваших устройств должно подтвердить этот Mac.";
 "onboarding.account.approvalTitle" = "Подтвердите этот Mac на другом устройстве";

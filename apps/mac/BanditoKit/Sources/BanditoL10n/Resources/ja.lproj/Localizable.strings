@@ -985,6 +985,7 @@
 "ios.settings.notifications.allow" = "通知を許可";
 "ios.settings.notifications.answers" = "完了した返信";
 "ios.settings.notifications.approvals" = "承認と質問";
+"ios.settings.notifications.background" = "アプリを閉じている間、Bandito は時々確認します。即時の通知は今後のアップデートで届きます。";
 "ios.settings.notifications.denied" = "Bandito の通知は iOS の設定でオフになっています。";
 "ios.settings.notifications.errors" = "エラー";
 "ios.settings.openSettings" = "iOS の設定を開く";
@@ -1439,12 +1440,17 @@
 "notify.deny" = "拒否";
 "notify.failed" = "%1$@: エラー";
 "notify.finished" = "%1$@ が完了しました";
+"notify.form" = "%1$@ がフォームへの入力を求めています";
 "notify.hiddenPreview" = "Bandito を開いて確認してください";
 "notify.needsApproval" = "%1$@ の承認が必要です";
 "notify.needsYou" = "%1$@ があなたを待っています: %2$@";
+"notify.question" = "%1$@ が回答を待っています";
+"notify.reply" = "返信";
+"notify.replyPlaceholder" = "メッセージ";
 "notify.resolveFailed" = "応答できませんでした。リクエストはすでに処理済みか、古くなっています";
 "notify.reviewLines" = "%1$lld 行のコマンド — Bandito を開いて確認してください";
 "notify.reviewLong" = "長いコマンド — Bandito を開いて確認してください";
+"notify.wantsToRun" = "%1$@ が実行しようとしています";
 "onboarding.account.approvalHint" = "別の Mac または iPhone で Bandito を開いてください。そこにリクエストが表示されます。その画面のコードとこのコードを見比べてください。";
 "onboarding.account.approvalSubtitle" = "サインインは完了しています。ここでサーバーを使うには、お持ちの別のデバイスでこの Mac を承認する必要があります。";
 "onboarding.account.approvalTitle" = "別のデバイスでこの Mac を確認してください";

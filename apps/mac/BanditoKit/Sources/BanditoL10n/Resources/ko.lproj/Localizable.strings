@@ -985,6 +985,7 @@
 "ios.settings.notifications.allow" = "알림 허용";
 "ios.settings.notifications.answers" = "준비된 답변";
 "ios.settings.notifications.approvals" = "승인 및 질문";
+"ios.settings.notifications.background" = "앱이 닫혀 있는 동안 Bandito는 가끔 확인합니다. 즉시 알림은 향후 업데이트와 함께 나옵니다.";
 "ios.settings.notifications.denied" = "Bandito 알림이 iOS 설정에서 꺼져 있습니다.";
 "ios.settings.notifications.errors" = "오류";
 "ios.settings.openSettings" = "iOS 설정 열기";
@@ -1439,12 +1440,17 @@
 "notify.deny" = "거부";
 "notify.failed" = "%1$@: 오류";
 "notify.finished" = "%1$@이(가) 끝났어요";
+"notify.form" = "%1$@이(가) 양식 작성을 요청했습니다";
 "notify.hiddenPreview" = "Bandito를 열어서 확인하세요";
 "notify.needsApproval" = "%1$@에게 승인이 필요해요";
 "notify.needsYou" = "%1$@이(가) 나를 기다려요: %2$@";
+"notify.question" = "%1$@이(가) 답변을 기다립니다";
+"notify.reply" = "답장";
+"notify.replyPlaceholder" = "메시지";
 "notify.resolveFailed" = "응답할 수 없었어요. 요청이 이미 처리됐거나 오래됐어요";
 "notify.reviewLines" = "%1$lld줄짜리 명령이에요 — Bandito를 열어 검토해 주세요";
 "notify.reviewLong" = "긴 명령이에요 — Bandito를 열어 검토해 주세요";
+"notify.wantsToRun" = "%1$@이(가) 실행하려고 합니다";
 "onboarding.account.approvalHint" = "다른 Mac이나 iPhone에서 Bandito를 여세요. 그곳에 요청이 나타나요. 그 화면의 코드와 이 코드를 비교해 주세요.";
 "onboarding.account.approvalSubtitle" = "로그인은 끝났어요. 여기에서 서버를 사용하려면 다른 기기에서 이 Mac을 승인해야 해요.";
 "onboarding.account.approvalTitle" = "다른 기기에서 이 Mac을 확인해 주세요";

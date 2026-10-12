@@ -3152,5 +3152,11 @@
   "ios.activity.emptyMessage": "完了した返信と、何か知らせたスケジュール実行がここに表示されます。",
   "ios.activity.emptyUnread": "未読はありません。",
   "ios.activity.emptyErrors": "エラーはありません。",
-  "ios.activity.chatSoon": "{name}とのチャットはまもなくここで開きます。イベント {event}。"
+  "ios.activity.chatSoon": "{name}とのチャットはまもなくここで開きます。イベント {event}。",
+  "notify.wantsToRun": "{name} が実行しようとしています",
+  "notify.form": "{name} がフォームへの入力を求めています",
+  "notify.question": "{name} が回答を待っています",
+  "notify.reply": "返信",
+  "notify.replyPlaceholder": "メッセージ",
+  "ios.settings.notifications.background": "アプリを閉じている間、Bandito は時々確認します。即時の通知は今後のアップデートで届きます。"
 }

@@ -106,8 +106,11 @@ struct SettingsTab: View {
         } header: {
             sectionHeader(L10n.Ios.Settings.Header.notifications)
         } footer: {
-            if permission == .denied {
-                footnote(L10n.Ios.Settings.Notifications.denied)
+            VStack(alignment: .leading, spacing: BanditoSpace.s1) {
+                footnote(L10n.Ios.Settings.Notifications.background)
+                if permission == .denied {
+                    footnote(L10n.Ios.Settings.Notifications.denied)
+                }
             }
         }
     }
