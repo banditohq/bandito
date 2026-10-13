@@ -9,6 +9,8 @@ enum PairProblem: Equatable {
     case failure(PairFailure)
     /// The Keychain refused the token: the device was disconnected again on the server.
     case saveKey
+    /// The server shares a certificate or key with one already here, but is not that server.
+    case differentServer
 }
 
 /// Where a link came from. Every one is shown and confirmed before anything is sent (a code on a poster, or a link
@@ -183,7 +185,7 @@ final class PairModel {
                     try self.session.add(paired.config)
                 } catch {
                     await revoke(paired)
-                    self.phase = .failed(.saveKey, back: back)
+                    self.phase = .failed((error as? ServerSession.SessionError) == .differentServer ? .differentServer : .saveKey, back: back)
                     return
                 }
                 self.phase = .done(serverID: paired.config.id, name: paired.config.name, route: paired.route)

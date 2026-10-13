@@ -1003,6 +1003,7 @@
 "ios.connect.error.cloudLimit" = "Bandito クラウドの月間上限に達しました。Tailscale か Mac と同じネットワークで接続してください。";
 "ios.connect.error.cloudUnreachable" = "Bandito クラウドに接続できません。iPhone のインターネット接続を確認して、もう一度お試しください。";
 "ios.connect.error.codeRejected" = "サーバーがコードを受け付けませんでした。期限切れ（有効 10 分）か、使用済みの可能性があります。Mac で「iPhone を接続」→「新しいコード」を実行してください。";
+"ios.connect.error.differentServer" = "同じ証明書を持つ別のサーバーのため、何も追加・置き換えされませんでした。以前のサーバーが不要な場合は、先に設定で切断してください。";
 "ios.connect.error.generic" = "接続できませんでした。もう一度お試しください。";
 "ios.connect.error.mismatch" = "このアドレスのサーバーは、リンクにあるものとは別の証明書を提示しました。別の誰かが応答している可能性があります。何も送信していません。サーバーの証明書を自分でリセットした場合は、Mac で新しい QR コードを作成してください。";
 "ios.connect.error.mismatchTitle" = "これはペアリングしたサーバーではありません";
@@ -1978,7 +1979,7 @@
 "phoneWizard.done.action" = "完了";
 "phoneWizard.done.body" = "「%1$@」は Bandito クラウド経由で「%2$@」に接続されました。";
 "phoneWizard.done.title" = "完了しました。iPhone を接続しました";
-"phoneWizard.install" = "アプリがない場合は、TestFlight から Bandito をインストール";
+"phoneWizard.install" = "iPhone 版 Bandito は現在クローズドテスト中です。招待をご希望の方はご連絡ください";
 "phoneWizard.noServer" = "クラウドで動作できる接続済みサーバーがありません。サーバーを接続するか、更新してください。";
 "phoneWizard.pick.hint" = "iPhone は Bandito クラウド経由で、どのネットワークからでもこのサーバーに接続します。";
 "phoneWizard.pick.title" = "iPhone をどのサーバーに接続しますか？";

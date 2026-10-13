@@ -28,6 +28,8 @@ struct PairProblemText: Equatable {
             }
         case .saveKey:
             self.init(message: L10n.Ios.Connect.Error.saveKey)
+        case .differentServer:
+            self.init(title: L10n.Ios.Connect.Error.mismatchTitle, message: L10n.Ios.Connect.Error.differentServer, isAlarm: true)
         }
     }
 

@@ -3406,7 +3406,7 @@
   "phoneWizard.preparing": "正在准备连接…",
   "phoneWizard.via": "通过 Bandito 云连接",
   "phoneWizard.waiting": "正在等待 iPhone 连接…",
-  "phoneWizard.install": "还没有应用？请从 TestFlight 安装 Bandito",
+  "phoneWizard.install": "iPhone 版 Bandito 目前处于封闭测试：请给我们写信以获取邀请",
   "phoneWizard.done.title": "完成，iPhone 已连接",
   "phoneWizard.done.body": "“{device}”已通过 Bandito 云连接到“{server}”。",
   "phoneWizard.done.action": "完成",
@@ -3426,5 +3426,6 @@
   "ios.connect.error.offline": "服务器不在线。请检查 Mac 是否开机且 Bandito 正在运行。",
   "ios.connect.error.cloudLimit": "已达到 Bandito 云的月上限。请通过 Tailscale 或与 Mac 相同的网络连接。",
   "ios.connect.error.cloudKey": "这不是正确的服务器：链接中的密钥不匹配。请在 Mac 上生成新的二维码。",
-  "ios.connect.error.cloudUnreachable": "无法连接到 Bandito 云。请检查 iPhone 的网络连接后重试。"
+  "ios.connect.error.cloudUnreachable": "无法连接到 Bandito 云。请检查 iPhone 的网络连接后重试。",
+  "ios.connect.error.differentServer": "这是使用相同证书的另一台服务器，因此没有添加或替换任何内容。如果不再需要旧服务器，请先在设置中断开它。"
 }

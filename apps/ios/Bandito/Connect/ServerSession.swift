@@ -132,9 +132,10 @@ final class ServerSession {
         }
     }
 
-    /// Keeps a paired server: the token first (a server that could not keep its key is not kept at all), then the
-    /// list. A server with the same certificate is the same server paired again: it keeps its place and its id, and
-    /// gets the new token.
+    /// Keeps a paired server: the token and the relay key first (a server that could not keep both is not kept at all, and
+    /// a server paired again keeps its old token and key as they were), then the list. The same server paired again (every
+    /// identifier it shares agrees: certificate, Noise key) keeps its place and its id, and gets the new token. Another
+    /// server behind the same certificate or key is refused (`SessionError.differentServer`), never replaced.
     func add(_ config: ServerConfig) throws {
         guard let token = config.token, !token.isEmpty else { throw SessionError.noToken }
         // The saved list is read before it is written to; one that cannot be read yet is not written over.
@@ -142,19 +143,23 @@ final class ServerSession {
         guard loaded else { throw SessionError.notReady }
         var config = config
         var replaced: UUID?
+        if servers.contains(where: { config.endpoint.conflicts(with: $0.config.endpoint) }) { throw SessionError.differentServer }
         if let same = servers.first(where: { config.endpoint.isSameServer(as: $0.config.endpoint) }) {
             config.id = same.id
             replaced = same.id
         }
-        // The token first: when the Keychain refuses it, nothing else changes (an old server stays as it was).
+        // The token and the key first. When the Keychain refuses either, both go back to what they were: a new token
+        // with an old key (or a key without its token) would only fail later, and an old server stays as it was.
+        let tokenAccount = config.id.uuidString
+        let keyAccount = Self.noiseAccount(config.id)
+        let oldToken = (try? secrets.load(account: tokenAccount)).flatMap { $0 }
+        let oldKey = (try? secrets.load(account: keyAccount)).flatMap { $0 }
         do {
-            try secrets.save(Data(token.utf8), account: config.id.uuidString)
-            if let noise = config.noiseSecret {
-                try secrets.save(Data(noise.utf8), account: Self.noiseAccount(config.id))
-            }
+            try secrets.save(Data(token.utf8), account: tokenAccount)
+            try secrets.save(config.noiseSecret.map { Data($0.utf8) }, account: keyAccount)
         } catch {
-            // Neither half stays: a token without its key (or the other way round) would only fail later.
-            try? secrets.save(nil, account: Self.noiseAccount(config.id))
+            try? secrets.save(oldToken, account: tokenAccount)
+            try? secrets.save(oldKey, account: keyAccount)
             throw SessionError.keychain
         }
         if let replaced { drop(replaced) }
@@ -254,6 +259,8 @@ final class ServerSession {
         case noToken
         /// The Keychain refused the token.
         case keychain
+        /// Another server already here has the same certificate (or key) but not the same other identifier.
+        case differentServer
         /// The saved list could not be read yet (the phone is locked since its restart).
         case notReady
     }

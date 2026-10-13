@@ -52,6 +52,11 @@ import Testing
         let direct = ServerEndpoint.direct(hosts: ["10.0.0.2:7879"], fingerprint: Self.fp)
         #expect(cloudOnly.isSameServer(as: both) && both.isSameServer(as: direct) && direct.isSameServer(as: both))
         #expect(!cloudOnly.isSameServer(as: direct))
+        // Every identifier both have must agree: the same certificate behind another Noise key is another server.
+        let otherKey = ServerEndpoint.reachable(
+            hosts: ["10.0.0.2:7879"], fingerprint: Self.fp, relay: route, noiseKey: Base64URL.encode(Data(repeating: 9, count: 32)))
+        #expect(!both.isSameServer(as: otherKey) && both.conflicts(with: otherKey) && otherKey.conflicts(with: both))
+        #expect(!both.conflicts(with: direct) && !cloudOnly.conflicts(with: direct) && !both.conflicts(with: cloudOnly))
         #expect(!direct.isSameServer(as: .direct(hosts: ["x:1"], fingerprint: String(repeating: "cd", count: 32))))
     }
 
@@ -112,6 +117,8 @@ final class FakeRelayHost: RelayHost {
     var enabled: [(String, String, String)] = []
     var disabledCount = 0
     var enableError: Error?
+    /// The daemon takes the registration but the answer is lost: `relayEnable` throws after the status changed.
+    var takesThenThrows = false
     /// Statuses the daemon reports after enabling, one per read; the last repeats.
     var afterEnable: [RelayStatus] = [RelayStatus(enabled: true, connected: true, sid: "abcdefghijklmnopqrstuvwxyz", relayUrl: "wss://r")]
 
@@ -123,6 +130,10 @@ final class FakeRelayHost: RelayHost {
         return status
     }
     func relayEnable(url: String, sid: String, secret: String) async throws -> RelayStatus {
+        if takesThenThrows {
+            status = RelayStatus(enabled: true, connected: true, sid: sid, relayUrl: url)
+            throw RPCError(code: RPCError.timedOut, message: "no answer")
+        }
         if let enableError { throw enableError }
         enabled.append((url, sid, secret))
         status = afterEnable[0]
@@ -196,6 +207,48 @@ actor FakeRegistrar: RelayRegistrar {
         #expect(await controller.enable() == false)
         #expect(await registrar.deleted == ["abcdefghijklmnopqrstuvwxyz"])
         if case .daemon? = controller.problem {} else { Issue.record("a daemon problem") }
+    }
+
+    @Test func aLostAnswerOfEnableDoesNotDeleteARegistrationTheDaemonTook() async {
+        let host = FakeRelayHost()
+        host.takesThenThrows = true
+        let registrar = FakeRegistrar()
+        let controller = make(host, registrar)
+        #expect(await controller.enable())
+        #expect(await registrar.deleted.isEmpty)
+        #expect(controller.isConnected && controller.problem == nil)
+    }
+
+    @Test func aCloudThatIsOnButNeverConnectsIsReplacedByANewRegistration() async {
+        let host = FakeRelayHost()
+        host.status = RelayStatus(enabled: true, connected: false, sid: "oldoldoldoldoldoldoldoldol")
+        let registrar = FakeRegistrar()
+        let controller = make(host, registrar, timeout: .milliseconds(80))
+        #expect(await controller.enable())
+        #expect(host.disabledCount == 1)
+        #expect(await registrar.deleted == ["oldoldoldoldoldoldoldoldol"])
+        #expect(await registrar.registered == ["Studio"] && host.enabled.count == 1)
+        #expect(controller.isConnected)
+    }
+
+    @Test func aStaleCloudWithoutAnAccountIsLeftAloneAndReported() async {
+        let host = FakeRelayHost()
+        host.status = RelayStatus(enabled: true, connected: false, sid: "oldoldoldoldoldoldoldoldol")
+        let controller = make(host, nil, timeout: .milliseconds(50))
+        #expect(await controller.enable() == false)
+        #expect(host.disabledCount == 0 && controller.problem == .notConnected(reason: nil))
+    }
+
+    @Test func disablingDeletesTheRegistrationTheDaemonHoldsNow() async {
+        let host = FakeRelayHost()
+        host.status = RelayStatus(enabled: true, connected: true, sid: "abcdefghijklmnopqrstuvwxyz")
+        let registrar = FakeRegistrar()
+        let controller = make(host, registrar)
+        await controller.refresh()
+        // The daemon moved to another registration after the last read.
+        host.status = RelayStatus(enabled: true, connected: true, sid: "newnewnewnewnewnewnewnewne")
+        #expect(await controller.disable())
+        #expect(await registrar.deleted == ["newnewnewnewnewnewnewnewne"])
     }
 
     @Test func tooManyServersIsTheAccountsAnswer() async {

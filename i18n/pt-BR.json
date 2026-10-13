@@ -3448,7 +3448,7 @@
   "phoneWizard.preparing": "Preparando a conexão…",
   "phoneWizard.via": "Conexão pela nuvem do Bandito",
   "phoneWizard.waiting": "Aguardando o iPhone se conectar…",
-  "phoneWizard.install": "Ainda sem o app? Instale o Bandito pelo TestFlight",
+  "phoneWizard.install": "O Bandito para iPhone está por enquanto em teste fechado: escreva para nós e receba um convite",
   "phoneWizard.done.title": "Pronto, o iPhone está conectado",
   "phoneWizard.done.body": "“{device}” está conectado a “{server}” pela nuvem do Bandito.",
   "phoneWizard.done.action": "Concluir",
@@ -3468,5 +3468,6 @@
   "ios.connect.error.offline": "O servidor está offline. Verifique se o Mac está ligado e se o Bandito está em execução.",
   "ios.connect.error.cloudLimit": "O limite mensal da nuvem do Bandito foi atingido. Conecte pelo Tailscale ou na mesma rede do Mac.",
   "ios.connect.error.cloudKey": "Este não é o servidor certo: a chave do link não confere. Gere um novo QR code no Mac.",
-  "ios.connect.error.cloudUnreachable": "Não foi possível alcançar a nuvem do Bandito. Verifique a internet do iPhone e tente de novo."
+  "ios.connect.error.cloudUnreachable": "Não foi possível alcançar a nuvem do Bandito. Verifique a internet do iPhone e tente de novo.",
+  "ios.connect.error.differentServer": "É um servidor diferente com o mesmo certificado, então nada foi adicionado ou substituído. Se o servidor antigo não for mais necessário, desconecte-o antes em Ajustes."
 }

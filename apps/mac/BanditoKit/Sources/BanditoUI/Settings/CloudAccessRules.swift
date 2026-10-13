@@ -79,6 +79,6 @@ enum CloudAccessRules {
 
 /// Where a person without the iPhone app gets it.
 enum IPhoneApp {
-    /// The TestFlight invitation of the closed beta.
-    static let testFlight = URL(string: "https://bandito.dev")!
+    /// The iPhone app is in closed testing: until there is a public TestFlight link, a letter asks for an invitation.
+    static let requestInvite = URL(string: "mailto:hello@bandito.dev?subject=Bandito%20for%20iPhone")!
 }

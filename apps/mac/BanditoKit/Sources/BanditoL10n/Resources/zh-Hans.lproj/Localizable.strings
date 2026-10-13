@@ -1003,6 +1003,7 @@
 "ios.connect.error.cloudLimit" = "已达到 Bandito 云的月上限。请通过 Tailscale 或与 Mac 相同的网络连接。";
 "ios.connect.error.cloudUnreachable" = "无法连接到 Bandito 云。请检查 iPhone 的网络连接后重试。";
 "ios.connect.error.codeRejected" = "服务器不接受此代码。它可能已过期（有效期 10 分钟）或已被使用。请在 Mac 上重新生成：连接 iPhone → 新代码。";
+"ios.connect.error.differentServer" = "这是使用相同证书的另一台服务器，因此没有添加或替换任何内容。如果不再需要旧服务器，请先在设置中断开它。";
 "ios.connect.error.generic" = "无法连接。请重试。";
 "ios.connect.error.mismatch" = "此地址上的服务器出示的证书与链接中的不同，可能是别人在应答。没有发送任何内容。如果你自己重置了服务器证书，请在 Mac 上重新生成二维码。";
 "ios.connect.error.mismatchTitle" = "这不是你配对的服务器";
@@ -1978,7 +1979,7 @@
 "phoneWizard.done.action" = "完成";
 "phoneWizard.done.body" = "“%1$@”已通过 Bandito 云连接到“%2$@”。";
 "phoneWizard.done.title" = "完成，iPhone 已连接";
-"phoneWizard.install" = "还没有应用？请从 TestFlight 安装 Bandito";
+"phoneWizard.install" = "iPhone 版 Bandito 目前处于封闭测试：请给我们写信以获取邀请";
 "phoneWizard.noServer" = "没有可通过云工作的已连接服务器。请连接服务器或更新它。";
 "phoneWizard.pick.hint" = "iPhone 将通过 Bandito 云从任何网络连接到它。";
 "phoneWizard.pick.title" = "iPhone 要连接到哪台服务器？";

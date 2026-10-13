@@ -3533,7 +3533,7 @@
   "phoneWizard.preparing": "Готовлю подключение…",
   "phoneWizard.via": "Подключение через облако Bandito",
   "phoneWizard.waiting": "Жду, пока iPhone подключится…",
-  "phoneWizard.install": "Нет приложения? Установите Bandito из TestFlight",
+  "phoneWizard.install": "Bandito для iPhone пока в закрытом тестировании: напишите нам, чтобы получить приглашение",
   "phoneWizard.done.title": "Готово, iPhone подключён",
   "phoneWizard.done.body": "«{device}» подключён к «{server}» через облако Bandito.",
   "phoneWizard.done.action": "Готово",
@@ -3553,5 +3553,6 @@
   "ios.connect.error.offline": "Сервер не в сети. Проверьте, что Mac включён и Bandito на нём запущен.",
   "ios.connect.error.cloudLimit": "Достигнут месячный лимит облака Bandito. Подключитесь по Tailscale или в одной сети с Mac.",
   "ios.connect.error.cloudKey": "Это не тот сервер: ключ из ссылки не подошёл. Сделайте на Mac новый QR-код.",
-  "ios.connect.error.cloudUnreachable": "Не удалось связаться с облаком Bandito. Проверьте интернет на iPhone и попробуйте снова."
+  "ios.connect.error.cloudUnreachable": "Не удалось связаться с облаком Bandito. Проверьте интернет на iPhone и попробуйте снова.",
+  "ios.connect.error.differentServer": "Это другой сервер с тем же сертификатом, поэтому ничего не добавлено и не заменено. Если прежний сервер больше не нужен, сначала отключите его в настройках."
 }

@@ -1003,6 +1003,7 @@
 "ios.connect.error.cloudLimit" = "The monthly limit of the Bandito cloud is reached. Connect over Tailscale or on the same network as the Mac.";
 "ios.connect.error.cloudUnreachable" = "Could not reach the Bandito cloud. Check the iPhone’s internet connection and try again.";
 "ios.connect.error.codeRejected" = "The server did not accept the code. It may have run out (codes last 10 minutes) or been used already. Make a new one on the Mac: Connect iPhone → New code.";
+"ios.connect.error.differentServer" = "This is a different server with the same certificate, so nothing was added or replaced. If the old server is no longer needed, disconnect it in Settings first.";
 "ios.connect.error.generic" = "Could not connect. Try again.";
 "ios.connect.error.mismatch" = "The server at this address showed a different certificate than the one in the link. Someone else may be answering. Nothing was sent. If you reset the server’s certificate yourself, make a new QR code on the Mac.";
 "ios.connect.error.mismatchTitle" = "This is not the server you paired";
@@ -1978,7 +1979,7 @@
 "phoneWizard.done.action" = "Done";
 "phoneWizard.done.body" = "“%1$@” is connected to “%2$@” through the Bandito cloud.";
 "phoneWizard.done.title" = "Done, the iPhone is connected";
-"phoneWizard.install" = "No app yet? Install Bandito from TestFlight";
+"phoneWizard.install" = "Bandito for iPhone is in closed testing for now: write to us to get an invitation";
 "phoneWizard.noServer" = "There is no connected server that can work through the cloud. Connect a server or update it.";
 "phoneWizard.pick.hint" = "The iPhone will reach it through the Bandito cloud, from any network.";
 "phoneWizard.pick.title" = "Which server should the iPhone connect to?";

@@ -187,12 +187,18 @@ public struct NoiseInitiator {
     }
 
     static func dh(_ private_: Curve25519.KeyAgreement.PrivateKey, _ public_: Curve25519.KeyAgreement.PublicKey) throws -> Data {
+        let shared: Data
         do {
             let secret = try private_.sharedSecretFromKeyAgreement(with: public_)
-            return secret.withUnsafeBytes { Data($0) }
+            shared = secret.withUnsafeBytes { Data($0) }
         } catch {
-            throw NoiseError.badKey
+            throw NoiseError.handshakeFailed
         }
+        // A low-order point (all-zero output) would give both sides a key an eavesdropper can guess: refused.
+        var accumulated: UInt8 = 0
+        for byte in shared { accumulated |= byte }
+        guard accumulated != 0 else { throw NoiseError.handshakeFailed }
+        return shared
     }
 }
 

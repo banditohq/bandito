@@ -138,4 +138,25 @@ import Testing
         #expect(throws: NoiseError.self) { try bad.push(Data([2, 1])) }
         #expect(throws: NoiseError.self) { try bad.push(Data()) }
     }
+
+    @Test func aLowOrderPointNeverGivesAKey() throws {
+        let v = try Self.load()
+        let low: [Data] = [
+            Data(count: 32),
+            Data([1] + [UInt8](repeating: 0, count: 31)),
+            try #require(Data(hex: "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800")),
+            try #require(Data(hex: "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157")),
+        ]
+        for point in low {
+            // A daemon key that is a low-order point: the first message cannot be written.
+            var initiator = try NoiseInitiator(staticKey: try key(v.initiatorStaticPrivate), remoteStatic: point)
+            #expect(throws: NoiseError.handshakeFailed) { _ = try initiator.writeMessage1(payload: Data("{}".utf8)) }
+            // An answer whose ephemeral key is a low-order point is refused, whatever follows.
+            var again = try NoiseInitiator(
+                staticKey: try key(v.initiatorStaticPrivate), remoteStatic: try #require(Data(hex: v.responderStaticPublic)),
+                ephemeral: try key(v.initiatorEphemeralPrivate))
+            _ = try again.writeMessage1(payload: try #require(Data(hex: v.message1Payload)))
+            #expect(throws: NoiseError.handshakeFailed) { _ = try again.readMessage2(point + Data(count: 32)) }
+        }
+    }
 }

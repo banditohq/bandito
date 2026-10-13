@@ -1483,6 +1483,7 @@ public enum L10n {
                 public static var cloudLimit: String { L10n.tr("ios.connect.error.cloudLimit") }
                 public static var cloudUnreachable: String { L10n.tr("ios.connect.error.cloudUnreachable") }
                 public static var codeRejected: String { L10n.tr("ios.connect.error.codeRejected") }
+                public static var differentServer: String { L10n.tr("ios.connect.error.differentServer") }
                 public static var generic: String { L10n.tr("ios.connect.error.generic") }
                 public static var mismatch: String { L10n.tr("ios.connect.error.mismatch") }
                 public static var mismatchTitle: String { L10n.tr("ios.connect.error.mismatchTitle") }

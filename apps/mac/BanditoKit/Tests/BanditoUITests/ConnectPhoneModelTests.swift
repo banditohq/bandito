@@ -35,7 +35,11 @@ final class WizardServer: PhoneWizardServer {
         codes += 1
         return PairCode(code: "otter-lava-mint-orbit-crane-fig", expiresInMs: codeLifetimeMs, link: link)
     }
-    func wizardDevices() async throws -> [Device] { devices }
+    var devicesFail = false
+    func wizardDevices() async throws -> [Device] {
+        if devicesFail { throw RPCError(code: RPCError.disconnected, message: "x") }
+        return devices
+    }
 }
 
 actor WizardRegistrar: RelayRegistrar {
@@ -139,6 +143,29 @@ actor WizardRegistrar: RelayRegistrar {
         try? await Task.sleep(for: .milliseconds(100))
         if case .done = wizard.step { Issue.record("the Mac must not count") }
         wizard.cancel()
+    }
+
+    @Test func theBaselineIsTakenOnceEvenWhenTheServerHadNoDevices() async {
+        let server = WizardServer(name: "Studio")
+        server.devices = []
+        server.codeLifetimeMs = 2_100
+        let wizard = model([server])
+        wizard.start()
+        #expect(await wait(wizard) { $0 == .scan(.expired) })
+        // A phone shows up while no code is shown; the next code must not take it into the baseline.
+        server.devices.append(Device(id: "phone", name: "iPhone", createdAt: 2, lastSeenAt: nil, current: nil, platform: "ios"))
+        wizard.newCode()
+        #expect(await wait(wizard) { $0 == .done(device: "iPhone") })
+    }
+
+    @Test func aServerThatCannotListItsDevicesStopsTheWizardBeforeAnythingIsChanged() async {
+        let server = WizardServer(name: "Studio")
+        server.status = .off
+        server.devicesFail = true
+        let wizard = model([server])
+        wizard.start()
+        #expect(await wait(wizard) { if case .problem = $0 { true } else { false } })
+        #expect(server.enableCalls == 0)
     }
 
     @Test func closingTheWizardStopsTheWatch() async {

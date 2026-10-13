@@ -3448,7 +3448,7 @@
   "phoneWizard.preparing": "Préparation de la connexion…",
   "phoneWizard.via": "Connexion via le cloud Bandito",
   "phoneWizard.waiting": "En attente de la connexion de l’iPhone…",
-  "phoneWizard.install": "Pas encore l’app ? Installez Bandito depuis TestFlight",
+  "phoneWizard.install": "Bandito pour iPhone est pour l’instant en test fermé : écrivez-nous pour recevoir une invitation",
   "phoneWizard.done.title": "Terminé, l’iPhone est connecté",
   "phoneWizard.done.body": "« {device} » est connecté à « {server} » via le cloud Bandito.",
   "phoneWizard.done.action": "Terminé",
@@ -3468,5 +3468,6 @@
   "ios.connect.error.offline": "Le serveur est hors ligne. Vérifiez que le Mac est allumé et que Bandito y tourne.",
   "ios.connect.error.cloudLimit": "La limite mensuelle du cloud Bandito est atteinte. Connectez-vous via Tailscale ou sur le même réseau que le Mac.",
   "ios.connect.error.cloudKey": "Ce n’est pas le bon serveur : la clé du lien ne correspond pas. Générez un nouveau QR code sur le Mac.",
-  "ios.connect.error.cloudUnreachable": "Impossible de joindre le cloud Bandito. Vérifiez la connexion internet de l’iPhone et réessayez."
+  "ios.connect.error.cloudUnreachable": "Impossible de joindre le cloud Bandito. Vérifiez la connexion internet de l’iPhone et réessayez.",
+  "ios.connect.error.differentServer": "C’est un autre serveur avec le même certificat : rien n’a été ajouté ni remplacé. Si l’ancien serveur ne sert plus, déconnectez-le d’abord dans les Réglages."
 }

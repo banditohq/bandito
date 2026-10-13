@@ -1003,6 +1003,7 @@
 "ios.connect.error.cloudLimit" = "Se alcanzó el límite mensual de la nube de Bandito. Conéctate por Tailscale o en la misma red que el Mac.";
 "ios.connect.error.cloudUnreachable" = "No se pudo conectar con la nube de Bandito. Comprueba la conexión a internet del iPhone e inténtalo de nuevo.";
 "ios.connect.error.codeRejected" = "El servidor no aceptó el código. Puede haber caducado (duran 10 minutos) o ya se usó. Crea uno nuevo en el Mac: Conectar iPhone → Código nuevo.";
+"ios.connect.error.differentServer" = "Es un servidor distinto con el mismo certificado, así que no se añadió ni se reemplazó nada. Si ya no necesitas el servidor anterior, desconéctalo primero en Ajustes.";
 "ios.connect.error.generic" = "No se pudo conectar. Inténtalo de nuevo.";
 "ios.connect.error.mismatch" = "El servidor de esta dirección mostró un certificado distinto al del enlace. Puede que responda otra persona. No se envió nada. Si restableciste tú el certificado del servidor, crea un código QR nuevo en el Mac.";
 "ios.connect.error.mismatchTitle" = "Este no es el servidor que vinculaste";
@@ -1978,7 +1979,7 @@
 "phoneWizard.done.action" = "Listo";
 "phoneWizard.done.body" = "«%1$@» está conectado a «%2$@» a través de la nube de Bandito.";
 "phoneWizard.done.title" = "Listo, el iPhone está conectado";
-"phoneWizard.install" = "¿Aún no tienes la app? Instala Bandito desde TestFlight";
+"phoneWizard.install" = "Bandito para iPhone está por ahora en pruebas cerradas: escríbenos para recibir una invitación";
 "phoneWizard.noServer" = "No hay ningún servidor conectado que pueda funcionar con la nube. Conecta un servidor o actualízalo.";
 "phoneWizard.pick.hint" = "El iPhone llegará a él a través de la nube de Bandito, desde cualquier red.";
 "phoneWizard.pick.title" = "¿A qué servidor se conecta el iPhone?";

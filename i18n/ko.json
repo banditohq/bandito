@@ -3406,7 +3406,7 @@
   "phoneWizard.preparing": "연결을 준비하는 중…",
   "phoneWizard.via": "Bandito 클라우드를 통한 연결",
   "phoneWizard.waiting": "iPhone이 연결되기를 기다리는 중…",
-  "phoneWizard.install": "앱이 없나요? TestFlight에서 Bandito를 설치하세요",
+  "phoneWizard.install": "iPhone용 Bandito는 현재 비공개 테스트 중입니다. 초대를 받으려면 저희에게 메일을 보내세요",
   "phoneWizard.done.title": "완료되었습니다. iPhone이 연결되었습니다",
   "phoneWizard.done.body": "“{device}”이(가) Bandito 클라우드를 통해 “{server}”에 연결되었습니다.",
   "phoneWizard.done.action": "완료",
@@ -3426,5 +3426,6 @@
   "ios.connect.error.offline": "서버가 오프라인입니다. Mac이 켜져 있고 Bandito가 실행 중인지 확인하세요.",
   "ios.connect.error.cloudLimit": "Bandito 클라우드의 월간 한도에 도달했습니다. Tailscale 또는 Mac과 같은 네트워크로 연결하세요.",
   "ios.connect.error.cloudKey": "올바른 서버가 아닙니다. 링크의 키가 일치하지 않습니다. Mac에서 새 QR 코드를 만드세요.",
-  "ios.connect.error.cloudUnreachable": "Bandito 클라우드에 연결할 수 없습니다. iPhone의 인터넷 연결을 확인하고 다시 시도하세요."
+  "ios.connect.error.cloudUnreachable": "Bandito 클라우드에 연결할 수 없습니다. iPhone의 인터넷 연결을 확인하고 다시 시도하세요.",
+  "ios.connect.error.differentServer": "같은 인증서를 쓰는 다른 서버라서 아무것도 추가하거나 바꾸지 않았습니다. 이전 서버가 더 필요 없다면 먼저 설정에서 연결을 끊으세요."
 }

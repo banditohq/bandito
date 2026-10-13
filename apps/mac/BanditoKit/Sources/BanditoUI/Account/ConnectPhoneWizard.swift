@@ -157,7 +157,7 @@ struct ConnectPhoneWizard: View {
                         .foregroundStyle(Color.Bandito.text2)
                 }
                 Button {
-                    SystemActions.open(IPhoneApp.testFlight)
+                    SystemActions.open(IPhoneApp.requestInvite)
                 } label: {
                     Text(L10n.PhoneWizard.install)
                         .font(BanditoFont.text(size: 12, weight: 400))

@@ -12,6 +12,8 @@ final class MemorySecrets: SecretStore, @unchecked Sendable {
     var failsToSave = false
     var failsToDelete = false
     var failsToLoad = false
+    /// Saving these accounts fails (a Keychain that refuses one item).
+    var failingAccounts: Set<String> = []
 
     func load(account: String) throws -> Data? {
         lock.lock()
@@ -24,6 +26,7 @@ final class MemorySecrets: SecretStore, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         if failsToSave, data != nil { throw SecretStoreError.keychain(-25299) }
+        if failingAccounts.contains(account), data != nil { throw SecretStoreError.keychain(-25299) }
         if failsToDelete, data == nil { throw SecretStoreError.keychain(-25299) }
         items[account] = data
     }
@@ -657,6 +660,50 @@ actor PairCalls {
         later.loadIfNeeded(arguments: [])
         #expect(later.loaded)
         #expect(Set(later.servers.map(\.config.name)).contains("Keep"))
+    }
+
+    private func cloudConfig(token: String, key: String?, nk: String) -> ServerConfig {
+        ServerConfig(
+            name: "Mac",
+            endpoint: .reachable(
+                hosts: ["10.0.0.2:7879"], fingerprint: ConnectTests.fp,
+                relay: RelayRoute(host: "relay.bandito.dev", sid: ConnectTests.sid), noiseKey: nk),
+            token: token, noiseSecret: key)
+    }
+
+    @Test func aRefusedRelayKeyTakesTheNewTokenBackAndLeavesTheOldServerAsItWas() throws {
+        let nk = ConnectTests.nk
+        let (session, secrets, _) = session()
+        try session.add(cloudConfig(token: "old-token", key: "old-key", nk: nk))
+        let id = try #require(session.servers.first?.id)
+        secrets.failingAccounts = [ServerSession.noiseAccount(id)]
+        #expect(throws: ServerSession.SessionError.keychain) {
+            try session.add(self.cloudConfig(token: "new-token", key: "new-key", nk: nk))
+        }
+        let token = try #require(try secrets.load(account: id.uuidString))
+        let key = try #require(try secrets.load(account: ServerSession.noiseAccount(id)))
+        #expect(String(decoding: token, as: UTF8.self) == "old-token", "the old token is back")
+        #expect(String(decoding: key, as: UTF8.self) == "old-key")
+        #expect(session.servers.count == 1)
+    }
+
+    @Test func aNewServerWhoseKeyIsRefusedLeavesNothingInTheKeychain() throws {
+        let (session, secrets, _) = session()
+        let config = cloudConfig(token: "t", key: "k", nk: ConnectTests.nk)
+        secrets.failingAccounts = [ServerSession.noiseAccount(config.id)]
+        #expect(throws: ServerSession.SessionError.keychain) { try session.add(config) }
+        #expect(secrets.count == 0 && session.servers.isEmpty)
+    }
+
+    @Test func anotherServerBehindTheSameCertificateIsRefusedNotReplaced() throws {
+        let (session, secrets, _) = session()
+        try session.add(cloudConfig(token: "old-token", key: "old-key", nk: ConnectTests.nk))
+        let other = Base64URL.encode(Data(repeating: 9, count: 32))
+        #expect(throws: ServerSession.SessionError.differentServer) {
+            try session.add(self.cloudConfig(token: "other-token", key: "other-key", nk: other))
+        }
+        #expect(session.servers.count == 1 && secrets.count == 2)
+        #expect(PairProblemText(.differentServer).isAlarm)
     }
 
     @Test func aTokenThatCannotBeReadYetKeepsTheReadOpen() throws {

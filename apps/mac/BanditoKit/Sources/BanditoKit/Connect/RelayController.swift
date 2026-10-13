@@ -106,7 +106,19 @@ public final class RelayController {
             loaded = true
             if current.enabled {
                 phase = .connecting
-                return await waitForConnection()
+                if await waitForConnection() { return true }
+                // On but never connecting for the whole wait: the registration is probably dead (deleted, or its secret
+                // lost). It is replaced by a new one, when there is an account to make it; without one the problem stays.
+                guard let stale = status?.sid, let account = try? await registrar() else { return false }
+                do {
+                    status = try await host.relayDisable()
+                } catch {
+                    problem = .daemon(error)
+                    return false
+                }
+                problem = nil
+                await Self.removeRegistration(account, sid: stale)
+                phase = .enabling
             }
         } catch {
             problem = .daemon(error)
@@ -136,6 +148,12 @@ public final class RelayController {
         do {
             status = try await host.relayEnable(url: registration.relayURL, sid: registration.sid, secret: registration.secret)
         } catch {
+            // The answer may have been lost on the way while the daemon did take the registration: look before deleting.
+            if let now = try? await host.relayStatus(), now.enabled, now.sid == registration.sid {
+                status = now
+                phase = .connecting
+                return await waitForConnection()
+            }
             // The daemon did not take it: the registration would only use up one of the account's ten places.
             await Self.removeRegistration(account, sid: registration.sid)
             problem = .daemon(error)
@@ -155,7 +173,8 @@ public final class RelayController {
         guard host.supportsRelay else { return false }
         phase = .disabling
         defer { phase = .idle }
-        let sid = status?.sid
+        // The registration to delete is the one the daemon holds now, not what an earlier read showed.
+        let sid = (try? await host.relayStatus())?.sid ?? status?.sid
         do {
             status = try await host.relayDisable()
         } catch {

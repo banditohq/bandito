@@ -31,12 +31,29 @@ extension ServerEndpoint {
         return nil
     }
 
-    /// Whether `other` is the same server: the same certificate, or the same Noise key. A server paired once through the
-    /// cloud and again over Tailscale is one server.
+    /// Whether `other` is the same server: every identifier that both have (the certificate, the Noise key) agrees, and at
+    /// least one is shared. A server paired once through the cloud and again over Tailscale is one server; the same
+    /// certificate with another Noise key is not (`conflicts(with:)`).
     public func isSameServer(as other: ServerEndpoint) -> Bool {
-        if let a = pinnedFingerprint, let b = other.pinnedFingerprint, a == b { return true }
-        if let a = noiseKeyText, let b = other.noiseKeyText, a == b { return true }
-        return false
+        var shared = false
+        for (a, b) in [(pinnedFingerprint, other.pinnedFingerprint), (noiseKeyText, other.noiseKeyText)] {
+            guard let a, let b else { continue }
+            if a != b { return false }
+            shared = true
+        }
+        return shared
+    }
+
+    /// Whether `other` shares one identifier with this endpoint and differs in another: a different server behind the same
+    /// certificate (or key). It is neither replaced nor added silently.
+    public func conflicts(with other: ServerEndpoint) -> Bool {
+        let pairs = [(pinnedFingerprint, other.pinnedFingerprint), (noiseKeyText, other.noiseKeyText)]
+        var same = false, differs = false
+        for (a, b) in pairs {
+            guard let a, let b else { continue }
+            if a == b { same = true } else { differs = true }
+        }
+        return same && differs
     }
 }
 

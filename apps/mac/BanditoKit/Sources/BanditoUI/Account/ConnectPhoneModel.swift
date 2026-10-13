@@ -54,7 +54,9 @@ final class ConnectPhoneModel {
     @ObservationIgnored private var controller: RelayController?
     @ObservationIgnored private var run: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
-    @ObservationIgnored private var baseline: Set<String> = []
+    /// The devices the server had when the wizard began with it: read once, before the cloud is touched. Only a device
+    /// that is not in it counts as the phone, however many codes are made.
+    @ObservationIgnored private var baseline: Set<String>?
 
     init(
         candidates: [any PhoneWizardServer], pollInterval: Duration = .seconds(2),
@@ -83,6 +85,7 @@ final class ConnectPhoneModel {
 
     func choose(_ server: any PhoneWizardServer) {
         chosen = server
+        baseline = nil
         begin()
     }
 
@@ -120,6 +123,14 @@ final class ConnectPhoneModel {
         self.controller = controller
         run = Task { [weak self] in
             guard let self else { return }
+            if self.baseline == nil {
+                guard let known = try? await server.wizardDevices() else {
+                    guard self.generation == mine, !Task.isCancelled else { return }
+                    self.step = .problem(.message(UserFacingMessage(text: L10n.Failure.noAnswer, canRetry: true)))
+                    return
+                }
+                self.baseline = Set(known.map(\.id))
+            }
             // The wizard follows what the controller does, so the person sees "turning on", then "connecting".
             let watcher = Task { @MainActor [weak self, weak controller] in
                 while !Task.isCancelled {
@@ -144,7 +155,6 @@ final class ConnectPhoneModel {
 
     private func showCode(_ server: any PhoneWizardServer, _ mine: Int) async {
         do {
-            if baseline.isEmpty, let known = try? await server.wizardDevices() { baseline = Set(known.map(\.id)) }
             let reply = try await server.wizardPairCode()
             guard generation == mine, !Task.isCancelled else { return }
             let state = PhoneAccessRules.pairState(for: reply)
@@ -164,7 +174,9 @@ final class ConnectPhoneModel {
         while clock.now < deadline {
             try await Task.sleep(for: pollInterval)
             guard generation == mine else { return }
-            if let devices = try? await server.wizardDevices(), let fresh = devices.first(where: { !baseline.contains($0.id) }) {
+            if let seen = baseline, let devices = try? await server.wizardDevices(),
+                let fresh = devices.first(where: { !seen.contains($0.id) })
+            {
                 step = .done(device: fresh.name)
                 return
             }
