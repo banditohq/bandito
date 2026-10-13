@@ -91,7 +91,7 @@ ok
 
 # The two iPhone targets disagree before the run: refuse, write nothing.
 fresh
-awk '!d && /^[[:space:]]*MARKETING_VERSION:/ { sub(/0\.1\.15/, "9.9.9"); d = 1 } { print }' \
+awk '!d && /^[[:space:]]*MARKETING_VERSION:/ { sub(/[0-9]+\.[0-9]+\.[0-9]+/, "9.9.9"); d = 1 } { print }' \
   "$work/root/apps/ios/project.yml" > "$work/split" && cat "$work/split" > "$work/root/apps/ios/project.yml"
 if "$bump" 9.8.7 --root "$work/root" > /dev/null 2>&1; then fail "accepted iPhone targets with different versions"; fi
 diff "$repo/apps/mac/project.yml" "$work/root/apps/mac/project.yml" > /dev/null || fail "partial write: targets disagree"
