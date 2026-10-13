@@ -2040,7 +2040,8 @@ mod tests {
         let code = on["code"].as_str().unwrap();
         assert_eq!(on["hosts"], json!(["100.101.102.103:7900", "192.168.1.5:7900"]));
         assert_eq!(on["fingerprint"], json!(fp));
-        let name = percent_encode(&w.app.hostname);
+        // The link carries the machine's name cut to MAX_NAME_CHARS (a CI runner's name is longer than that).
+        let name = percent_encode(&w.app.hostname.chars().take(MAX_NAME_CHARS).collect::<String>());
         assert_eq!(
             on["link"],
             json!(format!(
