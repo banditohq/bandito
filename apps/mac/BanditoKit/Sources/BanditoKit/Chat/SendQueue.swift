@@ -17,6 +17,20 @@ public struct QueuedSend: Codable, Equatable, Sendable, Identifiable {
         case sent
         /// The daemon refused it (or it can never go out): the person decides.
         case failed
+        /// The connection dropped and the thread could not be read to see whether the daemon took it: not sent again until
+        /// the person says so (send again, or remove).
+        case uncertain
+    }
+
+    /// Why a message is `failed`, for the line under it.
+    public enum Failure: String, Codable, Sendable {
+        /// The server answered with a refusal.
+        case refused
+        /// The server does not accept this device's key (or the connection may not carry it).
+        case key
+        case insecure
+        /// Several tries ended without an answer.
+        case gaveUp
     }
 
     public var id: String
@@ -34,11 +48,17 @@ public struct QueuedSend: Codable, Equatable, Sendable, Identifiable {
     public var maybeDelivered: Bool
     /// Why it failed, for a person to read (the server's words, or empty).
     public var failure: String?
+    public var failureKind: Failure?
+    /// Sends that ended without an answer, since the person last tried.
+    public var attempts: Int
+    /// Not before this time (Unix ms, this device): the wait after a rate limit or a lost answer.
+    public var retryAt: Int64?
 
     public init(
         id: String = UUID().uuidString, serverID: UUID, agentID: String, text: String,
         attachments: [AgentAttachment] = [], viaButton: Bool = false, createdAt: Int64, state: State = .waiting,
-        baseline: Int = 0, maybeDelivered: Bool = false, failure: String? = nil
+        baseline: Int = 0, maybeDelivered: Bool = false, failure: String? = nil, failureKind: Failure? = nil,
+        attempts: Int = 0, retryAt: Int64? = nil
     ) {
         self.id = id
         self.serverID = serverID
@@ -51,6 +71,51 @@ public struct QueuedSend: Codable, Equatable, Sendable, Identifiable {
         self.baseline = baseline
         self.maybeDelivered = maybeDelivered
         self.failure = failure
+        self.failureKind = failureKind
+        self.attempts = attempts
+        self.retryAt = retryAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, serverID, agentID, text, attachments, viaButton, createdAt, state, baseline, maybeDelivered, failure
+        case failureKind, attempts, retryAt
+    }
+
+    /// A file written before `attempts` and the rest existed still reads.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        serverID = try c.decode(UUID.self, forKey: .serverID)
+        agentID = try c.decode(String.self, forKey: .agentID)
+        text = try c.decode(String.self, forKey: .text)
+        attachments = try c.decodeIfPresent([AgentAttachment].self, forKey: .attachments) ?? []
+        viaButton = try c.decodeIfPresent(Bool.self, forKey: .viaButton) ?? false
+        createdAt = try c.decode(Int64.self, forKey: .createdAt)
+        state = try c.decodeIfPresent(State.self, forKey: .state) ?? .waiting
+        baseline = try c.decodeIfPresent(Int.self, forKey: .baseline) ?? 0
+        maybeDelivered = try c.decodeIfPresent(Bool.self, forKey: .maybeDelivered) ?? false
+        failure = try c.decodeIfPresent(String.self, forKey: .failure)
+        failureKind = try c.decodeIfPresent(Failure.self, forKey: .failureKind)
+        attempts = try c.decodeIfPresent(Int.self, forKey: .attempts) ?? 0
+        retryAt = try c.decodeIfPresent(Int64.self, forKey: .retryAt)
+    }
+}
+
+/// How long to wait before a message is tried again. Pure.
+public enum SendBackoff {
+    /// The most sends that end without an answer before a message is given up.
+    public static let maxAttempts = 5
+    public static let ceiling: Int64 = 60_000
+
+    /// 2, 4, 8, 16 … seconds for the n-th try (from 1), never more than a minute.
+    public static func delay(attempt: Int) -> Int64 {
+        let shift = min(max(attempt, 1), 10)
+        return min(ceiling, 1_000 * Int64(1 << shift))
+    }
+
+    /// The wait after a rate limit: the backoff, or the server's own word when that is longer.
+    public static func rateLimited(attempt: Int, retryAfter: Int64?) -> Int64 {
+        max(delay(attempt: attempt), min(retryAfter ?? 0, ceiling))
     }
 }
 
@@ -76,11 +141,31 @@ public struct SendQueue: Codable, Equatable, Sendable {
 
     /// The message to send next for this agent: the oldest, when nothing of the agent is out or refused before it. A
     /// refused message blocks the ones after it, so the order the person wrote them in is never changed.
-    public func next(serverID: UUID, agentID: String) -> QueuedSend? {
+    ///
+    /// A message whose text is the same as one the daemon has answered and that has not come back as an event yet waits
+    /// for that one: the two events could not be told apart, and a pending row would disappear at the first.
+    /// - Parameter now: Unix ms; a message under a wait (`retryAt`) is not offered before it.
+    public func next(serverID: UUID, agentID: String, now: Int64 = .max) -> QueuedSend? {
+        var sentTexts: Set<String> = []
         for item in items where item.serverID == serverID && item.agentID == agentID {
             switch item.state {
-            case .waiting: return item
-            case .sending, .failed: return nil
+            case .waiting:
+                if sentTexts.contains(item.text) { return nil }
+                if let at = item.retryAt, at > now { return nil }
+                return item
+            case .sending, .failed, .uncertain: return nil
+            case .sent: sentTexts.insert(item.text)
+            }
+        }
+        return nil
+    }
+
+    /// How long until the first waiting message of the agent may go, in ms; nil when nothing waits under a timer.
+    public func delay(serverID: UUID, agentID: String, now: Int64) -> Int64? {
+        for item in items where item.serverID == serverID && item.agentID == agentID {
+            switch item.state {
+            case .waiting: return item.retryAt.map { max(0, $0 - now) }
+            case .sending, .failed, .uncertain: return nil
             case .sent: continue
             }
         }
@@ -104,27 +189,60 @@ public struct SendQueue: Codable, Equatable, Sendable {
     }
 
     /// The attempt ended without an answer (the link dropped): back to waiting, and the daemon may have the message.
-    public mutating func interrupted(_ id: String) {
+    /// After `SendBackoff.maxAttempts` such ends the message is given up (`failed`, `gaveUp`); until then it waits an
+    /// exponentially longer time (`retryAt`).
+    public mutating func interrupted(_ id: String, now: Int64) {
         update(id) {
-            $0.state = .waiting
+            $0.attempts += 1
             $0.maybeDelivered = true
+            if $0.attempts >= SendBackoff.maxAttempts {
+                $0.state = .failed
+                $0.failureKind = .gaveUp
+                $0.retryAt = nil
+            } else {
+                $0.state = .waiting
+                $0.retryAt = now + SendBackoff.delay(attempt: $0.attempts)
+            }
         }
     }
 
-    /// The daemon refused the message.
-    public mutating func refused(_ id: String, reason: String?) {
+    /// The server limits the rate: back to waiting for `delay` ms (the answer was a refusal, so nothing arrived).
+    public mutating func limited(_ id: String, now: Int64, retryAfter: Int64?) {
+        update(id) {
+            $0.attempts += 1
+            $0.state = .waiting
+            $0.retryAt = now + SendBackoff.rateLimited(attempt: $0.attempts, retryAfter: retryAfter)
+        }
+    }
+
+    /// The daemon refused the message, or this device may not send it (`kind`).
+    public mutating func refused(_ id: String, reason: String?, kind: QueuedSend.Failure = .refused) {
         update(id) {
             $0.state = .failed
             $0.failure = reason
+            $0.failureKind = kind
             $0.maybeDelivered = false
+            $0.retryAt = nil
         }
     }
 
-    /// The person tries a refused message again.
+    /// The thread could not be read to tell whether the daemon took the message: the person decides.
+    public mutating func uncertain(_ id: String) {
+        update(id) {
+            $0.state = .uncertain
+            $0.retryAt = nil
+        }
+    }
+
+    /// The person tries a refused message again, or sends an uncertain one once more.
     public mutating func retry(_ id: String) {
         update(id) {
             $0.state = .waiting
             $0.failure = nil
+            $0.failureKind = nil
+            $0.attempts = 0
+            $0.retryAt = nil
+            $0.maybeDelivered = false
         }
     }
 
@@ -191,6 +309,16 @@ public struct SendQueueFile: Sendable {
         guard let data = try? JSONEncoder().encode(queue) else { return }
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: url, options: [.atomic])
+        // Unsent words of a person: not in a backup, and not readable before the first unlock after a restart.
+        #if os(iOS)
+        let options: Data.WritingOptions = [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+        #else
+        let options: Data.WritingOptions = [.atomic]
+        #endif
+        try? data.write(to: url, options: options)
+        var target = url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? target.setResourceValues(values)
     }
 }

@@ -3346,5 +3346,10 @@
   "ios.chat.tools.hide": "隐藏命令",
   "ios.chat.approval.allowed": "已允许",
   "ios.chat.approval.denied": "已拒绝",
-  "ios.chat.approval.failed": "无法发送您的回答。请检查连接后重试。"
+  "ios.chat.approval.failed": "无法发送您的回答。请检查连接后重试。",
+  "ios.chat.failed.key": "请重新连接此 iPhone",
+  "ios.chat.failed.insecure": "连接不安全",
+  "ios.chat.failed.gaveUp": "多次尝试后放弃",
+  "ios.chat.uncertain": "不确定是否送达",
+  "ios.chat.camera.denied": "Bandito 无法使用相机。请在 iOS 设置 → Bandito 中允许。"
 }

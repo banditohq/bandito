@@ -346,9 +346,19 @@ extension ChatLayoutEngine {
             color = UIColor.Bandito.danger
         case .waitingForConnection?: parts.append(L10n.Ios.Chat.waitingForConnection)
         case .sending?: parts.append(L10n.Ios.Chat.sending)
-        case .notSent?:
+        case .notSent(_, let why)?:
             parts.append(L10n.Ios.Chat.notSent)
+            switch why {
+            case .key?: parts.append(L10n.Ios.Chat.Failed.key)
+            case .insecure?: parts.append(L10n.Ios.Chat.Failed.insecure)
+            case .gaveUp?: parts.append(L10n.Ios.Chat.Failed.gaveUp)
+            case .refused?, nil: break
+            }
             parts.append(L10n.Ios.Chat.retry)
+            color = UIColor.Bandito.danger
+        case .uncertain?:
+            parts.append(L10n.Ios.Chat.uncertain)
+            parts.append(L10n.Message.resend)
             color = UIColor.Bandito.danger
         case .viaButton?: parts.append(L10n.Thread.viaButton)
         case nil: break

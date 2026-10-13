@@ -211,4 +211,46 @@ import UIKit
         #expect(abs(after - anchor.distance) < 1.5, "the row moved by \(after - anchor.distance) points")
         harness.window.isHidden = true
     }
+
+    @Test func updatesThatWaitForAnApplyAreMergedNotReplaced() {
+        let rows = [ChatRow(id: "a", content: .day("x"), spacing: 0)]
+        let first = ChatUpdate(rows: rows, heights: ["a": 10], changed: ["stream"], prepended: 2, initial: true)
+        let second = ChatUpdate(rows: rows, heights: ["a": 12], changed: ["stream", "other"], prepended: 3, initial: false)
+        let merged = ChatUpdate.merge(first, second)
+        #expect(merged.changed == ["stream", "other"])
+        #expect(merged.prepended == 5)
+        #expect(merged.initial)
+        #expect(merged.heights["a"] == 12)
+    }
+
+    @Test func aStreamUpdateIsNotLostWhenAHeightUpdateFollowsWhileOneIsApplied() async throws {
+        let (server, _) = await IOSDemo.startWithTransport()
+        let speed = ChatSpeedTests()
+        let id = speed.install(server, id: "chat-merge", messages: 20)
+        let harness = ChatSpeedTests.Harness(server: server, agentID: id)
+        await harness.rest()
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        server.apply(Event(seq: 0, agentId: id, ts: now, body: .messageDelta(text: "He")))
+        await harness.rest()
+        let rows = harness.model.rows
+        let metrics = try #require(harness.model.metrics)
+        guard let last = rows.last, case .message(var message) = last.content, last.id == "streaming" else {
+            Issue.record("no stream row")
+            return
+        }
+        message.text = "Hello there, this grew"
+        let grown = ChatRow(id: last.id, content: .message(message), spacing: last.spacing)
+        let grownRows = Array(rows.dropLast()) + [grown]
+        var heights = harness.model.heights
+        heights[grown.id] = harness.model.engine.layout(grown, metrics).height
+        ChatCounters.shared.reset()
+        let controller = harness.controller
+        // An update is being applied; a stream's update and a height update arrive meanwhile, in that order.
+        controller.receive(ChatUpdate(rows: rows, heights: harness.model.heights, changed: [], prepended: 0, initial: false))
+        controller.receive(ChatUpdate(rows: grownRows, heights: heights, changed: [grown.id], prepended: 0, initial: false))
+        controller.receive(ChatUpdate(rows: grownRows, heights: heights, changed: [], prepended: 0, initial: false))
+        await harness.rest()
+        #expect(ChatCounters.shared.configuredRows[grown.id, default: 0] >= 1, "the stream's cell was not set up again")
+        harness.window.isHidden = true
+    }
 }

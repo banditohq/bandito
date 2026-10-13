@@ -1,3 +1,4 @@
+import AVFoundation
 import BanditoDesign
 import BanditoKit
 import BanditoL10n
@@ -40,6 +41,8 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     private var distanceFromBottom: CGFloat = 0
     private var applying = false
     private var pending: ChatUpdate?
+    /// Whether an update is being applied (tests wait on it).
+    var isApplying: Bool { applying }
     private var visible = false
     private var dictation: ChatDictation?
     private var dictationBase = ""
@@ -216,9 +219,10 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
 
     // MARK: updates
 
-    private func receive(_ update: ChatUpdate) {
+    func receive(_ update: ChatUpdate) {
         if applying {
-            pending = update
+            // Not replaced: what the one waiting had changed must still be set up.
+            pending = pending.map { ChatUpdate.merge($0, update) } ?? update
             return
         }
         apply(update)
@@ -227,7 +231,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     private func apply(_ update: ChatUpdate) {
         applying = true
         let previousRows = rowsByID
-        rowsByID = Dictionary(uniqueKeysWithValues: update.rows.map { ($0.id, $0) })
+        rowsByID = Dictionary(update.rows.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         let ids = update.rows.map(\.id)
         let oldCount = order.count
         let addedMessages = update.rows.suffix(max(0, ids.count - oldCount)).filter {
@@ -666,6 +670,24 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
 
     private func takePhoto() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
+        switch ChatCameraAccess.decision(for: AVCaptureDevice.authorizationStatus(for: .video)) {
+        case .open:
+            presentCamera()
+        case .ask:
+            Task { @MainActor [weak self] in
+                // The system asks, with the reason from Info.plist.
+                if await AVCaptureDevice.requestAccess(for: .video) {
+                    self?.presentCamera()
+                } else {
+                    self?.explainDenied(L10n.Ios.Chat.Camera.denied)
+                }
+            }
+        case .explain:
+            explainDenied(L10n.Ios.Chat.Camera.denied)
+        }
+    }
+
+    private func presentCamera() {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.delegate = self
@@ -713,10 +735,12 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
             let id = composer.addFile(name: name, thumbnail: nil)
             if AttachmentRules.problem(name: name, size: size) != nil {
                 composer.setFile(id, .failed(""))
+                ChatTempFiles.remove(url)
                 continue
             }
             Task {
-                let data = await Task.detached { try? Data(contentsOf: url) }.value
+                // The picker copied the file into the app's temporary folder: it goes once it is read.
+                let data = await Task.detached { ChatTempFiles.readAndRemove(url) }.value
                 guard let data else { composer.setFile(id, .failed("")); return }
                 await upload(data, name: name, id: id, thumbnail: nil)
             }

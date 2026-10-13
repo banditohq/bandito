@@ -3388,5 +3388,10 @@
   "ios.chat.tools.hide": "Hide the commands",
   "ios.chat.approval.allowed": "Allowed",
   "ios.chat.approval.denied": "Denied",
-  "ios.chat.approval.failed": "Could not send your answer. Check the connection and try again."
+  "ios.chat.approval.failed": "Could not send your answer. Check the connection and try again.",
+  "ios.chat.failed.key": "Connect this iPhone again",
+  "ios.chat.failed.insecure": "The connection is not secure",
+  "ios.chat.failed.gaveUp": "Gave up after several tries",
+  "ios.chat.uncertain": "Not sure it arrived",
+  "ios.chat.camera.denied": "Bandito can’t use the camera. Allow it in iOS Settings → Bandito."
 }

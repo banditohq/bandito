@@ -946,6 +946,7 @@
 "ios.chat.attach.files" = "Файлы";
 "ios.chat.attach.noPreview" = "Предпросмотр недоступен при этом подключении";
 "ios.chat.attach.photos" = "Фото из библиотеки";
+"ios.chat.camera.denied" = "Bandito не может пользоваться камерой. Разрешите это в Настройках iOS → Bandito.";
 "ios.chat.changes.failed" = "Не удалось загрузить изменения.";
 "ios.chat.connection.offline" = "Нет связи. Новые сообщения подождут и уйдут, когда она появится.";
 "ios.chat.connection.reconnecting" = "Подключаемся заново…";
@@ -959,6 +960,9 @@
 "ios.chat.discard" = "Удалить сообщение";
 "ios.chat.empty.message" = "Дайте %1$@ задачу или задайте вопрос. Ответ появится здесь.";
 "ios.chat.empty.title" = "Начните разговор с %1$@";
+"ios.chat.failed.gaveUp" = "Не вышло после нескольких попыток";
+"ios.chat.failed.insecure" = "Соединение не защищено";
+"ios.chat.failed.key" = "Подключите iPhone заново";
 "ios.chat.header.offline" = "Нет связи";
 "ios.chat.header.waiting" = "Ждёт вас";
 "ios.chat.header.working" = "Работает…";
@@ -970,6 +974,7 @@
 "ios.chat.sending" = "Отправляется…";
 "ios.chat.tools.hide" = "Скрыть команды";
 "ios.chat.tools.show" = "Показать команды";
+"ios.chat.uncertain" = "Не уверены, дошло ли";
 "ios.chat.waitingForConnection" = "Ждёт соединения";
 "ios.connect.camera.allow" = "Разрешить камеру";
 "ios.connect.camera.denied" = "Камера для Bandito выключена. Включите её в Настройках, либо вставьте ссылку или введите адрес.";

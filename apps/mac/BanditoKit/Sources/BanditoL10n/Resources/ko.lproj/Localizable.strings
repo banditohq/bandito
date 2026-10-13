@@ -946,6 +946,7 @@
 "ios.chat.attach.files" = "파일";
 "ios.chat.attach.noPreview" = "이 연결에서는 미리보기를 사용할 수 없습니다";
 "ios.chat.attach.photos" = "사진 보관함";
+"ios.chat.camera.denied" = "Bandito가 카메라를 사용할 수 없습니다. iOS 설정 → Bandito에서 허용해 주세요.";
 "ios.chat.changes.failed" = "변경 사항을 불러오지 못했습니다.";
 "ios.chat.connection.offline" = "연결이 없습니다. 새 메시지는 연결이 돌아올 때까지 여기서 대기합니다.";
 "ios.chat.connection.reconnecting" = "다시 연결하는 중…";
@@ -959,6 +960,9 @@
 "ios.chat.discard" = "메시지 삭제";
 "ios.chat.empty.message" = "%1$@에게 작업을 맡기거나 질문해 보세요. 답변이 여기에 표시됩니다.";
 "ios.chat.empty.title" = "%1$@와 시작하기";
+"ios.chat.failed.gaveUp" = "여러 번 시도했지만 실패했습니다";
+"ios.chat.failed.insecure" = "연결이 안전하지 않습니다";
+"ios.chat.failed.key" = "이 iPhone을 다시 연결해 주세요";
 "ios.chat.header.offline" = "연결 없음";
 "ios.chat.header.waiting" = "응답을 기다리는 중";
 "ios.chat.header.working" = "작업 중…";
@@ -970,6 +974,7 @@
 "ios.chat.sending" = "보내는 중…";
 "ios.chat.tools.hide" = "명령 숨기기";
 "ios.chat.tools.show" = "명령 보기";
+"ios.chat.uncertain" = "도착했는지 확실하지 않음";
 "ios.chat.waitingForConnection" = "연결 대기 중";
 "ios.connect.camera.allow" = "카메라 허용";
 "ios.connect.camera.denied" = "Bandito의 카메라가 꺼져 있습니다. 설정에서 켜거나 링크를 붙여넣거나 주소를 입력하세요.";

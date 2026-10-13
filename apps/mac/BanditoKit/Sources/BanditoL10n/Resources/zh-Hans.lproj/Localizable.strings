@@ -946,6 +946,7 @@
 "ios.chat.attach.files" = "文件";
 "ios.chat.attach.noPreview" = "此连接无法预览";
 "ios.chat.attach.photos" = "照片图库";
+"ios.chat.camera.denied" = "Bandito 无法使用相机。请在 iOS 设置 → Bandito 中允许。";
 "ios.chat.changes.failed" = "无法加载更改。";
 "ios.chat.connection.offline" = "无连接。新消息会在这里等待，连接恢复后发送。";
 "ios.chat.connection.reconnecting" = "正在重新连接…";
@@ -959,6 +960,9 @@
 "ios.chat.discard" = "删除消息";
 "ios.chat.empty.message" = "给 %1$@ 一个任务或提个问题，回复会显示在这里。";
 "ios.chat.empty.title" = "从 %1$@ 开始";
+"ios.chat.failed.gaveUp" = "多次尝试后放弃";
+"ios.chat.failed.insecure" = "连接不安全";
+"ios.chat.failed.key" = "请重新连接此 iPhone";
 "ios.chat.header.offline" = "无连接";
 "ios.chat.header.waiting" = "等待您";
 "ios.chat.header.working" = "工作中…";
@@ -970,6 +974,7 @@
 "ios.chat.sending" = "正在发送…";
 "ios.chat.tools.hide" = "隐藏命令";
 "ios.chat.tools.show" = "显示命令";
+"ios.chat.uncertain" = "不确定是否送达";
 "ios.chat.waitingForConnection" = "等待连接";
 "ios.connect.camera.allow" = "允许使用摄像头";
 "ios.connect.camera.denied" = "Bandito 的摄像头权限已关闭。请在设置中开启，或粘贴链接、输入地址。";

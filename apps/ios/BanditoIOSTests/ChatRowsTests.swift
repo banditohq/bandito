@@ -100,7 +100,7 @@ import Testing
             Issue.record("no message")
             return
         }
-        #expect(message.caption == .notSent(id: item.id))
+        #expect(message.caption == .notSent(id: item.id, why: nil))
     }
 
     @Test func theWorkingRowShowsWhileATurnRunsAndYieldsToTheStream() {
@@ -177,5 +177,50 @@ import Testing
         }
         #expect(days.count == 2)
         #expect(days[0] != days[1])
+    }
+
+    @Test func rowsWithTheSameIdGetIdsOfTheirOwnThatStayTheSame() {
+        // Two groups of commands whose first call has no id, two days out of order, two messages of one id.
+        let items: [ThreadItem] = [
+            .tool(ToolRow(callId: "", tool: "bash", title: "a", ok: true)),
+            .assistant(id: "s1", text: "one", ts: ts),
+            .tool(ToolRow(callId: "", tool: "bash", title: "b", ok: true)),
+            .assistant(id: "s1", text: "again", ts: ts - 3 * 86_400_000),
+            .assistant(id: "s2", text: "later", ts: ts),
+            .assistant(id: "s3", text: "earlier", ts: ts - 3 * 86_400_000),
+        ]
+        let first = ChatRowBuilder.build(input(items)).map(\.id)
+        let second = ChatRowBuilder.build(input(items)).map(\.id)
+        #expect(Set(first).count == first.count, "ids: \(first)")
+        #expect(first == second)
+        #expect(first.contains("tools-#2") && first.contains("s1#2"))
+    }
+
+    @Test func aGroupOfCommandsWithADoubledIdOpensWithItsOwnKey() throws {
+        let items: [ThreadItem] = [
+            .tool(ToolRow(callId: "", tool: "bash", title: "a", ok: true)),
+            .assistant(id: "s1", text: "between", ts: ts),
+            .tool(ToolRow(callId: "", tool: "bash", title: "b", ok: true)),
+        ]
+        let rows = ChatRowBuilder.build(input(items, expanded: ["tools-#2"]))
+        let open = rows.compactMap { row -> Bool? in
+            if case .tools(let group) = row.content { return group.open }
+            return nil
+        }
+        #expect(open == [false, true])
+    }
+
+    @Test func anUncertainMessageAsksThePersonAndAKeyFailureSaysSo() {
+        var uncertain = QueuedSend(serverID: UUID(), agentID: "a", text: "maybe", createdAt: ts)
+        uncertain.state = .uncertain
+        var failed = QueuedSend(serverID: UUID(), agentID: "a", text: "key", createdAt: ts + 1)
+        failed.state = .failed
+        failed.failureKind = .key
+        let rows = ChatRowBuilder.build(input([], queued: [uncertain, failed]))
+        let captions = rows.compactMap { row -> ChatMessage.Caption? in
+            if case .message(let message) = row.content { return message.caption }
+            return nil
+        }
+        #expect(captions == [.uncertain(id: uncertain.id), .notSent(id: failed.id, why: .key)])
     }
 }

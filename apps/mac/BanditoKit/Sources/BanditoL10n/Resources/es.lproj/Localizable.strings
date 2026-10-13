@@ -946,6 +946,7 @@
 "ios.chat.attach.files" = "Archivos";
 "ios.chat.attach.noPreview" = "Sin vista previa en esta conexión";
 "ios.chat.attach.photos" = "Fototeca";
+"ios.chat.camera.denied" = "Bandito no puede usar la cámara. Permítelo en Ajustes de iOS → Bandito.";
 "ios.chat.changes.failed" = "No se pudieron cargar los cambios.";
 "ios.chat.connection.offline" = "Sin conexión. Los mensajes nuevos esperan aquí hasta que vuelva.";
 "ios.chat.connection.reconnecting" = "Reconectando…";
@@ -959,6 +960,9 @@
 "ios.chat.discard" = "Eliminar mensaje";
 "ios.chat.empty.message" = "Dale a %1$@ una tarea o pregunta algo. La respuesta aparecerá aquí.";
 "ios.chat.empty.title" = "Empieza con %1$@";
+"ios.chat.failed.gaveUp" = "No salió tras varios intentos";
+"ios.chat.failed.insecure" = "La conexión no es segura";
+"ios.chat.failed.key" = "Vuelve a conectar este iPhone";
 "ios.chat.header.offline" = "Sin conexión";
 "ios.chat.header.waiting" = "Te espera";
 "ios.chat.header.working" = "Trabajando…";
@@ -970,6 +974,7 @@
 "ios.chat.sending" = "Enviando…";
 "ios.chat.tools.hide" = "Ocultar los comandos";
 "ios.chat.tools.show" = "Mostrar los comandos";
+"ios.chat.uncertain" = "No se sabe si llegó";
 "ios.chat.waitingForConnection" = "Esperando conexión";
 "ios.connect.camera.allow" = "Permitir la cámara";
 "ios.connect.camera.denied" = "La cámara está desactivada para Bandito. Actívala en Ajustes, o pega el enlace o escribe la dirección.";

@@ -18,6 +18,19 @@ struct ChatUpdate {
     var initial: Bool
 }
 
+extension ChatUpdate {
+    /// Two updates that were not applied one by one become one: the rows and heights of the newer, every row that
+    /// changed in either, the rows that came in above, and the first-update flag of either. Dropping the older would
+    /// lose the cell of a stream that changed in it.
+    static func merge(_ older: ChatUpdate, _ newer: ChatUpdate) -> ChatUpdate {
+        var seen = Set<String>()
+        let changed = (older.changed + newer.changed).filter { seen.insert($0).inserted }
+        return ChatUpdate(
+            rows: newer.rows, heights: newer.heights, changed: changed, prepended: older.prepended + newer.prepended,
+            initial: older.initial || newer.initial)
+    }
+}
+
 /// The chat of one agent: the thread seen as rows, kept in step with the server. The thread's changes are folded together
 /// (a stream changes it at every token), the rows are built and measured off the main thread, and the screen is told what
 /// changed. The screen never reads the thread itself.
@@ -181,7 +194,7 @@ final class ChatModel {
             queued: outbox.items(serverID: server.id, agentID: agentID), expanded: expanded, changes: changes)
         let built = await Task.detached(priority: .userInitiated) { ChatRowBuilder.build(input) }.value
         // Measure what is new or changed off the main thread; the cards get their height here.
-        let old = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, $1) })
+        let old = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         let changedRows = built.filter { forceAll || old[$0.id]?.version != $0.version }
         await engine.prefetch(changedRows, metrics)
         var newHeights: [String: CGFloat] = [:]

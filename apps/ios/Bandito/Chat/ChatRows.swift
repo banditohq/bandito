@@ -23,8 +23,11 @@ struct ChatMessage: Equatable, Sendable {
         /// Written on this phone, not at the server yet.
         case waitingForConnection
         case sending
-        /// The daemon refused it; the queue item can be tried again or deleted.
-        case notSent(id: String)
+        /// The daemon refused it (or this device may not send); the queue item can be tried again or deleted.
+        case notSent(id: String, why: QueuedSend.Failure?)
+        /// The link dropped and the thread could not say whether the daemon took it: the person sends it again or
+        /// removes it.
+        case uncertain(id: String)
         /// The person pressed a button the agent offered.
         case viaButton
     }
@@ -202,6 +205,7 @@ struct ChatRowInput {
 enum ChatRowBuilder {
     static func build(_ input: ChatRowInput) -> [ChatRow] {
         var contents: [(id: String, content: ChatRowContent)] = []
+        var taken: [String: Int] = [:]
         let thread = input.thread
         let waiting = thread.waitingSeqs
         let undelivered = thread.undeliveredSeqs
@@ -217,8 +221,11 @@ enum ChatRowBuilder {
                     : L10n.Thread.chapterNotSaved(chapter: "\(number)")
                 contents.append((row.id, .chapter(text: text, warning: !saved)))
             case .toolGroup(let tools), .browserRun(let tools):
-                let key = row.id
-                contents.append((key, .tools(toolGroup(tools, open: input.expanded.contains(key)))))
+                // The key of a fold is the row's id after the ids are made unique (what the list toggles).
+                var probe = taken
+                let key = unique(row.id, &probe)
+                contents.append((row.id, .tools(toolGroup(tools, open: input.expanded.contains(key)))))
+                taken = probe
             case .item(let item):
                 if let content = content(of: item, input: input, waiting: waiting, undelivered: undelivered) {
                     contents.append((item.id, content))
@@ -232,7 +239,8 @@ enum ChatRowBuilder {
                 switch item.state {
                 case .waiting: .waitingForConnection
                 case .sending, .sent: .sending
-                case .failed: .notSent(id: item.id)
+                case .failed: .notSent(id: item.id, why: item.failureKind)
+                case .uncertain: .uncertain(id: item.id)
                 }
             let message = ChatMessage(
                 sender: .me, text: item.text, streaming: false, ts: item.createdAt, showsTime: false, files: item.attachments,
@@ -251,9 +259,21 @@ enum ChatRowBuilder {
         return finish(contents)
     }
 
+    /// `id` once only: the second row with an id gets `#2`, the third `#3`. The ids of a thread are not always unique (two day
+    /// dividers of one day when the times are out of order, a group of commands whose first call has no id, a live
+    /// message in the same millisecond as another), and a list with two rows of one id would crash.
+    /// The numbers follow the order of the rows, so the same thread gives the same ids at every update.
+    static func unique(_ id: String, _ taken: inout [String: Int]) -> String {
+        let count = taken[id, default: 0] + 1
+        taken[id] = count
+        return count == 1 ? id : "\(id)#\(count)"
+    }
+
     /// The gaps, the tails and the times, which depend on the rows around a row.
-    static func finish(_ contents: [(id: String, content: ChatRowContent)]) -> [ChatRow] {
+    static func finish(_ input: [(id: String, content: ChatRowContent)]) -> [ChatRow] {
         var rows: [ChatRow] = []
+        var taken: [String: Int] = [:]
+        let contents = input.map { (id: unique($0.id, &taken), content: $0.content) }
         for (index, entry) in contents.enumerated() {
             var content = entry.content
             let previous = index > 0 ? contents[index - 1].content.groupKind : nil

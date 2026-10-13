@@ -160,7 +160,7 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
                     self?.actions?.resend(seq: seq)
                     return true
                 })
-        case .notSent(let id)?:
+        case .notSent(let id, _)?, .uncertain(let id)?:
             found.append(
                 UIAccessibilityCustomAction(name: L10n.Ios.Chat.retry) { [weak self] _ in
                     self?.actions?.retry(queueID: id)
@@ -188,7 +188,7 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
         guard let message, let meta = layout?.meta, meta.frame.insetBy(dx: -12, dy: -10).contains(point) else { return }
         switch message.caption {
         case .notDelivered(let seq)?: actions?.resend(seq: seq)
-        case .notSent(let id)?: actions?.retry(queueID: id)
+        case .notSent(let id, _)?, .uncertain(let id)?: actions?.retry(queueID: id)
         default: break
         }
     }
@@ -203,8 +203,24 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
     func contextMenuInteraction(
         _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
     ) -> UIContextMenuConfiguration? {
-        guard let message, let layout, message.caption.map({ if case .notSent = $0 { return false } else { return true } }) ?? true
-        else { return nil }
+        guard let message, let layout else { return nil }
+        switch message.caption {
+        case .notSent(let id, _)?, .uncertain(let id)?:
+            return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+                UIMenu(children: [
+                    UIAction(title: L10n.Ios.Chat.retry, image: UIImage(systemName: "arrow.clockwise")) { _ in
+                        self?.actions?.retry(queueID: id)
+                    },
+                    UIAction(title: L10n.Ios.Chat.discard, image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
+                        self?.actions?.discard(queueID: id)
+                    },
+                    UIAction(title: L10n.Thread.copy, image: UIImage(systemName: "doc.on.doc")) { _ in
+                        self?.actions?.copy(layout.plain)
+                    },
+                ])
+            }
+        default: break
+        }
         let url = link(at: location)
         let body = message.text
         let isMarkdown = message.markdown && body != layout.plain

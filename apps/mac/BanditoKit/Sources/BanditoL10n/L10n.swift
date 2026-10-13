@@ -1374,6 +1374,7 @@ public enum L10n {
             public static var openSettings: String { L10n.tr("ios.chat.openSettings") }
             public static var retry: String { L10n.tr("ios.chat.retry") }
             public static var sending: String { L10n.tr("ios.chat.sending") }
+            public static var uncertain: String { L10n.tr("ios.chat.uncertain") }
             public static var waitingForConnection: String { L10n.tr("ios.chat.waitingForConnection") }
 
             public enum Approval {
@@ -1387,6 +1388,10 @@ public enum L10n {
                 public static var files: String { L10n.tr("ios.chat.attach.files") }
                 public static var noPreview: String { L10n.tr("ios.chat.attach.noPreview") }
                 public static var photos: String { L10n.tr("ios.chat.attach.photos") }
+            }
+
+            public enum Camera {
+                public static var denied: String { L10n.tr("ios.chat.camera.denied") }
             }
 
             public enum Changes {
@@ -1413,6 +1418,12 @@ public enum L10n {
             public enum Empty {
                 public static func message(name: String) -> String { L10n.tr("ios.chat.empty.message", name) }
                 public static func title(name: String) -> String { L10n.tr("ios.chat.empty.title", name) }
+            }
+
+            public enum Failed {
+                public static var gaveUp: String { L10n.tr("ios.chat.failed.gaveUp") }
+                public static var insecure: String { L10n.tr("ios.chat.failed.insecure") }
+                public static var key: String { L10n.tr("ios.chat.failed.key") }
             }
 
             public enum Header {
