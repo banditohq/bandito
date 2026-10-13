@@ -76,7 +76,7 @@ struct ServerConnectionSection: View {
             titleVisibility: .visible
         ) {
             Button(L10n.ServerSettings.Connection.Remove.button, role: .destructive) {
-                app.remove(server.id)
+                app.forget(server.id)
                 onBack()
             }
             Button(L10n.Common.cancel, role: .cancel) {}

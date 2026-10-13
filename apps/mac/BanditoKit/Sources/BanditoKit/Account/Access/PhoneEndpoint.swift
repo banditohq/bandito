@@ -54,23 +54,6 @@ extension SyncedPhone {
         guard let mine = SyncedPhone(endpoint: endpoint) else { return false }
         return isSameDaemon(as: mine)
     }
-
-    /// The fields this record lacks, taken from `other` (the same daemon seen by another device).
-    func filling(from other: SyncedPhone) -> SyncedPhone {
-        var result = self
-        if result.sid == nil || result.relayHost == nil || result.nk == nil {
-            if let sid = other.sid, let host = other.relayHost, let nk = other.nk, result.sid == nil {
-                result.sid = sid
-                result.relayHost = host
-                result.nk = nk
-            }
-        }
-        if result.fp == nil, let fp = other.fp, !other.hosts.isEmpty {
-            result.fp = fp
-            result.hosts = other.hosts
-        }
-        return result
-    }
 }
 
 extension ServerAccess {
@@ -124,7 +107,7 @@ public enum PairedServerPublishing {
 extension SyncPayload {
     /// One entry per daemon: two entries with the same Noise key or certificate are one server that two devices added.
     /// The entry with the richer endpoint stays (ssh, then a WebSocket address, then a link-paired one), the lower id
-    /// among equals, and it takes what the other knew about how to reach it.
+    /// among equals, as it is. Entries collapse only when every pin both give agrees (`SyncedPhone.isSameDaemon`).
     func collapsingSameDaemon() -> SyncPayload {
         func rank(_ server: SyncedServer) -> Int {
             switch server.endpoint {
@@ -143,10 +126,9 @@ extension SyncPayload {
                 continue
             }
             if let index = kept.firstIndex(where: { $0.phone?.isSameDaemon(as: phone) == true }) {
-                var winner = before(server, kept[index]) ? server : kept[index]
-                let loser = before(server, kept[index]) ? kept[index] : server
-                if let mine = winner.phone, let theirs = loser.phone { winner.phone = mine.filling(from: theirs) }
-                kept[index] = winner
+                // Nothing moves from one entry to the other: an address or a pin written by one device never becomes
+                // another entry's. The record in the blob is a hint that the server exists; the way in comes from the daemon.
+                if before(server, kept[index]) { kept[index] = server }
             } else {
                 kept.append(server)
             }

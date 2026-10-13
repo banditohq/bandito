@@ -518,7 +518,20 @@ public final class AppModel {
         servers.append(model)
         selectedServerID = model.id
         save()
+        onServerAdded?(config)
         Task { await model.connect() }
+    }
+
+    /// Called when the person removed a server (`forget`), with what it was: the account then does not offer it again.
+    @ObservationIgnored public var onServerForgotten: ((ServerConfig) -> Void)?
+    /// Called when a server was added (by hand, or from the account): a mark that hid it is lifted.
+    @ObservationIgnored public var onServerAdded: ((ServerConfig) -> Void)?
+
+    /// Removes a server because the person chose to: as `remove`, and the account is told.
+    public func forget(_ id: UUID) {
+        guard let config = servers.first(where: { $0.id == id })?.config else { return }
+        remove(id)
+        onServerForgotten?(config)
     }
 
     public func remove(_ id: UUID) {

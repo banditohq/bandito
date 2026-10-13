@@ -77,10 +77,28 @@ import Testing
         for (local, remote) in [(mac, phone), (phone, mac)] {
             let merged = SyncPayload.merged(local: SyncPayload(servers: [local]), remote: SyncPayload(servers: [remote]))
             #expect(merged.servers.count == 1)
-            // The ssh entry stays whatever the id order, and learns the direct address the phone knew.
+            // The ssh entry stays whatever the id order, and takes nothing from the other: an address or a pin one device
+            // wrote never becomes another entry's.
             #expect(merged.servers.first?.id == mac.id)
-            #expect(merged.servers.first?.phone?.fp == Self.fp && merged.servers.first?.phone?.hosts == ["10.0.0.2:7879"])
+            #expect(merged.servers.first?.phone == mac.phone)
         }
+    }
+
+    @Test func entriesWhoseGivenPinsDisagreeStayApartAndNothingIsBorrowed() {
+        let real = entry(
+            "00000000-0000-0000-0000-00000000000b", .ssh(host: "h", user: nil, port: nil),
+            SyncedPhone(sid: Self.sid, relayHost: "relay.bandito.dev", nk: Self.nk, fp: Self.fp, hosts: ["10.0.0.2:7879"]))
+        // The same key with another certificate and address: not the same daemon.
+        let evil = entry(
+            "00000000-0000-0000-0000-00000000000a", .local(deviceID: "phone"),
+            SyncedPhone(sid: Self.sid, relayHost: "evil.example", nk: Self.nk, fp: String(repeating: "ee", count: 32), hosts: ["evil:7879"]))
+        let merged = SyncPayload.merged(local: SyncPayload(servers: [evil]), remote: SyncPayload(servers: [real]))
+        #expect(merged.servers.count == 2)
+        #expect(merged.servers.first { $0.id == real.id }?.phone == real.phone)
+        // Only a key in common, with the evil one adding pins: the entries collapse, but nothing moves.
+        let thin = entry("00000000-0000-0000-0000-00000000000c", .ssh(host: "x", user: nil, port: nil), SyncedPhone(sid: Self.sid, relayHost: "relay.bandito.dev", nk: Self.nk))
+        let both = SyncPayload.merged(local: SyncPayload(servers: [evil]), remote: SyncPayload(servers: [thin]))
+        #expect(both.servers.count == 1 && both.servers[0].phone == thin.phone)
     }
 
     @Test func twoEntriesOfTheSameRichnessKeepTheLowerIdAndDifferentDaemonsStayApart() {

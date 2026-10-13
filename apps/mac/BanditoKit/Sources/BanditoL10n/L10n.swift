@@ -84,6 +84,11 @@ public enum L10n {
             public static var connectPhone: String { L10n.tr("account.devices.connectPhone") }
         }
 
+        public enum Hidden {
+            public static var hint: String { L10n.tr("account.hidden.hint") }
+            public static func show(count: Int) -> String { L10n.tr("account.hidden.show", count) }
+        }
+
         public enum Links {
             public static var help: String { L10n.tr("account.links.help") }
             public static var settings: String { L10n.tr("account.links.settings") }
@@ -1370,6 +1375,7 @@ public enum L10n {
                 public static var empty: String { L10n.tr("ios.account.servers.empty") }
                 public static var footer: String { L10n.tr("ios.account.servers.footer") }
                 public static var header: String { L10n.tr("ios.account.servers.header") }
+                public static var hidden: String { L10n.tr("ios.account.servers.hidden") }
                 public static var noAccess: String { L10n.tr("ios.account.servers.noAccess") }
                 public static var waiting: String { L10n.tr("ios.account.servers.waiting") }
             }

@@ -12,6 +12,8 @@
 "account.device.disconnectTitle" = "%1$@ trennen?";
 "account.device.lastSeen" = "zuletzt online %1$@";
 "account.devices.connectPhone" = "iPhone verbinden";
+"account.hidden.hint" = "Server des Kontos, die du von diesem Gerät entfernt hast. Zeige sie an, und sie kommen zurück.";
+"account.hidden.show" = "Ausgeblendete Server anzeigen (%1$lld)";
 "account.links.help" = "Hilfe und Feedback";
 "account.links.settings" = "App-Einstellungen";
 "account.method.email" = "E-Mail";
@@ -941,6 +943,7 @@
 "ios.account.servers.empty" = "Noch keine Server. Aktivieren Sie auf Ihrem Mac den iPhone-Zugriff für einen Server, dann erscheint er hier.";
 "ios.account.servers.footer" = "Ihr Mac gibt diesem iPhone für jeden Server einen eigenen Zugang. Solange der Mac aus ist, wartet der Server.";
 "ios.account.servers.header" = "SERVER IHRES KONTOS";
+"ios.account.servers.hidden" = "Ausgeblendet";
 "ios.account.servers.noAccess" = "Kein Fernzugriff";
 "ios.account.servers.waiting" = "Wartet auf den Mac …";
 "ios.account.signIn.text" = "Melden Sie sich an, um die Server Ihres Mac auf diesem iPhone zu sehen. Die Liste ist verschlüsselt: Der Schlüssel bleibt auf Ihren Geräten.";
@@ -2003,7 +2006,7 @@
 "phoneWizard.done.title" = "Fertig, das iPhone ist verbunden";
 "phoneWizard.install" = "Bandito für das iPhone ist noch in der geschlossenen Testphase: Schreib uns, um eine Einladung zu bekommen";
 "phoneWizard.noServer" = "Es ist kein verbundener Server vorhanden, der über die Cloud laufen kann. Verbinde einen Server oder aktualisiere ihn.";
-"phoneWizard.orSignIn" = "Oder melde dich auf dem iPhone einfach mit diesem Konto bei Bandito an: Die Server erscheinen von selbst.";
+"phoneWizard.orSignIn" = "Oder melde dich auf dem iPhone mit diesem Konto bei Bandito an und bestätige die Anmeldung hier: Die Server erscheinen von selbst.";
 "phoneWizard.pick.hint" = "Das iPhone erreicht ihn über die Bandito-Cloud, aus jedem Netz.";
 "phoneWizard.pick.title" = "Mit welchem Server soll sich das iPhone verbinden?";
 "phoneWizard.preparing" = "Verbindung wird vorbereitet …";

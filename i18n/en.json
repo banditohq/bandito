@@ -3492,5 +3492,8 @@
   "ios.account.signOut.message": "Servers that are already connected stay. Signing in to this account again needs no approval.",
   "ios.account.sender.title": "Approved by one of your devices. Does the code on its screen match the one below?",
   "ios.account.sender.codeLabel": "Code of the approving device",
-  "phoneWizard.orSignIn": "Or just sign in to Bandito on the iPhone with this account: the servers appear by themselves."
+  "phoneWizard.orSignIn": "Or sign in to Bandito on the iPhone with this account and confirm the sign-in here: the servers appear by themselves.",
+  "account.hidden.show": "Show hidden servers ({count})",
+  "account.hidden.hint": "Servers of the account that you removed from this device. Show them and they come back.",
+  "ios.account.servers.hidden": "Hidden"
 }

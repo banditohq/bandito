@@ -146,6 +146,12 @@ impl Config {
     }
 }
 
+/// The test setup flag `BANDITO_RELAY_ALLOW_LOOPBACK_PLAIN`: on only for the value `1`, so a variable that is merely set
+/// (empty, `0`, `false`) does not open anything.
+fn plain_from_env(value: Option<&str>) -> bool {
+    value == Some("1")
+}
+
 /// A relay URL taken apart.
 #[derive(Debug, PartialEq, Eq)]
 struct Target {
@@ -616,7 +622,9 @@ impl Relay {
             generation: AtomicU64::new(0),
             keys: Mutex::new(None),
             timing: Mutex::new(Timing::default()),
-            allow_plain: AtomicBool::new(std::env::var_os("BANDITO_RELAY_ALLOW_LOOPBACK_PLAIN").is_some()),
+            allow_plain: AtomicBool::new(plain_from_env(
+                std::env::var("BANDITO_RELAY_ALLOW_LOOPBACK_PLAIN").ok().as_deref(),
+            )),
             tls: tokio::sync::OnceCell::new(),
         }
     }
@@ -2749,6 +2757,22 @@ mod tests {
             !rig.dir.path().join(NOISE_KEY_FILE).exists(),
             "pair.create does not make the key while the relay is off"
         );
+    }
+
+    #[test]
+    fn the_plain_relay_flag_is_on_only_for_one() {
+        assert!(plain_from_env(Some("1")));
+        for off in [
+            None,
+            Some(""),
+            Some("0"),
+            Some("true"),
+            Some("yes"),
+            Some("11"),
+            Some(" 1"),
+        ] {
+            assert!(!plain_from_env(off), "{off:?}");
+        }
     }
 
     #[test]

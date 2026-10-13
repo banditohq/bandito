@@ -53,6 +53,10 @@ final class IOSAccount {
     /// paired with by a link. Empty in previews and tests that do not need it.
     @ObservationIgnored private let connectedServers: @MainActor () -> [ServerModel]
     @ObservationIgnored private let ledger: AccessLedger
+    /// The servers of the account the person removed on this iPhone: not asked for again until shown.
+    @ObservationIgnored private let dismissed: DismissedServers
+    /// How many are hidden for the signed-in account (the account screen offers to show them).
+    private(set) var hiddenCount = 0
     @ObservationIgnored private var responder: AccessResponder?
     @ObservationIgnored private let noiseKeys: ServerNoiseKeyStore
     @ObservationIgnored private let defaults: UserDefaults
@@ -74,6 +78,7 @@ final class IOSAccount {
     init(
         keys: SecretStore, identities: DeviceIdentityStore, sink: ServerAccessSink, noiseKeys: ServerNoiseKeyStore,
         connectedServers: @escaping @MainActor () -> [ServerModel] = { [] }, ledger: AccessLedger = AccessLedger(),
+        dismissed: DismissedServers = DismissedServers(),
         http: HTTPClient = URLSessionHTTPClient(), baseURL: URL = AccountClient.defaultBaseURL,
         deviceName: String = IOSAccount.currentDeviceName(), defaults: UserDefaults = .standard,
         pollInterval: Duration = .seconds(3)
@@ -84,6 +89,7 @@ final class IOSAccount {
         self.noiseKeys = noiseKeys
         self.connectedServers = connectedServers
         self.ledger = ledger
+        self.dismissed = dismissed
         self.http = http
         self.baseURL = baseURL
         self.deviceName = deviceName
@@ -100,10 +106,14 @@ final class IOSAccount {
         let session = AccessSession(
             add: { try ServerSession.shared.add($0) },
             holds: { ServerSession.shared.holds(serverID: $0, phone: $1) })
-        return IOSAccount(
+        let account = IOSAccount(
             keys: secrets, identities: DeviceIdentityStore(secrets: identitySecrets),
             sink: AccountAccessSink(secrets: secrets, session: session, noiseKeys: noiseKeys), noiseKeys: noiseKeys,
             connectedServers: { ServerSession.shared.servers })
+        // A server the person removes stays removed; one added again (by any way) lifts the mark.
+        ServerSession.shared.onForgotten = { [weak account] in account?.dismiss($0) }
+        ServerSession.shared.onAdded = { [weak account] in account?.lift($0) }
+        return account
     }
 
     /// The Keychain; on the Simulator an unsigned build has no Keychain access group and refuses every write, so there a
@@ -172,7 +182,8 @@ final class IOSAccount {
         syncStore = store
         responder = AccessResponder(sync: store, account: client, identity: identity, ledger: ledger)
         requester = AccessRequester(
-            sync: store, account: client, identity: identity, sink: sink, noiseKeys: noiseKeys, defaults: defaults)
+            sync: store, account: client, identity: identity, sink: sink, noiseKeys: noiseKeys, defaults: defaults,
+            dismissed: dismissed)
         github = PhoneGitHubSignIn(service: client)
         email = PhoneEmailSignIn(service: client)
         return client
@@ -357,6 +368,30 @@ final class IOSAccount {
 
     // MARK: servers
 
+    private var accountID: String? { me?.user.id }
+
+    /// The person removed this server on this iPhone: the account does not bring it back.
+    func dismiss(_ config: ServerConfig) {
+        guard let accountID, stage == .ready else { return }
+        dismissed.insert(accountID: accountID, serverID: config.id, phone: SyncedPhone(endpoint: config.endpoint))
+        hiddenCount = dismissed.count(accountID: accountID)
+    }
+
+    /// A server was added here: a mark that hid it (by id, or as the same daemon) is lifted.
+    func lift(_ config: ServerConfig) {
+        guard let accountID else { return }
+        dismissed.lift(accountID: accountID, serverID: config.id, phone: SyncedPhone(endpoint: config.endpoint))
+        hiddenCount = dismissed.count(accountID: accountID)
+    }
+
+    /// Shows the hidden servers again: the next round asks for them.
+    func showHiddenServers() {
+        guard let accountID else { return }
+        dismissed.clear(accountID: accountID)
+        hiddenCount = 0
+        Task { await runCycle() }
+    }
+
     /// One round of the asking side: opens grants, asks for the servers it has no token for. Silent on failure: the next
     /// round tries again.
     func runCycle() async {
@@ -372,6 +407,7 @@ final class IOSAccount {
                 _ = try? await responder.run(servers: connected)
             }
             servers = try await requester.run()
+            if let accountID { hiddenCount = dismissed.count(accountID: accountID) }
         } catch AccountError.api(let code, _) where code == "unauthorized" {
             await dropSession()
         } catch {
@@ -428,6 +464,9 @@ final class IOSAccount {
     }
 
     private func reset() {
+        // The hidden servers belong to the account that is leaving; the next one starts with none.
+        if let accountID { dismissed.clear(accountID: accountID) }
+        hiddenCount = 0
         pending = nil
         stage = .signedOut
         me = nil
@@ -450,11 +489,14 @@ final class IOSAccount {
 #if DEBUG
 extension IOSAccount {
     /// An account in a given stage with no network, for the screenshots (`-account-preview <stage>`) and the previews.
-    static func preview(stage: Stage, servers: [AccessServerState] = [], who: String = "anna@example.com") -> IOSAccount {
+    static func preview(
+        stage: Stage, servers: [AccessServerState] = [], who: String = "anna@example.com",
+        dismissed: DismissedServers = DismissedServers()
+    ) -> IOSAccount {
         let account = IOSAccount(
             keys: MemorySecretStore(), identities: DeviceIdentityStore(secrets: MemorySecretStore()),
             sink: AccountAccessSink(secrets: MemorySecretStore(), file: URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "preview-access.json")),
-            noiseKeys: ServerNoiseKeyStore(secrets: MemorySecretStore()), deviceName: "iPhone")
+            noiseKeys: ServerNoiseKeyStore(secrets: MemorySecretStore()), dismissed: dismissed, deviceName: "iPhone")
         account.inert = true
         account.stage = stage
         account.servers = servers

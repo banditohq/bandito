@@ -8,9 +8,11 @@ import Testing
     private let token = "bdt_" + String(repeating: "ab", count: 32)
     private let server = "00000000-0000-0000-0000-0000000000a1"
 
+    private let record = SyncedPhone(sid: "abcdefghijklmnopqrstuvwxyz", relayHost: "relay.bandito.dev", nk: "NK", fp: String(repeating: "ab", count: 32), hosts: ["10.0.0.2:7879"])
+
     private func seal(from sender: DeviceIdentity, to recipient: DeviceIdentity, account: String = "u1", device: String = "phone", server: String? = nil) throws -> String {
         try DeviceTokenSeal.seal(
-            token: token, forPublicKey: recipient.publicKeyBase64, sender: sender, accountID: account,
+            token: token, phone: record, forPublicKey: recipient.publicKeyBase64, sender: sender, accountID: account,
             deviceID: device, serverID: server ?? self.server)
     }
 
@@ -21,6 +23,7 @@ import Testing
         let opened = try DeviceTokenSeal.open(
             sealed: sealed, with: phone, accountID: "u1", deviceID: "phone", serverID: server)
         #expect(opened.token == token)
+        #expect(opened.phone == record, "the daemon's own record travels in the grant")
         #expect(opened.senderPublicKey == mac.publicKeyBase64)
         // The token is not readable in the message.
         #expect(!(Data(base64Encoded: sealed) ?? Data()).contains(Data(token.utf8)))
@@ -91,10 +94,25 @@ import Testing
         #expect(throws: DeviceTokenSealError.invalidSeal) { try open(Data(repeating: 1, count: 100_000).base64EncodedString()) }
         let mac = try makeIdentity()
         #expect(throws: DeviceTokenSealError.invalidPublicKey) {
-            try DeviceTokenSeal.seal(token: "t", forPublicKey: "AAAA", sender: mac, accountID: "u", deviceID: "d", serverID: server)
+            try DeviceTokenSeal.seal(token: "t", phone: SyncedPhone(fp: String(repeating: "ab", count: 32), hosts: ["h:1"]), forPublicKey: "AAAA", sender: mac, accountID: "u", deviceID: "d", serverID: server)
         }
         #expect(throws: DeviceTokenSealError.invalidToken) {
-            try DeviceTokenSeal.seal(token: "", forPublicKey: phone.publicKeyBase64, sender: mac, accountID: "u", deviceID: "d", serverID: server)
+            try DeviceTokenSeal.seal(token: "", phone: SyncedPhone(fp: String(repeating: "ab", count: 32), hosts: ["h:1"]), forPublicKey: phone.publicKeyBase64, sender: mac, accountID: "u", deviceID: "d", serverID: server)
+        }
+    }
+
+    @Test func aSealWithNoWayInOrOfTheOldVersionIsRefused() throws {
+        let mac = try makeIdentity()
+        let recipient = try makeIdentity()
+        #expect(throws: DeviceTokenSealError.invalidToken) {
+            try DeviceTokenSeal.seal(
+                token: token, phone: SyncedPhone(), forPublicKey: recipient.publicKeyBase64, sender: mac, accountID: "u", deviceID: "d", serverID: server)
+        }
+        // Version 1 (the token alone) is not accepted any more.
+        var bytes = [UInt8](try #require(Data(base64Encoded: try seal(from: mac, to: recipient, account: "u", device: "d"))))
+        bytes[0] = 0x01
+        #expect(throws: DeviceTokenSealError.invalidSeal) {
+            try DeviceTokenSeal.open(sealed: Data(bytes).base64EncodedString(), with: recipient, accountID: "u", deviceID: "d", serverID: server)
         }
     }
 }

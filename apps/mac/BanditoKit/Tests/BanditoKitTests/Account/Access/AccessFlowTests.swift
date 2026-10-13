@@ -71,6 +71,8 @@ final class AccessFakeDaemon: AccessServer {
     var rows: [Device] = [Device(id: "row-me", name: "Mac", createdAt: 0, lastSeenAt: nil, current: true, platform: nil)]
     var issuedCalls: [(name: String, platform: String, noiseKey: String?)] = []
     var refuse: RPCError?
+    /// What the daemon says about how a phone reaches it.
+    var info: PhoneInfo? = PhoneInfo(relayHost: "relay.bandito.dev", sid: "S1", noiseKey: "NK")
     private var counter = 0
 
     init(_ id: UUID) { accessServerID = id }
@@ -84,7 +86,7 @@ final class AccessFakeDaemon: AccessServer {
         return IssuedDevice(deviceId: id, token: "bdt_token_\(counter)")
     }
 
-    func phoneInfo() async throws -> PhoneInfo? { nil }
+    func phoneInfo() async throws -> PhoneInfo? { info }
     func deviceRows() async throws -> [Device] { rows }
     func revokeDeviceRow(_ id: String) async throws { rows.removeAll { $0.id == id } }
 }
@@ -192,6 +194,42 @@ final class Clock: @unchecked Sendable {
         #expect(received[0].deviceToken == "bdt_token_1" && received[0].serverID == serverID)
         #expect(received[0].name == "vps" && received[0].phone == phoneInfo)
         #expect(sync.payload?.accessGrants.isEmpty == true && sync.payload?.accessRequests.isEmpty == true)
+    }
+
+    @Test func aRecordWrittenToTheBlobByAnotherDeviceNeverChangesWhereTheGrantConnects() async throws {
+        // A device of the account writes evil pins and addresses next to the real key.
+        var blob = blobWithServer()
+        blob.servers[0].phone = SyncedPhone(
+            sid: "S1", relayHost: "evil.example", nk: "NK", fp: String(repeating: "ee", count: 32), hosts: ["evil.example:7879"])
+        let sync = AccessFakeSync(blob)
+        let (responder, requester, sink, _) = suite(sync: sync)
+        let server = AccessFakeDaemon(serverID)
+        server.info = PhoneInfo(
+            relayHost: "relay.bandito.dev", sid: "S1", noiseKey: "NK", fingerprint: String(repeating: "ab", count: 32),
+            hosts: ["10.0.0.2:7879"])
+
+        _ = try await requester.run()
+        _ = try await responder.run(servers: [server])
+        _ = try await requester.run()
+        let received = try #require(await sink.received.first)
+        // The access is the daemon's own record, as the Mac read it, whatever the blob says.
+        #expect(received.phone == server.info?.synced)
+        #expect(received.phone.relayHost == "relay.bandito.dev" && received.phone.hosts == ["10.0.0.2:7879"])
+        #expect(received.phone.fp == String(repeating: "ab", count: 32))
+        let text = String(describing: received.phone)
+        #expect(!text.contains("evil"))
+    }
+
+    @Test func aDaemonWithNoWayInGetsNoTokenIssued() async throws {
+        let sync = AccessFakeSync(blobWithServer())
+        let (responder, requester, _, _) = suite(sync: sync)
+        let server = AccessFakeDaemon(serverID)
+        server.info = nil
+        _ = try await requester.run()
+        let outcome = try await responder.run(servers: [server])
+        #expect(outcome.issued == 0 && outcome.failed == 1 && server.issuedCalls.isEmpty)
+        // The request stays: when the daemon has a way in, the next cycle answers it.
+        #expect(sync.payload?.accessRequests.count == 1)
     }
 
     @Test func aRequestIsAnsweredOnceEvenIfItComesBack() async throws {
@@ -317,7 +355,7 @@ final class Clock: @unchecked Sendable {
         let stranger = try makeIdentity()
         let (_, requester, sink, _) = suite(sync: sync)
         let forged = try DeviceTokenSeal.seal(
-            token: "bdt_evil", forPublicKey: phone.publicKeyBase64, sender: stranger, accountID: "u1", deviceID: "phone",
+            token: "bdt_evil", phone: phoneInfo, forPublicKey: phone.publicKeyBase64, sender: stranger, accountID: "u1", deviceID: "phone",
             serverID: serverID.uuidString)
         sync.payload?.accessGrants = [
             AccessGrant(deviceID: "phone", serverID: serverID.uuidString, sealed: forged, at: Int64(now.timeIntervalSince1970 * 1000))

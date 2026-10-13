@@ -12,6 +12,8 @@
 "account.device.disconnectTitle" = "%1$@ 연결을 해제할까요?";
 "account.device.lastSeen" = "마지막 접속 %1$@";
 "account.devices.connectPhone" = "iPhone 연결";
+"account.hidden.hint" = "이 기기에서 제거한 계정의 서버입니다. 표시하면 다시 나타납니다.";
+"account.hidden.show" = "숨긴 서버 표시 (%1$lld)";
 "account.links.help" = "도움말 및 피드백";
 "account.links.settings" = "앱 설정";
 "account.method.email" = "이메일";
@@ -941,6 +943,7 @@
 "ios.account.servers.empty" = "아직 서버가 없습니다. Mac에서 서버의 iPhone 접근을 켜면 여기에 나타납니다.";
 "ios.account.servers.footer" = "Mac이 이 iPhone에 서버마다 전용 접근 권한을 발급합니다. Mac이 꺼져 있는 동안 서버는 대기합니다.";
 "ios.account.servers.header" = "계정의 서버";
+"ios.account.servers.hidden" = "숨김";
 "ios.account.servers.noAccess" = "원격 접근 없음";
 "ios.account.servers.waiting" = "Mac을 기다리는 중…";
 "ios.account.signIn.text" = "로그인하면 Mac의 서버를 이 iPhone에서 볼 수 있습니다. 목록은 암호화되며 키는 사용자의 기기에만 남습니다.";
@@ -2003,7 +2006,7 @@
 "phoneWizard.done.title" = "완료되었습니다. iPhone이 연결되었습니다";
 "phoneWizard.install" = "iPhone용 Bandito는 현재 비공개 테스트 중입니다. 초대를 받으려면 저희에게 메일을 보내세요";
 "phoneWizard.noServer" = "클라우드로 동작할 수 있는 연결된 서버가 없습니다. 서버를 연결하거나 업데이트하세요.";
-"phoneWizard.orSignIn" = "또는 iPhone의 Bandito에 이 계정으로 로그인하기만 하면 서버가 저절로 나타납니다.";
+"phoneWizard.orSignIn" = "또는 iPhone의 Bandito에 이 계정으로 로그인하고 여기서 로그인을 승인하세요. 서버가 저절로 나타납니다.";
 "phoneWizard.pick.hint" = "iPhone은 어떤 네트워크에서든 Bandito 클라우드를 통해 이 서버에 연결됩니다.";
 "phoneWizard.pick.title" = "iPhone을 어느 서버에 연결할까요?";
 "phoneWizard.preparing" = "연결을 준비하는 중…";

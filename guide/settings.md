@@ -93,6 +93,7 @@ Shows whether this Mac is signed in and syncs servers, shortcuts and prompts. Wi
 Где: Settings (⌘,) → Account (Аккаунт)
 1. Read the state: Account (Аккаунт). Without sign-in, the line says Not signed in. Everything works on this Mac and without an account.
 2. Sign in: the Sign in (Войти) button opens the account sheet, the same sign-in as the account step of the introduction (see [account.md](account.md)).
+3. A server of your account that you removed from this Mac is not brought back by the account. While there are such servers, Show hidden servers (N) (Показать скрытые серверы (N)) appears here: it makes them come back at the next round of the account's sync. Signing out forgets what was hidden.
 
 ## Servers (Серверы)
 

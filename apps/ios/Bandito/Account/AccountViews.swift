@@ -269,6 +269,12 @@ struct AccountScreen: View {
                 }
             }
         }
+        if account.hiddenCount > 0 {
+            Button(L10n.Account.Hidden.show(count: account.hiddenCount)) { account.showHiddenServers() }
+                .buttonStyle(OnboardingLinkStyle())
+                .accessibilityIdentifier("account.hidden.show")
+            footnote(L10n.Account.Hidden.hint)
+        }
         footnote(L10n.Ios.Account.Servers.footer)
         signOutLink
     }
@@ -343,7 +349,7 @@ struct ServerStateRow: View {
         switch server.status {
         case .connected: Color.Bandito.ok
         case .waitingForMac: Color.Bandito.signal
-        case .noRemoteAccess: Color.Bandito.text3
+        case .noRemoteAccess, .hidden: Color.Bandito.text3
         }
     }
 
@@ -352,6 +358,7 @@ struct ServerStateRow: View {
         case .connected: L10n.Ios.Account.Servers.connected
         case .waitingForMac: L10n.Ios.Account.Servers.waiting
         case .noRemoteAccess: L10n.Ios.Account.Servers.noAccess
+        case .hidden: L10n.Ios.Account.Servers.hidden
         }
     }
 }

@@ -100,6 +100,10 @@ public final class AccountHub {
     @ObservationIgnored private var publishedPhones: [UUID: SyncedPhone] = [:]
     @ObservationIgnored private var responder: AccessResponder?
     @ObservationIgnored private var requester: AccessRequester?
+    /// The servers of the account the person removed on this Mac: not asked for again until shown.
+    @ObservationIgnored private let dismissed: DismissedServers
+    /// How many are hidden for the signed-in account (the Account page offers to show them).
+    public private(set) var hiddenServerCount = 0
     /// Where the accesses other devices issue for this Mac go (`MacAccessSink`). Set by the main window.
     @ObservationIgnored public var accessSink: (any ServerAccessSink)?
     /// The phone records this Mac last published for its own servers.
@@ -116,9 +120,11 @@ public final class AccountHub {
 
     public init(
         keys: SecretStore = KeychainStore(service: "dev.bandito.account"),
+        dismissed: DismissedServers = DismissedServers(),
         loadIdentity: @escaping @Sendable () async throws -> DeviceIdentity = { try await DeviceIdentityStore.shared.load() }
     ) {
         self.keys = keys
+        self.dismissed = dismissed
         self.loadIdentity = loadIdentity
         // A stored session is enough to know someone is signed in; no device key is read for that.
         signedIn = ((try? keys.load(account: AccountClient.sessionAccount)) ?? nil) != nil
@@ -229,7 +235,12 @@ public final class AccountHub {
         responder = nil
         requester = nil
         publishedPhones = [:]
-        if let accountID = session?.user.id { accessLedger.forget(accountID: accountID) }
+        if let accountID = session?.user.id {
+            accessLedger.forget(accountID: accountID)
+            // The hidden servers belong to the account that is leaving; the next one starts with none.
+            dismissed.clear(accountID: accountID)
+        }
+        hiddenServerCount = 0
         profile.clear()
         clearPicture()
         me = nil
@@ -275,13 +286,44 @@ public final class AccountHub {
             if let sink = accessSink {
                 let asking = self.requester ?? AccessRequester(
                     sync: store, account: client, identity: identity, sink: sink,
-                    noiseKeys: ServerNoiseKeyStore(secrets: keys))
+                    noiseKeys: ServerNoiseKeyStore(secrets: keys), dismissed: dismissed)
                 self.requester = asking
                 _ = try await asking.run()
             }
         } catch {
             Logger.account.error("Access cycle: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    private var currentAccountID: String? { me?.user.id ?? profile.rememberedUserID }
+
+    /// The person removed this server on this Mac: the account does not bring it back.
+    public func dismiss(_ config: ServerConfig) {
+        guard signedIn, let accountID = currentAccountID else { return }
+        dismissed.insert(
+            accountID: accountID, serverID: config.id,
+            phone: SyncedPhone(endpoint: config.endpoint) ?? publishedPhones[config.id])
+        hiddenServerCount = dismissed.count(accountID: accountID)
+    }
+
+    /// A server was added here: a mark that hid it (by id, or as the same daemon) is lifted.
+    public func lift(_ config: ServerConfig) {
+        guard let accountID = currentAccountID else { return }
+        dismissed.lift(accountID: accountID, serverID: config.id, phone: SyncedPhone(endpoint: config.endpoint))
+        hiddenServerCount = dismissed.count(accountID: accountID)
+    }
+
+    /// Reads how many servers are hidden (the Account page shows the button while there are some).
+    public func refreshHiddenCount() {
+        hiddenServerCount = currentAccountID.map { dismissed.count(accountID: $0) } ?? 0
+    }
+
+    /// Shows the hidden servers again: the next round asks for them.
+    public func showHiddenServers() {
+        guard let accountID = currentAccountID else { return }
+        dismissed.clear(accountID: accountID)
+        hiddenServerCount = 0
+        requestAccessCycle()
     }
 
     /// Runs a round of the access cycle now, without waiting for the next tick: after the cloud was switched on or off, so

@@ -12,6 +12,8 @@
 "account.device.disconnectTitle" = "¿Desconectar %1$@?";
 "account.device.lastSeen" = "visto por última vez %1$@";
 "account.devices.connectPhone" = "Conectar iPhone";
+"account.hidden.hint" = "Servidores de la cuenta que quitaste de este dispositivo. Muéstralos y volverán.";
+"account.hidden.show" = "Mostrar servidores ocultos (%1$lld)";
 "account.links.help" = "Ayuda y comentarios";
 "account.links.settings" = "Ajustes de la app";
 "account.method.email" = "Correo";
@@ -941,6 +943,7 @@
 "ios.account.servers.empty" = "Aún no hay servidores. Active el acceso desde iPhone para un servidor en su Mac y aparecerá aquí.";
 "ios.account.servers.footer" = "Su Mac da a este iPhone un acceso propio a cada servidor. Mientras el Mac esté apagado, el servidor espera.";
 "ios.account.servers.header" = "SERVIDORES DE SU CUENTA";
+"ios.account.servers.hidden" = "Oculto";
 "ios.account.servers.noAccess" = "Sin acceso remoto";
 "ios.account.servers.waiting" = "Esperando al Mac…";
 "ios.account.signIn.text" = "Inicie sesión para ver los servidores de su Mac en este iPhone. La lista está cifrada: la clave solo está en sus dispositivos.";
@@ -2003,7 +2006,7 @@
 "phoneWizard.done.title" = "Listo, el iPhone está conectado";
 "phoneWizard.install" = "Bandito para iPhone está por ahora en pruebas cerradas: escríbenos para recibir una invitación";
 "phoneWizard.noServer" = "No hay ningún servidor conectado que pueda funcionar con la nube. Conecta un servidor o actualízalo.";
-"phoneWizard.orSignIn" = "O simplemente inicia sesión en Bandito en el iPhone con esta cuenta: los servidores aparecerán solos.";
+"phoneWizard.orSignIn" = "O inicia sesión en Bandito en el iPhone con esta cuenta y confirma el acceso aquí: los servidores aparecerán solos.";
 "phoneWizard.pick.hint" = "El iPhone llegará a él a través de la nube de Bandito, desde cualquier red.";
 "phoneWizard.pick.title" = "¿A qué servidor se conecta el iPhone?";
 "phoneWizard.preparing" = "Preparando la conexión…";

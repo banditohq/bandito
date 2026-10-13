@@ -3491,5 +3491,8 @@
   "ios.account.signOut.message": "Bereits verbundene Server bleiben erhalten. Die erneute Anmeldung bei diesem Konto braucht keine Bestätigung.",
   "ios.account.sender.title": "Von einem Ihrer Geräte bestätigt. Stimmt der Code auf dessen Bildschirm mit dem unten überein?",
   "ios.account.sender.codeLabel": "Code des bestätigenden Geräts",
-  "phoneWizard.orSignIn": "Oder melde dich auf dem iPhone einfach mit diesem Konto bei Bandito an: Die Server erscheinen von selbst."
+  "phoneWizard.orSignIn": "Oder melde dich auf dem iPhone mit diesem Konto bei Bandito an und bestätige die Anmeldung hier: Die Server erscheinen von selbst.",
+  "account.hidden.show": "Ausgeblendete Server anzeigen ({count})",
+  "account.hidden.hint": "Server des Kontos, die du von diesem Gerät entfernt hast. Zeige sie an, und sie kommen zurück.",
+  "ios.account.servers.hidden": "Ausgeblendet"
 }

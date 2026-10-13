@@ -3450,5 +3450,8 @@
   "ios.account.signOut.message": "已连接的服务器会保留。再次登录此账户无需批准。",
   "ios.account.sender.title": "已由你的某台设备批准。它屏幕上的代码与下方的代码一致吗？",
   "ios.account.sender.codeLabel": "批准设备的代码",
-  "phoneWizard.orSignIn": "或者直接在 iPhone 上用此账户登录 Bandito：服务器会自动出现。"
+  "phoneWizard.orSignIn": "或者在 iPhone 上用此账户登录 Bandito，并在此处确认登录：服务器会自动出现。",
+  "account.hidden.show": "显示已隐藏的服务器（{count}）",
+  "account.hidden.hint": "您已从此设备移除的账户服务器。显示它们后会重新出现。",
+  "ios.account.servers.hidden": "已隐藏"
 }

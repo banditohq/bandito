@@ -9,6 +9,8 @@ public struct AccessServerState: Equatable, Sendable, Identifiable {
         case waitingForMac
         /// The server has no relay or direct access written by any device, so there is nothing to ask for.
         case noRemoteAccess
+        /// The person removed this server on this device: it is not asked for again until they show it.
+        case hidden
     }
 
     public var id: UUID
@@ -36,6 +38,7 @@ public final class AccessRequester {
     private let identity: DeviceIdentity
     private let sink: ServerAccessSink
     private let noiseKeys: ServerNoiseKeyStore
+    private let dismissed: DismissedServers
     private let defaults: UserDefaults
     private let now: () -> Date
     private var running = false
@@ -45,8 +48,10 @@ public final class AccessRequester {
 
     public init(
         sync: AccessSyncing, account: AccessAccount, identity: DeviceIdentity, sink: ServerAccessSink,
-        noiseKeys: ServerNoiseKeyStore, defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init
+        noiseKeys: ServerNoiseKeyStore, defaults: UserDefaults = .standard, dismissed: DismissedServers? = nil,
+        now: @escaping () -> Date = Date.init
     ) {
+        self.dismissed = dismissed ?? DismissedServers(defaults: defaults)
         self.sync = sync
         self.account = account
         self.identity = identity
@@ -83,24 +88,33 @@ public final class AccessRequester {
 
         var doneGrants = Set<AccessKey>()
         var newRequests: [AccessRequest] = []
+        var hiddenIDs = Set<UUID>()
         var states: [AccessServerState] = []
 
         for server in payload.servers {
             let serverKey = server.id.uuidString.lowercased()
             let key = AccessKey(deviceID: myID, serverID: serverKey)
             var connected = await sink.hasAccess(serverID: server.id, phone: server.phone)
+            // Removed here on purpose: nothing is asked for and a grant that arrives anyway is not opened into a server.
+            if !connected, dismissed.contains(accountID: accountID, serverID: server.id, phone: server.phone) {
+                hiddenIDs.insert(server.id)
+                if payload.accessGrants.contains(where: { $0.key == key }) { doneGrants.insert(key) }
+                states.append(AccessServerState(id: server.id, name: server.name, status: .hidden, phone: server.phone))
+                continue
+            }
 
             if let grant = payload.accessGrants.first(where: { $0.key == key }) {
                 if connected {
                     doneGrants.insert(key)
-                } else if let phone = server.phone, phone.isReachable {
+                } else {
                     do {
                         let opened = try DeviceTokenSeal.open(
                             sealed: grant.sealed, with: identity, accountID: accountID, deviceID: myID,
                             serverID: serverKey, expectedSenders: senders)
+                        // The address and the pins are the grant's (the daemon's own answer), never the blob's hint.
                         try await sink.receive(
                             ServerAccess(
-                                serverID: server.id, name: server.name, phone: phone, deviceToken: opened.token))
+                                serverID: server.id, name: server.name, phone: opened.phone, deviceToken: opened.token))
                         connected = true
                         doneGrants.insert(key)
                     } catch is DeviceTokenSealError {
@@ -140,7 +154,7 @@ public final class AccessRequester {
             let id = UUID(uuidString: request.serverID)
             let phone = payload.servers.first { $0.id == id }?.phone
             let held = id != nil ? await sink.hasAccess(serverID: id!, phone: phone) : false
-            if held || !accountServers.contains(request.serverID) { doneRequests.insert(request.key) }
+            if held || (id != nil && hiddenIDs.contains(id!)) || !accountServers.contains(request.serverID) { doneRequests.insert(request.key) }
         }
 
         guard !doneGrants.isEmpty || !newRequests.isEmpty || !doneRequests.isEmpty else { return states }

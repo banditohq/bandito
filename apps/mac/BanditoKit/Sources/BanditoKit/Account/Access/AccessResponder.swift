@@ -163,6 +163,12 @@ public final class AccessResponder {
                     continue
                 }
             }
+            // How the asking device reaches this daemon is what the daemon says about itself now, not what the blob says:
+            // any device of the account can write the blob. With no way in there is nothing to hand over, so no token.
+            guard let phone = (try? await server.phoneInfo())?.synced, phone.isReachable else {
+                outcome.failed += 1
+                continue
+            }
             do {
                 let issued = try await server.issueDeviceToken(
                     name: Self.deviceName(asking.name), platform: Self.platform(asking.platform),
@@ -170,7 +176,7 @@ public final class AccessResponder {
                 let sealed: String
                 do {
                     sealed = try DeviceTokenSeal.seal(
-                        token: issued.token, forPublicKey: listed, sender: identity,
+                        token: issued.token, phone: phone, forPublicKey: listed, sender: identity,
                         accountID: accountID, deviceID: request.deviceID, serverID: request.serverID)
                 } catch {
                     try? await server.revokeDeviceRow(issued.deviceId)

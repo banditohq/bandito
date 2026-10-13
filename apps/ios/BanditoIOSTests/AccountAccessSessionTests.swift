@@ -16,8 +16,7 @@ import Testing
             fileURL: FileManager.default.temporaryDirectory.appending(path: "bandito-\(UUID().uuidString)/servers.json"),
             defaults: UserDefaults(suiteName: "ios-access-\(UUID().uuidString)")!)
         let secrets = MemorySecrets()
-        let session = ServerSession(
-            store: store, secrets: secrets, connect: { _ in }, defaults: UserDefaults(suiteName: "ios-dismissed-\(UUID().uuidString)")!)
+        let session = ServerSession(store: store, secrets: secrets, connect: { _ in })
         session.forgetCursor = { _ in }
         let noiseKeys = ServerNoiseKeyStore(secrets: MemorySecretStore())
         let access = AccessSession(
@@ -79,19 +78,38 @@ import Testing
         #expect(session.servers.isEmpty)
     }
 
-    @Test func aServerTheOwnerDisconnectedIsNotAskedForAgain() async throws {
+    @Test func aServerThePersonDisconnectedIsToldToTheAccountAndAddingItAgainLiftsTheMark() async throws {
         let (session, _, sink, _) = make()
+        let hidden = DismissedServers(defaults: UserDefaults(suiteName: "ios-hidden-\(UUID().uuidString)")!)
+        let account = IOSAccount.preview(stage: .ready, dismissed: hidden)
+        session.onForgotten = { account.dismiss($0) }
+        session.onAdded = { account.lift($0) }
         let id = UUID()
         try await sink.receive(ServerAccess(serverID: id, name: "Studio", phone: Self.phone, deviceToken: "bdt_issued"))
+        #expect(account.hiddenCount == 0, "adding a server hides nothing")
         session.revokeSelf = { _ in true }
         #expect(await session.disconnect(id) == .removed(revokedOnServer: true))
         #expect(session.servers.isEmpty)
-        #expect(await sink.hasAccess(serverID: id, phone: Self.phone), "dismissed: the account does not bring it back")
-        // Scanning it again brings it back and clears the mark.
-        let again = ServerConfig(
-            id: id, name: "Studio", endpoint: .reachable(hosts: [], fingerprint: nil, relay: RelayRoute(host: "relay.bandito.dev", sid: Self.sid), noiseKey: Self.nk),
+        #expect(account.hiddenCount == 1)
+        #expect(hidden.contains(accountID: "preview", serverID: id, phone: nil))
+        #expect(hidden.contains(accountID: "preview", serverID: UUID(), phone: Self.phone), "the same daemon by another id")
+        // The same daemon scanned later under another id lifts the mark (the id of the account's entry differs).
+        let scanned = ServerConfig(
+            name: "Studio", endpoint: .reachable(hosts: [], fingerprint: nil, relay: RelayRoute(host: "relay.bandito.dev", sid: Self.sid), noiseKey: Self.nk),
             token: "t2", noiseSecret: Base64URL.encode(Data(repeating: 1, count: 32)))
-        try session.add(again)
-        #expect(session.servers.count == 1 && !session.dismissed.contains(id))
+        try session.add(scanned)
+        #expect(account.hiddenCount == 0)
+    }
+
+    @Test func showingHiddenServersClearsThemAndAnotherAccountStartsWithNone() throws {
+        let hidden = DismissedServers(defaults: UserDefaults(suiteName: "ios-hidden-\(UUID().uuidString)")!)
+        let account = IOSAccount.preview(stage: .ready, dismissed: hidden)
+        let config = ServerConfig(
+            name: "Studio", endpoint: .reachable(hosts: [], fingerprint: nil, relay: RelayRoute(host: "relay.bandito.dev", sid: Self.sid), noiseKey: Self.nk),
+            token: "t")
+        account.dismiss(config)
+        #expect(account.hiddenCount == 1 && hidden.count(accountID: "other") == 0)
+        account.showHiddenServers()
+        #expect(account.hiddenCount == 0 && hidden.count(accountID: "preview") == 0)
     }
 }

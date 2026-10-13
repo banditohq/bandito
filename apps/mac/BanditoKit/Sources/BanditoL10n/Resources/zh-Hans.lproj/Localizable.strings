@@ -12,6 +12,8 @@
 "account.device.disconnectTitle" = "断开 %1$@？";
 "account.device.lastSeen" = "上次在线 %1$@";
 "account.devices.connectPhone" = "连接 iPhone";
+"account.hidden.hint" = "您已从此设备移除的账户服务器。显示它们后会重新出现。";
+"account.hidden.show" = "显示已隐藏的服务器（%1$lld）";
 "account.links.help" = "帮助与反馈";
 "account.links.settings" = "应用设置";
 "account.method.email" = "邮箱";
@@ -941,6 +943,7 @@
 "ios.account.servers.empty" = "还没有服务器。在 Mac 上为某台服务器开启 iPhone 访问后，它会出现在这里。";
 "ios.account.servers.footer" = "Mac 会为这台 iPhone 单独发放每台服务器的访问权限。Mac 关机期间，服务器会保持等待。";
 "ios.account.servers.header" = "账户中的服务器";
+"ios.account.servers.hidden" = "已隐藏";
 "ios.account.servers.noAccess" = "无远程访问";
 "ios.account.servers.waiting" = "等待 Mac…";
 "ios.account.signIn.text" = "登录后即可在这台 iPhone 上看到你 Mac 上的服务器。列表已加密，密钥只保存在你的设备上。";
@@ -2003,7 +2006,7 @@
 "phoneWizard.done.title" = "完成，iPhone 已连接";
 "phoneWizard.install" = "iPhone 版 Bandito 目前处于封闭测试：请给我们写信以获取邀请";
 "phoneWizard.noServer" = "没有可通过云工作的已连接服务器。请连接服务器或更新它。";
-"phoneWizard.orSignIn" = "或者直接在 iPhone 上用此账户登录 Bandito：服务器会自动出现。";
+"phoneWizard.orSignIn" = "或者在 iPhone 上用此账户登录 Bandito，并在此处确认登录：服务器会自动出现。";
 "phoneWizard.pick.hint" = "iPhone 将通过 Bandito 云从任何网络连接到它。";
 "phoneWizard.pick.title" = "iPhone 要连接到哪台服务器？";
 "phoneWizard.preparing" = "正在准备连接…";

@@ -122,7 +122,7 @@ sync key envelopes, `SyncPayload` in BanditoKit — shared by both apps).
   `public_key` that `GET /me` lists for the same device id (and the device is approved). An account service that lists no
   keys (an older one) gets no answers; the app logs that the service needs updating. A blob without the new fields reads
   as before, and fields a build does not know are kept when it writes the blob back.
-- The sealed message is `0x01 || sender_pub (32) || enc (32) || ct`, base64, HPKE auth mode (`DeviceTokenSeal`). The
+- The sealed message is `0x02 || sender_pub (32) || enc (32) || ct`, base64, HPKE auth mode (`DeviceTokenSeal`), `info` `bandito-device-token:v2`; `ct` is JSON `{"token", "phone": {sid, relay_host, nk, fp, hosts}}`. The `phone` record is what the answering device read from the daemon itself (`phone.info`) when it issued the token; the requesting device builds the server **only** from the opened grant, never from the blob's `phone`, which any device of the account can write (a hint that the server exists). Version 1 (the token alone) is not accepted. No `phone.info` answer with a way in, no token is issued. The
   requester opens it with its own key, for its own device id and server id; when `GET /me` lists device keys the sender
   must be one of them.
 - A merge keeps the newest request and grant per device and server and drops entries older than 7 days. Removing an
@@ -156,14 +156,15 @@ sync key envelopes, `SyncPayload` in BanditoKit — shared by both apps).
   before the account knew it is not asked for again, and how the Mac's own ssh server (whose daemon says its `phone.info`)
   is not asked for from the Mac.
 - Two entries of one daemon collapse when the blob is merged (`SyncPayload.merged`): ssh, then a WebSocket address, then a
-  link-paired entry stays, the lower id among equals, and it keeps the way in the other knew. The same certificate behind
+  link-paired entry stays, the lower id among equals, as it is: no address or pin moves from one entry to the other, and entries collapse only when every pin both give agrees. The same certificate behind
   another Noise key is another server: pairing it is refused on the iPhone (`differentServer`), never a replacement.
 - The iPhone answers the account's requests for the servers it is connected to (`AccessResponder`, over the relay or
   direct as the device it is), and publishes what it was paired with; the Mac asks for the servers of the account it lacks
-  (`AccessRequester`, every 30 s with the cycle). A server the person disconnected on the iPhone is remembered
-  (`ServerSession.dismissed`) and not asked for again.
+  (`AccessRequester`, every 30 s with the cycle). A server the person removed on a device is remembered there, per account (`DismissedServers`: the id and the daemon's keys, on that
+  device only) and not asked for again; adding the same daemon again lifts the mark, signing out forgets the marks, and Settings → Account
+  offers «Show hidden servers (N)» on both apps.
 - A daemon can take a plain `ws://127.0.0.1` relay for tests only: the environment variable
-  `BANDITO_RELAY_ALLOW_LOOPBACK_PLAIN` of the daemon process (never a request); any other plain address is refused.
+  `BANDITO_RELAY_ALLOW_LOOPBACK_PLAIN=1` of the daemon process (only the value `1`, never a request); any other plain address is refused.
 
 **Residual risk.** A device removed from the account still holds the sync key: the key is not rotated on removal. It
 cannot write the blob or read a newer one without a session of the account, and its session ends with the removal. Its

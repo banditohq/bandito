@@ -12,6 +12,8 @@
 "account.device.disconnectTitle" = "Отключить %1$@?";
 "account.device.lastSeen" = "был в сети %1$@";
 "account.devices.connectPhone" = "Подключить iPhone";
+"account.hidden.hint" = "Серверы аккаунта, которые вы убрали с этого устройства. Покажите их, и они появятся снова.";
+"account.hidden.show" = "Показать скрытые серверы (%1$lld)";
 "account.links.help" = "Помощь и обратная связь";
 "account.links.settings" = "Настройки приложения";
 "account.method.email" = "Почта";
@@ -941,6 +943,7 @@
 "ios.account.servers.empty" = "Серверов пока нет. Включите доступ с iPhone для сервера на Mac, и он появится здесь.";
 "ios.account.servers.footer" = "Mac выдаёт этому iPhone отдельный доступ к каждому серверу. Пока Mac выключен, сервер ждёт.";
 "ios.account.servers.header" = "СЕРВЕРЫ АККАУНТА";
+"ios.account.servers.hidden" = "Скрыт";
 "ios.account.servers.noAccess" = "Нет удалённого доступа";
 "ios.account.servers.waiting" = "Ожидает Mac…";
 "ios.account.signIn.text" = "Войдите, чтобы увидеть серверы вашего Mac на этом iPhone. Список зашифрован: ключ остаётся только на ваших устройствах.";
@@ -2003,7 +2006,7 @@
 "phoneWizard.done.title" = "Готово, iPhone подключён";
 "phoneWizard.install" = "Bandito для iPhone пока в закрытом тестировании: напишите нам, чтобы получить приглашение";
 "phoneWizard.noServer" = "Нет подключённого сервера, который умеет работать через облако. Подключите сервер или обновите его.";
-"phoneWizard.orSignIn" = "Или просто войдите в Bandito на iPhone этим аккаунтом: серверы появятся сами.";
+"phoneWizard.orSignIn" = "Или войдите в Bandito на iPhone этим аккаунтом и подтвердите вход здесь — серверы появятся сами.";
 "phoneWizard.pick.hint" = "iPhone будет подключаться к нему через облако Bandito, из любой сети.";
 "phoneWizard.pick.title" = "К какому серверу подключить iPhone?";
 "phoneWizard.preparing" = "Готовлю подключение…";

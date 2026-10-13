@@ -12,6 +12,8 @@
 "account.device.disconnectTitle" = "%1$@ を切断しますか？";
 "account.device.lastSeen" = "最終接続 %1$@";
 "account.devices.connectPhone" = "iPhone を接続";
+"account.hidden.hint" = "このデバイスから削除したアカウントのサーバーです。表示すると、再び追加されます。";
+"account.hidden.show" = "非表示のサーバーを表示（%1$lld）";
 "account.links.help" = "ヘルプとフィードバック";
 "account.links.settings" = "アプリの設定";
 "account.method.email" = "メール";
@@ -941,6 +943,7 @@
 "ios.account.servers.empty" = "サーバーはまだありません。Mac でサーバーの iPhone アクセスをオンにすると、ここに表示されます。";
 "ios.account.servers.footer" = "Mac が、この iPhone 専用のアクセスをサーバーごとに発行します。Mac がオフの間、サーバーは待機します。";
 "ios.account.servers.header" = "アカウントのサーバー";
+"ios.account.servers.hidden" = "非表示";
 "ios.account.servers.noAccess" = "リモートアクセスなし";
 "ios.account.servers.waiting" = "Mac を待っています…";
 "ios.account.signIn.text" = "サインインすると、Mac のサーバーをこの iPhone で見られます。リストは暗号化され、鍵はお使いのデバイスにだけ残ります。";
@@ -2003,7 +2006,7 @@
 "phoneWizard.done.title" = "完了しました。iPhone を接続しました";
 "phoneWizard.install" = "iPhone 版 Bandito は現在クローズドテスト中です。招待をご希望の方はご連絡ください";
 "phoneWizard.noServer" = "クラウドで動作できる接続済みサーバーがありません。サーバーを接続するか、更新してください。";
-"phoneWizard.orSignIn" = "または、iPhone の Bandito にこのアカウントでサインインするだけで、サーバーが自動的に表示されます。";
+"phoneWizard.orSignIn" = "または、iPhone の Bandito にこのアカウントでサインインし、ここでサインインを承認してください。サーバーが自動的に表示されます。";
 "phoneWizard.pick.hint" = "iPhone は Bandito クラウド経由で、どのネットワークからでもこのサーバーに接続します。";
 "phoneWizard.pick.title" = "iPhone をどのサーバーに接続しますか？";
 "phoneWizard.preparing" = "接続を準備しています…";

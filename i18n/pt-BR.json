@@ -3492,5 +3492,8 @@
   "ios.account.signOut.message": "Os servidores já conectados permanecem. Entrar de novo nesta conta não exige aprovação.",
   "ios.account.sender.title": "Aprovado por um dos seus dispositivos. O código na tela dele é igual ao de baixo?",
   "ios.account.sender.codeLabel": "Código do dispositivo que aprovou",
-  "phoneWizard.orSignIn": "Ou simplesmente entre no Bandito do iPhone com esta conta: os servidores aparecem sozinhos."
+  "phoneWizard.orSignIn": "Ou entre no Bandito do iPhone com esta conta e confirme o login aqui: os servidores aparecem sozinhos.",
+  "account.hidden.show": "Mostrar servidores ocultos ({count})",
+  "account.hidden.hint": "Servidores da conta que você removeu deste dispositivo. Mostre-os e eles voltam.",
+  "ios.account.servers.hidden": "Oculto"
 }
