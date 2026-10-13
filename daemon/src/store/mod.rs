@@ -75,6 +75,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0025_agent_migrated.sql"),
     include_str!("../../migrations/0026_query_indexes.sql"),
     include_str!("../../migrations/0027_server_settings.sql"),
+    include_str!("../../migrations/0028_device_noise_key.sql"),
 ];
 
 pub struct Store {

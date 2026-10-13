@@ -325,36 +325,41 @@ enum KnownHostRemoval {
 }
 
 enum ServerSyncPayload {
-    static func payload(for configs: [ServerConfig], now: Date = Date()) -> SyncPayload {
+    /// The servers of this Mac for the account. `phones` are the records of the servers that have relay or direct access
+    /// (see `PhoneRecords`); a server without one carries none, and the one already in the blob stays (`SyncPayload.merged`).
+    /// A server on this Mac (a local socket) is synced only when it has a phone record: it is then the Mac itself,
+    /// named by `localDeviceID`, this Mac's id on the account.
+    static func payload(
+        for configs: [ServerConfig], phones: [UUID: SyncedPhone] = [:], localDeviceID: String? = nil, now: Date = Date()
+    ) -> SyncPayload {
         var payload = SyncPayload()
         let addedAt = Int64(now.timeIntervalSince1970 * 1000)
         payload.servers = configs.compactMap { config in
-            // The key file is this Mac's own path: only the host, user and port travel.
-            guard case .ssh(let server, _) = config.endpoint else { return nil }
-            return SyncedServer(
-                id: config.id, name: config.name,
-                endpoint: .ssh(host: server.host, user: server.user, port: server.port), addedAt: addedAt)
+            switch config.endpoint {
+            case .ssh(let server, _):
+                // The key file is this Mac's own path: only the host, user and port travel.
+                return SyncedServer(
+                    id: config.id, name: config.name,
+                    endpoint: .ssh(host: server.host, user: server.user, port: server.port), addedAt: addedAt,
+                    phone: phones[config.id])
+            case .local:
+                guard let phone = phones[config.id], let localDeviceID else { return nil }
+                return SyncedServer(
+                    id: config.id, name: config.name, endpoint: .local(deviceID: localDeviceID), addedAt: addedAt,
+                    phone: phone)
+            default:
+                return nil
+            }
         }
         return payload
     }
 }
 
 extension ServerSyncPayload {
-    /// The servers of `remote`, with the ones of `local` added or replacing them by id. The profile is the newer copy.
-    /// Other parts of the blob (keymap, snippets) are kept from `remote`.
+    /// The merge of every sync write: see `SyncPayload.merged`. The servers of `local` replace the ones of `remote` by id
+    /// (keeping the remote phone record and unknown fields they lack), the profile is the newer copy, requests and
+    /// grants are the newest per device and server, and other parts of the blob (keymap, snippets) are kept from `remote`.
     static func merge(local: SyncPayload, remote: SyncPayload) -> SyncPayload {
-        var servers = remote.servers
-        for server in local.servers {
-            if let index = servers.firstIndex(where: { $0.id == server.id }) {
-                servers[index] = server
-            } else {
-                servers.append(server)
-            }
-        }
-        var merged = remote
-        merged.servers = servers
-        // The profile is the newer copy of the two, not the remote one: a local change must not be overwritten.
-        merged.profile = SyncedProfile.newer(local.profile, remote.profile)
-        return merged
+        SyncPayload.merged(local: local, remote: remote)
     }
 }

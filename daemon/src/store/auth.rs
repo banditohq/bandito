@@ -111,6 +111,11 @@ impl Store {
 
     /// Insert a device with `token_hash = sha256_hex(token)`.
     pub fn device_add(&self, name: &str, token: &str) -> Result<Device> {
+        self.device_add_keyed(name, token, None)
+    }
+
+    /// Like [`Store::device_add`], with the phone's Noise static public key (base64url) when it pairs through the relay.
+    pub fn device_add_keyed(&self, name: &str, token: &str, noise_key: Option<&str>) -> Result<Device> {
         let device = Device {
             id: new_id(),
             name: name.to_string(),
@@ -119,13 +124,14 @@ impl Store {
         };
         let token_hash = sha256_hex(token);
         self.conn().execute(
-            "INSERT INTO devices (id, name, token_hash, created_at, last_seen_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO devices (id, name, token_hash, created_at, last_seen_at, noise_key) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 device.id,
                 device.name,
                 token_hash,
                 device.created_at,
-                device.last_seen_at
+                device.last_seen_at,
+                noise_key
             ],
         )?;
         Ok(device)
@@ -146,6 +152,35 @@ impl Store {
                 from_row,
             )
             .optional()?)
+    }
+
+    /// The device with `sha256_hex(token)`, without touching it: the relay checks the phone's key before the device is seen.
+    pub fn device_find(&self, token: &str) -> Result<Option<Device>> {
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT id, name, created_at, last_seen_at FROM devices WHERE token_hash = ?1",
+                [sha256_hex(token)],
+                from_row,
+            )
+            .optional()?)
+    }
+
+    /// Sets the device's `last_seen_at` to now and returns it.
+    pub fn device_touch(&self, id: &str) -> Result<i64> {
+        let now = now_ms();
+        self.conn()
+            .execute("UPDATE devices SET last_seen_at = ?2 WHERE id = ?1", params![id, now])?;
+        Ok(now)
+    }
+
+    /// The Noise static public key (base64url) the device paired with, if it gave one.
+    pub fn device_noise_key(&self, id: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn()
+            .query_row("SELECT noise_key FROM devices WHERE id = ?1", [id], |r| r.get(0))
+            .optional()?
+            .flatten())
     }
 
     pub fn device_list(&self) -> Result<Vec<Device>> {
@@ -184,6 +219,18 @@ pub fn normalize_code(code: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_device_keeps_the_noise_key_it_paired_with() {
+        let store = Store::open_in_memory().unwrap();
+        let plain = store.device_add("laptop", "t1").unwrap();
+        let keyed = store.device_add_keyed("phone", "t2", Some("a2V5")).unwrap();
+        assert_eq!(store.device_noise_key(&plain.id).unwrap(), None);
+        assert_eq!(store.device_noise_key(&keyed.id).unwrap().as_deref(), Some("a2V5"));
+        assert_eq!(store.device_noise_key("missing").unwrap(), None);
+        // The key is not part of the device the apps list.
+        assert!(!serde_json::to_string(&keyed).unwrap().contains("a2V5"));
+    }
 
     #[test]
     fn safe_mode_store_keeps_the_paired_devices_of_the_live_database_and_changes_nothing_there() {

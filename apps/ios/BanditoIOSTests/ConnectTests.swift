@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import Foundation
 import Testing
 
@@ -11,6 +12,8 @@ final class MemorySecrets: SecretStore, @unchecked Sendable {
     var failsToSave = false
     var failsToDelete = false
     var failsToLoad = false
+    /// Saving these accounts fails (a Keychain that refuses one item).
+    var failingAccounts: Set<String> = []
 
     func load(account: String) throws -> Data? {
         lock.lock()
@@ -23,6 +26,7 @@ final class MemorySecrets: SecretStore, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         if failsToSave, data != nil { throw SecretStoreError.keychain(-25299) }
+        if failingAccounts.contains(account), data != nil { throw SecretStoreError.keychain(-25299) }
         if failsToDelete, data == nil { throw SecretStoreError.keychain(-25299) }
         items[account] = data
     }
@@ -36,10 +40,10 @@ final class MemorySecrets: SecretStore, @unchecked Sendable {
 
 /// Counts what the fake pairing did.
 actor PairCalls {
-    var redeemed: [(PairRequest, String)] = []
+    var redeemed: [(PairRequest, String?)] = []
     var probed: [DirectHost] = []
     var revoked = 0
-    func redeem(_ request: PairRequest, _ pin: String) { redeemed.append((request, pin)) }
+    func redeem(_ request: PairRequest, _ pin: String?) { redeemed.append((request, pin)) }
     func probe(_ host: DirectHost) { probed.append(host) }
     func revoke() { revoked += 1 }
 }
@@ -73,9 +77,11 @@ actor PairCalls {
             redeem: { request, pin, _ in
                 await calls.redeem(request, pin)
                 if let redeemError { throw redeemError }
-                let config = ServerConfig(
-                    name: request.name, endpoint: .direct(hosts: request.hosts, fingerprint: pin), token: "bdt_token")
-                return PairedDevice(config: config, deviceID: "dev-1")
+                let endpoint: ServerEndpoint =
+                    pin.map { .direct(hosts: request.hosts, fingerprint: $0) }
+                    ?? .reachable(hosts: [], fingerprint: nil, relay: request.relay, noiseKey: request.noiseKey)
+                let config = ServerConfig(name: request.name, endpoint: endpoint, token: "bdt_token", noiseSecret: request.relay == nil ? nil : "k")
+                return PairedDevice(config: config, deviceID: "dev-1", route: request.relay == nil ? .network : .cloud)
             },
             probe: { host in
                 await calls.probe(host)
@@ -117,7 +123,7 @@ actor PairCalls {
         #expect(await w.calls.redeemed.isEmpty, "nothing is sent before the button")
         w.model.confirmLink()
         await settle(w.model, until: isDone)
-        guard case .done(_, let name) = w.model.phase else {
+        guard case .done(_, let name, _) = w.model.phase else {
             Issue.record("not done: \(w.model.phase)")
             return
         }
@@ -308,6 +314,48 @@ actor PairCalls {
         #expect(lines.allSatisfy { $0 == "AB:AB:AB:AB:AB:AB:AB:AB" })
         #expect(FingerprintLines.lines("").isEmpty)
     }
+
+    // MARK: relay
+
+    static let sid = "abcdefghijklmnopqrstuvwxyz"
+    static let nk = Base64URL.encode(Data(repeating: 5, count: 32))
+    static let cloudLink = "bandito://pair?v=1&code=\(code)&name=Studio&relay=relay.bandito.dev/\(sid)&nk=\(nk)"
+
+    @Test func aRelayOnlyLinkIsConfirmedAndConnectsWithoutAPin() async {
+        let w = world()
+        w.model.submitLink(Self.cloudLink, origin: .scan)
+        guard case .confirmLink(let request, _) = w.model.phase else {
+            Issue.record("not shown first: \(w.model.phase)")
+            return
+        }
+        #expect(request.isRelayOnly)
+        #expect(await w.calls.redeemed.isEmpty, "nothing is sent before the button")
+        w.model.confirmLink()
+        await settle(w.model, until: isDone)
+        let calls = await w.calls.redeemed
+        #expect(calls.count == 1 && calls.first?.1 == nil && calls.first?.0.relay?.sid == Self.sid)
+    }
+
+    @Test func theCloudsFailuresHaveTheirOwnWords() {
+        let offline = RPCError(code: RPCError.relay, message: "relay_offline: x")
+        #expect(PairFailure.classify(offline) == .serverOffline)
+        #expect(PairFailure.classify(RPCError(code: RPCError.relay, message: "relay_limit: x")) == .cloudLimit)
+        #expect(PairFailure.classify(RPCError(code: RPCError.relay, message: "relay_key_mismatch: x")) == .cloudKey)
+        #expect(PairFailure.classify(RPCError(code: RPCError.rateLimited, message: "relay_busy: x")) == .tooManyAttempts)
+        #expect(PairProblemText(.failure(.serverOffline)).message == L10n.Ios.Connect.Error.offline)
+        #expect(PairProblemText(.failure(.cloudKey)).isAlarm)
+    }
+
+    @Test func aServerOnTheCloudSaysSoInTheList() {
+        let config = ServerConfig(
+            name: "Studio",
+            endpoint: .reachable(hosts: [], fingerprint: nil, relay: RelayRoute(host: "relay.bandito.dev", sid: Self.sid), noiseKey: Self.nk),
+            token: "t")
+        let facts = ServerRowFacts.make(ServerModel(config: config))
+        #expect(facts.via == .cloud && facts.addresses.isEmpty)
+        #expect(facts.viaTitle == L10n.Ios.Settings.Servers.Via.cloud)
+    }
+
 }
 
 /// The saved servers: what is stored where, and what a launch brings back.
@@ -612,6 +660,50 @@ actor PairCalls {
         later.loadIfNeeded(arguments: [])
         #expect(later.loaded)
         #expect(Set(later.servers.map(\.config.name)).contains("Keep"))
+    }
+
+    private func cloudConfig(token: String, key: String?, nk: String) -> ServerConfig {
+        ServerConfig(
+            name: "Mac",
+            endpoint: .reachable(
+                hosts: ["10.0.0.2:7879"], fingerprint: ConnectTests.fp,
+                relay: RelayRoute(host: "relay.bandito.dev", sid: ConnectTests.sid), noiseKey: nk),
+            token: token, noiseSecret: key)
+    }
+
+    @Test func aRefusedRelayKeyTakesTheNewTokenBackAndLeavesTheOldServerAsItWas() throws {
+        let nk = ConnectTests.nk
+        let (session, secrets, _) = session()
+        try session.add(cloudConfig(token: "old-token", key: "old-key", nk: nk))
+        let id = try #require(session.servers.first?.id)
+        secrets.failingAccounts = [ServerSession.noiseAccount(id)]
+        #expect(throws: ServerSession.SessionError.keychain) {
+            try session.add(self.cloudConfig(token: "new-token", key: "new-key", nk: nk))
+        }
+        let token = try #require(try secrets.load(account: id.uuidString))
+        let key = try #require(try secrets.load(account: ServerSession.noiseAccount(id)))
+        #expect(String(decoding: token, as: UTF8.self) == "old-token", "the old token is back")
+        #expect(String(decoding: key, as: UTF8.self) == "old-key")
+        #expect(session.servers.count == 1)
+    }
+
+    @Test func aNewServerWhoseKeyIsRefusedLeavesNothingInTheKeychain() throws {
+        let (session, secrets, _) = session()
+        let config = cloudConfig(token: "t", key: "k", nk: ConnectTests.nk)
+        secrets.failingAccounts = [ServerSession.noiseAccount(config.id)]
+        #expect(throws: ServerSession.SessionError.keychain) { try session.add(config) }
+        #expect(secrets.count == 0 && session.servers.isEmpty)
+    }
+
+    @Test func anotherServerBehindTheSameCertificateIsRefusedNotReplaced() throws {
+        let (session, secrets, _) = session()
+        try session.add(cloudConfig(token: "old-token", key: "old-key", nk: ConnectTests.nk))
+        let other = Base64URL.encode(Data(repeating: 9, count: 32))
+        #expect(throws: ServerSession.SessionError.differentServer) {
+            try session.add(self.cloudConfig(token: "other-token", key: "other-key", nk: other))
+        }
+        #expect(session.servers.count == 1 && secrets.count == 2)
+        #expect(PairProblemText(.differentServer).isAlarm)
     }
 
     @Test func aTokenThatCannotBeReadYetKeepsTheReadOpen() throws {

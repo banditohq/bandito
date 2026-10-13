@@ -20,10 +20,16 @@ struct PairProblemText: Equatable {
             case .fingerprintMismatch:
                 self.init(title: L10n.Ios.Connect.Error.mismatchTitle, message: L10n.Ios.Connect.Error.mismatch, isAlarm: true)
             case .unreachable: self.init(message: L10n.Ios.Connect.Error.unreachable)
+            case .serverOffline: self.init(message: L10n.Ios.Connect.Error.offline)
+            case .cloudLimit: self.init(message: L10n.Ios.Connect.Error.cloudLimit)
+            case .cloudKey: self.init(title: L10n.Ios.Connect.Error.mismatchTitle, message: L10n.Ios.Connect.Error.cloudKey, isAlarm: true)
+            case .cloudUnreachable: self.init(message: L10n.Ios.Connect.Error.cloudUnreachable)
             case .other: self.init(message: L10n.Ios.Connect.Error.generic)
             }
         case .saveKey:
             self.init(message: L10n.Ios.Connect.Error.saveKey)
+        case .differentServer:
+            self.init(title: L10n.Ios.Connect.Error.mismatchTitle, message: L10n.Ios.Connect.Error.differentServer, isAlarm: true)
         }
     }
 
@@ -41,6 +47,7 @@ struct PairProblemText: Equatable {
         case .badFingerprint: L10n.Ios.Connect.Error.badFingerprint
         case .noAddress: L10n.Ios.Connect.Error.noAddress
         case .badAddress: L10n.Ios.Connect.Error.badAddress
+        case .badRelay: L10n.Ios.Connect.Error.notALink
         }
     }
 }

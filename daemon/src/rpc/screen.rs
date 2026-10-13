@@ -457,7 +457,7 @@ mod tests {
         });
         assert!(allowed(&device, "screen.stop"));
         assert!(!allowed(&Peer::Agent("agent-a".into()), "screen.stop"));
-        assert!(!allowed(&Peer::Anonymous("x".into()), "screen.stop"));
+        assert!(!allowed(&Peer::Anonymous("x".into(), None), "screen.stop"));
     }
 
     #[tokio::test]

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 // Pairing an iPhone (or any app) with a daemon's phone listener: the request that comes from the link, the QR code or
@@ -41,14 +42,27 @@ public struct PairRequest: Sendable, Hashable {
     public var hosts: [String]
     /// The name is only the address the person typed: the pairing asks the server for its own name instead.
     public var nameIsGuess: Bool
+    /// Bandito Relay, when the link names it: the phone can reach the server through the cloud. With it `hosts` and
+    /// `fingerprint` may be empty (relay only).
+    public var relay: RelayRoute?
+    /// The daemon's Noise key (base64url) that goes with `relay`.
+    public var noiseKey: String?
 
-    public init(code: String, fingerprint: String?, name: String, hosts: [String], nameIsGuess: Bool = false) {
+    public init(
+        code: String, fingerprint: String?, name: String, hosts: [String], nameIsGuess: Bool = false,
+        relay: RelayRoute? = nil, noiseKey: String? = nil
+    ) {
         self.code = code
         self.fingerprint = fingerprint
         self.name = name
         self.hosts = hosts
         self.nameIsGuess = nameIsGuess
+        self.relay = relay
+        self.noiseKey = noiseKey
     }
+
+    /// Whether the server can only be reached through the relay (no address, nothing to pin).
+    public var isRelayOnly: Bool { hosts.isEmpty && relay != nil }
 }
 
 /// Why what the person gave cannot be used. The words for each are in the app.
@@ -65,6 +79,8 @@ public enum PairInputError: Error, Sendable, Hashable {
     case noAddress
     /// The address typed is not `host` or `host:port`.
     case badAddress
+    /// The link's `relay` or `nk` does not read.
+    case badRelay
 }
 
 public enum PairInput {
@@ -93,6 +109,7 @@ public enum PairInput {
             case .badCode: throw PairInputError.badCode
             case .badFingerprint: throw PairInputError.badFingerprint
             case .noHosts: throw PairInputError.noAddress
+            case .badRelay: throw PairInputError.badRelay
             }
         }
         // An address that does not read is dropped: the others may. Duplicates go too.
@@ -100,10 +117,13 @@ public enum PairInput {
         for text in parsed.hosts {
             if let host = DirectHost.parse(text)?.text, !hosts.contains(host) { hosts.append(host) }
         }
-        guard !hosts.isEmpty else { throw PairInputError.noAddress }
+        // Without a usable address the relay is the way; with neither there is nothing to connect to.
+        guard !hosts.isEmpty || parsed.relay != nil else { throw PairInputError.noAddress }
+        let fallback = hosts.first ?? parsed.relay?.host ?? ""
         return PairRequest(
-            code: parsed.code, fingerprint: parsed.fingerprint, name: ServerNameRules.clean(parsed.name, fallback: hosts[0]),
-            hosts: hosts)
+            code: parsed.code, fingerprint: hosts.isEmpty ? nil : parsed.fingerprint,
+            name: ServerNameRules.clean(parsed.name, fallback: fallback), hosts: hosts, relay: parsed.relay,
+            noiseKey: parsed.noiseKey)
     }
 
     /// Reads what was typed: an address (`host`, `host:port`, `[v6]:port`), the six-word code, and the fingerprint if the
@@ -136,10 +156,13 @@ public enum PairInput {
 public struct PairedDevice: Sendable {
     public var config: ServerConfig
     public var deviceID: String
+    /// The way the pairing got through: a direct address or Bandito Relay.
+    public var route: ConnectionRoute?
 
-    public init(config: ServerConfig, deviceID: String) {
+    public init(config: ServerConfig, deviceID: String, route: ConnectionRoute? = nil) {
         self.config = config
         self.deviceID = deviceID
+        self.route = route
     }
 }
 
@@ -151,6 +174,14 @@ public enum PairFailure: Sendable, Hashable {
     case tooManyAttempts
     /// The address answers with a certificate that is not the one pinned: the loudest warning.
     case fingerprintMismatch
+    /// Bandito Relay says the server is not connected to it: the Mac is off or Bandito is not running there.
+    case serverOffline
+    /// The monthly traffic limit of the cloud.
+    case cloudLimit
+    /// The peer behind the relay is not the server whose key the link carries.
+    case cloudKey
+    /// The relay itself could not be reached (no internet on the phone).
+    case cloudUnreachable
     /// Nothing answered: the server is off, the address is wrong, or the phone is not on the same network.
     case unreachable
     /// Anything else.
@@ -161,6 +192,12 @@ public enum PairFailure: Sendable, Hashable {
             switch rpc.code {
             case RPCError.unauthorized: return .codeRejected
             case RPCError.rateLimited: return .tooManyAttempts
+            case RPCError.relay:
+                let reason = FailureKind.classify(rpc)
+                if reason == .reason(RelayFailure.offline) { return .serverOffline }
+                if reason == .reason(RelayFailure.limit) { return .cloudLimit }
+                if reason == .reason(RelayFailure.keyMismatch) { return .cloudKey }
+                return .other
             case RPCError.fingerprintMismatch.code: return .fingerprintMismatch
             case RPCError.disconnected, RPCError.timedOut: return .unreachable
             default: return .other
@@ -171,16 +208,37 @@ public enum PairFailure: Sendable, Hashable {
 }
 
 public enum DevicePairing {
-    /// Connects to the server (its addresses in order, the certificate pinned), swaps the one-time code for a device
-    /// token, and returns the server's config with a `.direct` endpoint whose first address is the one that worked.
-    /// `fingerprint` is the pin: the one from the link, or the one the person confirmed.
+    /// Connects to the server (its addresses in order, the certificate pinned; then Bandito Relay when the link names it),
+    /// swaps the one-time code for a device token, and returns the server's config: `.direct` when the link has no relay
+    /// (the old shape), else `.reachable`, with the key this device made for the relay. `fingerprint` is the pin: the one
+    /// from the link, or the one the person confirmed; nil only for a relay-only link.
     public static func redeem(
-        _ request: PairRequest, fingerprint: String, deviceName: String,
-        hostTimeout: Duration = DirectTransport.defaultHostTimeout, memory: DirectHostMemory = .shared
+        _ request: PairRequest, fingerprint: String?, deviceName: String,
+        hostTimeout: Duration = DirectTransport.defaultHostTimeout, memory: DirectHostMemory = .shared,
+        relayTimeout: Duration = RelayTransport.defaultTimeout
     ) async throws -> PairedDevice {
-        guard let pin = PinnedFingerprint.normalize(fingerprint) else { throw PairInputError.badFingerprint }
-        let transport = DirectTransport(
-            hosts: request.hosts, fingerprint: pin, token: nil, hostTimeout: hostTimeout, memory: memory)
+        var pin: String?
+        if !request.hosts.isEmpty {
+            guard let normalized = fingerprint.flatMap({ PinnedFingerprint.normalize($0) }) else {
+                throw PairInputError.badFingerprint
+            }
+            pin = normalized
+        }
+        var phoneKey: Curve25519.KeyAgreement.PrivateKey?
+        var daemonKey: Data?
+        if let relay = request.relay {
+            guard RelayRoute.isSID(relay.sid), let text = request.noiseKey, let key = Base64URL.key(text) else {
+                throw PairInputError.badRelay
+            }
+            daemonKey = key
+            phoneKey = Curve25519.KeyAgreement.PrivateKey()
+        } else if pin == nil {
+            throw PairInputError.badFingerprint
+        }
+        let transport = ReachableTransport(
+            hosts: pin == nil ? [] : request.hosts, fingerprint: pin, relay: request.relay, daemonKey: daemonKey,
+            phoneKey: phoneKey, token: nil, directTimeout: request.relay == nil ? hostTimeout : min(hostTimeout, .seconds(3)),
+            relayTimeout: relayTimeout, memory: memory)
         let client = RPCClient(transport: transport)
         try await client.start()
         defer { Task { await client.close() } }
@@ -197,25 +255,38 @@ public enum DevicePairing {
         struct Params: Encodable {
             var code: String
             var deviceName: String
+            var noiseKey: String?
         }
         let paired = try await client.call(
-            "pair.redeem", Params(code: request.code, deviceName: deviceName), as: PairResult.self,
-            timeout: .seconds(15))
+            "pair.redeem",
+            Params(code: request.code, deviceName: deviceName, noiseKey: phoneKey.map { Base64URL.encode($0.publicKey.rawRepresentation) }),
+            as: PairResult.self, timeout: .seconds(15))
         var hosts = request.hosts
-        if let worked = await transport.connectedHost, let index = hosts.firstIndex(of: worked), index != 0 {
+        if case .network? = await transport.connectedRoute, let pin,
+            let worked = memory.lastGood(for: pin), let index = hosts.firstIndex(of: worked), index != 0
+        {
             hosts.remove(at: index)
             hosts.insert(worked, at: 0)
         }
-        let config = ServerConfig(
-            name: name, endpoint: .direct(hosts: hosts, fingerprint: pin), token: paired.token)
-        return PairedDevice(config: config, deviceID: paired.device.id)
+        let endpoint: ServerEndpoint
+        var secret: String?
+        if let relay = request.relay, let phoneKey {
+            endpoint = .reachable(hosts: hosts, fingerprint: pin, relay: relay, noiseKey: request.noiseKey)
+            secret = Base64URL.encode(phoneKey.rawRepresentation)
+        } else if let pin {
+            endpoint = .direct(hosts: hosts, fingerprint: pin)
+        } else {
+            throw PairInputError.badFingerprint
+        }
+        let config = ServerConfig(name: name, endpoint: endpoint, token: paired.token, noiseSecret: secret)
+        return PairedDevice(config: config, deviceID: paired.device.id, route: await transport.connectedRoute)
     }
 
     /// Takes a device back off the daemon (`devices.revoke`) over a connection its own token opens. For a token the app
     /// could not keep, so the daemon does not list a device that nobody holds. Best effort: it never throws.
     public static func revoke(_ device: PairedDevice) async {
-        guard case .direct(let hosts, let fingerprint) = device.config.endpoint, let token = device.config.token else { return }
-        let transport = DirectTransport(hosts: hosts, fingerprint: fingerprint, token: token)
+        guard device.config.endpoint.isPaired, let token = device.config.token, !token.isEmpty else { return }
+        let transport = ReachableTransport(config: device.config)
         let client = RPCClient(transport: transport)
         guard (try? await client.start()) != nil else { return }
         struct Params: Encodable { var id: String }
@@ -229,8 +300,8 @@ extension DevicePairing {
     /// this is: `devices.list` marks it `current`), over a connection of its own with the stored token. False when the
     /// server could not be reached or refused (the caller forgets the server on this device either way).
     public static func revokeSelf(config: ServerConfig, timeout: Duration = .seconds(10)) async -> Bool {
-        guard case .direct(let hosts, let fingerprint) = config.endpoint, let token = config.token else { return false }
-        let transport = DirectTransport(hosts: hosts, fingerprint: fingerprint, token: token, hostTimeout: timeout)
+        guard config.endpoint.isPaired, let token = config.token, !token.isEmpty else { return false }
+        let transport = ReachableTransport(config: config, directTimeout: timeout)
         let client = RPCClient(transport: transport)
         defer { Task { await client.close() } }
         do {

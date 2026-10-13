@@ -15,6 +15,11 @@ public enum ServerEndpoint: Sendable, Hashable, Codable {
     /// order, and `fingerprint` is the SHA-256 of the daemon's certificate (64 lower-case hex digits). The certificate is
     /// checked against it and against nothing else: the system's trust store plays no part (`DirectTransport`).
     case direct(hosts: [String], fingerprint: String)
+    /// A server reached by its direct addresses and/or through Bandito Relay (docs/RELAY.md): `hosts` and `fingerprint`
+    /// as in `.direct` (both absent for a relay-only server), `relay` the relay and the server's id there, `noiseKey` the
+    /// daemon's Noise public key (base64url) that every relay session is checked against. The phone's own Noise key is
+    /// `ServerConfig.noiseSecret`. Tried in this order: direct addresses, then the relay (`ReachableTransport`).
+    case reachable(hosts: [String], fingerprint: String?, relay: RelayRoute?, noiseKey: String?)
 
     public static var defaultLocal: ServerEndpoint {
         .local(socketPath: URL(fileURLWithPath: NSHomeDirectory()).appending(path: ".bandito/bandito.sock").path)
@@ -27,7 +32,11 @@ public enum ServerEndpoint: Sendable, Hashable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case local, webSocket, ssh, direct
+        case local, webSocket, ssh, direct, reachable
+    }
+
+    private enum ReachableKeys: String, CodingKey {
+        case hosts, fingerprint, relay, noiseKey
     }
 
     private enum DirectKeys: String, CodingKey {
@@ -78,6 +87,21 @@ public enum ServerEndpoint: Sendable, Hashable, Codable {
                     DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "bad direct endpoint"))
             }
             self = .direct(hosts: hosts, fingerprint: PinnedFingerprint.normalize(fingerprint) ?? fingerprint)
+        } else if container.contains(.reachable) {
+            let nested = try container.nestedContainer(keyedBy: ReachableKeys.self, forKey: .reachable)
+            let hosts = try nested.decodeIfPresent([String].self, forKey: .hosts) ?? []
+            let fingerprint = try nested.decodeIfPresent(String.self, forKey: .fingerprint)
+            let relay = try nested.decodeIfPresent(RelayRoute.self, forKey: .relay)
+            let noiseKey = try nested.decodeIfPresent(String.self, forKey: .noiseKey)
+            // Damaged or hand-edited records are refused, not trusted: each way needs its own pin.
+            let pin = fingerprint.flatMap { PinnedFingerprint.normalize($0) }
+            let hasDirect = !hosts.isEmpty && pin != nil
+            let hasRelay = relay != nil && noiseKey.flatMap({ Base64URL.key($0) }) != nil && relay.map({ RelayRoute.isSID($0.sid) }) == true
+            guard (hasDirect || hasRelay), fingerprint == nil || pin != nil, relay == nil || hasRelay else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "bad reachable endpoint"))
+            }
+            self = .reachable(hosts: hosts, fingerprint: pin, relay: relay, noiseKey: noiseKey)
         } else {
             throw DecodingError.dataCorrupted(
                 DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "unknown server endpoint"))
@@ -104,6 +128,12 @@ public enum ServerEndpoint: Sendable, Hashable, Codable {
             var nested = container.nestedContainer(keyedBy: DirectKeys.self, forKey: .direct)
             try nested.encode(hosts, forKey: .hosts)
             try nested.encode(fingerprint, forKey: .fingerprint)
+        case .reachable(let hosts, let fingerprint, let relay, let noiseKey):
+            var nested = container.nestedContainer(keyedBy: ReachableKeys.self, forKey: .reachable)
+            try nested.encode(hosts, forKey: .hosts)
+            try nested.encodeIfPresent(fingerprint, forKey: .fingerprint)
+            try nested.encodeIfPresent(relay, forKey: .relay)
+            try nested.encodeIfPresent(noiseKey, forKey: .noiseKey)
         }
     }
 }
@@ -115,6 +145,9 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
     public var endpoint: ServerEndpoint
     /// Device token for WebSocket endpoints. The app keeps it in the Keychain; it is never encoded.
     public var token: String?
+    /// This device's Noise private key for the relay (base64url, 32 bytes). Kept in the Keychain next to the token and
+    /// never encoded, like the token.
+    public var noiseSecret: String?
     /// True for the daemon this app installed on this Mac (`LocalDaemonPairing` sets it). Configs saved before this
     /// flag existed decode as false; `LocalDaemonUpgrade.confirmsThisMac` checks them at launch.
     public var isThisMac: Bool
@@ -139,7 +172,8 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
     }
 
     public init(
-        id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil, isThisMac: Bool = false,
+        id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil, noiseSecret: String? = nil,
+        isThisMac: Bool = false,
         isPrimary: Bool = false, iconName: String? = nil, tintName: String? = nil,
         notifications: NotificationScope = .all, disabled: Bool = false
     ) {
@@ -147,6 +181,7 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
         self.name = name
         self.endpoint = endpoint
         self.token = token
+        self.noiseSecret = noiseSecret
         self.isThisMac = isThisMac
         self.isPrimary = isPrimary
         self.iconName = iconName
@@ -179,6 +214,7 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
         case .webSocket: "WebSocket"
         case .ssh: "ssh"
         case .direct: "direct"
+        case .reachable: "reachable"
         }
         return "ServerConfig(name: \(name), connection: \(kind))"
     }
@@ -309,6 +345,10 @@ public final class ServerModel: Identifiable {
     /// Whether an agent's thread has events older than the ones loaded.
     public private(set) var hasMoreHistory: [String: Bool] = [:]
 
+    /// How the open connection reaches the server: a direct address or Bandito Relay. Nil while not connected, and for
+    /// kinds of connection that do not tell (ssh, this Mac).
+    public private(set) var connectionRoute: ConnectionRoute?
+
     private var client: RPCClient?
     private var pump: Task<Void, Never>?
     private var notificationPump: Task<Void, Never>?
@@ -354,6 +394,8 @@ public final class ServerModel: Identifiable {
                     #endif
                 case .direct(let hosts, let fingerprint):
                     return DirectTransport(hosts: hosts, fingerprint: fingerprint, token: cfg.token)
+                case .reachable:
+                    return ReachableTransport(config: cfg)
                 }
             }
         self.reconnectDelay = reconnectDelay ?? { ServerModel.backoff(attempt: $0) }
@@ -480,6 +522,7 @@ public final class ServerModel: Identifiable {
         let old = client
         client = nil
         transport = nil
+        connectionRoute = nil
         state = .disconnected
         creations.clear()
         finishTerminalStreams()
@@ -503,6 +546,7 @@ public final class ServerModel: Identifiable {
         do {
             try await c.start()
             try checkCurrent(attempt)
+            connectionRoute = await (current as? RouteReporting)?.connectedRoute
             client = c
             pump = startPump(c)
             notificationPump = startNotificationPump(c)
@@ -590,6 +634,7 @@ public final class ServerModel: Identifiable {
         // Stale clients (superseded, or closed by disconnect) are ignored.
         guard client === lost else { return }
         client = nil
+        connectionRoute = nil
         stopPumps()
         await lost.close()
         scheduleReconnect()
@@ -682,6 +727,8 @@ public final class ServerModel: Identifiable {
     /// Counts the `server.settings_changed` events this model applied. The server's settings page reads the settings
     /// again on each change of this number.
     public internal(set) var settingsRevision = 0
+    /// Counts the `relay.changed` events this model applied; screens that show the relay read `relay.status` again.
+    public internal(set) var relayRevision = 0
     /// Whether the daemon knows the Telegram RPCs. `unknown` until `checkTelegramSupport()` has answered; the Settings
     /// window shows the Telegram section only for `supported`.
     public internal(set) var telegramSupport = TelegramSupport.unknown
@@ -695,6 +742,10 @@ public final class ServerModel: Identifiable {
         }
         if case .serverSettingsChanged = e.body {
             settingsRevision &+= 1
+            return
+        }
+        if case .relayChanged = e.body {
+            relayRevision &+= 1
             return
         }
         if case .usageLimits(let runtime, let windows) = e.body {

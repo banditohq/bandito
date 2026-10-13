@@ -98,26 +98,41 @@ public final class SyncStore {
         knownVersion = 0
     }
 
-    /// Joins two copies of the payload. Servers are matched by `id`: the local copy wins for an id both
-    /// have, and ids only one side has are kept. The local keymap wins when there is one.
-    /// The profile is the copy with the newer `updatedAt`; a tie keeps the local one.
+    /// Joins two copies of the payload: see `SyncPayload.merged`. Servers are matched by `id` (the local copy wins),
+    /// the profile is the newer copy, requests and grants are the newest per device and server and are dropped after
+    /// a week, and fields this build does not know are kept.
     /// There are no tombstones, so a server deleted on one device comes back if another device
     /// still has it and pushes.
-    static func merge(local: SyncPayload, remote: SyncPayload) -> SyncPayload {
-        var servers = remote.servers
-        for server in local.servers {
-            if let index = servers.firstIndex(where: { $0.id == server.id }) {
-                servers[index] = server
-            } else {
-                servers.append(server)
+    static func merge(local: SyncPayload, remote: SyncPayload, now: Date = Date()) -> SyncPayload {
+        SyncPayload.merged(local: local, remote: remote, now: now)
+    }
+
+    /// Reads the newest payload, lets `mutate` change it, and writes the result. On a version conflict the payload is
+    /// read again and `mutate` runs again on it, up to three times: a change such as removing an answered request is
+    /// applied to the newest copy, so a merge cannot bring the removed entry back. The last conflict is thrown.
+    /// An account with no blob starts from an empty payload.
+    @discardableResult
+    public func update(_ mutate: (inout SyncPayload) -> Void) async throws -> SyncPayload {
+        state = .syncing
+        var attempt = 1
+        while true {
+            do {
+                var payload = try await fetch() ?? SyncPayload()
+                mutate(&payload)
+                let stored = try await write(payload)
+                state = .idle
+                return stored
+            } catch AccountError.conflict(let current) {
+                if attempt >= 3 {
+                    state = .error(Self.message(for: AccountError.conflict(current: current)))
+                    throw AccountError.conflict(current: current)
+                }
+                attempt += 1
+            } catch {
+                state = .error(Self.message(for: error))
+                throw error
             }
         }
-        return SyncPayload(
-            version: SyncPayload.currentVersion,
-            servers: servers,
-            keymap: local.keymap ?? remote.keymap,
-            snippets: local.snippets ?? remote.snippets,
-            profile: SyncedProfile.newer(local.profile, remote.profile))
     }
 
     static func versionKey(accountID: String) -> String {

@@ -23,6 +23,12 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
 - The device token only ever goes to a server whose certificate matches the pinned SHA-256 (`DirectTransport`); the
   system trust store is never used for these servers. A link that arrives from outside (paste, `bandito://`) is shown
   and confirmed before anything is sent; an address typed without a fingerprint shows what the server presents first.
+- A server can also be reached through Bandito Relay (`docs/RELAY.md`): `ServerEndpoint.reachable` holds the direct addresses
+  (with the pin) and/or the relay route with the daemon's Noise key; `ReachableTransport` tries the addresses first, then
+  `RelayTransport` (Noise IK end to end, the relay only forwards bytes). The phone's Noise private key is kept in the
+  Keychain next to the token (`ServerSession.noiseAccount`, never in `servers.v1`). A relay-only link has no fingerprint and
+  is still shown and confirmed before anything is sent. The bytes of `NoiseIK` are checked against `snow` vectors
+  (`daemon/tests/fixtures/noise_ik_vectors.json`, `NoiseVectorTests`).
 - The token lives in the Keychain (`ServerSession`, one item per server); the saved list (`servers.v1`) never holds it.
   A token that cannot be saved is revoked on the daemon at once.
 - `ServerSession.shared` is the one list of servers (paired ones, or the `-demo` world): Crew, Inbox, Activity, Settings,

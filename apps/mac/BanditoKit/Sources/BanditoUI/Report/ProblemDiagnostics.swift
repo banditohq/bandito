@@ -190,6 +190,8 @@ enum ProblemDiagnosticsCollector {
                 if let host = url.host() { out.append(host) }
             case .direct(let hosts, _):
                 out.append(contentsOf: hosts)
+            case .reachable(let hosts, _, _, _):
+                out.append(contentsOf: hosts)
             case .local:
                 break
             }

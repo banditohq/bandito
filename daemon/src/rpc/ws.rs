@@ -274,13 +274,13 @@ async fn rpc(
     }
     let peer = match device_for(&app, &headers) {
         Ok(Some(device)) => Peer::Device(device),
-        Ok(None) => Peer::Anonymous(client.0),
+        Ok(None) => Peer::Anonymous(client.0, None),
         Err(e) => return e.into_response(),
     };
     // The peer is fixed for the whole connection: a socket that was anonymous stays anonymous after `pair.redeem`,
     // and the app reconnects with its token. So the big limit is only ever for a paired device.
     let limit = match peer {
-        Peer::Anonymous(_) => ANONYMOUS_MESSAGE_LIMIT,
+        Peer::Anonymous(..) => ANONYMOUS_MESSAGE_LIMIT,
         _ => RPC_MESSAGE_LIMIT,
     };
     ws.max_message_size(limit)
@@ -570,7 +570,7 @@ fn percent_encode(s: &str) -> String {
 
 /// Whether a message is a `pair.redeem` request: its `method` is that name. The text anywhere else in a message (a
 /// param, say) does not count.
-fn asks_to_pair(text: &str) -> bool {
+pub(crate) fn asks_to_pair(text: &str) -> bool {
     serde_json::from_str::<serde_json::Value>(text)
         .ok()
         .and_then(|v| v.get("method").and_then(|m| m.as_str()).map(|m| m == "pair.redeem"))
@@ -581,7 +581,7 @@ async fn handle(app: Arc<App>, peer: Peer, socket: WebSocket, anonymous_slot: Op
     // An anonymous socket on a phone listener may only pair: it closes when no `pair.redeem` comes in time, and a while
     // after the one that did (the app reconnects with its token). The slot it holds is freed when it closes.
     let _slot = anonymous_slot;
-    let anonymous = matches!(peer, Peer::Anonymous(_));
+    let anonymous = matches!(peer, Peer::Anonymous(..));
     let redeem_seen = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let seen = redeem_seen.clone();
     let (mut sink, mut stream) = socket.split();
@@ -615,11 +615,7 @@ async fn handle(app: Arc<App>, peer: Peer, socket: WebSocket, anonymous_slot: Op
         if !(anonymous && _slot.is_some()) {
             return std::future::pending::<()>().await;
         }
-        tokio::time::sleep(crate::phone::ANONYMOUS_IDLE).await;
-        if !redeem_seen.load(std::sync::atomic::Ordering::Relaxed) {
-            return;
-        }
-        tokio::time::sleep(crate::phone::ANONYMOUS_AFTER_REDEEM).await;
+        crate::phone::anonymous_deadline(&redeem_seen).await;
     };
     tokio::select! {
         () = serve(app, peer, in_rx, out_tx) => {}
@@ -769,6 +765,50 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(value["id"], 1);
         assert!(value.get("result").is_some(), "{text}");
+    }
+
+    /// A token from `devices.issue` is a device token like any other: the `/v1/rpc` socket takes it.
+    #[tokio::test]
+    async fn an_issued_token_works_on_the_rpc_socket() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as ClientMessage;
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+        use tokio_tungstenite::tungstenite::http::HeaderValue;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let app = served(dir.path());
+        let issued = crate::rpc::dispatch(
+            &app,
+            &crate::rpc::Peer::Local,
+            "devices.issue",
+            serde_json::json!({ "name": "Phone", "platform": "ios" }),
+        )
+        .await
+        .unwrap();
+        let token = issued["token"].as_str().unwrap().to_string();
+        let addr = serve_rpc(app).await;
+
+        let mut req = format!("ws://{addr}/v1/rpc").into_client_request().unwrap();
+        req.headers_mut().insert(
+            "authorization",
+            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+        );
+        let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
+        ws.send(ClientMessage::Text(
+            r#"{"id":1,"method":"devices.list","params":{}}"#.to_string().into(),
+        ))
+        .await
+        .unwrap();
+        let ClientMessage::Text(text) = ws.next().await.unwrap().unwrap() else {
+            panic!("expected a text reply")
+        };
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let rows = value["result"].as_array().unwrap_or_else(|| panic!("{text}"));
+        let me = rows
+            .iter()
+            .find(|d| d["id"] == issued["device_id"])
+            .expect("the issued device lists itself");
+        assert_eq!(me["current"], serde_json::json!(true));
     }
 
     /// A socket that is not paired yet takes only small messages: 64 KB. A big one closes it, so an anonymous client

@@ -30,6 +30,8 @@ allow = [
     "MPL-2.0",
     "CC0-1.0",
     "BSL-1.0",
+    # webpki-roots (the bundled Mozilla CA roots, the relay's TLS fallback): the data is permissively licensed.
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.93
 # The list is a policy, not a lockfile report: a permitted license that no crate uses yet is not a finding.

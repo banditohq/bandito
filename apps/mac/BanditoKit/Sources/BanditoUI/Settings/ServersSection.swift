@@ -66,7 +66,7 @@ struct ServersSection: View {
             presenting: removing
         ) { server in
             Button(L10n.Common.delete, role: .destructive) {
-                app.remove(server.id)
+                app.forget(server.id)
             }
             Button(L10n.Common.cancel, role: .cancel) {}
         } message: { _ in

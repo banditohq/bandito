@@ -10,41 +10,6 @@ extension Logger {
     static let account = Logger(subsystem: "dev.bandito", category: "account")
 }
 
-/// Sign-out in the order that keeps this Mac safe. A plain sign-out parks the sync key (so the next sign-in to the
-/// same account needs no approval); "forget this Mac" deletes it. The key is parked before anything is removed:
-/// if parking fails, the error reaches the caller and nothing is deleted. Then the local key and the session are
-/// removed, and only then is the server asked to end the session. A failed server call is logged and changes
-/// nothing locally.
-@MainActor
-enum SignOutSteps {
-    static func run(
-        keys: SecretStore, session: Session?, forgetThisMac: Bool,
-        revoke: (Session) async throws -> Void, log: (String) -> Void
-    ) async throws {
-        if forgetThisMac {
-            // Forgetting removes the parked key first, so a failure here leaves the live key and the session in place.
-            try ParkedSyncKey.clearParked(in: keys)
-        } else if let accountID = session?.user.id {
-            // The parked key belongs to the session's account. Without a session there is nothing to park under.
-            do {
-                if let key = try SyncKey.load(from: keys) {
-                    try ParkedSyncKey.park(key, accountID: accountID, in: keys)
-                }
-            } catch SyncKeyError.invalidKey {
-                // A damaged key cannot be parked; the sign-out below removes it like any other key.
-            }
-        }
-        try keys.save(nil, account: SyncKey.keychainAccount)
-        try keys.save(nil, account: AccountClient.sessionAccount)
-        guard let session else { return }
-        do {
-            try await revoke(session)
-        } catch {
-            log("Sign-out: the server did not confirm the end of the session (\(error.localizedDescription)).")
-        }
-    }
-}
-
 /// Publishes this Mac's servers into the sync blob. Fetch, merge, write; on a version conflict the blob is fetched
 /// again and merged again, up to `maxAttempts` times. The last conflict is thrown to the caller.
 @MainActor
@@ -77,25 +42,6 @@ enum AccountHubError: Error, Equatable, LocalizedError {
 
     var errorDescription: String? {
         L10n.Onboarding.Account.setupFailed
-    }
-}
-
-/// What a signed-in device does next. Decided from the server state (`/me`, the sync blob) and whether this Mac
-/// holds the sync key.
-public enum AccountRoute: Equatable, Sendable {
-    /// Approved, and the account has no sync data yet: this is the first device. It creates the key and the blob.
-    case firstDevice
-    /// Approved, with sync data and the key on this Mac: nothing to do.
-    case ready
-    /// Approved, with sync data but no key here (a reinstall, say). Only a reset makes the account usable again.
-    case recoverRequired
-    /// Not approved: another device must hand over the sync key.
-    case waitForApproval
-
-    public static func decide(approved: Bool, hasBlob: Bool, hasKey: Bool) -> AccountRoute {
-        guard approved else { return .waitForApproval }
-        if !hasBlob { return .firstDevice }
-        return hasKey ? .ready : .recoverRequired
     }
 }
 
@@ -148,6 +94,21 @@ public final class AccountHub {
     /// Where the session and the sync key are kept. The device keys live in `DeviceIdentityStore`.
     public let keys: SecretStore
 
+    /// The servers this Mac is connected to, for the access cycle. Set by the main window; nil in tests that do not need it.
+    @ObservationIgnored public var accessServers: (@MainActor () -> [ServerModel])?
+    /// What this Mac last wrote as phone records, so the blob is written again only when they change.
+    @ObservationIgnored private var publishedPhones: [UUID: SyncedPhone] = [:]
+    @ObservationIgnored private var responder: AccessResponder?
+    @ObservationIgnored private var requester: AccessRequester?
+    /// The servers of the account the person removed on this Mac: not asked for again until shown.
+    @ObservationIgnored private let dismissed: DismissedServers
+    /// How many are hidden for the signed-in account (the Account page offers to show them).
+    public private(set) var hiddenServerCount = 0
+    /// Where the accesses other devices issue for this Mac go (`MacAccessSink`). Set by the main window.
+    @ObservationIgnored public var accessSink: (any ServerAccessSink)?
+    /// The phone records this Mac last published for its own servers.
+    var ownPhoneRecords: [UUID: SyncedPhone] { publishedPhones }
+    @ObservationIgnored private let accessLedger = AccessLedger()
     @ObservationIgnored private var watchTask: Task<Void, Never>?
     /// The first `prepare` in progress. Calls that come meanwhile wait for it, so the device identity is read once.
     @ObservationIgnored private var preparing: Task<AccountClient, Error>?
@@ -159,9 +120,11 @@ public final class AccountHub {
 
     public init(
         keys: SecretStore = KeychainStore(service: "dev.bandito.account"),
+        dismissed: DismissedServers = DismissedServers(),
         loadIdentity: @escaping @Sendable () async throws -> DeviceIdentity = { try await DeviceIdentityStore.shared.load() }
     ) {
         self.keys = keys
+        self.dismissed = dismissed
         self.loadIdentity = loadIdentity
         // A stored session is enough to know someone is signed in; no device key is read for that.
         signedIn = ((try? keys.load(account: AccountClient.sessionAccount)) ?? nil) != nil
@@ -204,51 +167,16 @@ public final class AccountHub {
     /// Call after a successful sign-in, so the banner and Settings know.
     public func markSignedIn() {
         signedIn = true
+        // The round that shows devices to approve and answers access requests runs from now on, not only after a restart.
+        startWatchingPending()
     }
 
     /// The signed-in account and this device's route. Needs a session.
     public func inspect() async throws -> (route: AccountRoute, me: Me) {
         let client = try await prepare()
-        let me = try await client.me()
-        self.me = me
-        guard me.device.approved else {
-            return (.waitForApproval, me)
-        }
-        // The blob belongs to the session's account, as `SyncStore` reads it.
-        let blobAccountID = try await client.restoreSession()?.user.id
-        let blob = try await client.getSync()
-        var hasKey = try SyncKey.load(from: keys) != nil
-        var parked: (accountID: String, key: SymmetricKey)?
-        if !hasKey {
-            parked = try ParkedSyncKey.loadParked(from: keys)
-        }
-        var opens = false
-        if let parked, let blob, let blobAccountID, parked.accountID == blobAccountID {
-            opens = Self.opensBlob(blob, key: parked.key, accountID: blobAccountID)
-        }
-        // The session is read again, and the sign-out flag with it. Nothing is awaited after this line: the decision and
-        // the writes below run in one step on the main actor. A sign-out that started during the reads above has set
-        // the flag or removed the session, and then nothing is written.
-        let sessionNow = try await client.restoreSession()?.user.id
-        let decision = ParkedSyncKey.restoreDecision(
-            approved: true, hasBlob: blob != nil, hasMainKey: hasKey, signingOut: signingOut,
-            parkedAccountID: parked?.accountID, blobOpensWithParked: opens,
-            blobAccountID: blobAccountID, sessionUserID: sessionNow, meUserID: me.user.id)
-        if let parked, decision == .restore {
-            try SyncKey.save(parked.key, to: keys)
-            try ParkedSyncKey.clearParked(in: keys)
-            hasKey = true
-        } else if decision == .discard {
-            // Same account, but the blob is not its history any more: the parked key is useless here.
-            try ParkedSyncKey.clearParked(in: keys)
-        }
-        return (AccountRoute.decide(approved: true, hasBlob: blob != nil, hasKey: hasKey), me)
-    }
-
-    /// Whether the sync blob opens with `key` for `accountID`, at the blob's version.
-    private static func opensBlob(_ blob: SyncBlob, key: SymmetricKey, accountID: String) -> Bool {
-        let associatedData = SyncKey.blobAssociatedData(accountID: accountID, version: blob.version)
-        return (try? SyncKey.openBlob(blob.blob, key: key, associatedData: associatedData)) != nil
+        let result = try await AccountInspector.inspect(client: client, keys: keys, isSigningOut: { [weak self] in self?.signingOut ?? true })
+        self.me = result.me
+        return result
     }
 
     /// The first device of an account: makes the sync key (if there is none) and writes the first, empty blob.
@@ -304,6 +232,15 @@ public final class AccountHub {
             log: { Logger.account.error("\($0, privacy: .public)") })
         pending = []
         signedIn = false
+        responder = nil
+        requester = nil
+        publishedPhones = [:]
+        if let accountID = session?.user.id {
+            accessLedger.forget(accountID: accountID)
+            // The hidden servers belong to the account that is leaving; the next one starts with none.
+            dismissed.clear(accountID: accountID)
+        }
+        hiddenServerCount = 0
         profile.clear()
         clearPicture()
         me = nil
@@ -311,16 +248,96 @@ public final class AccountHub {
 
     /// Writes this Mac's ssh servers into the account's sync blob, keeping the other servers and retrying on
     /// conflicts (see `ServerPublishing`). Errors reach the caller.
-    public func publishServers(_ configs: [ServerConfig]) async throws {
+    public func publishServers(_ configs: [ServerConfig], phones: [UUID: SyncedPhone]? = nil) async throws {
         _ = try await prepare()
         guard let store = syncStore else { throw AccountHubError.notReady }
-        var local = ServerSyncPayload.payload(for: configs)
+        let records = phones ?? publishedPhones
+        var local = ServerSyncPayload.payload(for: configs, phones: records, localDeviceID: me?.device.id)
         local.profile = await avatar.currentSyncedProfile()
         let stored = try await ServerPublishing.publish(
             local: local,
             fetch: { try await store.pull() },
             write: { payload in try await store.push(payload) })
         try await avatar.apply(stored.profile)
+        if let phones { publishedPhones = phones }
+    }
+
+    /// One round of "servers follow you": writes the phone records of the servers this Mac is connected to when they
+    /// changed, then answers the requests of the account's other devices (`AccessResponder`). Silent on failure: the
+    /// next round tries again. Does nothing without a session, a sync key or `accessServers`.
+    public func runAccessCycle(configs: [ServerConfig]) async {
+        guard signedIn, hasSyncKey, let provider = accessServers else { return }
+        do {
+            _ = try await prepare()
+            guard let store = syncStore, let client, let identity else { return }
+            let servers = provider()
+            let phones = await PhoneRecords.collect(from: servers)
+            if !phones.isEmpty, phones != publishedPhones {
+                try await publishServers(configs, phones: phones)
+            }
+            let responder = self.responder ?? AccessResponder(
+                sync: store, account: client, identity: identity, ledger: accessLedger)
+            self.responder = responder
+            let outcome = try await responder.run(servers: servers)
+            if outcome.updateNeeded > 0 {
+                Logger.account.notice("Access: \(outcome.updateNeeded) request(s) wait: bandito.dev does not list device keys yet, update the account service.")
+            }
+            // The other way: servers the account has (added on the iPhone) that this Mac does not.
+            if let sink = accessSink {
+                let asking = self.requester ?? AccessRequester(
+                    sync: store, account: client, identity: identity, sink: sink,
+                    noiseKeys: ServerNoiseKeyStore(secrets: keys), dismissed: dismissed)
+                self.requester = asking
+                _ = try await asking.run()
+            }
+        } catch {
+            Logger.account.error("Access cycle: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private var currentAccountID: String? { me?.user.id ?? profile.rememberedUserID }
+
+    /// The person removed this server on this Mac: the account does not bring it back.
+    public func dismiss(_ config: ServerConfig) {
+        guard signedIn, let accountID = currentAccountID else { return }
+        dismissed.insert(
+            accountID: accountID, serverID: config.id,
+            phone: SyncedPhone(endpoint: config.endpoint) ?? publishedPhones[config.id])
+        hiddenServerCount = dismissed.count(accountID: accountID)
+    }
+
+    /// A server was added here: a mark that hid it (by id, or as the same daemon) is lifted.
+    public func lift(_ config: ServerConfig) {
+        guard let accountID = currentAccountID else { return }
+        dismissed.lift(accountID: accountID, serverID: config.id, phone: SyncedPhone(endpoint: config.endpoint))
+        hiddenServerCount = dismissed.count(accountID: accountID)
+    }
+
+    /// Reads how many servers are hidden (the Account page shows the button while there are some).
+    public func refreshHiddenCount() {
+        hiddenServerCount = currentAccountID.map { dismissed.count(accountID: $0) } ?? 0
+    }
+
+    /// Shows the hidden servers again: the next round asks for them.
+    public func showHiddenServers() {
+        guard let accountID = currentAccountID else { return }
+        dismissed.clear(accountID: accountID)
+        hiddenServerCount = 0
+        requestAccessCycle()
+    }
+
+    /// Runs a round of the access cycle now, without waiting for the next tick: after the cloud was switched on or off, so
+    /// the account's other devices see the way in (or its loss) within seconds.
+    public func requestAccessCycle() {
+        guard signedIn, let configs = accessServers?().map(\.config) else { return }
+        Task { await runAccessCycle(configs: configs) }
+    }
+
+    /// A device left the account: runs a round now, which revokes the rows this Mac issued to it (the round compares what
+    /// this Mac issued with the account's device list, so a removal from another device is handled the same way).
+    public func revokeAccess(of device: AccountDevice) async {
+        guard let configs = accessServers?().map(\.config) else { return }
+        await runAccessCycle(configs: configs)
     }
 
     /// Brings the profile picture in line with the sync blob. A newer copy in the blob is applied on this Mac; a newer
@@ -366,6 +383,9 @@ public final class AccountHub {
             while !Task.isCancelled {
                 guard self != nil else { return }
                 await self?.refreshPending()
+                if let hub = self, let configs = hub.accessServers?().map(\.config) {
+                    await hub.runAccessCycle(configs: configs)
+                }
                 try? await Task.sleep(for: .seconds(30))
             }
         }

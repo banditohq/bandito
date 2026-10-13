@@ -116,4 +116,65 @@ import Testing
             DaemonInfo.self, from: Data(#"{"version":"0.1.14","hostname":"h","os":"linux","arch":"x","started_at":1,"last_seq":0}"#.utf8))
         #expect(older.tlsFingerprint == nil && older.phoneAccess == nil)
     }
+
+    // MARK: relay (docs/RELAY.md)
+
+    static let sid = "abcdefghijklmnopqrstuvwxyz"
+    static let nk = Base64URL.encode(Data((0..<32).map { UInt8($0) }))
+    static let relayTail = "&relay=relay.bandito.dev/\(sid)&nk=\(nk)"
+
+    @Test func aLinkWithTheRelayCarriesItAndTheKey() throws {
+        let link = try PhonePairLink.parse(Self.daemonLink + Self.relayTail)
+        #expect(link.relay == RelayRoute(host: "relay.bandito.dev", sid: Self.sid))
+        #expect(link.noiseKey == Self.nk)
+        #expect(link.fingerprint == Self.fp && link.hosts == Self.hosts)
+        let made = PhonePairLink.make(
+            code: Self.code, fingerprint: Self.fp, name: "Дом & Co #1", hosts: Self.hosts, relay: link.relay, noiseKey: Self.nk)
+        #expect(made == Self.daemonLink + Self.relayTail)
+    }
+
+    @Test func aRelayOnlyLinkHasNoHostAndNoFingerprint() throws {
+        let text = "bandito://pair?v=1&code=\(Self.code)&name=Mac\(Self.relayTail)"
+        let link = try PhonePairLink.parse(text)
+        #expect(link.fingerprint == nil && link.hosts.isEmpty && link.relay?.sid == Self.sid)
+        let request = try PairInput.parseLink(text)
+        #expect(request.isRelayOnly && request.fingerprint == nil && request.noiseKey == Self.nk)
+        // Hosts without a certificate to pin are not worth trying: the relay is the way.
+        let hostsOnly = try PairInput.parseLink(text + "&host=10.0.0.2:7879")
+        #expect(hostsOnly.hosts.isEmpty)
+    }
+
+    @Test func aBrokenRelayPartIsRefusedAndOnlyTheOldLinkNeedsNoRelay() {
+        let bad = [
+            Self.daemonLink + "&relay=relay.bandito.dev/short&nk=\(Self.nk)",
+            Self.daemonLink + "&relay=relay.bandito.dev/\(Self.sid)",
+            Self.daemonLink + "&relay=relay.bandito.dev/\(Self.sid)&nk=AAAA",
+            Self.daemonLink + "&nk=\(Self.nk)",
+            Self.daemonLink + "&relay=evil host/\(Self.sid)&nk=\(Self.nk)",
+            Self.daemonLink + "&relay=https://relay.bandito.dev/\(Self.sid)&nk=\(Self.nk)",
+        ]
+        for text in bad { #expect(throws: PhonePairLink.Problem.badRelay) { try PhonePairLink.parse(text) } }
+        #expect(throws: PairInputError.badRelay) { try PairInput.parseLink(bad[0]) }
+        // No relay and no fingerprint: nothing to pin, nothing to connect to.
+        #expect(throws: PhonePairLink.Problem.badFingerprint) {
+            try PhonePairLink.parse("bandito://pair?v=1&code=\(Self.code)&name=x&host=10.0.0.2:7879")
+        }
+    }
+
+    @Test func relayRoutesAreReadAndTheirAddressIsTLSExceptOnLoopback() {
+        #expect(RelayRoute.parse("relay.bandito.dev/\(Self.sid)")?.clientURL?.absoluteString
+            == "wss://relay.bandito.dev:443/v1/client/\(Self.sid)")
+        #expect(RelayRoute.parse("127.0.0.1:8787/\(Self.sid)")?.clientURL?.scheme == "ws")
+        #expect(RelayRoute.parse("example.com:8443/\(Self.sid)")?.clientURL?.absoluteString
+            == "wss://example.com:8443/v1/client/\(Self.sid)")
+        #expect(RelayRoute.parse("relay.bandito.dev/\(Self.sid)/x") == nil)
+        #expect(RelayRoute.parse("/\(Self.sid)") == nil)
+        #expect(RelayRoute.parse("relay.bandito.dev/UPPERCASEUPPERCASEUPPERCA") == nil)
+    }
+
+    @Test func aPairReplyCarriesTheRelayFields() throws {
+        let json = #"{"code":"a-b-c-d-e-f","expires_in_ms":600000,"link":null,"relay":"relay.bandito.dev/\#(Self.sid)","noise_key":"\#(Self.nk)"}"#
+        let reply = try RPCClient.decoder.decode(PairCode.self, from: Data(json.utf8))
+        #expect(reply.relay == "relay.bandito.dev/\(Self.sid)" && reply.noiseKey == Self.nk)
+    }
 }

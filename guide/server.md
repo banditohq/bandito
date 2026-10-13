@@ -134,7 +134,7 @@ The phones and Macs that connect to this server. Revoking one device cuts off on
 1. To add a device, click Add device (Добавить устройство). The sheet Pair a device (Добавить устройство) shows a code that is valid for N min (Valid for {minutes} min.). Scan it with Bandito on the device, or type it in. The code works once.
 2. To remove a device, click Revoke (Отозвать) in its row, read Revoke {name}?, and confirm. The device loses access to the server at once.
 3. Each row shows Added {date} and, when known, last seen (last seen {last}).
-4. To pair an iPhone, use the iPhone block of the server's settings (see [settings.md](settings.md), Server settings): it turns on access from a phone and shows the QR code the iPhone scans. When the server gives a link for the iPhone, the sheet above shows that same QR code. In release builds the iPhone block shows only when the iPhone app (beta) switch in General (Общие) is on, or when access from a phone is already on for this server.
+4. To pair an iPhone, the quickest way is Connect iPhone (Подключить iPhone) in the profile sheet (see [account.md](account.md)), which turns on the cloud by itself. Or use the iPhone block of the server's settings (see [settings.md](settings.md), Server settings): it turns on access from a phone and shows the QR code the iPhone scans. When the server gives a link for the iPhone, the sheet above shows that same QR code. In release builds the iPhone block shows only when the iPhone app (beta) switch in General (Общие) is on, or when access from a phone is already on for this server.
 
 ## Updates (Обновления)
 

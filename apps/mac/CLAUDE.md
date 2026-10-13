@@ -147,6 +147,19 @@ list or animation is done:
 `RPCClient.decoder` uses `convertFromSnakeCase`. `CodingKeys` must be plain camelCase (`case imageRev`), never a raw
 snake value (`case imageRev = "image_rev"` silently never matches). Test a wire type with `RPCClient.decoder`.
 
+## Bandito Relay (cloud) on the Mac
+
+`RelayController` (BanditoKit) turns the cloud on and off for one server: registration through the account
+(`AccountClient.registerRelayServer`), then the daemon's `relay.enable`; off is `relay.disable`, then the registration is
+deleted (in a task of its own, so a closed sheet cannot cut it). The iPhone block of the server settings shows it first
+(`CloudAccessBlock`), the profile's Devices has the wizard (`ConnectPhoneWizard`, `ConnectPhoneModel`). Tests of the
+transport run against `FakeRelay` (a loopback WebSocket with a Swift Noise responder), never against bandito.dev.
+Pictures of these screens: `RELAY_SNAPSHOTS=<dir> swift test --filter RelaySnapshots`.
+
+The end-to-end tests with the real daemon (`PhoneEverywhereTests`: a daemon process, `RelayBridge` as the relay, two devices of
+one account on fake account fakes) are skipped when `daemon/target/debug/bandito` is not built (`cargo build --bin bandito`);
+`LiveRelayTests` reaches the real relay and runs only by hand with `BANDITO_LIVE_CREDS` (a test registration, deleted after).
+
 ## Daemon features
 
 Check a capability with `server.supports("<feature>")` before calling a newer RPC, so the app keeps working with an

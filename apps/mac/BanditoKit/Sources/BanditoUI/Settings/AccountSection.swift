@@ -79,10 +79,21 @@ struct AccountSection: View {
                 }
             }
             .banditoCard()
+            if hub.hiddenServerCount > 0 {
+                SettingsRow(
+                    title: L10n.Account.Hidden.show(count: hub.hiddenServerCount), hint: L10n.Account.Hidden.hint
+                ) {
+                    Button(L10n.Account.Hidden.show(count: hub.hiddenServerCount)) { hub.showHiddenServers() }
+                        .banditoButton(.quiet())
+                        .fixedSize()
+                }
+                .banditoCard()
+            }
             if let errorText {
                 UserFacingErrorView(message: errorText)
             }
         }
+        .task { hub.refreshHiddenCount() }
     }
 
     private func identity(name: String?) -> some View {

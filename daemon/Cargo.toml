@@ -27,8 +27,10 @@ rcgen = { version = "0.14", default-features = false, features = ["ring", "pem",
 rand = "0.10.3"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rustls-native-certs = "0.8.4"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+snow = "0.10.0"
 sha2 = "0.11.0"
 tar = { version = "0.4.46", default-features = false }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd", "png-format"] }
@@ -41,6 +43,8 @@ tokio-util = { version = "0.7", features = ["io"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.27.0", features = ["v7", "serde"] }
+webpki-roots = "1"
+zeroize = "1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = "0.13"

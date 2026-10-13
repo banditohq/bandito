@@ -43,6 +43,7 @@ pub mod host;
 pub mod integrations;
 pub mod migrate;
 pub mod preview;
+pub mod relay;
 pub mod schedules;
 pub mod screen;
 pub mod secrets;
@@ -122,6 +123,7 @@ pub fn features() -> Vec<&'static str> {
         "agent_migrate",
         "server_settings",
         "phone_access",
+        "relay",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -178,6 +180,8 @@ pub struct App {
     pub migrate: crate::migrate::Registry,
     /// The TLS listener for phones (see docs/ARCHITECTURE.md#phone-access). Off until the owner switches it on.
     pub phone: Arc<crate::phone::PhoneAccess>,
+    /// The connection to Bandito Relay (see docs/RELAY.md). Off until the owner switches it on.
+    pub relay: Arc<crate::relay::Relay>,
     /// One cancellation token per paired device: revoking the device cancels it, and every long connection of the device
     /// (RPC, tunnel, DevTools, a file or preview stream) ends with it (see [`App::device_cancel`]).
     device_cancels: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
@@ -250,6 +254,7 @@ impl App {
             creations: team_create::Creations::default(),
             migrate: crate::migrate::Registry::default(),
             phone: Arc::new(crate::phone::PhoneAccess::new(data_home.clone(), me.clone())),
+            relay: Arc::new(crate::relay::Relay::new(data_home.clone(), me.clone())),
             device_cancels: Mutex::new(HashMap::new()),
             data_home,
         })
@@ -333,8 +338,9 @@ pub enum Peer {
     /// A paired app.
     Device(Device),
     /// Not authenticated yet: only `daemon.hello` and `pair.redeem`. Holds where the
-    /// connection came from (an IP for WebSocket), for the rate limit of `pair.redeem`.
-    Anonymous(String),
+    /// connection came from (an IP for WebSocket), for the rate limit of `pair.redeem`, and, on a relay
+    /// stream, the phone's Noise key that the handshake proved (`pair.redeem` must agree with it).
+    Anonymous(String, Option<String>),
     /// An agent's crew server on `agent.sock`, with the agent its session token names.
     Agent(String),
 }
@@ -394,7 +400,7 @@ pub fn is_agent_only(method: &str) -> bool {
 /// Whether `peer` may call `method` at all. [`dispatch`] and the event stream check it first.
 pub fn allowed(peer: &Peer, method: &str) -> bool {
     match peer {
-        Peer::Anonymous(_) => matches!(method, "daemon.hello" | "pair.redeem"),
+        Peer::Anonymous(..) => matches!(method, "daemon.hello" | "pair.redeem"),
         Peer::Agent(_) => AGENT_METHODS.contains(&method),
         Peer::Local | Peer::Device(_) => !is_agent_only(method),
     }
@@ -403,7 +409,7 @@ pub fn allowed(peer: &Peer, method: &str) -> bool {
 /// The refusal for a call `peer` may not make.
 fn denied(peer: &Peer, method: &str) -> RpcError {
     match peer {
-        Peer::Anonymous(_) => RpcError::new(UNAUTHORIZED, "not paired: run `bandito pair` on the server"),
+        Peer::Anonymous(..) => RpcError::new(UNAUTHORIZED, "not paired: run `bandito pair` on the server"),
         Peer::Agent(_) => RpcError::new(UNAUTHORIZED, format!("agents cannot call {method}")),
         Peer::Local | Peer::Device(_) => RpcError::new(UNAUTHORIZED, format!("{method} is only for agents")),
     }
@@ -431,7 +437,7 @@ fn bind_to_agent(agent: &str, mut p: Value) -> Result<Value, RpcError> {
 pub(crate) fn redeem_source(peer: &Peer) -> String {
     match peer {
         Peer::Local => "local".into(),
-        Peer::Anonymous(source) => source.clone(),
+        Peer::Anonymous(source, _) => source.clone(),
         Peer::Device(device) => format!("device:{}", device.id),
         Peer::Agent(agent) => format!("agent:{agent}"),
     }
@@ -473,6 +479,8 @@ pub const WORKSPACE_ERROR: i64 = -32028;
 pub const TELEGRAM_ERROR: i64 = -32029;
 /// An agent migration step failed; `error.data.reason` says why (see rpc::migrate).
 pub const MIGRATE_ERROR: i64 = -32030;
+/// A relay call failed on the server (the key or settings file); `error.data.reason` says why (see rpc::relay).
+pub const RELAY_ERROR: i64 = -32031;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -785,6 +793,58 @@ struct ScheduleUpdate {
 struct RedeemParams {
     code: String,
     device_name: String,
+    /// The phone's Noise static public key (base64url, 32 bytes) when it pairs for the relay (docs/RELAY.md).
+    #[serde(default)]
+    noise_key: Option<String>,
+}
+#[derive(Deserialize)]
+struct IssueParams {
+    name: String,
+    platform: String,
+    #[serde(default)]
+    noise_key: Option<String>,
+}
+/// The most device rows `devices.issue` allows on one server.
+const MAX_DEVICES: usize = 50;
+/// The longest device name that is kept, in characters.
+const ISSUE_NAME_CHARS: usize = 100;
+/// The name of an issued device: trimmed, cut to [`ISSUE_NAME_CHARS`], never empty.
+fn issue_name(name: &str) -> Result<String, RpcError> {
+    let name: String = name
+        .trim()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(ISSUE_NAME_CHARS)
+        .collect();
+    if name.trim().is_empty() {
+        return Err(RpcError::new(INVALID_PARAMS, "name must not be empty"));
+    }
+    Ok(name.trim().to_string())
+}
+/// The platform of an issued device: a short lowercase word (`macos`, `ios`).
+fn issue_platform(platform: &str) -> Result<&str, RpcError> {
+    let p = platform.trim();
+    let fine = !p.is_empty()
+        && p.len() <= 32
+        && p.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if fine {
+        Ok(p)
+    } else {
+        Err(RpcError::new(INVALID_PARAMS, "platform must be a short lowercase word"))
+    }
+}
+/// A phone's Noise public key: base64url without padding, 32 bytes. Returned in its canonical spelling.
+fn valid_noise_key(key: &str) -> Result<String, RpcError> {
+    use base64::Engine;
+    let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    match engine.decode(key.trim()) {
+        Ok(bytes) if bytes.len() == 32 => Ok(engine.encode(bytes)),
+        _ => Err(RpcError::new(
+            INVALID_PARAMS,
+            "noise_key must be 32 bytes as base64url without padding",
+        )),
+    }
 }
 #[derive(Deserialize)]
 struct TeamAgentParams {
@@ -1236,6 +1296,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     if method.starts_with("screen.") {
         return screen::dispatch(app, peer, method, p).await;
     }
+    if method.starts_with("relay.") {
+        return relay::dispatch(app, method, p).await;
+    }
     if method.starts_with("telegram.") {
         return telegram::dispatch(app, method, p).await;
     }
@@ -1292,7 +1355,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "name": "bandito",
             "version": VERSION,
             "hostname": app.hostname,
-            "authenticated": !matches!(peer, Peer::Anonymous(_)),
+            "authenticated": !matches!(peer, Peer::Anonymous(..)),
         })),
         "daemon.info" => ok(json!({
             "version": VERSION,
@@ -1824,6 +1887,45 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(json!({ "revoked": revoked }))
         }
 
+        "devices.issue" => {
+            // Owner peers only: `allowed` already refused anonymous callers and agents; this is the second lock.
+            if !matches!(peer, Peer::Local | Peer::Device(_)) {
+                return Err(denied(peer, method));
+            }
+            let r: IssueParams = params(p)?;
+            let name = issue_name(&r.name)?;
+            let platform = issue_platform(&r.platform)?;
+            // A key that cannot be one is refused before anything is written.
+            let noise_key = r.noise_key.as_deref().map(valid_noise_key).transpose()?;
+            // A device with the account's access can mint more: the number of rows is capped, so a loop of requests
+            // cannot fill the table.
+            if store.device_list()?.len() >= MAX_DEVICES {
+                return Err(RpcError::new(
+                    SERVER_ERROR,
+                    format!("this server already has {MAX_DEVICES} devices: remove one in Settings and try again"),
+                ));
+            }
+            let token = pairing::new_token();
+            let d = store.device_add_keyed(&name, &token, noise_key.as_deref())?;
+            tracing::info!(device = %d.id, platform, "issued a device token to another device of the owner");
+            ok(json!({ "device_id": d.id, "token": token }))
+        }
+        "phone.info" => {
+            // How a phone reaches this daemon, without a pairing code (what `pair.create` adds to its link).
+            if !matches!(peer, Peer::Local | Peer::Device(_)) {
+                return Err(denied(peer, method));
+            }
+            let relay = app.relay.link_info();
+            ok(json!({
+                "relay": relay.as_ref().map(crate::phone::RelayLink::param),
+                "relay_host": relay.as_ref().map(|r| r.host.as_str()),
+                "sid": relay.as_ref().map(|r| r.sid.as_str()),
+                "noise_key": relay.as_ref().map(|r| r.nk.as_str()),
+                "fingerprint": app.phone.fingerprint(),
+                "hosts": app.phone.hosts_now(),
+            }))
+        }
+
         "usage.limits" => ok(store.usage_list()?),
         "usage.refresh" => {
             // Ask every runtime at once, for its windows and its plan; each question gets its own timeout.
@@ -1869,7 +1971,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let code = pairing::new_code();
             store.pairing_add(&code, pairing::CODE_TTL_MS)?;
             // For a phone: the link (and the QR text, the same string) when the phone listener is up.
-            let phone = app.phone.pair_info(&code, &app.hostname);
+            let relay = app.relay.link_info();
+            let phone = app.phone.pair_info(&code, &app.hostname, relay.as_ref());
             ok(json!({
                 "code": code,
                 "expires_in_ms": pairing::CODE_TTL_MS,
@@ -1877,10 +1980,25 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 "qr": phone.link,
                 "hosts": phone.hosts,
                 "fingerprint": phone.fingerprint,
+                "relay": relay.as_ref().map(crate::phone::RelayLink::param),
+                "noise_key": relay.as_ref().map(|r| r.nk.as_str()),
             }))
         }
         "pair.redeem" => {
             let r: RedeemParams = params(p)?;
+            // A key that cannot be one is refused before the code is looked at, so a typo does not burn the code.
+            let noise_key = r.noise_key.as_deref().map(valid_noise_key).transpose()?;
+            // Through the relay the phone's key is the one its handshake proved: the parameter may be left out,
+            // and when it is given it must be that key. Checked before the code is taken, as the key is.
+            let noise_key = match peer {
+                Peer::Anonymous(_, Some(session_key)) => {
+                    if noise_key.as_deref().is_some_and(|k| k != session_key) {
+                        return Err(RpcError::new(INVALID_PARAMS, "noise_key does not match the session"));
+                    }
+                    Some(session_key.clone())
+                }
+                _ => noise_key,
+            };
             let now = crate::store::now_ms();
             let source = redeem_source(peer);
             let mut limiter = app.redeem.lock().unwrap_or_else(|e| e.into_inner());
@@ -1898,7 +2016,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let name = r.device_name.trim();
             let name = if name.is_empty() { "device" } else { name };
             let token = pairing::new_token();
-            let d = store.device_add(name, &token)?;
+            let d = store.device_add_keyed(name, &token, noise_key.as_deref())?;
             ok(json!({ "token": token, "device": d }))
         }
 
@@ -4357,6 +4475,8 @@ mod trust_tests {
         "approvals.resolve",
         "devices.list",
         "devices.revoke",
+        "devices.issue",
+        "phone.info",
         "secrets.list",
         "secrets.set",
         "secrets.delete",
@@ -4413,6 +4533,9 @@ mod trust_tests {
         "backups.create",
         "backups.restore",
         "backups.leave_safe_mode",
+        "relay.enable",
+        "relay.disable",
+        "relay.status",
         "telegram.status",
         "telegram.set_token",
         "telegram.remove_token",
@@ -4487,7 +4610,7 @@ mod trust_tests {
     async fn only_the_owner_and_apps_may_update_the_daemon() {
         // Refused by the gate before anything runs, so no network call happens here.
         let agent = Peer::Agent("agent-a".into());
-        let anonymous = Peer::Anonymous("203.0.113.7".into());
+        let anonymous = Peer::Anonymous("203.0.113.7".into(), None);
         for method in ["daemon.update_check", "daemon.update_apply"] {
             for peer in [&agent, &anonymous] {
                 let err = dispatch(&app(), peer, method, json!({ "version": "9.9.9" }))
@@ -4503,7 +4626,7 @@ mod trust_tests {
     #[test]
     fn who_may_call_what() {
         let agent = Peer::Agent("agent-a".into());
-        let anonymous = Peer::Anonymous("203.0.113.7".into());
+        let anonymous = Peer::Anonymous("203.0.113.7".into(), None);
         for method in AGENT_METHODS {
             assert!(allowed(&agent, method), "{method}");
         }
@@ -4550,7 +4673,7 @@ mod trust_tests {
     #[tokio::test]
     async fn a_source_gets_five_failed_redeems_then_is_stopped() {
         let app = app();
-        let attacker = Peer::Anonymous("203.0.113.7".into());
+        let attacker = Peer::Anonymous("203.0.113.7".into(), None);
         for _ in 0..REDEEM_MAX_FAILURES_PER_SOURCE {
             let err = try_redeem(&app, &attacker).await.unwrap_err();
             assert_eq!(err.code, UNAUTHORIZED);
@@ -4558,7 +4681,7 @@ mod trust_tests {
         let err = try_redeem(&app, &attacker).await.unwrap_err();
         assert_eq!(err.code, RATE_LIMITED);
         // Another source is not held back by it.
-        let other = Peer::Anonymous("198.51.100.9".into());
+        let other = Peer::Anonymous("198.51.100.9".into(), None);
         let err = try_redeem(&app, &other).await.unwrap_err();
         assert_eq!(err.code, UNAUTHORIZED);
     }
@@ -4937,6 +5060,185 @@ mod folder_and_device_tests {
         let p = json!({"name": "Forge", "runtime": "claude", "cwd": "/nonexistent/folder/for/test"});
         assert!(dispatch(&app, &Peer::Local, "agents.create", p).await.is_err());
         assert!(store.agent_list().unwrap().is_empty(), "nothing is left behind");
+    }
+
+    fn noise(byte: u8) -> String {
+        use base64::Engine;
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([byte; 32])
+    }
+
+    #[tokio::test]
+    async fn devices_issue_makes_a_device_without_a_code() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        let key = noise(7);
+        let issued = dispatch(
+            &app,
+            &Peer::Local,
+            "devices.issue",
+            json!({ "name": "  My iPhone ", "platform": "ios", "noise_key": key }),
+        )
+        .await
+        .unwrap();
+        let id = issued["device_id"].as_str().unwrap().to_string();
+        let token = issued["token"].as_str().unwrap().to_string();
+        assert!(token.starts_with("bdt_") && token.len() == 68);
+        // The row is a normal device: it authenticates, keeps the Noise key and shows in the list.
+        let found = store.device_auth(&token).unwrap().unwrap();
+        assert_eq!((found.id.as_str(), found.name.as_str()), (id.as_str(), "My iPhone"));
+        assert_eq!(store.device_noise_key(&id).unwrap().as_deref(), Some(key.as_str()));
+        let list = dispatch(&app, &Peer::Local, "devices.list", json!({})).await.unwrap();
+        assert!(
+            list.as_array()
+                .unwrap()
+                .iter()
+                .any(|d| d["id"] == json!(id) && d["name"] == json!("My iPhone"))
+        );
+        // Two calls are two devices with different tokens.
+        let again = dispatch(
+            &app,
+            &Peer::Local,
+            "devices.issue",
+            json!({ "name": "My iPhone", "platform": "ios" }),
+        )
+        .await
+        .unwrap();
+        assert_ne!(again["token"], issued["token"]);
+        assert_ne!(again["device_id"], issued["device_id"]);
+        assert_eq!(
+            store.device_noise_key(again["device_id"].as_str().unwrap()).unwrap(),
+            None
+        );
+        // A device that was issued one may be revoked like any other.
+        let revoked = dispatch(&app, &Peer::Local, "devices.revoke", json!({ "id": id }))
+            .await
+            .unwrap();
+        assert_eq!(revoked["revoked"], json!(true));
+        assert!(store.device_auth(&token).unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn an_app_that_is_paired_may_issue_a_device() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let mine = store.device_add("Mac", "tok-1").unwrap();
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        let issued = dispatch(
+            &app,
+            &Peer::Device(mine),
+            "devices.issue",
+            json!({ "name": "Phone", "platform": "ios", "noise_key": noise(1) }),
+        )
+        .await
+        .unwrap();
+        assert!(store.device_auth(issued["token"].as_str().unwrap()).unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn devices_issue_and_phone_info_are_not_for_agents_or_strangers() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        let params = json!({ "name": "Phone", "platform": "ios", "noise_key": noise(2) });
+        for method in ["devices.issue", "phone.info"] {
+            for peer in [
+                Peer::Agent("agent-a".into()),
+                Peer::Anonymous("203.0.113.7".into(), None),
+            ] {
+                let err = dispatch(&app, &peer, method, params.clone()).await.unwrap_err();
+                assert_eq!(err.code, UNAUTHORIZED, "{method} from {peer:?}");
+            }
+            assert!(!allowed(&Peer::Agent("agent-a".into()), method));
+            assert!(!allowed(&Peer::Anonymous("x".into(), None), method));
+        }
+        assert!(store.device_list().unwrap().is_empty(), "nothing was written");
+    }
+
+    #[tokio::test]
+    async fn devices_issue_checks_its_params_before_it_writes() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        let bad = [
+            json!({ "name": "P", "platform": "ios", "noise_key": "not-a-key" }),
+            json!({ "name": "P", "platform": "ios", "noise_key": noise(3) + "A" }),
+            // Standard base64 with padding is not the relay's spelling.
+            json!({ "name": "P", "platform": "ios", "noise_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" }),
+            json!({ "name": "   ", "platform": "ios" }),
+            json!({ "name": "P", "platform": "" }),
+            json!({ "name": "P", "platform": "iOS 17" }),
+            json!({ "name": "P" }),
+            json!({ "platform": "ios" }),
+        ];
+        for p in bad {
+            let err = dispatch(&app, &Peer::Local, "devices.issue", p.clone())
+                .await
+                .unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{p}");
+        }
+        assert!(
+            store.device_list().unwrap().is_empty(),
+            "a refused call leaves no device"
+        );
+        // A long name is cut, not refused.
+        let long = "x".repeat(300);
+        let ok = dispatch(
+            &app,
+            &Peer::Local,
+            "devices.issue",
+            json!({ "name": long, "platform": "macos" }),
+        )
+        .await
+        .unwrap();
+        let name = store
+            .device_list()
+            .unwrap()
+            .into_iter()
+            .find(|d| d.id == ok["device_id"].as_str().unwrap())
+            .unwrap()
+            .name;
+        assert_eq!(name.chars().count(), ISSUE_NAME_CHARS);
+    }
+
+    #[tokio::test]
+    async fn devices_issue_stops_at_fifty_devices_with_a_clear_error() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        for i in 0..MAX_DEVICES {
+            store.device_add(&format!("d{i}"), &format!("tok-{i}")).unwrap();
+        }
+        let err = dispatch(
+            &app,
+            &Peer::Local,
+            "devices.issue",
+            json!({ "name": "P", "platform": "ios" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, SERVER_ERROR);
+        assert!(err.message.contains("50 devices"), "{}", err.message);
+        assert_eq!(store.device_list().unwrap().len(), MAX_DEVICES);
+        // Removing one makes room again.
+        let first = store.device_list().unwrap()[0].id.clone();
+        dispatch(&app, &Peer::Local, "devices.revoke", json!({ "id": first }))
+            .await
+            .unwrap();
+        assert!(
+            dispatch(
+                &app,
+                &Peer::Local,
+                "devices.issue",
+                json!({ "name": "P", "platform": "ios" })
+            )
+            .await
+            .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn phone_info_tells_how_a_phone_reaches_the_server() {
+        let app = app_with(Arc::new(Store::open_in_memory().unwrap()), PathBuf::from("/unused"));
+        let info = dispatch(&app, &Peer::Local, "phone.info", json!({})).await.unwrap();
+        assert_eq!(info["relay"], json!(null));
+        assert_eq!(info["noise_key"], json!(null));
+        assert_eq!(info["hosts"], json!([]));
     }
 
     #[tokio::test]

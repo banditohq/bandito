@@ -52,7 +52,7 @@ struct PhonePairSheet: View {
             switch state {
             case nil:
                 ProgressView().controlSize(.small).frame(height: 120)
-            case .ready(let link, let code, let hosts, let minutes):
+            case .ready(let link, let code, let hosts, let minutes, let viaCloud):
                 VStack(spacing: 14) {
                     Text(L10n.ServerSettings.Phone.Pair.steps)
                         .font(BanditoFont.text(size: 13, weight: 400))
@@ -75,12 +75,20 @@ struct PhonePairSheet: View {
                         .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(L10n.ServerSettings.Phone.Pair.hosts(hosts: hosts.joined(separator: ", ")))
-                        .font(BanditoFont.mono(size: 11, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .multilineTextAlignment(.center)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if viaCloud {
+                        Label(L10n.PhoneWizard.via, systemImage: "cloud.fill")
+                            .font(BanditoFont.text(size: 12, weight: 500))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !hosts.isEmpty {
+                        Text(L10n.ServerSettings.Phone.Pair.hosts(hosts: hosts.joined(separator: ", ")))
+                            .font(BanditoFont.mono(size: 11, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .multilineTextAlignment(.center)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             case .expired:
                 problem(L10n.ServerSettings.Phone.Pair.expired)

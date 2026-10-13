@@ -43,8 +43,8 @@ struct ConnectServerView: View {
                     TrustStep(request: request, fingerprint: fingerprint, model: model)
                 case .working:
                     WorkingStep()
-                case .done(_, let name):
-                    DoneStep(initialName: name, model: model, onClose: onClose)
+                case .done(_, let name, let route):
+                    DoneStep(initialName: name, route: route, model: model, onClose: onClose)
                 case .failed(let problem, _):
                     FailedStep(problem: PairProblemText(problem), model: model)
                 }
@@ -278,9 +278,11 @@ private struct ConfirmLinkStep: View {
                 .foregroundStyle(Color.Bandito.text)
                 .multilineTextAlignment(.center)
             Text(
-                origin == .scan
-                    ? L10n.Ios.Connect.Confirm.bodyScan(address: request.hosts.joined(separator: ", "))
-                    : L10n.Ios.Connect.Confirm.body(address: request.hosts.joined(separator: ", "))
+                request.isRelayOnly
+                    ? (origin == .scan ? L10n.Ios.Connect.Confirm.bodyScanCloud : L10n.Ios.Connect.Confirm.bodyCloud)
+                    : origin == .scan
+                        ? L10n.Ios.Connect.Confirm.bodyScan(address: request.hosts.joined(separator: ", "))
+                        : L10n.Ios.Connect.Confirm.body(address: request.hosts.joined(separator: ", "))
             )
                 .font(BanditoFont.text(size: 14))
                 .foregroundStyle(Color.Bandito.text2)
@@ -352,6 +354,7 @@ private struct WorkingStep: View {
 /// Connected: the server's name, which the person may change, and Done.
 private struct DoneStep: View {
     let initialName: String
+    let route: ConnectionRoute?
     let model: PairModel
     let onClose: () -> Void
     @State private var name = ""
@@ -362,6 +365,16 @@ private struct DoneStep: View {
                 .font(BanditoFont.display(size: 22, weight: 700))
                 .foregroundStyle(Color.Bandito.text)
                 .accessibilityIdentifier("connect.done.title")
+            if let route {
+                Label(
+                    route == .cloud ? L10n.Ios.Connect.Done.viaCloud : L10n.Ios.Connect.Done.viaNetwork,
+                    systemImage: route == .cloud ? "cloud.fill" : "wifi"
+                )
+                .font(BanditoFont.text(size: 13, weight: 500))
+                .foregroundStyle(Color.Bandito.text2)
+                .multilineTextAlignment(.center)
+                .accessibilityIdentifier("connect.done.route")
+            }
             VStack(alignment: .leading, spacing: BanditoSpace.s2) {
                 Text(L10n.Ios.Connect.Done.nameLabel)
                     .font(BanditoFont.text(size: 13, weight: 600))

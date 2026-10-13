@@ -34,6 +34,10 @@ final class ServerSession {
     /// The server the Crew screen shows. One for now: the first.
     var active: ServerModel? { current.first }
 
+    /// Told when the person disconnected or removed a server (what it was), so the account does not bring it back.
+    @ObservationIgnored var onForgotten: (@MainActor (ServerConfig) -> Void)?
+    /// Told when a server was added (scanned, typed or from the account): a mark that hid it is lifted.
+    @ObservationIgnored var onAdded: (@MainActor (ServerConfig) -> Void)?
     @ObservationIgnored private let store: ServerStore
     @ObservationIgnored private let secrets: SecretStore
     /// Connects a new model. Replaced in tests, so no network is touched.
@@ -101,6 +105,13 @@ final class ServerSession {
                 guard let token, let text = String(data: token, encoding: .utf8), !text.isEmpty else { continue }
                 var withToken = config
                 withToken.token = text
+                // The key this phone speaks to the relay with. Without it the relay cannot be used, direct addresses still can.
+                if config.endpoint.relayPart != nil,
+                    let key = (try? secrets.load(account: Self.noiseAccount(config.id))).flatMap({ $0 }),
+                    let keyText = String(data: key, encoding: .utf8)
+                {
+                    withToken.noiseSecret = keyText
+                }
                 start(withToken)
             }
         }
@@ -125,9 +136,10 @@ final class ServerSession {
         }
     }
 
-    /// Keeps a paired server: the token first (a server that could not keep its key is not kept at all), then the
-    /// list. A server with the same certificate is the same server paired again: it keeps its place and its id, and
-    /// gets the new token.
+    /// Keeps a paired server: the token and the relay key first (a server that could not keep both is not kept at all, and
+    /// a server paired again keeps its old token and key as they were), then the list. The same server paired again (every
+    /// identifier it shares agrees: certificate, Noise key) keeps its place and its id, and gets the new token. Another
+    /// server behind the same certificate or key is refused (`SessionError.differentServer`), never replaced.
     func add(_ config: ServerConfig) throws {
         guard let token = config.token, !token.isEmpty else { throw SessionError.noToken }
         // The saved list is read before it is written to; one that cannot be read yet is not written over.
@@ -135,21 +147,36 @@ final class ServerSession {
         guard loaded else { throw SessionError.notReady }
         var config = config
         var replaced: UUID?
-        if case .direct(_, let fingerprint) = config.endpoint,
-            let same = servers.first(where: { Self.fingerprint(of: $0.config) == fingerprint })
-        {
+        if servers.contains(where: { config.endpoint.conflicts(with: $0.config.endpoint) }) { throw SessionError.differentServer }
+        if let same = servers.first(where: { config.endpoint.isSameServer(as: $0.config.endpoint) }) {
             config.id = same.id
             replaced = same.id
         }
-        // The token first: when the Keychain refuses it, nothing else changes (an old server stays as it was).
+        // The token and the key first. When the Keychain refuses either, both go back to what they were: a new token
+        // with an old key (or a key without its token) would only fail later, and an old server stays as it was.
+        let tokenAccount = config.id.uuidString
+        let keyAccount = Self.noiseAccount(config.id)
+        let oldToken = (try? secrets.load(account: tokenAccount)).flatMap { $0 }
+        let oldKey = (try? secrets.load(account: keyAccount)).flatMap { $0 }
         do {
-            try secrets.save(Data(token.utf8), account: config.id.uuidString)
+            try secrets.save(Data(token.utf8), account: tokenAccount)
+            try secrets.save(config.noiseSecret.map { Data($0.utf8) }, account: keyAccount)
         } catch {
+            try? secrets.save(oldToken, account: tokenAccount)
+            try? secrets.save(oldKey, account: keyAccount)
             throw SessionError.keychain
         }
         if let replaced { drop(replaced) }
         start(config)
         save()
+        onAdded?(config)
+    }
+
+    /// Whether this iPhone has the server `id` from the account, or the same daemon under another id.
+    func holds(serverID: UUID, phone: SyncedPhone?) -> Bool {
+        if servers.contains(where: { $0.id == serverID }) { return true }
+        guard let phone else { return false }
+        return servers.contains { phone.isSameDaemon(as: $0.config.endpoint) }
     }
 
     /// Renames a server. The name is cleaned like every name (`ServerNameRules`); one with nothing left changes nothing.
@@ -184,18 +211,21 @@ final class ServerSession {
         let config = server.config
         var withToken = config
         withToken.token = (try? secrets.load(account: id.uuidString)).flatMap { $0 }.flatMap { String(data: $0, encoding: .utf8) }
+        withToken.noiseSecret = (try? secrets.load(account: Self.noiseAccount(id))).flatMap { $0 }.flatMap { String(data: $0, encoding: .utf8) }
         do {
             try secrets.save(nil, account: id.uuidString)
         } catch {
             return .keychainRefused
         }
+        try? secrets.save(nil, account: Self.noiseAccount(id))
         await server.disconnect()
         var revoked = false
-        if case .direct = config.endpoint { revoked = await revokeSelf(withToken) }
-        if case .direct(_, let fingerprint) = config.endpoint { DirectHostMemory.shared.forget(fingerprint) }
+        if config.endpoint.isPaired { revoked = await revokeSelf(withToken) }
+        if let fingerprint = config.endpoint.pinnedFingerprint { DirectHostMemory.shared.forget(fingerprint) }
         drop(id)
         forgetCursor(id)
         save()
+        onForgotten?(config)
         return .removed(revokedOnServer: revoked)
     }
 
@@ -206,9 +236,12 @@ final class ServerSession {
 
     /// Forgets a server and its key on this iPhone. (The daemon keeps the device until it is disconnected there.)
     func remove(_ id: UUID) {
+        let removed = servers.first(where: { $0.id == id })?.config
         guard drop(id) else { return }
         try? secrets.save(nil, account: id.uuidString)
+        try? secrets.save(nil, account: Self.noiseAccount(id))
         forgetCursor(id)
+        if let removed { onForgotten?(removed) }
         // What was written to this server and not sent stays with it no longer.
         ChatOutbox.shared.forget(serverID: id)
         save()
@@ -225,7 +258,10 @@ final class ServerSession {
 
     /// Forgets everything.
     func reset() {
-        for config in store.load() { try? secrets.save(nil, account: config.id.uuidString) }
+        for config in store.load() {
+            try? secrets.save(nil, account: config.id.uuidString)
+            try? secrets.save(nil, account: Self.noiseAccount(config.id))
+        }
         for server in servers {
             ChatOutbox.shared.forget(serverID: server.id)
             Task { await server.disconnect() }
@@ -238,6 +274,8 @@ final class ServerSession {
         case noToken
         /// The Keychain refused the token.
         case keychain
+        /// Another server already here has the same certificate (or key) but not the same other identifier.
+        case differentServer
         /// The saved list could not be read yet (the phone is locked since its restart).
         case notReady
     }
@@ -261,10 +299,8 @@ final class ServerSession {
         store.save(servers.map(\.config))
     }
 
-    private static func fingerprint(of config: ServerConfig) -> String? {
-        if case .direct(_, let fingerprint) = config.endpoint { return fingerprint }
-        return nil
-    }
+    /// The Keychain account of a server's relay key, next to the token's (`<id>`).
+    static func noiseAccount(_ id: UUID) -> String { "\(id.uuidString).noise" }
 }
 
 #if targetEnvironment(simulator)

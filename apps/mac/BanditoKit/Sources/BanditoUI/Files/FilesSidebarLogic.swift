@@ -87,7 +87,7 @@ enum FilesServer {
         case .webSocket(let url):
             let host = (url.host() ?? "").lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
             return ["127.0.0.1", "::1", "localhost"].contains(host)
-        case .ssh, .direct:
+        case .ssh, .direct, .reachable:
             return false
         }
     }

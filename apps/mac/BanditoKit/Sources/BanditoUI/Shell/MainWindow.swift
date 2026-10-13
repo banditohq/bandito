@@ -93,6 +93,12 @@ struct MainWindow: View {
         .banditoAnimation(BanditoMotion.ease, value: router.chatLinkNotice?.id)
         .task {
             // Only with a session: without one nobody can ask for pending devices, and no device key is needed yet.
+            hub.accessServers = { [weak app] in app?.servers ?? [] }
+            app.onServerForgotten = { [weak hub] in hub?.dismiss($0) }
+            app.onServerAdded = { [weak hub] in hub?.lift($0) }
+            hub.accessSink = MacAccessSink(
+                app: { [weak app] in app }, noiseKeys: ServerNoiseKeyStore(secrets: hub.keys),
+                ownRecords: { [weak hub] in hub?.ownPhoneRecords ?? [:] })
             guard hub.signedIn else { return }
             try? await hub.prepare()
             await hub.refreshPending()

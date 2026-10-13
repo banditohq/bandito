@@ -193,7 +193,7 @@ mod tests {
                 "agents are refused: {method}"
             );
             assert!(
-                !allowed(&Peer::Anonymous("1.2.3.4".into()), method),
+                !allowed(&Peer::Anonymous("1.2.3.4".into(), None), method),
                 "anonymous is refused: {method}"
             );
         }

@@ -22,6 +22,7 @@ struct AccountSheet: View {
     @State private var confirmingSignOut = false
     @State private var lastSynced: Date?
     @State private var syncing = false
+    @State private var connectingPhone = false
     @FocusState private var nicknameFocused: Bool
     /// A photo picked for the profile, framed in the sheet until it is saved.
     @State private var photoFraming: CGImage?
@@ -47,6 +48,9 @@ struct AccountSheet: View {
             .padding(12)
         }
         .task { await reload() }
+        .banditoSheet(isPresented: $connectingPhone, dismissOnOutsideClick: false) {
+            ConnectPhoneWizard()
+        }
         .confirmationDialog(
             L10n.Account.SignOut.title,
             isPresented: $confirmingSignOut,
@@ -373,6 +377,15 @@ struct AccountSheet: View {
                 ForEach(me.devices, id: \.id) { device in
                     deviceRow(device)
                 }
+                Button {
+                    connectingPhone = true
+                } label: {
+                    Label(L10n.Account.Devices.connectPhone, systemImage: "iphone.gen3")
+                        .font(BanditoFont.text(size: 12.5, weight: 500))
+                }
+                .banditoButton(.quiet())
+                .fixedSize()
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -583,6 +596,8 @@ struct AccountSheet: View {
     private func remove(_ device: AccountDevice) async {
         do {
             try await hub.client?.deleteDevice(id: device.id, force: false)
+            // A lost phone loses its access to the servers too (revoked on every server this Mac can reach).
+            await hub.revokeAccess(of: device)
             await reload()
         } catch {
             errorText = SignInMessages.text(for: error)
