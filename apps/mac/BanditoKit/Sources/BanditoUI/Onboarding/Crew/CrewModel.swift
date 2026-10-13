@@ -374,18 +374,20 @@ final class CrewModel {
                 server: server, bundle: bundle, members: members(of: bundle), runtime: runtime,
                 model: ReadyTeamsLogic.model(runtime: runtime, models: models(for: runtime)), languageCode: languageCode,
                 texts: CrewTexts.creation, alreadyMade: existingMade)
+            // Each agent's id is noted as its answer arrives, not after the whole attempt: a quit in the middle keeps it.
+            creation.onAgent = { [noteCreated] in noteCreated([$0.id]) }
             teamCreations[id] = creation
             let path = folder, makes = makesFolder, server = server
             await creation.create(
                 folder: { if makes { try await server.ensureFolder(path) }; return path },
                 items: scheduleItems, enabled: enabled)
-            noteCreated(creation.made.values.map(\.id))
             if creation.isComplete { Telemetry.count(.agentCreate(.bundle)) }
             return creation.isComplete ? creation.firstAgent : nil
         case .single:
             let creation = oneCreation ?? SingleAgentCreation(server: server, describe: {
                 WorkspaceText.failure($0) ?? UserFacingError.message(for: $0).text
             })
+            creation.onAgent = { [noteCreated] in noteCreated([$0.id]) }
             oneCreation = creation
             let template = template
             let agentName = effectiveName
@@ -400,7 +402,6 @@ final class CrewModel {
                         approvalMode: .risky, systemPrompt: template.instructions.isEmpty ? nil : template.instructions,
                         effort: template.effort, workspaceId: workspaceID)
                 })
-            if let agent = creation.agent { noteCreated([agent.id]) }
             if made { Telemetry.count(.agentCreate(template == .scratch ? .plain : .template)) }
             return made ? creation.agent : nil
         case nil:

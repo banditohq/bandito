@@ -34,7 +34,7 @@ struct ReadyTeamSheet: View {
     /// the sheet: a sheet closed in the middle and opened again shows the same progress or result.
     @State private var creation: TeamCreation?
 
-    private var key: String { "sheet:" + bundleID }
+    private var key: String { AgentCreationStore.bundleKey(bundleID) }
     private var creating: Bool { creation?.busy ?? false }
     private var result: BundleCreation? { creation?.isComplete == true ? creation?.result : nil }
     private var error: UserFacingMessage? {

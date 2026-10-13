@@ -25,6 +25,9 @@ extension ServerModel: TaskSending {
 /// server and the messages with this text are counted; after a failed send it is read again, and one more message with
 /// this text means the agent has it (the answer was lost). If the thread cannot be read, nothing is sent: the person is
 /// told the connection failed and can try again. (Counted, not timed: the server's clock and ours may differ.)
+/// The read after a failed send is reliable: the daemon writes the person's message to its journal (`hub.emit` stores the
+/// event, in `supervisor.rs` `Cmd::Send`) before it answers `agents.send`, so a message the agent got is in
+/// `events.page` by the time any answer, or its loss, can reach us. No waiting for the event is needed.
 @MainActor
 @Observable
 final class FirstTaskModel {

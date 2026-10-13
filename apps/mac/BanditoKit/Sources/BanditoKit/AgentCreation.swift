@@ -47,7 +47,8 @@ public struct AgentCreationTexts {
 public final class TeamCreation {
     public let bundle: AgentBundle
     public let members: [BotTemplate]
-    @ObservationIgnored private let server: AgentCreationServer
+    /// Weak: the server keeps its creations (`AgentCreationStore`), and a strong link back would be a cycle.
+    @ObservationIgnored private weak var server: AgentCreationServer?
     public let runtime: RuntimeKind
     @ObservationIgnored private let model: String?
     @ObservationIgnored private let languageCode: String
@@ -63,6 +64,9 @@ public final class TeamCreation {
     public private(set) var missingIntegrations: [MissingIntegration] = []
     public private(set) var failure: String?
     public private(set) var busy = false
+    /// Called with each agent the moment the creation learns it exists (from the answer, or from the list after a lost
+    /// answer), before the attempt ends: the caller can note the id at once.
+    @ObservationIgnored public var onAgent: ((Agent) -> Void)?
     /// A failed attempt may have made agents, and the list could not be read to find out: the next attempt reads first
     /// and makes nothing until it has. The ids on the server before that attempt are kept to tell the new ones.
     @ObservationIgnored private var unreadSince: Set<String>?
@@ -110,6 +114,10 @@ public final class TeamCreation {
         folder makeFolder: () async throws -> String, items: [ReadyTeamsLogic.ScheduleItem], enabled: Set<String>
     ) async -> Bool {
         guard !busy, !isComplete else { return isComplete }
+        guard let server else {
+            failure = texts.none
+            return false
+        }
         busy = true
         defer { busy = false }
         failure = nil
@@ -120,7 +128,7 @@ public final class TeamCreation {
                 return false
             }
             unreadSince = nil
-            markFresh(since: since)
+            markFresh(since: since, in: server)
             if isComplete {
                 madeCount += 1
                 return true
@@ -148,6 +156,7 @@ public final class TeamCreation {
                 for entry in answer.agents {
                     if let agent = entry.agent {
                         made[entry.templateId] = agent
+                        onAgent?(agent)
                         problems[entry.templateId] = entry.error
                     }
                 }
@@ -159,7 +168,7 @@ public final class TeamCreation {
                 failure = texts.describe(error)
                 do {
                     try await server.readAgentsNow()
-                    markFresh(since: before)
+                    markFresh(since: before, in: server)
                 } catch {
                     unreadSince = before
                 }
@@ -179,14 +188,18 @@ public final class TeamCreation {
     }
 
     /// Reads the agents again and marks the positions that a new agent (one not in `before`) stands for.
-    private func markFresh(since before: Set<String>) {
+    private func markFresh(since before: Set<String>, in server: AgentCreationServer) {
         for agent in server.agents where !before.contains(agent.id) {
             if let member = members.first(where: { $0.id == agent.templateId }) {
-                if made[member.id] == nil { made[member.id] = agent }
+                if made[member.id] == nil {
+                    made[member.id] = agent
+                    onAgent?(agent)
+                }
             } else if let member = members.first(where: {
                 made[$0.id] == nil && $0.name(languageCode: languageCode) == agent.name
             }) {
                 made[member.id] = agent
+                onAgent?(agent)
             }
         }
     }
@@ -198,7 +211,8 @@ public final class TeamCreation {
 @MainActor
 @Observable
 public final class SingleAgentCreation {
-    @ObservationIgnored private let server: AgentCreationServer
+    /// Weak: the server keeps its creations (`AgentCreationStore`), and a strong link back would be a cycle.
+    @ObservationIgnored private weak var server: AgentCreationServer?
     @ObservationIgnored private let describe: (Error) -> String
 
     public private(set) var folder: String?
@@ -210,6 +224,8 @@ public final class SingleAgentCreation {
     public private(set) var failure: String?
     public private(set) var busy = false
     public private(set) var madeCount = 0
+    /// Called with the agent the moment the creation learns it exists, before the attempt ends.
+    @ObservationIgnored public var onAgent: ((Agent) -> Void)?
     /// The failed request and the ids before it, while the list could not be read to find out whether it made the agent.
     @ObservationIgnored private var unread: (request: NewAgent, before: Set<String>)?
 
@@ -227,6 +243,10 @@ public final class SingleAgentCreation {
     ) async -> Bool {
         guard !busy else { return false }
         if agent != nil { return true }
+        guard let server else {
+            failure = describe(CancellationError())
+            return false
+        }
         busy = true
         defer { busy = false }
         failure = nil
@@ -238,6 +258,7 @@ public final class SingleAgentCreation {
             unread = nil
             if let fresh = Self.find(pending.request, in: server.agents, before: pending.before) {
                 agent = fresh
+                onAgent?(fresh)
                 madeCount += 1
                 return true
             }
@@ -257,7 +278,9 @@ public final class SingleAgentCreation {
             let new = build(path, workspaceID)
             let before = Set(server.agents.map(\.id))
             do {
-                agent = try await server.createAgent(new)
+                let made = try await server.createAgent(new)
+                agent = made
+                onAgent?(made)
             } catch {
                 // The answer may be lost after the daemon made the agent: the list decides, not the error.
                 failure = describe(error)
@@ -269,6 +292,7 @@ public final class SingleAgentCreation {
                 }
                 guard let fresh = Self.find(new, in: server.agents, before: before) else { return false }
                 agent = fresh
+                onAgent?(fresh)
                 failure = nil
             }
             madeCount += 1
@@ -294,10 +318,17 @@ public final class AgentCreationStore {
 
     public init() {}
 
+    /// The one key of a ready team, for every screen that makes it (the Marketplace panel, the sheet): a team that failed
+    /// in one is continued, not made again, in the other.
+    public static func bundleKey(_ bundleID: String) -> String { "bundle:" + bundleID }
+
     public func team(_ key: String) -> TeamCreation? { teams[key] }
 
     public func setTeam(_ creation: TeamCreation, for key: String) { teams[key] = creation }
 
     /// A finished team that the person has seen: the next open starts again.
     public func forgetTeam(_ key: String) { teams[key] = nil }
+
+    /// The server went away (disconnected or removed): nothing is kept for it.
+    public func clear() { teams = [:] }
 }

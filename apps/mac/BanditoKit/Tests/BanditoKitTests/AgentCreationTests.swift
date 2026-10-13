@@ -349,4 +349,64 @@ private final class FakeServer: AgentCreationServer {
         #expect(store.team("sheet:b")?.isComplete == true)
         #expect(store.team("sheet:b")?.result.agents.count == 3)
     }
+
+    // MARK: ownership and keys
+
+    @Test func theServerIsFreedAlthoughItKeepsItsCreations() {
+        weak var weakServer: ServerModel?
+        var creation: TeamCreation?
+        do {
+            let (server, _) = DemoDaemon.server(id: UUID(), name: "Demo", setup: DemoDaemonSetup())
+            weakServer = server
+            let made = TeamCreation(
+                server: server, bundle: bundle(), members: ids.map { BotTemplate(id: $0, nameEn: $0, nameRu: $0) },
+                runtime: .claude, model: nil, languageCode: "en", texts: texts)
+            server.creations.setTeam(made, for: AgentCreationStore.bundleKey("b"))
+            creation = made
+        }
+        #expect(weakServer == nil, "ServerModel -> creations -> TeamCreation -> server was a cycle")
+        #expect(creation != nil)
+    }
+
+    @Test func aCreationWhoseServerIsGoneMakesNothingAndSaysSo() async {
+        var creation: TeamCreation?
+        do {
+            let server = FakeServer()
+            creation = team(server)
+        }
+        #expect(await run(creation!, Folders()) == false)
+        #expect(creation?.failure == "nothing")
+    }
+
+    @Test func disconnectingTheServerClearsWhatItKept() async {
+        let (server, _) = DemoDaemon.server(id: UUID(), name: "Demo", setup: DemoDaemonSetup())
+        let made = TeamCreation(
+            server: server, bundle: bundle(), members: [], runtime: .claude, model: nil, languageCode: "en", texts: texts)
+        server.creations.setTeam(made, for: AgentCreationStore.bundleKey("b"))
+        await server.disconnect()
+        #expect(server.creations.team(AgentCreationStore.bundleKey("b")) == nil)
+    }
+
+    @Test func thePanelAndTheSheetShareOneKeyPerBundle() {
+        #expect(AgentCreationStore.bundleKey("web") == AgentCreationStore.bundleKey("web"))
+        #expect(AgentCreationStore.bundleKey("web") != AgentCreationStore.bundleKey("docs"))
+    }
+
+    @Test func eachAgentIsReportedAsItsAnswerIsLearnedNotAfterTheAttempt() async {
+        let server = FakeServer()
+        server.losesBundleAnswer = true
+        let creation = team(server)
+        var noted: [String] = []
+        creation.onAgent = { noted.append($0.id) }
+        #expect(await run(creation, Folders()))
+        #expect(Set(noted) == Set(server.agents.map(\.id)))
+        #expect(noted.count == 3)
+
+        let clean = FakeServer()
+        let other = team(clean)
+        var seen = 0
+        other.onAgent = { _ in seen += 1 }
+        _ = await run(other, Folders())
+        #expect(seen == 3)
+    }
 }

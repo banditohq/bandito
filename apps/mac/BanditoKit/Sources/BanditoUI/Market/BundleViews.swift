@@ -127,7 +127,7 @@ struct BundlePanel: View {
     /// result, and an attempt that is running finishes anyway.
     @State private var creation: TeamCreation?
 
-    private var key: String { "panel:" + bundle.id }
+    private var key: String { AgentCreationStore.bundleKey(bundle.id) }
     private var result: BundleCreation? { creation?.isComplete == true ? creation?.result : nil }
     private var error: UserFacingMessage? {
         guard let creation, !creation.busy, let text = creation.failure else { return nil }
@@ -149,7 +149,7 @@ struct BundlePanel: View {
         _creating = creating
         self.onClose = onClose
         self.onConnect = onConnect
-        let kept = server.creations.team("panel:" + bundle.id)
+        let kept = server.creations.team(AgentCreationStore.bundleKey(bundle.id))
         _creation = State(initialValue: kept)
         _runtime = State(
             initialValue: kept?.runtime ?? BundleLogic.runtime(
