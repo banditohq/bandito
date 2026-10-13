@@ -25,6 +25,8 @@ public struct BanditoCommands: Commands {
         // replacement could not open the window on recent macOS.
         CommandGroup(after: .help) {
             Button(L10n.Onboarding.showAgain) { onboarding.replay() }
+            Button(L10n.Menu.whatsNew) { router.sheet = .whatsNew(skipped: []) }
+                .disabled(onboarding.isActive)
             Button(L10n.Menu.reportProblem) { router.sheet = .reportProblem }
         }
         CommandGroup(after: .newItem) {

@@ -104,6 +104,7 @@ public struct RootView: View {
                 if await app.handleOpen(url) { router.select(mode: .market) }
             }
         }
+        .modifier(WhatsNewPresenter())
         .modifier(OAuthSignInPresenter())
         .modifier(DeviceSignInPresenter())
     }

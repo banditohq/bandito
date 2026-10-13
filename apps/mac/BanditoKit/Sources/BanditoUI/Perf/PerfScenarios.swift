@@ -704,6 +704,16 @@ private struct PerfSteps {
             }
         }
         recorder.endSegment("sheets")
+        // The "What's new" sheet: the raccoon of lights in its header and the cards coming in one after another.
+        recorder.beginSegment()
+        for _ in 0..<2 {
+            try check()
+            router.sheet = .whatsNew(skipped: [])
+            await settle(48)
+            router.sheet = nil
+            await settle(24)
+        }
+        recorder.endSegment("whats new")
         recorder.beginSegment()
         for index in 0..<3 {
             try check()

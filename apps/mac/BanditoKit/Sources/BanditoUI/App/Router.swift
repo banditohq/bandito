@@ -152,6 +152,9 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     case reportProblem
     /// A ready team (a bundle of agents) to look at before it is made: its agents, what they may do, their schedules.
     case readyTeam(bundleID: String)
+    /// What is new in this version (see `WhatsNewSheet`); `skipped` are earlier versions with notes that the person
+    /// did not see, listed folded below. The Help menu opens it with none.
+    case whatsNew(skipped: [String])
 
     public var id: String {
         switch self {
@@ -167,6 +170,7 @@ public enum Sheet: Identifiable, Hashable, Sendable {
         case .moveAgent(let agentID, let serverID): "moveAgent-\(agentID)-\(serverID.uuidString)"
         case .reportProblem: "reportProblem"
         case .readyTeam(let bundleID): "readyTeam-\(bundleID)"
+        case .whatsNew: "whatsNew"
         }
     }
 }

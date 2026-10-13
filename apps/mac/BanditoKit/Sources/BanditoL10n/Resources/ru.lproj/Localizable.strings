@@ -1438,6 +1438,7 @@
 "menu.reportProblem" = "Сообщить о проблеме…";
 "menu.terminals" = "Терминалы";
 "menu.view" = "Вид";
+"menu.whatsNew" = "Что нового";
 "menubar.noneWaiting" = "Никто не ждёт вас.";
 "menubar.nothingRunning" = "Сейчас никто не работает.";
 "menubar.open" = "Открыть Bandito";
@@ -3089,6 +3090,13 @@
 "viewer.tooLarge" = "Файл больше 2 МБ — здесь его не открыть. Скачайте на Mac.";
 "viewer.zoomIn" = "Увеличить";
 "viewer.zoomOut" = "Уменьшить";
+"whatsNew.allChanges" = "Все изменения";
+"whatsNew.continue" = "Продолжить";
+"whatsNew.earlier" = "Предыдущие версии";
+"whatsNew.empty" = "Для этой версии пока нет заметок.";
+"whatsNew.language" = "Язык заметок";
+"whatsNew.olderVersion" = "Версия %1$@";
+"whatsNew.title" = "Что нового в Bandito %1$@";
 "workbench.add" = "Добавить вкладку";
 "workbench.agentInBrowser" = "Агент в браузере";
 "workbench.browser" = "Браузер";

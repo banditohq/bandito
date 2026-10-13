@@ -1438,6 +1438,7 @@
 "menu.reportProblem" = "报告问题…";
 "menu.terminals" = "终端";
 "menu.view" = "显示";
+"menu.whatsNew" = "新增内容";
 "menubar.noneWaiting" = "没有人在等待。";
 "menubar.nothingRunning" = "目前没有代理在运行。";
 "menubar.open" = "打开 Bandito";
@@ -3089,6 +3090,13 @@
 "viewer.tooLarge" = "文件超过 2 MB，无法在此打开。请下载到 Mac。";
 "viewer.zoomIn" = "放大";
 "viewer.zoomOut" = "缩小";
+"whatsNew.allChanges" = "所有更改";
+"whatsNew.continue" = "继续";
+"whatsNew.earlier" = "更早的版本";
+"whatsNew.empty" = "此版本暂无说明。";
+"whatsNew.language" = "说明语言";
+"whatsNew.olderVersion" = "版本 %1$@";
+"whatsNew.title" = "Bandito %1$@ 新增内容";
 "workbench.add" = "添加标签页";
 "workbench.agentInBrowser" = "代理正在使用浏览器";
 "workbench.browser" = "浏览器";

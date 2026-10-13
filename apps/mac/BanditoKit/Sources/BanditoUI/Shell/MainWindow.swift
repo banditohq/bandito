@@ -175,6 +175,7 @@ struct MainWindow: View {
         case .addServer: AddServerSheet()
         case .importer: ImportSheet()
         case .reportProblem: ReportProblemSheet()
+        case .whatsNew(let skipped): WhatsNewSheet(skipped: skipped)
         case .readyTeam(let bundleID):
             if let server = app.currentServer {
                 ReadyTeamSheet(bundleID: bundleID, server: server)

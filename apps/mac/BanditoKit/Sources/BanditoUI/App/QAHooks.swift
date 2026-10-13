@@ -140,6 +140,7 @@ enum QACommand: Equatable {
         case "account": return .account
         case "addServer": return .addServer
         case "reportProblem": return .reportProblem
+        case "whatsNew": return .whatsNew(skipped: [])
         default:
             // `readyTeam:web-project` opens the preview of that ready team.
             guard name.hasPrefix("readyTeam:") else { return nil }
