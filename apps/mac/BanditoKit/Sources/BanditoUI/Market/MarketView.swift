@@ -57,6 +57,8 @@ struct MarketView: View {
     @State private var memo = MarketListMemo()
     /// The shelves of All, kept apart from the page in front (see `scrollArea`).
     @State private var shelvesMemo = MarketListMemo()
+    /// What the header and the kept pages were handed last time (`MarketPassed`).
+    @State private var passed = MarketPassedBoxes()
 
     var body: some View {
         Group {
@@ -443,24 +445,30 @@ struct MarketView: View {
             : KeptMarketPageInputs(
                 query: query, languageCode: languageCode, catalog: [], integrations: [],
                 agents: server?.agents ?? [], canShare: false, error: error)
-        return KeptMarketPage(shown: shown, key: pageKey(for: page), inputs: inputs) {
+        let facts = KeptMarketPageFacts(shown: shown, key: pageKey(for: page), inputs: inputs)
+        let kept = passed.page(page.rawValue, facts) {
             if page == .bots {
                 botsContent(query: query)
             } else {
                 skillsContent(query: query)
             }
         }
-        .equatable()
-        .opacity(shown ? 1 : 0)
-        .allowsHitTesting(shown)
-        .accessibilityHidden(!shown)
+        return KeptMarketPage(passed: kept, version: kept.version)
+            .equatable()
+            .opacity(shown ? 1 : 0)
+            .allowsHitTesting(shown)
+            .accessibilityHidden(!shown)
     }
+
+    /// How long after the Marketplace opened its Bots and Skills pages are built ahead (`buildPagesAhead`). The work
+    /// budget makes it long to count a Marketplace without them, and short to count one with them.
+    nonisolated(unsafe) static var pagesAheadDelay: Duration = .milliseconds(400)
 
     /// Builds the Bots and Skills pages out of sight a moment after the Marketplace opened, so the first switch to them
     /// is as quick as the next ones. Their lists are read first (the same reads a switch makes).
     private func buildPagesAhead() async {
         guard let server, server.info != nil else { return }
-        try? await Task.sleep(for: .milliseconds(400))
+        try? await Task.sleep(for: Self.pagesAheadDelay)
         for page in [MarketTab.bots, .skills] where availableTabs.contains(page) && !keptTabs.contains(page) {
             guard !Task.isCancelled else { return }
             switch page {
@@ -470,6 +478,7 @@ struct MarketView: View {
             }
             guard !Task.isCancelled else { return }
             keptTabs.insert(page)
+            PerfCounters.hit("MarketView.pageAhead")
             // The page's shelves come one a frame; the next page waits for them.
             try? await Task.sleep(for: .milliseconds(300))
         }
@@ -658,8 +667,7 @@ struct MarketView: View {
     /// The title, the pages and the actions. An `Equatable` view of its own: a filter, a category or a search letter
     /// rebuilds the page under it, not the header (measuring its actions was 200 ms at each change).
     private func header(supported: Bool) -> some View {
-        MarketHeader(
-            tab: tab, tabs: availableTabs, supported: supported, sharingSupported: sharingSupported, search: search,
+        let calls = MarketHeaderCalls(
             onTab: { chosen in
                 guard chosen != router.marketTab else { return }
                 router.marketTab = chosen
@@ -668,9 +676,12 @@ struct MarketView: View {
             },
             onImport: { router.sheet = .importer },
             onOwn: { editing = .custom },
-            onMine: { router.sheet = .myShares }
-        )
-        .equatable()
+            onMine: { router.sheet = .myShares })
+        let facts = MarketHeaderFacts(
+            tab: tab, tabs: availableTabs, supported: supported, sharingSupported: sharingSupported, search: search)
+        let header = passed.pass("header", facts, calls)
+        return MarketHeader(passed: header, version: header.version)
+            .equatable()
     }
 
     /// The server has the `sharing` feature: bots and skills can be published, and the list of one's shares exists.
@@ -1315,6 +1326,64 @@ final class MarketListMemo {
     }
 }
 
+/// What a view that a pass of `MarketView` must leave alone (the header, a kept Bots or Skills page) shows, and the
+/// closures it calls, handed over in a reference with the number of its facts. The view holds only the two (a pointer
+/// and a number), so its copy from a pass where nothing it shows changed is the same, byte for byte. SwiftUI compares
+/// an `Equatable` view with its last copy through `==` only once AttributeGraph has worked out the layout of the
+/// view's type, on a background queue; until then it compares the bytes, and a closure, an array or a padding byte
+/// differ at every pass. In the first moments of the Marketplace (seconds on a busy Mac) each category switch rebuilt
+/// the header and both kept pages with every shelf in them (`WorkBudgetTests`: MarketShelf 28 → 84, MarketHeader
+/// 0 → 4).
+@MainActor
+final class MarketPassed<Facts: Equatable, Calls> {
+    private(set) var facts: Facts
+    /// The closures of the last pass (they hold that pass's `MarketView`).
+    private(set) var calls: Calls
+    /// Grows when the facts change.
+    private(set) var version = 0
+
+    init(facts: Facts, calls: Calls) {
+        self.facts = facts
+        self.calls = calls
+    }
+
+    func pass(_ facts: Facts, _ calls: Calls) {
+        if facts != self.facts {
+            self.facts = facts
+            version &+= 1
+        }
+        self.calls = calls
+    }
+}
+
+/// The `MarketPassed` of each view, by name, held weakly: the view keeps its own, and the closures in it (which hold
+/// `MarketView`, and so this object) make no cycle. A box the view let go of is made again (the view is then built).
+@MainActor
+final class MarketPassedBoxes {
+    private struct WeakBox {
+        weak var box: AnyObject?
+    }
+
+    private var boxes: [String: WeakBox] = [:]
+
+    func pass<Facts: Equatable, Calls>(_ name: String, _ facts: Facts, _ calls: Calls) -> MarketPassed<Facts, Calls> {
+        if let box = boxes[name]?.box as? MarketPassed<Facts, Calls> {
+            box.pass(facts, calls)
+            return box
+        }
+        let box = MarketPassed(facts: facts, calls: calls)
+        boxes[name] = WeakBox(box: box)
+        return box
+    }
+
+    /// `pass` for a kept page: its facts and the builder of its content.
+    func page<Content: View>(
+        _ name: String, _ facts: KeptMarketPageFacts, @ViewBuilder content: @escaping () -> Content
+    ) -> MarketPassed<KeptMarketPageFacts, () -> Content> {
+        pass(name, facts, content)
+    }
+}
+
 /// The result of the last check of an integration, in one line.
 struct IntegrationStatusLine: View {
     let status: IntegrationStatus
@@ -1518,32 +1587,39 @@ struct KeptMarketPageInputs: Equatable {
     var error: UserFacingMessage?
 }
 
+/// What a kept Bots or Skills page shows: whether it is in front, its page and filter (`MarketView.pageKey(for:)`), and
+/// its inputs.
+struct KeptMarketPageFacts: Equatable {
+    var shown: Bool
+    var key: String
+    var inputs: KeptMarketPageInputs
+}
+
 /// A Bots or Skills page kept under the page in front: its scroll view, made again for a new filter of its own (a
-/// category opens at its top). Equatable on its inputs: a change elsewhere in the Marketplace (a category opened on
-/// Services, a letter of its search) rebuilt both kept pages and all their shelves.
+/// category opens at its top). Equal, and the same bytes, while its facts are the same (`MarketPassed`): a change
+/// elsewhere in the Marketplace (a category opened on Services, a letter of its search) rebuilt both kept pages and
+/// all their shelves.
 struct KeptMarketPage<Content: View>: View, Equatable {
-    let shown: Bool
-    /// The page and its filter (`MarketView.pageKey(for:)`).
-    let key: String
-    let inputs: KeptMarketPageInputs
-    @ViewBuilder let content: () -> Content
+    let passed: MarketPassed<KeptMarketPageFacts, () -> Content>
+    let version: Int
 
     nonisolated static func == (lhs: KeptMarketPage, rhs: KeptMarketPage) -> Bool {
-        lhs.shown == rhs.shown && lhs.key == rhs.key && lhs.inputs == rhs.inputs
+        lhs.passed === rhs.passed && lhs.version == rhs.version
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                content()
+                passed.calls()
             }
             .padding(.top, MarketShelfMetrics.topInset)
             .padding(.bottom, 24)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .id(key)
+        .id(passed.facts.key)
         .scrollIndicators(.automatic)
         .transition(.opacity)
-        .environment(\.marketShelvesAhead, !shown)
+        .environment(\.marketShelvesAhead, !passed.facts.shown)
     }
 }
+
