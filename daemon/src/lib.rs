@@ -17,6 +17,7 @@ pub mod commands;
 pub mod config;
 pub mod crew;
 pub mod crew_schedule;
+pub mod desktop;
 pub mod event;
 pub mod files;
 pub mod forms;

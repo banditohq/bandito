@@ -27,7 +27,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 #[cfg(target_os = "linux")]
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 #[cfg(target_os = "linux")]
 use std::sync::{Mutex as StdMutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -58,6 +58,9 @@ pub const MAX_SCROLL: u32 = 20;
 const FIRST_DISPLAY: u32 = 90;
 #[cfg(any(target_os = "linux", test))]
 const LAST_DISPLAY: u32 = 199;
+/// Folder of a screen's desktop files (theme, menu, fonts, browser wrappers), inside its folder.
+#[cfg(target_os = "linux")]
+const DESKTOP_DIR: &str = "desktop";
 /// File name of a screen's X authority, inside its folder.
 #[cfg(target_os = "linux")]
 const XAUTH_FILE: &str = "Xauthority";
@@ -227,9 +230,18 @@ struct Session {
     last_agent_ms: i64,
     xvfb: TrackedChild,
     openbox: Option<TrackedChild>,
+    /// The screen's own D-Bus session bus (see `spawn_session_bus`).
+    bus: Option<TrackedChild>,
     vnc: VncTask,
-    /// Process group ids of programs started with `Launch` that are still running.
+    /// Process group ids of programs started with `Launch` (or from the dock) that are still running.
     launched: Arc<StdMutex<Vec<i32>>>,
+    /// The environment of every program on this screen: `DISPLAY`, `XAUTHORITY` and the desktop's own variables
+    /// (fonts, cursor, theme, `PATH` with the browser wrappers first).
+    env: Vec<(String, String)>,
+    /// Who holds the controls, for the dock: `desktop::xpanel::HOLDER_*`.
+    holder: Arc<AtomicU8>,
+    /// Set when the screen stops, so the dock's thread ends even if Xvfb lingers.
+    desktop_stop: Arc<AtomicBool>,
 }
 
 /// The x11vnc process and its watcher. The watcher restarts x11vnc once if it dies.
@@ -292,14 +304,17 @@ impl ScreenManager {
         })
     }
 
-    /// Stop the screen of `workspace` and every program started on it. Stopping a stopped screen is fine.
-    pub async fn stop(&self, workspace: &str) -> Result<(), ScreenError> {
+    /// Stop the screen of `workspace` and every program started on it, at once, as the idle check does: this is
+    /// the person's "put the screen to sleep" (`screen.stop`). Stopping a stopped screen is fine. Returns whether
+    /// a screen was running.
+    pub async fn stop(&self, workspace: &str) -> Result<bool, ScreenError> {
         validate_workspace(workspace)?;
         let removed = self.sessions.lock().await.remove(workspace);
+        let was_running = removed.is_some();
         if let Some(session) = removed {
             shutdown_session(session).await;
         }
-        Ok(())
+        Ok(was_running)
     }
 
     /// Set who drives the screen. `None` means nobody.
@@ -308,16 +323,21 @@ impl ScreenManager {
         let mut sessions = self.sessions.lock().await;
         let session = sessions.get_mut(workspace).ok_or(ScreenError::NotRunning)?;
         session.controller = holder;
+        session.holder.store(
+            match holder {
+                None => crate::desktop::xpanel::HOLDER_NONE,
+                Some(Controller::Agent) => crate::desktop::xpanel::HOLDER_AGENT,
+                Some(Controller::User) => crate::desktop::xpanel::HOLDER_USER,
+            },
+            Ordering::Relaxed,
+        );
         Ok(session.status(now_ms()))
     }
 
     /// Environment that puts a program on this screen (`DISPLAY=:N`, `XAUTHORITY`). Empty if it is not running.
     pub async fn env_for(&self, workspace: &str) -> Vec<(String, String)> {
         let sessions = self.sessions.lock().await;
-        sessions
-            .get(workspace)
-            .map(|s| display_env(s.display, &s.xauth))
-            .unwrap_or_default()
+        sessions.get(workspace).map(|s| s.env.clone()).unwrap_or_default()
     }
 
     /// Run one agent tool call. Starts the screen if needed, refuses while the user holds the
@@ -338,7 +358,7 @@ impl ScreenManager {
         agent_gate(session.controller)?;
         session.last_agent_ms = now_ms();
         let (display, width, height) = (session.display, session.width, session.height);
-        let env = display_env(display, &session.xauth);
+        let env = session.env.clone();
         match action {
             AgentAction::Screenshot => {
                 let png = screenshot(display, &env).await?;
@@ -449,7 +469,7 @@ impl ScreenManager {
         Err(ScreenError::Unsupported)
     }
 
-    pub async fn stop(&self, workspace: &str) -> Result<(), ScreenError> {
+    pub async fn stop(&self, workspace: &str) -> Result<bool, ScreenError> {
         let _ = workspace;
         Err(ScreenError::Unsupported)
     }
@@ -817,7 +837,7 @@ async fn start_locked(
     }
     let display = pick_display(&busy_displays())
         .ok_or_else(|| ScreenError::StartFailed("no free X display from :90 to :199".into()))?;
-    let session = launch(&state_dir.join(workspace), display, width, height).await?;
+    let session = launch(&state_dir.join(workspace), display, width, height, path).await?;
     sessions.insert(workspace.to_string(), session);
     Ok(())
 }
@@ -825,9 +845,15 @@ async fn start_locked(
 /// Writes the screen's `Xauthority`, then starts Xvfb, openbox and x11vnc. On failure, what already
 /// started is stopped again and the authority file is removed.
 #[cfg(target_os = "linux")]
-async fn launch(dir: &Path, display: u32, width: u32, height: u32) -> Result<Session, ScreenError> {
-    let xauth = write_xauthority(dir, display).await?;
-    match start_processes(dir, display, width, height, &xauth).await {
+async fn launch(
+    dir: &Path,
+    display: u32,
+    width: u32,
+    height: u32,
+    path: &std::ffi::OsStr,
+) -> Result<Session, ScreenError> {
+    let (xauth, cookie) = write_xauthority(dir, display).await?;
+    match start_processes(dir, display, width, height, &xauth, &cookie, path).await {
         Ok(session) => Ok(session),
         Err(e) => {
             let _ = std::fs::remove_file(&xauth);
@@ -849,10 +875,11 @@ fn create_screen_dir(dir: &Path) -> Result<(), ScreenError> {
         .map_err(|e| ScreenError::StartFailed(format!("cannot protect {}: {e}", dir.display())))
 }
 
-/// Writes `<dir>/Xauthority` with a new cookie for `:display`, mode 0600. A file left by a crashed
-/// screen is replaced. Missing `xauth` gives `MissingComponent(["xauth"])`.
+/// Writes `<dir>/Xauthority` with a new cookie for `:display`, mode 0600, and returns the file and the cookie
+/// (hex), which the dock's connection needs. A file left by a crashed screen is replaced. Missing `xauth`
+/// gives `MissingComponent(["xauth"])`.
 #[cfg(target_os = "linux")]
-async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenError> {
+async fn write_xauthority(dir: &Path, display: u32) -> Result<(PathBuf, String), ScreenError> {
     create_screen_dir(dir)?;
     let path = dir.join(XAUTH_FILE);
     let _ = std::fs::remove_file(&path);
@@ -871,7 +898,7 @@ async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenErr
     }
     .await;
     match written {
-        Ok(()) => Ok(path),
+        Ok(()) => Ok((path, cookie)),
         Err(e) => {
             let _ = std::fs::remove_file(&path);
             Err(e)
@@ -879,7 +906,8 @@ async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenErr
     }
 }
 
-/// Starts the processes of a screen whose `Xauthority` is written.
+/// Starts the processes of a screen whose `Xauthority` is written: Xvfb, then the desktop (openbox with the Bandito
+/// theme, the wallpaper and the dock), then x11vnc.
 #[cfg(target_os = "linux")]
 async fn start_processes(
     dir: &Path,
@@ -887,18 +915,63 @@ async fn start_processes(
     width: u32,
     height: u32,
     xauth: &Path,
+    cookie: &str,
+    path: &std::ffi::OsStr,
 ) -> Result<Session, ScreenError> {
     let mut xvfb = spawn_group(&xvfb_argv(display, width, height, xauth), &[], "xvfb")?;
     if let Err(e) = wait_for_socket(&mut xvfb, display).await {
         terminate_child(xvfb).await;
         return Err(e);
     }
-    let openbox = spawn_openbox(display, xauth);
+    let launched = Arc::new(StdMutex::new(Vec::new()));
+    let holder = Arc::new(AtomicU8::new(crate::desktop::xpanel::HOLDER_NONE));
+    let desktop_stop = Arc::new(AtomicBool::new(false));
+    let mut env = display_env(display, xauth);
+    // Programs on this screen get a D-Bus session bus of their own: on the shared one, a program that keeps a single
+    // instance (a file manager, a terminal) hands its window to the copy running on the person's own desktop.
+    let bus = spawn_session_bus(&dir.join(DESKTOP_DIR), path).await;
+    if let Some((_, address)) = &bus {
+        env.push(("DBUS_SESSION_BUS_ADDRESS".to_string(), address.clone()));
+    }
+    let bus = bus.map(|(child, _)| child);
+    // The desktop's files. If they cannot be written the screen still works, with openbox's own look.
+    let prepared =
+        match crate::desktop::theme::prepare(&dir.join(DESKTOP_DIR), path, Path::new("/usr/share/icons"), height) {
+            Ok(prepared) => {
+                env.extend(prepared.env.iter().cloned());
+                Some(prepared)
+            }
+            Err(e) => {
+                tracing::warn!("the screen's desktop files were not written ({e}); the screen runs with plain openbox");
+                None
+            }
+        };
+    let openbox = spawn_openbox(&env, prepared.as_ref().map(|p| p.rc_file.as_path()));
+    if let Some(prepared) = &prepared {
+        let params = crate::desktop::xpanel::Params {
+            display,
+            width,
+            height,
+            cookie: cookie.to_string(),
+            launchers: prepared.launchers.clone(),
+            env: env.clone(),
+            launched: Arc::clone(&launched),
+            holder: Arc::clone(&holder),
+            stop: Arc::clone(&desktop_stop),
+        };
+        if let Err(e) = crate::desktop::xpanel::spawn(params) {
+            tracing::warn!("the screen's desktop thread did not start: {e}");
+        }
+    }
     let vnc = match start_vnc(dir, display, xauth).await {
         Ok(vnc) => vnc,
         Err(e) => {
+            desktop_stop.store(true, Ordering::Relaxed);
             terminate_child(xvfb).await;
             if let Some(child) = openbox {
+                terminate_child(child).await;
+            }
+            if let Some(child) = bus {
                 terminate_child(child).await;
             }
             return Err(e);
@@ -916,8 +989,12 @@ async fn start_processes(
         last_agent_ms: now_ms(),
         xvfb,
         openbox,
+        bus,
         vnc: vnc.task,
-        launched: Arc::new(StdMutex::new(Vec::new())),
+        launched,
+        env,
+        holder,
+        desktop_stop,
     })
 }
 
@@ -1026,10 +1103,53 @@ async fn wait_for_socket(child: &mut TrackedChild, display: u32) -> Result<(), S
     }))
 }
 
-/// openbox is optional: without it the screen works, but windows have no frames.
+/// Longest socket path the kernel accepts for a Unix socket is 107 bytes; a longer path gets no private bus.
 #[cfg(target_os = "linux")]
-fn spawn_openbox(display: u32, xauth: &Path) -> Option<TrackedChild> {
-    match spawn_group(&["openbox".to_string()], &display_env(display, xauth), "openbox") {
+const MAX_SOCKET_PATH: usize = 100;
+
+/// Starts `dbus-daemon --session` on a socket inside the screen's desktop folder and returns it with its address.
+/// `None` when `dbus-daemon` is not installed, the path is too long for a socket, or the bus does not come up: the
+/// programs then use the server's session bus, as they would without Bandito.
+#[cfg(target_os = "linux")]
+async fn spawn_session_bus(dir: &Path, path: &std::ffi::OsStr) -> Option<(TrackedChild, String)> {
+    crate::setup::which("dbus-daemon", path)?;
+    let socket = dir.join("bus");
+    if socket.as_os_str().len() > MAX_SOCKET_PATH {
+        return None;
+    }
+    if let Err(e) = std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir) {
+        tracing::debug!("no folder for the screen's session bus: {e}");
+        return None;
+    }
+    let _ = std::fs::remove_file(&socket);
+    let address = format!("unix:path={}", socket.display());
+    let argv = argv![
+        "dbus-daemon",
+        "--session",
+        "--nofork",
+        "--nopidfile",
+        format!("--address={address}")
+    ];
+    let child = spawn_group(&argv, &[], "dbus-daemon").ok()?;
+    if wait_until(START_TIMEOUT, || socket.exists()).await {
+        Some((child, address))
+    } else {
+        tracing::warn!("the screen's session bus did not come up");
+        terminate_child(child).await;
+        None
+    }
+}
+
+/// openbox is optional: without it the screen works, but windows have no frames. With `rc` it starts with the
+/// Bandito configuration (theme, menu, keys).
+#[cfg(target_os = "linux")]
+fn spawn_openbox(env: &[(String, String)], rc: Option<&Path>) -> Option<TrackedChild> {
+    let mut argv = vec!["openbox".to_string()];
+    if let Some(rc) = rc {
+        argv.push("--config-file".to_string());
+        argv.push(rc.display().to_string());
+    }
+    match spawn_group(&argv, env, "openbox") {
         Ok(child) => Some(child),
         Err(e) => {
             tracing::warn!("openbox is not available ({e}); the screen runs without a window manager");
@@ -1174,7 +1294,7 @@ fn check_point(x: u32, y: u32, width: u32, height: u32) -> Result<(), ScreenErro
 fn launch_program(session: &Session, command: &str) -> Result<(), ScreenError> {
     let mut child = spawn_group(
         &["sh".to_string(), "-c".to_string(), command.to_string()],
-        &display_env(session.display, &session.xauth),
+        &session.env,
         "sh",
     )?;
     let pgid = child.id().map_or(0, |p| p as i32);
@@ -1195,17 +1315,23 @@ async fn shutdown_session(session: Session) {
     let Session {
         xvfb,
         openbox,
+        bus,
         vnc,
         launched,
         xauth,
+        desktop_stop,
         ..
     } = session;
+    desktop_stop.store(true, Ordering::Relaxed);
     stop_vnc(vnc).await;
     if let Some(child) = openbox {
         terminate_child(child).await;
     }
     terminate_child(xvfb).await;
     stop_launched(&launched).await;
+    if let Some(child) = bus {
+        terminate_child(child).await;
+    }
     let _ = std::fs::remove_file(&xauth);
 }
 
@@ -1700,6 +1826,18 @@ mod tests {
         }
     }
 
+    /// Putting a screen to sleep that is not running is fine and says so; a bad workspace name is refused.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn stopping_a_screen_that_is_not_running_says_so() {
+        let dir = tempfile::tempdir().unwrap();
+        let mgr = ScreenManager::new(dir.path().to_path_buf());
+        assert_eq!(mgr.stop(DEFAULT_WORKSPACE).await, Ok(false));
+        assert_eq!(mgr.stop("other").await, Ok(false));
+        assert!(matches!(mgr.stop("../x").await, Err(ScreenError::InvalidArgs(_))));
+        assert!(matches!(mgr.stop("").await, Err(ScreenError::InvalidArgs(_))));
+    }
+
     /// Without x11vnc and xdotool the start stops before anything runs: the error names both, and no
     /// folder, authority file or program was made.
     #[cfg(target_os = "linux")]
@@ -1893,9 +2031,57 @@ mod tests {
         assert!(!pids.is_empty());
         assert!(pids.iter().all(|&p| alive(p)));
 
-        mgr.stop(DEFAULT_WORKSPACE).await.unwrap();
+        assert_eq!(
+            mgr.stop(DEFAULT_WORKSPACE).await,
+            Ok(true),
+            "stop says a screen was running"
+        );
+        assert_eq!(
+            mgr.stop(DEFAULT_WORKSPACE).await,
+            Ok(false),
+            "a second stop finds nothing"
+        );
         assert!(!mgr.status(DEFAULT_WORKSPACE).await.unwrap().running);
         assert!(pids.iter().all(|&p| !alive(p)), "processes still alive: {pids:?}");
         assert!(!auth.exists(), "the Xauthority file stays after the screen stops");
+    }
+
+    /// Starts a screen and keeps it until the file `BANDITO_SCREEN_HOLD/stop` exists, so a person can look at its
+    /// desktop (screenshots with `import`, `xdotool`) while changing it. It prints the display and the Xauthority.
+    /// `BANDITO_SCREEN_IT=1 BANDITO_SCREEN_HOLD=/tmp/hold cargo test -- --ignored screen_hold_for_inspection`
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    #[ignore = "needs a Linux server with the screen programs; keeps the screen until BANDITO_SCREEN_HOLD/stop exists"]
+    async fn screen_hold_for_inspection() {
+        if !it_enabled() {
+            return;
+        }
+        let Some(hold) = std::env::var_os("BANDITO_SCREEN_HOLD").map(PathBuf::from) else {
+            return;
+        };
+        std::fs::create_dir_all(&hold).unwrap();
+        let _ = std::fs::remove_file(hold.join("stop"));
+        let width = std::env::var("BANDITO_SCREEN_WIDTH")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1280);
+        let height = std::env::var("BANDITO_SCREEN_HEIGHT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(800);
+        let mgr = ScreenManager::new(hold.join("state"));
+        let st = mgr.start(DEFAULT_WORKSPACE, width, height).await.unwrap();
+        println!("DISPLAY=:{}", st.display.unwrap());
+        println!(
+            "XAUTHORITY={}",
+            hold.join("state").join(DEFAULT_WORKSPACE).join(XAUTH_FILE).display()
+        );
+        for _ in 0..1800 {
+            if hold.join("stop").exists() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        mgr.stop(DEFAULT_WORKSPACE).await.unwrap();
     }
 }
