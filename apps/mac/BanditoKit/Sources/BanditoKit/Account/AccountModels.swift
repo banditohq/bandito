@@ -65,11 +65,29 @@ public struct AccountDevice: Codable, Sendable, Equatable, Identifiable {
     public var lastSeenAt: String
     /// True for the device that made the request.
     public var current: Bool
+    /// The device's X25519 public key (base64), when `GET /me` lists it. Nil on a server that does not. Access
+    /// answers are sealed to the key in the asking device's own request first (`AccessRequest.publicKey`).
+    public var publicKey: String?
 
     private enum CodingKeys: String, CodingKey {
         case id, name, platform, approved, current
         case createdAt = "created_at"
         case lastSeenAt = "last_seen_at"
+        case publicKey = "public_key"
+    }
+
+    public init(
+        id: String, name: String, platform: String, approved: Bool, createdAt: String = "", lastSeenAt: String = "",
+        current: Bool = false, publicKey: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.platform = platform
+        self.approved = approved
+        self.createdAt = createdAt
+        self.lastSeenAt = lastSeenAt
+        self.current = current
+        self.publicKey = publicKey
     }
 }
 
