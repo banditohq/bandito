@@ -182,6 +182,21 @@ struct MainWindow: View {
         case .importer: ImportSheet()
         case .reportProblem: ReportProblemSheet()
         case .whatsNew(let skipped): WhatsNewSheet(skipped: skipped)
+        case .readyTeam, .schedule, .share:
+            serverSheetView(for: sheet)
+        case .installShared(let shareID):
+            InstallSharedSheet(shareID: shareID, server: app.currentServer)
+        case .myShares:
+            MySharesView(servers: app.servers)
+        case .moveAgent:
+            moveSheetView(for: sheet)
+        }
+    }
+
+    /// The sheets that need the current server. Split from `sheetView` so the type checker meets fewer branches at once.
+    @ViewBuilder
+    private func serverSheetView(for sheet: Sheet) -> some View {
+        switch sheet {
         case .readyTeam(let bundleID):
             if let server = app.currentServer {
                 ReadyTeamSheet(bundleID: bundleID, server: server)
@@ -194,10 +209,13 @@ struct MainWindow: View {
             if let server = app.currentServer {
                 ShareSheet(subject: subject, server: server)
             }
-        case .installShared(let shareID):
-            InstallSharedSheet(shareID: shareID, server: app.currentServer)
-        case .myShares:
-            MySharesView(servers: app.servers)
+        default: EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private func moveSheetView(for sheet: Sheet) -> some View {
+        switch sheet {
         case .moveAgent(let agentID, let serverID):
             if let source = app.servers.first(where: { $0.id == serverID }),
                 let agent = source.agents.first(where: { $0.id == agentID })
@@ -206,6 +224,7 @@ struct MainWindow: View {
                     source: source, agent: agent,
                     targets: MigrationTargets.eligible(source: source, among: app.servers))
             }
+        default: EmptyView()
         }
     }
 }

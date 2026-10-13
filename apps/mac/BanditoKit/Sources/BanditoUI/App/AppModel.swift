@@ -587,13 +587,15 @@ public final class AppModel {
         guard let server = currentServer else { return }
         await server.disconnect()
         await server.connect()
-        let reloads = RefreshRules.reloads(for: router.mode)
-        if reloads.contains(.terminals) {
-            await terminalController(for: server).refresh()
+        let reloads: [RefreshRules.Reload] = RefreshRules.reloads(for: router.mode)
+        if reloads.contains(RefreshRules.Reload.terminals) {
+            let controller: TerminalController = terminalController(for: server)
+            await controller.refresh()
         }
-        if reloads.contains(.browserPage) {
-            let chosen = WorkspaceSelections.shared.selection(mode: "browser", server: server).selectedID
-            await BrowserStore.shared.model(for: server, workspace: chosen).reload()
+        if reloads.contains(RefreshRules.Reload.browserPage) {
+            let selection = WorkspaceSelections.shared.selection(mode: "browser", server: server)
+            let model: BrowserModel = BrowserStore.shared.model(for: server, workspace: selection.selectedID)
+            await model.reload()
         }
         router.refreshRequests += 1
     }
