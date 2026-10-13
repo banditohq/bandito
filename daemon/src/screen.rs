@@ -236,7 +236,7 @@ struct Session {
     desktop: Option<std::thread::JoinHandle<()>>,
     vnc: VncTask,
     /// Process group ids of programs started with `Launch` (or from the dock) that are still running.
-    launched: Arc<StdMutex<Vec<i32>>>,
+    launched: Arc<StdMutex<Vec<LaunchedGroup>>>,
     /// The environment of every program on this screen: `DISPLAY`, `XAUTHORITY` and the desktop's own variables
     /// (fonts, cursor, theme, `PATH` with the browser wrappers first).
     env: Vec<(String, String)>,
@@ -1191,30 +1191,88 @@ fn spawn_bus_watcher(socket: PathBuf, argv: Vec<String>, mut child: TrackedChild
 }
 
 /// Stops the bus, then the services it started that left its process group (`setsid`): those are found by the
-/// bus address in their environment, and only among this user's processes.
+/// bus address in their environment, and only among this user's processes. Each is held by a pidfd from before its
+/// environment was read, so a signal goes to that process and never to a later one that got its number.
 #[cfg(target_os = "linux")]
 async fn stop_bus(task: VncTask, address: &str) {
     stop_vnc(task).await;
-    let pids = processes_using_bus(address);
-    for &pid in &pids {
-        // SAFETY: kill only sends a signal; a process that is gone yields ESRCH, which is ignored.
-        let _ = unsafe { libc::kill(pid, libc::SIGTERM) };
+    let targets = processes_using_bus(address);
+    for target in &targets {
+        target.signal(libc::SIGTERM);
     }
     let deadline = Instant::now() + GRACE;
-    while Instant::now() < deadline && pids.iter().any(|&p| process_alive(p)) {
+    while Instant::now() < deadline && targets.iter().any(ProcTarget::alive) {
         tokio::time::sleep(POLL).await;
     }
-    for pid in pids.into_iter().filter(|&p| process_alive(p)) {
-        // SAFETY: as above.
-        let _ = unsafe { libc::kill(pid, libc::SIGKILL) };
+    for target in targets.iter().filter(|t| t.alive()) {
+        target.signal(libc::SIGKILL);
     }
 }
 
+/// The `starttime` of a process (field 22 of `/proc/<pid>/stat`, in clock ticks since boot): with the pid it names
+/// one process for ever, since a number reused later starts at a later time.
 #[cfg(target_os = "linux")]
-fn process_alive(pid: i32) -> bool {
-    // SAFETY: signal 0 sends nothing; it only asks whether the process exists. A zombie still answers, which is
-    // fine: its parent reaps it.
-    pid > 0 && unsafe { libc::kill(pid, 0) } == 0 && !is_zombie(pid)
+fn proc_start(pid: i32) -> Option<u64> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // The command name is in brackets and may hold spaces and brackets; the fields after the last `)` start at 3.
+    let rest = stat.rsplit_once(')')?.1;
+    rest.split_whitespace().nth(19)?.parse().ok()
+}
+
+/// A process that is signalled by what identifies it, not by its number alone: a pidfd opened at once (Linux 5.3 and
+/// later), else the number with its start time, checked again before every signal.
+#[cfg(target_os = "linux")]
+struct ProcTarget {
+    pid: i32,
+    start: Option<u64>,
+    fd: Option<std::os::fd::OwnedFd>,
+}
+
+#[cfg(target_os = "linux")]
+impl ProcTarget {
+    /// Holds the process `pid` now. Open it before reading anything that decides whether it is the one wanted.
+    fn open(pid: i32) -> Self {
+        use std::os::fd::FromRawFd;
+        // SAFETY: pidfd_open takes a pid and flags and returns a new descriptor or -1; a descriptor is owned here.
+        let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
+        let fd = (raw >= 0).then(|| {
+            // SAFETY: `raw` is a descriptor the kernel just made for us and nobody else holds.
+            unsafe { std::os::fd::OwnedFd::from_raw_fd(raw as i32) }
+        });
+        Self {
+            pid,
+            start: proc_start(pid),
+            fd,
+        }
+    }
+
+    /// Sends `sig` (0 only asks) to the process this holds. False when it is gone, or when without a pidfd the number
+    /// now belongs to another process.
+    fn signal(&self, sig: libc::c_int) -> bool {
+        use std::os::fd::AsRawFd;
+        if let Some(fd) = &self.fd {
+            // SAFETY: pidfd_send_signal on our own descriptor with no siginfo; a gone process yields ESRCH.
+            return unsafe {
+                libc::syscall(
+                    libc::SYS_pidfd_send_signal,
+                    fd.as_raw_fd(),
+                    sig,
+                    std::ptr::null::<libc::siginfo_t>(),
+                    0u32,
+                )
+            } == 0;
+        }
+        if self.start.is_none() || proc_start(self.pid) != self.start {
+            return false;
+        }
+        // SAFETY: kill only sends a signal; the start time says this is still the process held.
+        unsafe { libc::kill(self.pid, sig) == 0 }
+    }
+
+    /// Still running (a zombie is not: its parent reaps it).
+    fn alive(&self) -> bool {
+        self.signal(0) && !(proc_start(self.pid) == self.start && is_zombie(self.pid))
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -1240,9 +1298,10 @@ pub fn environ_names_bus(environ: &[u8], address: &str) -> bool {
         .any(|entry| entry == session.as_bytes() || entry == starter.as_bytes())
 }
 
-/// This user's processes (not this daemon) whose environment names the bus `address`.
+/// This user's processes (not this daemon) whose environment names the bus `address`. Each is opened (pidfd) before
+/// its environment is read, so what is returned is the process that was read.
 #[cfg(target_os = "linux")]
-fn processes_using_bus(address: &str) -> Vec<i32> {
+fn processes_using_bus(address: &str) -> Vec<ProcTarget> {
     use std::os::unix::fs::MetadataExt;
     // SAFETY: getuid cannot fail.
     let uid = unsafe { libc::getuid() };
@@ -1257,17 +1316,54 @@ fn processes_using_bus(address: &str) -> Vec<i32> {
             if pid == me || entry.metadata().ok()?.uid() != uid {
                 return None;
             }
+            let target = ProcTarget::open(pid);
             let environ = std::fs::read(entry.path().join("environ")).ok()?;
-            environ_names_bus(&environ, address).then_some(pid)
+            environ_names_bus(&environ, address).then_some(target)
         })
         .collect()
 }
 
-/// Whether anything is left in the process group `pgid`.
+/// A process group the screen started: its number and the start time of its leader, so that a number reused by a
+/// later group is not taken for this one. (While any process of a group lives, no process can get the number.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LaunchedGroup {
+    pub pgid: i32,
+    start: Option<u64>,
+}
+
+impl LaunchedGroup {
+    /// The group led by `leader`, which has just been started.
+    #[cfg(target_os = "linux")]
+    pub fn of(leader: i32) -> Self {
+        Self {
+            pgid: leader,
+            start: proc_start(leader),
+        }
+    }
+}
+
+/// Whether anything is left in the group. When the leader still has its entry in `/proc` with another start time,
+/// the number belongs to a newer process and the group we started is gone.
 #[cfg(target_os = "linux")]
-pub fn group_alive(pgid: i32) -> bool {
+pub fn group_alive(group: &LaunchedGroup) -> bool {
+    if group.pgid <= 0 {
+        return false;
+    }
+    if let (Some(started), Some(now)) = (group.start, proc_start(group.pgid))
+        && started != now
+    {
+        return false;
+    }
     // SAFETY: signal 0 sends nothing; it only asks whether the group has a process we may signal.
-    pgid > 0 && unsafe { libc::killpg(pgid, 0) } == 0
+    unsafe { libc::killpg(group.pgid, 0) == 0 }
+}
+
+/// Sends `sig` to the group when it is still the one we started.
+#[cfg(target_os = "linux")]
+fn signal_launched(group: &LaunchedGroup, sig: libc::c_int) {
+    if group_alive(group) {
+        signal_group(group.pgid, sig);
+    }
 }
 
 /// openbox is optional: without it the screen works, but windows have no frames. With `rc` it starts with the
@@ -1427,19 +1523,18 @@ fn launch_program(session: &Session, command: &str) -> Result<(), ScreenError> {
         &session.env,
         "sh",
     )?;
-    let pgid = child.id().map_or(0, |p| p as i32);
-    lock_std(&session.launched).push(pgid);
+    let group = LaunchedGroup::of(child.id().map_or(0, |p| p as i32));
+    lock_std(&session.launched).push(group);
     let launched = Arc::clone(&session.launched);
-    let stop = Arc::clone(&session.desktop_stop);
     tokio::spawn(async move {
         let _ = child.wait().await;
         child.release();
         // The program may have left behind members of its group (a browser that detaches): the group stays in the
-        // list while any of them lives, so stopping the screen still signals it.
-        while group_alive(pgid) && !stop.load(Ordering::Relaxed) {
+        // list for as long as any of them lives, stop or no stop, so that stopping the screen can still end it.
+        while group_alive(&group) {
             tokio::time::sleep(POLL * 4).await;
         }
-        lock_std(&launched).retain(|&p| p != pgid);
+        lock_std(&launched).retain(|g| *g != group);
     });
     Ok(())
 }
@@ -1492,18 +1587,21 @@ async fn terminate_child(mut child: TrackedChild) {
     child.release();
 }
 
+/// Ends every program started on the screen: SIGTERM to the groups listed now, a wait of `GRACE`, then SIGKILL to
+/// those of the same list that still live. The list is read once, before the first signal: the watchers take a
+/// group out only when it is gone, but the SIGKILL does not depend on that.
 #[cfg(target_os = "linux")]
-async fn stop_launched(launched: &StdMutex<Vec<i32>>) {
+pub(crate) async fn stop_launched(launched: &StdMutex<Vec<LaunchedGroup>>) {
     let groups = lock_std(launched).clone();
-    for &pgid in &groups {
-        signal_group(pgid, libc::SIGTERM);
+    for group in &groups {
+        signal_launched(group, libc::SIGTERM);
     }
     let deadline = Instant::now() + GRACE;
-    while Instant::now() < deadline && !lock_std(launched).is_empty() {
+    while Instant::now() < deadline && groups.iter().any(group_alive) {
         tokio::time::sleep(POLL).await;
     }
-    for pgid in lock_std(launched).clone() {
-        signal_group(pgid, libc::SIGKILL);
+    for group in &groups {
+        signal_launched(group, libc::SIGKILL);
     }
 }
 
@@ -2007,22 +2105,22 @@ mod tests {
         let mut ours = service(&address);
         let mut theirs = service(&other);
         // `setsid` forks when it leads a group already, so wait until the sleeps carry their environment.
-        let mut pids = Vec::new();
+        let mut found = Vec::new();
         for _ in 0..100 {
-            pids = processes_using_bus(&address);
-            if !pids.is_empty() {
+            found = processes_using_bus(&address);
+            if !found.is_empty() {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        assert_eq!(pids.len(), 1, "{pids:?}");
+        assert_eq!(found.len(), 1);
         assert_eq!(processes_using_bus(&other).len(), 1);
 
         let sleep = argv!["sleep", "60"];
         let bus = spawn_group(&sleep, &[], "sleep").unwrap();
         let task = spawn_bus_watcher(tmp.path().join("bus"), argv!["true"], bus);
         stop_bus(task, &address).await;
-        assert!(!process_alive(pids[0]), "the service outlived its bus");
+        assert!(!found[0].alive(), "the service outlived its bus");
         assert_eq!(
             processes_using_bus(&other).len(),
             1,
@@ -2031,6 +2129,96 @@ mod tests {
         let _ = ours.wait();
         let _ = theirs.kill();
         let _ = theirs.wait();
+    }
+
+    /// A group that ignores SIGTERM is still ended: the watchers keep a group in the list until it is gone, even
+    /// after the stop flag is set, so the SIGKILL after the grace finds it.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_group_that_ignores_sigterm_is_killed_when_the_screen_stops() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let program = tmp.path().join("stubborn.sh");
+        std::fs::write(&program, "#!/bin/sh\ntrap '' TERM\nwhile true; do sleep 1; done\n").unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let launched = Arc::new(StdMutex::new(Vec::new()));
+        let stop = Arc::new(AtomicBool::new(false));
+        crate::desktop::xpanel::spawn_detached(&[program.display().to_string()], &[], &launched, &stop);
+        let group = lock_std(&launched)[0];
+        assert!(group_alive(&group));
+        // What `shutdown_session` does first: the flag. The watcher must not take the group out because of it.
+        stop.store(true, Ordering::SeqCst);
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        assert_eq!(lock_std(&launched).len(), 1, "the group left the list while it lived");
+
+        stop_launched(&launched).await;
+        // The kill is sent; the dead leader is a zombie until the watcher's wait reaps it.
+        for _ in 0..40 {
+            if !group_alive(&group) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(!group_alive(&group), "a group that ignores SIGTERM survived the stop");
+        for _ in 0..40 {
+            if lock_std(&launched).is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(lock_std(&launched).is_empty(), "a dead group stayed in the list");
+    }
+
+    /// A process group number that a newer process now holds is not taken for the group we started.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_reused_group_number_is_not_ours() {
+        use std::os::unix::process::CommandExt;
+        let mut leader = std::process::Command::new("sleep")
+            .arg("30")
+            .process_group(0)
+            .spawn()
+            .unwrap();
+        let ours = LaunchedGroup::of(leader.id() as i32);
+        assert!(group_alive(&ours));
+        let reused = LaunchedGroup {
+            start: ours.start.map(|s| s + 1),
+            ..ours
+        };
+        assert!(!group_alive(&reused), "another start time means another group");
+        signal_launched(&reused, libc::SIGKILL);
+        assert!(group_alive(&ours), "a group that is not ours was signalled");
+        signal_launched(&ours, libc::SIGKILL);
+        let _ = leader.wait();
+        assert!(!group_alive(&ours));
+    }
+
+    /// Without a pidfd a process is signalled only while its number still has the start time it had.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_process_with_another_start_time_is_not_signalled() {
+        let mut child = std::process::Command::new("sleep").arg("30").spawn().unwrap();
+        let pid = child.id() as i32;
+        let wrong = ProcTarget {
+            pid,
+            start: proc_start(pid).map(|s| s + 1),
+            fd: None,
+        };
+        assert!(!wrong.signal(libc::SIGKILL));
+        assert!(
+            child.try_wait().unwrap().is_none(),
+            "a process of another start time was killed"
+        );
+        let right = ProcTarget {
+            pid,
+            start: proc_start(pid),
+            fd: None,
+        };
+        assert!(right.signal(libc::SIGKILL));
+        let _ = child.wait();
+        // With the pidfd of the process the signal reaches it by its identity.
+        let held = ProcTarget::open(std::process::id() as i32);
+        assert!(held.signal(0));
     }
 
     /// A bus that dies is started again once, on the same socket; a second death is only logged.
@@ -2044,14 +2232,17 @@ mod tests {
         let mut restarted = 0;
         for _ in 0..100 {
             restarted = task.pgid.load(Ordering::SeqCst);
-            if restarted > 0 && group_alive(restarted) {
+            if restarted > 0 && group_alive(&LaunchedGroup::of(restarted)) {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        assert!(restarted > 0 && group_alive(restarted), "the bus was not started again");
+        assert!(
+            restarted > 0 && group_alive(&LaunchedGroup::of(restarted)),
+            "the bus was not started again"
+        );
         stop_vnc(task).await;
-        assert!(!group_alive(restarted));
+        assert!(!group_alive(&LaunchedGroup::of(restarted)));
     }
 
     /// Putting a screen to sleep that is not running is fine and says so; a bad workspace name is refused.

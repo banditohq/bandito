@@ -5,6 +5,7 @@
 
 use super::paint::{self, Fonts, Hit, Holder, LauncherItem, PANEL_HEIGHT, PanelLayout, PanelView, WindowItem};
 use super::theme::{Launcher, MENU_KEY};
+use crate::screen::{LaunchedGroup, group_alive};
 use std::collections::HashSet;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::process::CommandExt;
@@ -78,7 +79,7 @@ pub struct Params {
     /// `DISPLAY`, `XAUTHORITY` and the desktop's own variables, for the programs the dock starts.
     pub env: Vec<(String, String)>,
     /// Process groups of programs started on the screen; killed when it stops (`screen.rs`).
-    pub launched: Arc<Mutex<Vec<i32>>>,
+    pub launched: Arc<Mutex<Vec<LaunchedGroup>>>,
     /// Who holds the controls: `HOLDER_*`.
     pub holder: Arc<AtomicU8>,
     pub stop: Arc<AtomicBool>,
@@ -625,7 +626,7 @@ fn wait_readable(fd: i32, timeout_ms: i32) {
 pub fn spawn_detached(
     argv: &[String],
     env: &[(String, String)],
-    launched: &Arc<Mutex<Vec<i32>>>,
+    launched: &Arc<Mutex<Vec<LaunchedGroup>>>,
     stop: &Arc<AtomicBool>,
 ) {
     let Some(program) = argv.first() else { return };
@@ -643,18 +644,18 @@ pub fn spawn_detached(
     }
     match command.spawn() {
         Ok(mut child) => {
-            let pgid = child.id() as i32;
-            list.push(pgid);
+            let group = LaunchedGroup::of(child.id() as i32);
+            list.push(group);
             drop(list);
             let launched = Arc::clone(launched);
-            let stop = Arc::clone(stop);
             std::thread::spawn(move || {
                 let _ = child.wait();
-                while crate::screen::group_alive(pgid) && !stop.load(Ordering::Relaxed) {
+                // The entry goes only when the group is gone, whatever `stop` says: the stop's SIGKILL needs it.
+                while group_alive(&group) {
                     std::thread::sleep(Duration::from_millis(200));
                 }
                 if let Ok(mut list) = launched.lock() {
-                    list.retain(|&p| p != pgid);
+                    list.retain(|g| *g != group);
                 }
             });
         }
@@ -674,7 +675,7 @@ mod tests {
         path.display().to_string()
     }
 
-    fn state() -> (Arc<Mutex<Vec<i32>>>, Arc<AtomicBool>) {
+    fn state() -> (Arc<Mutex<Vec<LaunchedGroup>>>, Arc<AtomicBool>) {
         (Arc::new(Mutex::new(Vec::new())), Arc::new(AtomicBool::new(false)))
     }
 
@@ -722,7 +723,7 @@ mod tests {
         assert_eq!(groups.len(), 1, "the group left the list while its member runs");
         // Stopping the screen signals it, and then it leaves the list.
         // SAFETY: killpg only sends a signal to the group this test made.
-        unsafe { libc::killpg(groups[0], libc::SIGTERM) };
+        unsafe { libc::killpg(groups[0].pgid, libc::SIGTERM) };
         assert!(eventually(|| launched.lock().unwrap().is_empty()));
     }
 }
