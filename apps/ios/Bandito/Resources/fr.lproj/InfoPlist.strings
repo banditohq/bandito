@@ -1,0 +1,6 @@
+/* Texte d’autorisation affiché par iOS. */
+"NSCameraUsageDescription" = "Bandito utilise l’appareil photo pour scanner le QR code d’appairage d’un serveur et pour prendre une photo que vous joignez à un message.";
+"NSLocalNetworkUsageDescription" = "Bandito communique avec votre Mac ou votre serveur sur votre réseau local.";
+"NSFaceIDUsageDescription" = "Bandito utilise Face ID pour verrouiller l’app et confirmer les actions risquées.";
+"NSMicrophoneUsageDescription" = "Bandito utilise le micro uniquement pendant que vous dictez un message.";
+"NSSpeechRecognitionUsageDescription" = "Bandito transforme votre voix en texte uniquement pendant que vous dictez un message.";

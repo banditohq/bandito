@@ -1,3 +1,4 @@
+import BanditoKit
 import Foundation
 import Testing
 

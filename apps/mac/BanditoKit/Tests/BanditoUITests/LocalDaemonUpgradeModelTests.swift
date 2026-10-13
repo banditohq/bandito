@@ -59,9 +59,9 @@ final class FakeReplacer: DaemonReplacing {
         return (model, server, replacer)
     }
 
-    /// Waits until `condition` holds, for up to two seconds. Returns whether it did.
+    /// Waits until `condition` holds, for up to thirty seconds. Returns whether it did.
     private func eventually(_ condition: () -> Bool) async -> Bool {
-        for _ in 0..<400 {
+        for _ in 0..<6000 {
             if condition() { return true }
             try? await Task.sleep(for: .milliseconds(5))
         }

@@ -1,4 +1,6 @@
 /* Текст разрешения, который показывает iOS. */
-"NSCameraUsageDescription" = "Bandito использует камеру только для сканирования QR-кода подключения сервера.";
+"NSCameraUsageDescription" = "Bandito использует камеру, чтобы сканировать QR-код подключения сервера и делать фото, которое вы прикрепляете к сообщению.";
 "NSLocalNetworkUsageDescription" = "Bandito общается с вашим Mac или сервером в локальной сети.";
 "NSFaceIDUsageDescription" = "Bandito использует Face ID для блокировки приложения и подтверждения рискованных действий.";
+"NSMicrophoneUsageDescription" = "Bandito использует микрофон только пока вы диктуете сообщение.";
+"NSSpeechRecognitionUsageDescription" = "Bandito превращает вашу речь в текст только пока вы диктуете сообщение.";

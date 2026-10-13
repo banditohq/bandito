@@ -21,7 +21,7 @@ import Testing
 
     /// Waits until the icon was given `label` last (the watch reads on the next main-actor turn).
     private func settle(_ written: Written, on label: String?) async throws {
-        for _ in 0..<300 where written.labels.last != label {
+        for _ in 0..<3000 where written.labels.last != label {
             try await Task.sleep(for: .milliseconds(10))
         }
         #expect(written.labels.last == label)

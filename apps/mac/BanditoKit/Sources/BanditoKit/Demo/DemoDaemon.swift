@@ -49,6 +49,8 @@ public actor DemoDaemonTransport: RPCTransport {
     var demoFolders: [String] = []
     /// The templates `agents.create_bundle` answers with an `error` (see `failBundleEntry`).
     var demoBundleFailures: Set<String> = []
+    /// What the app's demo does when the person talks to an agent (see `setClientHook`); nil answers as before.
+    var clientHook: (@Sendable (DemoClientCall) -> Void)?
 
     public init(setup: DemoDaemonSetup = DemoDaemonSetup()) {
         self.setup = setup
@@ -95,6 +97,9 @@ public actor DemoDaemonTransport: RPCTransport {
         switch method {
         case "approvals.resolve":
             guard let id = params["approval_id"] as? String, let agent = owners[id] else { return }
+            defer {
+                clientHook?(DemoClientCall(method: method, agentID: agent, objectID: id, decision: params["decision"] as? String))
+            }
             emitEvent(
                 agentID: agent, kind: "approval.resolved",
                 payload: [
@@ -104,6 +109,7 @@ public actor DemoDaemonTransport: RPCTransport {
                 persisted: false)
         case "forms.answer":
             guard let id = params["form_id"] as? String, let agent = owners[id] else { return }
+            defer { clientHook?(DemoClientCall(method: method, agentID: agent, objectID: id)) }
             var payload: [String: Any] = ["form_id": id, "action": params["action"] ?? "expired"]
             for key in ["values", "comment", "message"] {
                 if let value = params[key] { payload[key] = value }
@@ -120,6 +126,10 @@ public actor DemoDaemonTransport: RPCTransport {
                 agentID: agent, kind: "message.user",
                 payload: ["text": text, "source": "user", "via_button": params["via_button"] ?? false], persisted: false)
             emitEvent(agentID: agent, kind: "agent.status", payload: ["status": "working"], persisted: false)
+            clientHook?(DemoClientCall(method: method, agentID: agent, text: text))
+        case "agents.interrupt":
+            guard let agent = params["agent_id"] as? String else { return }
+            clientHook?(DemoClientCall(method: method, agentID: agent))
         default:
             return
         }
@@ -180,6 +190,9 @@ public actor DemoDaemonTransport: RPCTransport {
     private func answer(_ method: String, _ params: [String: Any]) -> Result<String, RPCError> {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         if let reply = answerAgents(method, params, now: now) {
+            return reply
+        }
+        if let reply = answerChat(method, params, now: now) {
             return reply
         }
         switch method {
@@ -269,7 +282,7 @@ public actor DemoDaemonTransport: RPCTransport {
             return .success(DemoJSON.text(setupStatus))
         case "browser.status":
             return .success("{\"cdp\":null,\"controller\":null,\"pid\":null,\"running\":false,\"started_at\":null}")
-        case "approvals.resolve", "forms.answer", "integrations.request_decline", "agents.send":
+        case "approvals.resolve", "forms.answer", "integrations.request_decline", "agents.send", "agents.interrupt":
             // The answer is accepted; the event that follows (`followUp`) is what the app folds in.
             return .success("{}")
         case "screen.status":

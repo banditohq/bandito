@@ -7,7 +7,7 @@ import Testing
 @testable import BanditoUI
 
 /// The screens of the layout audit that are not sheets or Settings sections: Server, Marketplace, onboarding.
-extension LayoutAuditSnapshots {
+extension ScreenWorkSuites.LayoutAuditSnapshots {
     /// The area right of the 296 pt sidebar when the window is at its smallest (900 pt).
     static let modeArea: CGFloat = 604
 
@@ -223,7 +223,7 @@ extension LayoutAuditSnapshots {
             // The step on its own, at the width the flow gives it, with the catalog the daemon ships in place of the
             // server's answer.
             let subscriptions = SubscriptionsModel(server: env.server)
-            let crew = CrewModel(server: env.server, subscriptions: subscriptions, preview: LayoutAuditSnapshots.readyTeamCatalog)
+            let crew = CrewModel(server: env.server, subscriptions: subscriptions, preview: ScreenWorkSuites.LayoutAuditSnapshots.readyTeamCatalog)
             crew.select(.team("web-project"))
             return AnyView(CrewStep(model: crew, rememberedAgentID: nil, onMade: { _, _ in }, onContinue: {}))
         },
