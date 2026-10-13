@@ -2109,7 +2109,13 @@
 "screen.sendCAD" = "Enviar Ctrl+Alt+Supr";
 "screen.shared" = "Compartida";
 "screen.sharedSub" = "Pantalla del lugar de trabajo";
+"screen.sleep" = "Poner la pantalla en reposo";
+"screen.sleepAgentTitle" = "Un agente está trabajando en la pantalla";
+"screen.sleepConfirm" = "Poner en reposo";
 "screen.sleepHint" = "La pantalla se despierta bajo demanda. Tras 30 minutos sin que nadie la use, ni tú ni los agentes, se duerme para liberar memoria del servidor.";
+"screen.sleepMessage" = "Los programas abiertos en ella se cerrarán. La pantalla vuelve a arrancar cuando tú o un agente la necesiten.";
+"screen.sleepUserTitle" = "Tienes el control";
+"screen.sleeping" = "Poniendo la pantalla en reposo…";
 "screen.start" = "Iniciar pantalla";
 "screen.startFailed" = "No se pudo iniciar la pantalla";
 "screen.starting" = "Iniciando la pantalla…";

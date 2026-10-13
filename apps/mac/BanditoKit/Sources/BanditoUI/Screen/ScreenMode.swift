@@ -92,6 +92,8 @@ private struct ScreenToolbar: View {
     @Bindable var model: ScreenModel
     let title: String
     @Environment(Keymap.self) private var keymap
+    /// Set while the "Put the screen to sleep" question is open.
+    @State private var askingToSleep: ScreenSleepRules.Confirmation?
 
     var body: some View {
         let holder = model.status?.controller ?? .none
@@ -159,6 +161,19 @@ private struct ScreenToolbar: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }
+        .confirmationDialog(
+            askingToSleep?.title ?? L10n.Screen.sleep,
+            isPresented: Binding(get: { askingToSleep != nil }, set: { if !$0 { askingToSleep = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(L10n.Screen.sleepConfirm, role: .destructive) {
+                askingToSleep = nil
+                Task { await model.sleep() }
+            }
+            Button(L10n.Common.cancel, role: .cancel) {}
+        } message: {
+            Text(L10n.Screen.sleepMessage)
+        }
     }
 }
 
@@ -223,7 +238,7 @@ private struct ScreenCanvas: View {
         case .installing:
             ScreenInstalling(setup: model.setup)
         case .connecting:
-            ScreenProgress(text: L10n.Screen.connecting)
+            ScreenProgress(text: model.isSleeping ? L10n.Screen.sleeping : L10n.Screen.connecting)
         case .noFrame:
             ScreenFailure(message: UserFacingMessage(text: L10n.Screen.noFrame, canRetry: true)) {
                 Task { await model.start() }

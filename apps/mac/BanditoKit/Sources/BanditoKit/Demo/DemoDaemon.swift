@@ -10,10 +10,26 @@ public struct DemoDaemonSetup: Sendable {
     public var agentIDs: [String]
     /// The host name the daemon reports (the second demo server has another one).
     public var hostname: String
+    /// A server screen the daemon pretends to have (a Linux server's). Nil, as in the smoothness check, is a Mac's:
+    /// no `screen` feature, and `screen.status` says it needs Linux.
+    public var screen: DemoScreen?
 
-    public init(agentIDs: [String] = [], hostname: String = "demo") {
+    public init(agentIDs: [String] = [], hostname: String = "demo", screen: DemoScreen? = nil) {
         self.agentIDs = agentIDs
         self.hostname = hostname
+        self.screen = screen
+    }
+}
+
+/// The state of the demo daemon's server screen: it runs or sleeps, and somebody may hold its controls.
+public struct DemoScreen: Sendable, Equatable {
+    public var running: Bool
+    /// `agent`, `user` or `none`, as `screen.control` takes it.
+    public var controller: String
+
+    public init(running: Bool = true, controller: String = "none") {
+        self.running = running
+        self.controller = controller
     }
 }
 
@@ -51,9 +67,14 @@ public actor DemoDaemonTransport: RPCTransport {
     var demoBundleFailures: Set<String> = []
     /// What the app's demo does when the person talks to an agent (see `setClientHook`); nil answers as before.
     var clientHook: (@Sendable (DemoClientCall) -> Void)?
+    /// The server screen, when the setup gives the daemon one (see `DemoDaemonSetup.screen`).
+    private var screen: DemoScreen?
+    /// How many times the app asked the screen to stop.
+    public private(set) var screenStopCalls = 0
 
     public init(setup: DemoDaemonSetup = DemoDaemonSetup()) {
         self.setup = setup
+        self.screen = setup.screen
         let (stream, continuation) = AsyncThrowingStream.makeStream(
             of: String.self, throwing: Error.self, bufferingPolicy: .unbounded)
         self.continuation = continuation
@@ -285,22 +306,69 @@ public actor DemoDaemonTransport: RPCTransport {
         case "approvals.resolve", "forms.answer", "integrations.request_decline", "agents.send", "agents.interrupt":
             // The answer is accepted; the event that follows (`followUp`) is what the app folds in.
             return .success("{}")
-        case "screen.status":
+        case "screen.status", "screen.start", "screen.stop", "screen.control":
+            return answerScreen(method, params)
+        default:
+            return .failure(RPCError(code: RPCError.methodNotFound, message: "unknown method \(method)"))
+        }
+    }
+
+    /// The `screen.*` calls: a Mac has no screen; a demo Linux server has one that starts, stops and changes hands.
+    private func answerScreen(_ method: String, _ params: [String: Any]) -> Result<String, RPCError> {
+        guard var state = screen else {
             return .failure(
                 RPCError(
                     code: -32025, message: "the server screen needs Linux (Xvfb and x11vnc)",
                     data: .object(["reason": .string("unsupported")])))
-        default:
-            return .failure(RPCError(code: RPCError.methodNotFound, message: "unknown method \(method)"))
         }
+        switch method {
+        case "screen.start":
+            state.running = true
+        case "screen.stop":
+            state.running = false
+            state.controller = "none"
+            screenStopCalls += 1
+            screen = state
+            return .success("{\"stopped\":true}")
+        case "screen.control":
+            guard state.running else {
+                return .failure(
+                    RPCError(
+                        code: -32025, message: "the screen is not running",
+                        data: .object(["reason": .string("not_running")])))
+            }
+            state.controller = params["holder"] as? String ?? "none"
+        default:
+            break
+        }
+        screen = state
+        var body: [String: Any] = ["running": state.running]
+        if state.running {
+            body["display"] = 90
+            body["width"] = 1280
+            body["height"] = 800
+            body["vnc_port"] = 57878
+            body["vnc_password"] = "demo1234"
+            body["started_at"] = startedAt
+            body["controller"] = state.controller == "none" ? NSNull() : state.controller
+            body["idle_ms"] = 0
+        }
+        return .success(DemoJSON.text(body))
+    }
+
+    /// Who holds the demo screen's controls, as an agent's tool call would set it.
+    public func setScreen(_ state: DemoScreen) {
+        screen = state
     }
 
     // MARK: daemon and runtimes
 
     private func daemonInfo(now: Int64) -> [String: Any] {
         [
-            "version": DemoDaemon.version, "hostname": setup.hostname, "os": "macos", "arch": "aarch64",
-            "pid": 4242, "started_at": startedAt, "last_seq": eventSeq, "features": DemoDaemon.features,
+            "version": DemoDaemon.version, "hostname": setup.hostname, "os": setup.screen == nil ? "macos" : "linux",
+            "arch": "aarch64",
+            "pid": 4242, "started_at": startedAt, "last_seq": eventSeq,
+            "features": setup.screen == nil ? DemoDaemon.features : DemoDaemon.features + ["screen"],
             "last_restore": NSNull(), "safe_mode": false, "safe_mode_error": NSNull(),
             "update": ["available": false, "checked_at": now, "current": DemoDaemon.version, "latest": DemoDaemon.version],
         ]
