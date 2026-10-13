@@ -3,6 +3,7 @@ import BanditoL10n
 import Foundation
 import Testing
 
+@testable import BanditoKit
 @testable import BanditoUI
 
 /// A scheduled run and a quiet turn are each one line of the thread: their rows, what the lines say, and that folded

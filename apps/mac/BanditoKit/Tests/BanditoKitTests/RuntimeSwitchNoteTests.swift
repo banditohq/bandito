@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import BanditoUI
+@testable import BanditoKit
 
 @Suite struct RuntimeSwitchNoteTests {
     static let vladivostok = TimeZone(identifier: "Asia/Vladivostok")!
