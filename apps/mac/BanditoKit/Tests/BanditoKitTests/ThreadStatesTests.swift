@@ -59,7 +59,7 @@ import Testing
         #expect(box.lastMessageHead == "Earlier reply")
         #expect(!fires({ _ = box.lastMessageHead }) { box.thread.items[1] = .streaming(text: "Hello wor") })
         // After the interval the latest text is written (waited for: the main actor may be busy with other tests).
-        for _ in 0..<100 where box.lastMessageHead != "Hello wor" {
+        for _ in 0..<1500 where box.lastMessageHead != "Hello wor" {
             try await Task.sleep(for: .milliseconds(20))
         }
         #expect(box.lastMessageHead == "Hello wor")

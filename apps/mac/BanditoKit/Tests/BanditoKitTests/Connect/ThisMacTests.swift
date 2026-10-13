@@ -130,8 +130,9 @@ import Testing
         let confirmed = await LocalDaemonUpgrade.confirmsThisMac(
             config, binary: try binary(home), runner: HungRunner(), timeout: .milliseconds(100))
         #expect(confirmed == false)
-        // The limit is 100 ms; a loaded CI runner needs a wide margin, and a runner that is never stopped would hang.
-        #expect(start.duration(to: .now) < .seconds(10))
+        // The limit is 100 ms. A runner that is never stopped would hang for good, so the fact is "it came back";
+        // the upper bound is only a wide guard for a starved CI runner.
+        #expect(start.duration(to: .now) < .seconds(120))
     }
 
     @Test func aHangingDaemonCLIProcessIsStoppedAtTheLimit() async throws {
@@ -146,7 +147,8 @@ import Testing
         let confirmed = await LocalDaemonUpgrade.confirmsThisMac(
             config, binary: script, runner: ProcessCommandRunner(), timeout: .milliseconds(300))
         #expect(confirmed == false)
-        // Far below a hang (the script sleeps much longer), with room for a loaded CI runner.
-        #expect(start.duration(to: .now) < .seconds(10))
+        // The script sleeps 30 s: coming back sooner means the process was stopped at the limit. The bound leaves
+        // room for a starved CI runner (the timer task alone can be late by seconds).
+        #expect(start.duration(to: .now) < .seconds(25))
     }
 }

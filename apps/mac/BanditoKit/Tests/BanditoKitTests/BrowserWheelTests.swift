@@ -193,9 +193,10 @@ import Testing
         var total = 0.0
         let sender = WheelSender(interval: .milliseconds(5)) { total += $0.deltaY }
         sender.add(x: 1, y: 1, deltaX: 0, deltaY: 10, modifiers: [])
-        try await Task.sleep(for: .milliseconds(60))
+        for _ in 0..<1000 where !(total == 10 && sender.isIdle) { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(total == 10)
         sender.add(x: 1, y: 1, deltaX: 0, deltaY: 5, modifiers: [])
-        try await Task.sleep(for: .milliseconds(60))
+        for _ in 0..<1000 where total != 15 { try await Task.sleep(for: .milliseconds(10)) }
         #expect(total == 15)
     }
 
@@ -208,7 +209,7 @@ import Testing
         #expect(total == 0)
         sender.add(x: 1, y: 1, deltaX: 0, deltaY: 7, modifiers: [])
         // A busy CI runner can be late by far more than one interval: wait for the delivery, up to 2 s.
-        for _ in 0..<100 where total != 7 {
+        for _ in 0..<1000 where total != 7 {
             try await Task.sleep(for: .milliseconds(20))
         }
         #expect(total == 7)

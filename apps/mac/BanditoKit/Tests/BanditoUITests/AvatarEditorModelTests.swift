@@ -30,7 +30,7 @@ import Testing
     }
 
     private func waitUntil(_ condition: () -> Bool) async {
-        for _ in 0..<200 where !condition() {
+        for _ in 0..<3000 where !condition() {
             try? await Task.sleep(for: .milliseconds(10))
         }
     }
