@@ -19,3 +19,9 @@ jobs:
       - uses: actions/checkout@v5
       - name: Validate strings and generated files
         run: python3 i18n/build.py --check
+      - name: Validate the "What's new" notes
+        run: python3 scripts/check_release_notes.py
+      # A release PR (branch release/X.Y.Z) must carry the notes of the version it ships.
+      - name: Require the notes of the released version
+        if: startsWith(github.head_ref || github.ref_name, 'release/')
+        run: python3 scripts/check_release_notes.py --require-current

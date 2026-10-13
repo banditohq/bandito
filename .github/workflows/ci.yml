@@ -38,6 +38,8 @@ jobs:
               - 'brand/tokens/**'
               - 'guide/**'
               - 'scripts/check_guide.py'
+              - 'release-notes/**'
+              - 'scripts/check_release_notes.py'
             daemon:
               - 'daemon/**'
             deps:
