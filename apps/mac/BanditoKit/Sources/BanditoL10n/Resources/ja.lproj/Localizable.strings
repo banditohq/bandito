@@ -960,7 +960,7 @@
 "ios.chat.discard" = "メッセージを削除";
 "ios.chat.empty.message" = "%1$@にタスクを頼むか、質問してください。返信はここに表示されます。";
 "ios.chat.empty.title" = "%1$@と始めましょう";
-"ios.chat.failed.gaveUp" = "何度か試しましたが送れませんでした";
+"ios.chat.failed.gaveUp" = "届いた可能性があります。再試行する前にチャットを確認してください";
 "ios.chat.failed.insecure" = "接続が安全ではありません";
 "ios.chat.failed.key" = "このiPhoneを接続し直してください";
 "ios.chat.header.offline" = "接続なし";

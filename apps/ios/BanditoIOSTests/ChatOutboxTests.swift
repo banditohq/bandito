@@ -231,6 +231,33 @@ import Testing
         #expect(harness.sent == ["unsure", "unsure"])
     }
 
+    @Test func aGivenUpMessageThatTheThreadHasIsNotSentAgainByTheRetry() async {
+        let harness = Harness()
+        harness.failures = (0..<10).map { _ in RPCError(code: RPCError.disconnected, message: "closed") }
+        let (server, outbox) = await connected(harness: harness)
+        outbox.enqueue(serverID: server.id, agentID: "a1", text: "it came")
+        await waitUntil { outbox.items(serverID: server.id, agentID: "a1").first?.state == .failed }
+        let sends = harness.sent.count
+        // The daemon had it after all: its event shows up when the person looks.
+        echo(server, "it came", seq: 70)
+        outbox.releaseEchoes(serverID: server.id, agentID: "a1", thread: server.thread(for: "a1"))
+        #expect(outbox.items(serverID: server.id, agentID: "a1").isEmpty, "let go as delivered")
+        // And one that is still there when the person presses "Send again": the thread is read first.
+        outbox.enqueue(serverID: server.id, agentID: "a1", text: "late echo")
+        await waitUntil { outbox.items(serverID: server.id, agentID: "a1").first?.state == .failed }
+        let after = harness.sent.count
+        harness.failures = []
+        harness.onRead = { server, _ in
+            self.echo(server, "late echo", seq: 71)
+            return true
+        }
+        outbox.retry(outbox.items(serverID: server.id, agentID: "a1")[0].id)
+        await waitUntil { outbox.items(serverID: server.id, agentID: "a1").isEmpty }
+        #expect(sends >= SendBackoff.maxAttempts)
+        #expect(harness.sent.count == after, "not sent again")
+        #expect(harness.reads.count >= 1)
+    }
+
     @Test func aMessageWithTheSameTextWaitsForTheEchoOfTheOneBefore() async {
         let harness = Harness()
         harness.holdLongSleeps = true

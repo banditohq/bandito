@@ -220,4 +220,37 @@ import Testing
         let values = try url.resourceValues(forKeys: [.isExcludedFromBackupKey])
         #expect(values.isExcludedFromBackup == true)
     }
+
+    @Test func anUncertainOrGivenUpMessageIsLetGoWhenItsEchoShowsLater() {
+        var uncertain = item("maybe")
+        uncertain.state = .uncertain
+        uncertain.baseline = 0
+        var gaveUp = item("tired")
+        gaveUp.state = .failed
+        gaveUp.failureKind = .gaveUp
+        var refused = item("refused")
+        refused.state = .failed
+        refused.failureKind = .refused
+        let thread = [userItem("maybe", id: "s1"), userItem("tired", id: "s2"), userItem("refused", id: "s3")]
+        #expect(SendQueue.hasEcho(uncertain, in: thread))
+        #expect(SendQueue.hasEcho(gaveUp, in: thread))
+        // A refusal is not "maybe delivered": the daemon said no.
+        #expect(!SendQueue.hasEcho(refused, in: thread))
+        #expect(!SendQueue.hasEcho(uncertain, in: []))
+    }
+
+    @Test func aManualRetryOfAnUncertainOrGivenUpMessageReadsTheThreadFirst() {
+        var queue = SendQueue()
+        let one = item("x"), two = item("y")
+        queue.enqueue(one)
+        queue.enqueue(two)
+        queue.begin(one.id, baseline: 0)
+        queue.uncertain(one.id)
+        queue.retry(one.id)
+        #expect(queue.items[0].state == .waiting && queue.items[0].maybeDelivered)
+        queue.begin(two.id, baseline: 0)
+        queue.refused(two.id, reason: "no")
+        queue.retry(two.id)
+        #expect(!queue.items[1].maybeDelivered)
+    }
 }

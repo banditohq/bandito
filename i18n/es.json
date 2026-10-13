@@ -3391,7 +3391,7 @@
   "ios.chat.approval.failed": "No se pudo enviar tu respuesta. Revisa la conexión e inténtalo de nuevo.",
   "ios.chat.failed.key": "Vuelve a conectar este iPhone",
   "ios.chat.failed.insecure": "La conexión no es segura",
-  "ios.chat.failed.gaveUp": "No salió tras varios intentos",
+  "ios.chat.failed.gaveUp": "Puede que haya llegado: revisa el chat antes de reintentar",
   "ios.chat.uncertain": "No se sabe si llegó",
   "ios.chat.camera.denied": "Bandito no puede usar la cámara. Permítelo en Ajustes de iOS → Bandito."
 }

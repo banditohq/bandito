@@ -960,7 +960,7 @@
 "ios.chat.discard" = "Удалить сообщение";
 "ios.chat.empty.message" = "Дайте %1$@ задачу или задайте вопрос. Ответ появится здесь.";
 "ios.chat.empty.title" = "Начните разговор с %1$@";
-"ios.chat.failed.gaveUp" = "Не вышло после нескольких попыток";
+"ios.chat.failed.gaveUp" = "Возможно, дошло — проверьте чат перед повтором";
 "ios.chat.failed.insecure" = "Соединение не защищено";
 "ios.chat.failed.key" = "Подключите iPhone заново";
 "ios.chat.header.offline" = "Нет связи";

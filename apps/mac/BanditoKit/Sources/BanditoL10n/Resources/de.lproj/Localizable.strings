@@ -960,7 +960,7 @@
 "ios.chat.discard" = "Nachricht löschen";
 "ios.chat.empty.message" = "Geben Sie %1$@ eine Aufgabe oder stellen Sie eine Frage. Die Antwort erscheint hier.";
 "ios.chat.empty.title" = "Beginnen Sie mit %1$@";
-"ios.chat.failed.gaveUp" = "Nach mehreren Versuchen aufgegeben";
+"ios.chat.failed.gaveUp" = "Möglicherweise angekommen – prüfen Sie den Chat vor einem neuen Versuch";
 "ios.chat.failed.insecure" = "Die Verbindung ist nicht sicher";
 "ios.chat.failed.key" = "Verbinden Sie dieses iPhone erneut";
 "ios.chat.header.offline" = "Keine Verbindung";

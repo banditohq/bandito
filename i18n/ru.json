@@ -3476,7 +3476,7 @@
   "ios.chat.approval.failed": "Не удалось отправить ответ. Проверьте связь и попробуйте ещё раз.",
   "ios.chat.failed.key": "Подключите iPhone заново",
   "ios.chat.failed.insecure": "Соединение не защищено",
-  "ios.chat.failed.gaveUp": "Не вышло после нескольких попыток",
+  "ios.chat.failed.gaveUp": "Возможно, дошло — проверьте чат перед повтором",
   "ios.chat.uncertain": "Не уверены, дошло ли",
   "ios.chat.camera.denied": "Bandito не может пользоваться камерой. Разрешите это в Настройках iOS → Bandito."
 }

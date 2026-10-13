@@ -235,14 +235,17 @@ public struct SendQueue: Codable, Equatable, Sendable {
     }
 
     /// The person tries a refused message again, or sends an uncertain one once more.
+    /// A message that was uncertain or given up may be in the thread already: it stays "maybe delivered", so the thread is
+    /// read before it is sent again.
     public mutating func retry(_ id: String) {
         update(id) {
+            let maybe = $0.state == .uncertain || ($0.state == .failed && $0.failureKind == .gaveUp)
             $0.state = .waiting
             $0.failure = nil
             $0.failureKind = nil
             $0.attempts = 0
             $0.retryAt = nil
-            $0.maybeDelivered = false
+            $0.maybeDelivered = maybe
         }
     }
 
@@ -280,9 +283,11 @@ public struct SendQueue: Codable, Equatable, Sendable {
         echoCount(text: item.text, in: items) > item.baseline
     }
 
-    /// Whether the person's message has come back as an event after the daemon answered.
+    /// Whether the person's message has come back as an event: after the daemon answered, or later for a message the
+    /// queue was not sure about (`uncertain`, or given up after lost answers), which the thread shows it did have.
     public static func hasEcho(_ item: QueuedSend, in items: [ThreadItem]) -> Bool {
-        item.state == .sent && isDelivered(item, in: items)
+        let counts = item.state == .sent || item.state == .uncertain || (item.state == .failed && item.failureKind == .gaveUp)
+        return counts && isDelivered(item, in: items)
     }
 }
 
