@@ -45,7 +45,9 @@ end-to-end encrypted session (Noise) through it, so the relay never sees command
   sends `ping` to both sides every 25 s; both the daemon and the phone answer `pong` and send their own `ping` every
   25 s; 60 s of silence closes with 4002.
 - Close codes: 4001 replaced by a newer server connection, 4002 silence timeout, 4003 registration deleted, 4004 the
-  server left (sent to phones), 4008 monthly traffic limit, 4009 message over 1 MiB. Before the upgrade: 401 bad
+  server left (sent to phones), 4008 monthly traffic limit (checked at 95%), 4009 message over 1 MiB or any text but
+  `ping`/`pong`, 4010 too many messages (200/s per phone socket, 2000/s per server socket), 4011 a phone stream sent no
+  binary frame within 15 s of opening. Before the upgrade: 401 bad
   secret, 503 `{"error":"offline"}` (server not connected or unknown sid), 429 `{"error":"too_many_streams"}` or
   `{"error":"rate"}`.
 - Phone: `GET wss://relay.bandito.dev/v1/client/<sid>` (no auth at the relay: the Noise session is the auth). If the
