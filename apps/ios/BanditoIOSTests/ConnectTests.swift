@@ -36,10 +36,10 @@ final class MemorySecrets: SecretStore, @unchecked Sendable {
 
 /// Counts what the fake pairing did.
 actor PairCalls {
-    var redeemed: [(PairRequest, String)] = []
+    var redeemed: [(PairRequest, String?)] = []
     var probed: [DirectHost] = []
     var revoked = 0
-    func redeem(_ request: PairRequest, _ pin: String) { redeemed.append((request, pin)) }
+    func redeem(_ request: PairRequest, _ pin: String?) { redeemed.append((request, pin)) }
     func probe(_ host: DirectHost) { probed.append(host) }
     func revoke() { revoked += 1 }
 }
@@ -117,7 +117,7 @@ actor PairCalls {
         #expect(await w.calls.redeemed.isEmpty, "nothing is sent before the button")
         w.model.confirmLink()
         await settle(w.model, until: isDone)
-        guard case .done(_, let name) = w.model.phase else {
+        guard case .done(_, let name, _) = w.model.phase else {
             Issue.record("not done: \(w.model.phase)")
             return
         }
@@ -700,5 +700,46 @@ actor AsyncGate {
         isOpen = true
         for waiter in waiting { waiter.resume() }
         waiting = []
+    }
+
+    // MARK: relay
+
+    static let sid = "abcdefghijklmnopqrstuvwxyz"
+    static let nk = Base64URL.encode(Data(repeating: 5, count: 32))
+    static let cloudLink = "bandito://pair?v=1&code=\(code)&name=Studio&relay=relay.bandito.dev/\(sid)&nk=\(nk)"
+
+    @Test func aRelayOnlyLinkIsConfirmedAndConnectsWithoutAPin() async {
+        let w = world()
+        w.model.submitLink(Self.cloudLink, origin: .scan)
+        guard case .confirmLink(let request, _) = w.model.phase else {
+            Issue.record("not shown first: \(w.model.phase)")
+            return
+        }
+        #expect(request.isRelayOnly)
+        #expect(await w.calls.redeemed.isEmpty, "nothing is sent before the button")
+        w.model.confirmLink()
+        await settle(w.model, until: isDone)
+        let calls = await w.calls.redeemed
+        #expect(calls.count == 1 && calls.first?.1 == nil && calls.first?.0.relay?.sid == Self.sid)
+    }
+
+    @Test func theCloudsFailuresHaveTheirOwnWords() {
+        let offline = RPCError(code: RPCError.relay, message: "relay_offline: x")
+        #expect(PairFailure.classify(offline) == .serverOffline)
+        #expect(PairFailure.classify(RPCError(code: RPCError.relay, message: "relay_limit: x")) == .cloudLimit)
+        #expect(PairFailure.classify(RPCError(code: RPCError.relay, message: "relay_key_mismatch: x")) == .cloudKey)
+        #expect(PairFailure.classify(RPCError(code: RPCError.rateLimited, message: "relay_busy: x")) == .tooManyAttempts)
+        #expect(PairProblemText(.failure(.serverOffline)).message == L10n.Ios.Connect.Error.offline)
+        #expect(PairProblemText(.failure(.cloudKey)).isAlarm)
+    }
+
+    @Test func aServerOnTheCloudSaysSoInTheList() {
+        let config = ServerConfig(
+            name: "Studio",
+            endpoint: .reachable(hosts: [], fingerprint: nil, relay: RelayRoute(host: "relay.bandito.dev", sid: Self.sid), noiseKey: Self.nk),
+            token: "t")
+        let facts = ServerRowFacts.make(ServerModel(config: config))
+        #expect(facts.via == .cloud && facts.addresses.isEmpty)
+        #expect(facts.viaTitle == L10n.Ios.Settings.Servers.Via.cloud)
     }
 }

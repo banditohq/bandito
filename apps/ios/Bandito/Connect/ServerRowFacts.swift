@@ -5,7 +5,7 @@ import Foundation
 /// What the Servers list of Settings shows about one server, from its live model.
 struct ServerRowFacts: Equatable {
     enum Via: Equatable {
-        case tailscale, lan
+        case tailscale, lan, cloud
     }
 
     var name: String
@@ -20,10 +20,14 @@ struct ServerRowFacts: Equatable {
     static func make(_ server: ServerModel, memory: DirectHostMemory = .shared) -> ServerRowFacts {
         var hosts: [String] = []
         var via = Via.lan
-        if case .direct(let all, let fingerprint) = server.config.endpoint {
-            hosts = all
-            let used = memory.lastGood(for: fingerprint).flatMap { all.contains($0) ? $0 : nil } ?? all.first
+        if let direct = server.config.endpoint.directPart {
+            hosts = direct.hosts
+            let used = memory.lastGood(for: direct.fingerprint).flatMap { direct.hosts.contains($0) ? $0 : nil } ?? direct.hosts.first
             if let used, DirectHost.parse(used)?.isTailscale == true { via = .tailscale }
+        }
+        // What the open connection really uses wins; a server that is only on the cloud says so before it connects too.
+        if server.connectionRoute == .cloud || (server.connectionRoute == nil && server.config.endpoint.directPart == nil && server.config.endpoint.relayPart != nil) {
+            via = .cloud
         }
         return ServerRowFacts(name: server.config.name, isOnline: server.state == .connected, via: via, addresses: hosts)
     }
@@ -32,6 +36,7 @@ struct ServerRowFacts: Equatable {
         switch via {
         case .tailscale: L10n.Ios.Settings.Servers.Via.tailscale
         case .lan: L10n.Ios.Settings.Servers.Via.lan
+        case .cloud: L10n.Ios.Settings.Servers.Via.cloud
         }
     }
 }

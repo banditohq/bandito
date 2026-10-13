@@ -156,10 +156,13 @@ public enum PairInput {
 public struct PairedDevice: Sendable {
     public var config: ServerConfig
     public var deviceID: String
+    /// The way the pairing got through: a direct address or Bandito Relay.
+    public var route: ConnectionRoute?
 
-    public init(config: ServerConfig, deviceID: String) {
+    public init(config: ServerConfig, deviceID: String, route: ConnectionRoute? = nil) {
         self.config = config
         self.deviceID = deviceID
+        self.route = route
     }
 }
 
@@ -171,6 +174,14 @@ public enum PairFailure: Sendable, Hashable {
     case tooManyAttempts
     /// The address answers with a certificate that is not the one pinned: the loudest warning.
     case fingerprintMismatch
+    /// Bandito Relay says the server is not connected to it: the Mac is off or Bandito is not running there.
+    case serverOffline
+    /// The monthly traffic limit of the cloud.
+    case cloudLimit
+    /// The peer behind the relay is not the server whose key the link carries.
+    case cloudKey
+    /// The relay itself could not be reached (no internet on the phone).
+    case cloudUnreachable
     /// Nothing answered: the server is off, the address is wrong, or the phone is not on the same network.
     case unreachable
     /// Anything else.
@@ -181,6 +192,12 @@ public enum PairFailure: Sendable, Hashable {
             switch rpc.code {
             case RPCError.unauthorized: return .codeRejected
             case RPCError.rateLimited: return .tooManyAttempts
+            case RPCError.relay:
+                let reason = FailureKind.classify(rpc)
+                if reason == .reason(RelayFailure.offline) { return .serverOffline }
+                if reason == .reason(RelayFailure.limit) { return .cloudLimit }
+                if reason == .reason(RelayFailure.keyMismatch) { return .cloudKey }
+                return .other
             case RPCError.fingerprintMismatch.code: return .fingerprintMismatch
             case RPCError.disconnected, RPCError.timedOut: return .unreachable
             default: return .other
@@ -262,7 +279,7 @@ public enum DevicePairing {
             throw PairInputError.badFingerprint
         }
         let config = ServerConfig(name: name, endpoint: endpoint, token: paired.token, noiseSecret: secret)
-        return PairedDevice(config: config, deviceID: paired.device.id)
+        return PairedDevice(config: config, deviceID: paired.device.id, route: await transport.connectedRoute)
     }
 
     /// Takes a device back off the daemon (`devices.revoke`) over a connection its own token opens. For a token the app

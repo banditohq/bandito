@@ -30,7 +30,7 @@ final class PairModel {
         /// An address typed without a fingerprint: the one the server presents, to compare with the Mac's.
         case trust(PairRequest, fingerprint: String)
         case working
-        case done(serverID: UUID, name: String)
+        case done(serverID: UUID, name: String, route: ConnectionRoute?)
         case failed(PairProblem, back: Back)
     }
 
@@ -41,7 +41,7 @@ final class PairModel {
 
     private(set) var phase: Phase
     let session: ServerSession
-    private let redeem: @Sendable (PairRequest, String, String) async throws -> PairedDevice
+    private let redeem: @Sendable (PairRequest, String?, String) async throws -> PairedDevice
     private let probe: @Sendable (DirectHost) async -> String?
     private let revoke: @Sendable (PairedDevice) async -> Void
     private let deviceName: String
@@ -51,7 +51,7 @@ final class PairModel {
 
     init(
         session: ServerSession, startsOnTypedForm: Bool = false, deviceName: String = UIDevice.current.name,
-        redeem: @escaping @Sendable (PairRequest, String, String) async throws -> PairedDevice = { request, fingerprint, name in
+        redeem: @escaping @Sendable (PairRequest, String?, String) async throws -> PairedDevice = { request, fingerprint, name in
             try await DevicePairing.redeem(request, fingerprint: fingerprint, deviceName: name)
         },
         probe: @escaping @Sendable (DirectHost) async -> String? = { await FingerprintProbe.fetch(host: $0) },
@@ -144,8 +144,8 @@ final class PairModel {
 
     /// "Connect" on a link that came from outside.
     func confirmLink() {
-        guard case .confirmLink(let request, _) = phase, let pin = request.fingerprint else { return }
-        start(request, fingerprint: pin, back: .choose)
+        guard case .confirmLink(let request, _) = phase, request.fingerprint != nil || request.isRelayOnly else { return }
+        start(request, fingerprint: request.fingerprint, back: .choose)
     }
 
     /// "They match": the fingerprint the person compared becomes the pin.
@@ -156,7 +156,7 @@ final class PairModel {
 
     /// The name the person settled on, after "Connected".
     func finish(name: String) {
-        guard case .done(let id, _) = phase else { return }
+        guard case .done(let id, _, _) = phase else { return }
         session.rename(id, to: name)
     }
 
@@ -168,11 +168,11 @@ final class PairModel {
     // MARK: Pairing
 
     private func start(_ request: PairRequest, back: Back) {
-        guard let pin = request.fingerprint else { return }
-        start(request, fingerprint: pin, back: back)
+        guard request.fingerprint != nil || request.isRelayOnly else { return }
+        start(request, fingerprint: request.fingerprint, back: back)
     }
 
-    private func start(_ request: PairRequest, fingerprint: String, back: Back) {
+    private func start(_ request: PairRequest, fingerprint: String?, back: Back) {
         phase = .working
         task?.cancel()
         task = Task { [redeem, revoke, deviceName] in
@@ -186,13 +186,16 @@ final class PairModel {
                     self.phase = .failed(.saveKey, back: back)
                     return
                 }
-                self.phase = .done(serverID: paired.config.id, name: paired.config.name)
+                self.phase = .done(serverID: paired.config.id, name: paired.config.name, route: paired.route)
             } catch {
                 guard !Task.isCancelled else { return }
                 if let input = error as? PairInputError {
                     self.phase = .failed(.input(input), back: back)
                 } else {
-                    self.phase = .failed(.failure(PairFailure.classify(error)), back: back)
+                    var failure = PairFailure.classify(error)
+                    // No internet on the phone looks like "no answer"; for a link with the relay it is the relay that is out of reach.
+                    if failure == .unreachable, request.relay != nil { failure = .cloudUnreachable }
+                    self.phase = .failed(.failure(failure), back: back)
                 }
             }
         }

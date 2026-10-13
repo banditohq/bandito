@@ -56,7 +56,7 @@ struct ServerStore {
             var clean = config
             // Names from old or moved records are cleaned like every name.
             var fallback = "Server"
-            if case .direct(let hosts, _) = config.endpoint, let first = hosts.first { fallback = first }
+            if let first = config.endpoint.directPart?.hosts.first ?? config.endpoint.relayPart?.route.host { fallback = first }
             clean.name = ServerNameRules.clean(config.name, fallback: fallback)
             return clean
         }

@@ -101,6 +101,13 @@ final class ServerSession {
                 guard let token, let text = String(data: token, encoding: .utf8), !text.isEmpty else { continue }
                 var withToken = config
                 withToken.token = text
+                // The key this phone speaks to the relay with. Without it the relay cannot be used, direct addresses still can.
+                if config.endpoint.relayPart != nil,
+                    let key = (try? secrets.load(account: Self.noiseAccount(config.id))).flatMap({ $0 }),
+                    let keyText = String(data: key, encoding: .utf8)
+                {
+                    withToken.noiseSecret = keyText
+                }
                 start(withToken)
             }
         }
@@ -135,16 +142,19 @@ final class ServerSession {
         guard loaded else { throw SessionError.notReady }
         var config = config
         var replaced: UUID?
-        if case .direct(_, let fingerprint) = config.endpoint,
-            let same = servers.first(where: { Self.fingerprint(of: $0.config) == fingerprint })
-        {
+        if let same = servers.first(where: { config.endpoint.isSameServer(as: $0.config.endpoint) }) {
             config.id = same.id
             replaced = same.id
         }
         // The token first: when the Keychain refuses it, nothing else changes (an old server stays as it was).
         do {
             try secrets.save(Data(token.utf8), account: config.id.uuidString)
+            if let noise = config.noiseSecret {
+                try secrets.save(Data(noise.utf8), account: Self.noiseAccount(config.id))
+            }
         } catch {
+            // Neither half stays: a token without its key (or the other way round) would only fail later.
+            try? secrets.save(nil, account: Self.noiseAccount(config.id))
             throw SessionError.keychain
         }
         if let replaced { drop(replaced) }
@@ -184,15 +194,17 @@ final class ServerSession {
         let config = server.config
         var withToken = config
         withToken.token = (try? secrets.load(account: id.uuidString)).flatMap { $0 }.flatMap { String(data: $0, encoding: .utf8) }
+        withToken.noiseSecret = (try? secrets.load(account: Self.noiseAccount(id))).flatMap { $0 }.flatMap { String(data: $0, encoding: .utf8) }
         do {
             try secrets.save(nil, account: id.uuidString)
         } catch {
             return .keychainRefused
         }
+        try? secrets.save(nil, account: Self.noiseAccount(id))
         await server.disconnect()
         var revoked = false
-        if case .direct = config.endpoint { revoked = await revokeSelf(withToken) }
-        if case .direct(_, let fingerprint) = config.endpoint { DirectHostMemory.shared.forget(fingerprint) }
+        if config.endpoint.isPaired { revoked = await revokeSelf(withToken) }
+        if let fingerprint = config.endpoint.pinnedFingerprint { DirectHostMemory.shared.forget(fingerprint) }
         drop(id)
         forgetCursor(id)
         save()
@@ -208,6 +220,7 @@ final class ServerSession {
     func remove(_ id: UUID) {
         guard drop(id) else { return }
         try? secrets.save(nil, account: id.uuidString)
+        try? secrets.save(nil, account: Self.noiseAccount(id))
         forgetCursor(id)
         // What was written to this server and not sent stays with it no longer.
         ChatOutbox.shared.forget(serverID: id)
@@ -225,7 +238,10 @@ final class ServerSession {
 
     /// Forgets everything.
     func reset() {
-        for config in store.load() { try? secrets.save(nil, account: config.id.uuidString) }
+        for config in store.load() {
+            try? secrets.save(nil, account: config.id.uuidString)
+            try? secrets.save(nil, account: Self.noiseAccount(config.id))
+        }
         for server in servers {
             ChatOutbox.shared.forget(serverID: server.id)
             Task { await server.disconnect() }
@@ -261,10 +277,8 @@ final class ServerSession {
         store.save(servers.map(\.config))
     }
 
-    private static func fingerprint(of config: ServerConfig) -> String? {
-        if case .direct(_, let fingerprint) = config.endpoint { return fingerprint }
-        return nil
-    }
+    /// The Keychain account of a server's relay key, next to the token's (`<id>`).
+    static func noiseAccount(_ id: UUID) -> String { "\(id.uuidString).noise" }
 }
 
 #if targetEnvironment(simulator)
