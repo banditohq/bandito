@@ -16,11 +16,22 @@ import Testing
         return (world, crew)
     }
 
+    /// Waits until `condition` holds, up to `seconds`: the step checks its folder against the server in the
+    /// background, and a loaded CI runner can take seconds for it. True when it held in time.
+    private func eventually(seconds: Double = 15, _ condition: () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + .seconds(seconds)
+        while ContinuousClock.now < deadline {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return condition()
+    }
+
     @Test func aTeamThatFailedInTheMiddleIsFinishedWithoutDoublingAnything() async throws {
         let (world, crew) = await ready()
         defer { Task { await world.stop() } }
         #expect(crew.choice == .team("web-project"))
-        #expect(crew.canCreate)
+        #expect(await eventually { crew.canCreate })
 
         // The tester cannot be made the first time.
         await world.transport.failBundleEntry(templateID: "qa-tester", failing: true)
@@ -55,8 +66,7 @@ import Testing
         crew.select(.single)
         crew.setName("Forge")
         // The default folder is checked against the folders that exist first.
-        try? await Task.sleep(for: .milliseconds(300))
-        #expect(crew.canCreate)
+        #expect(await eventually { crew.canCreate })
         let agent = await crew.create()
         #expect(agent?.name == "Forge")
         #expect(crew.isDone)
@@ -106,7 +116,7 @@ import Testing
             server: world.server, subscriptions: world.session!.subscriptions,
             createdIDs: { onboarding.createdAgentIDs }, noteCreated: { onboarding.rememberCreated($0) })
         await again.start()
-        try? await Task.sleep(for: .milliseconds(400))
+        #expect(await eventually { again.existingMade.count == 2 && again.canCreate })
         #expect(again.choice == .team("web-project"))
         #expect(again.isResumed)
         #expect(again.existingMade.count == 2)
@@ -131,7 +141,7 @@ import Testing
         #expect(!crew.isResumed)
         #expect(!crew.isDone)
         // Hiring makes this introduction's own three, and those are what the step remembers.
-        try? await Task.sleep(for: .milliseconds(400))
+        #expect(await eventually { crew.canCreate })
         _ = await crew.create()
         #expect(crew.isDone)
         #expect(world.server.agents.count == 6)
