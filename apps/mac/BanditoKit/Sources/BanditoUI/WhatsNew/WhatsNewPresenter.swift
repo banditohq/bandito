@@ -21,8 +21,10 @@ struct WhatsNewPresenter: ViewModifier {
     private var trigger: Trigger {
         Trigger(
             loaded: library != nil, introductionActive: onboarding.isActive,
-            dialogOpen: telemetry.showsNotice || telemetry.showsCrashQuestion || app.notificationQuestion != nil
-                || router.sheet != nil)
+            // The statistics notice counts only while it is really on screen: one that waits for the first reply
+            // would hold the notes back until the middle of a conversation.
+            dialogOpen: (telemetry.showsNotice && RootView.noticeMayShow(router: router, onboarding: onboarding, app: app))
+                || telemetry.showsCrashQuestion || app.notificationQuestion != nil || router.sheet != nil)
     }
 
     func body(content: Content) -> some View {

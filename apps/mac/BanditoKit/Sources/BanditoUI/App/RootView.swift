@@ -18,6 +18,12 @@ public struct RootView: View {
     /// The statistics notice does not close the first chat: it waits for the first finished reply and an empty field,
     /// or the next launch (`ConsentTiming`).
     private var noticeMayShow: Bool {
+        Self.noticeMayShow(router: router, onboarding: onboarding, app: app)
+    }
+
+    /// Whether the statistics notice may be on screen now. Also read by `WhatsNewPresenter`, which waits only for a
+    /// notice that is really shown, not for one that is itself waiting.
+    static func noticeMayShow(router: Router, onboarding: OnboardingModel, app: AppModel) -> Bool {
         let draft = router.selectedAgentID.flatMap { router.drafts[$0] } ?? ""
         return ConsentTiming.mayShow(
             introductionActive: onboarding.isActive, introductionWasDoneAtLaunch: onboarding.wasDoneAtLaunch,
