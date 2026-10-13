@@ -148,6 +148,12 @@ public final class AccountHub {
     /// Where the session and the sync key are kept. The device keys live in `DeviceIdentityStore`.
     public let keys: SecretStore
 
+    /// The servers this Mac is connected to, for the access cycle. Set by the main window; nil in tests that do not need it.
+    @ObservationIgnored public var accessServers: (@MainActor () -> [ServerModel])?
+    /// What this Mac last wrote as phone records, so the blob is written again only when they change.
+    @ObservationIgnored private var publishedPhones: [UUID: SyncedPhone] = [:]
+    @ObservationIgnored private var responder: AccessResponder?
+    @ObservationIgnored private let accessLedger = AccessLedger()
     @ObservationIgnored private var watchTask: Task<Void, Never>?
     /// The first `prepare` in progress. Calls that come meanwhile wait for it, so the device identity is read once.
     @ObservationIgnored private var preparing: Task<AccountClient, Error>?
@@ -304,6 +310,9 @@ public final class AccountHub {
             log: { Logger.account.error("\($0, privacy: .public)") })
         pending = []
         signedIn = false
+        responder = nil
+        publishedPhones = [:]
+        if let accountID = session?.user.id { accessLedger.forget(accountID: accountID) }
         profile.clear()
         clearPicture()
         me = nil
@@ -311,16 +320,50 @@ public final class AccountHub {
 
     /// Writes this Mac's ssh servers into the account's sync blob, keeping the other servers and retrying on
     /// conflicts (see `ServerPublishing`). Errors reach the caller.
-    public func publishServers(_ configs: [ServerConfig]) async throws {
+    public func publishServers(_ configs: [ServerConfig], phones: [UUID: SyncedPhone]? = nil) async throws {
         _ = try await prepare()
         guard let store = syncStore else { throw AccountHubError.notReady }
-        var local = ServerSyncPayload.payload(for: configs)
+        let records = phones ?? publishedPhones
+        var local = ServerSyncPayload.payload(for: configs, phones: records, localDeviceID: me?.device.id)
         local.profile = await avatar.currentSyncedProfile()
         let stored = try await ServerPublishing.publish(
             local: local,
             fetch: { try await store.pull() },
             write: { payload in try await store.push(payload) })
         try await avatar.apply(stored.profile)
+        if let phones { publishedPhones = phones }
+    }
+
+    /// One round of "servers follow you": writes the phone records of the servers this Mac is connected to when they
+    /// changed, then answers the requests of the account's other devices (`AccessResponder`). Silent on failure: the
+    /// next round tries again. Does nothing without a session, a sync key or `accessServers`.
+    public func runAccessCycle(configs: [ServerConfig]) async {
+        guard signedIn, hasSyncKey, let provider = accessServers else { return }
+        do {
+            _ = try await prepare()
+            guard let store = syncStore, let client, let identity else { return }
+            let servers = provider()
+            let phones = await PhoneRecords.collect(from: servers)
+            if !phones.isEmpty, phones != publishedPhones {
+                try await publishServers(configs, phones: phones)
+            }
+            let responder = self.responder ?? AccessResponder(
+                sync: store, account: client, identity: identity, ledger: accessLedger)
+            self.responder = responder
+            try await responder.run(servers: servers)
+        } catch {
+            Logger.account.error("Access cycle: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// A device left the account: its device rows on the servers this Mac can reach are revoked (servers that are not
+    /// reachable now are cleaned when they are). Call after the account removed the device.
+    public func revokeAccess(of device: AccountDevice) async {
+        guard let provider = accessServers, let client, let identity, let store = syncStore else { return }
+        let responder = self.responder ?? AccessResponder(
+            sync: store, account: client, identity: identity, ledger: accessLedger)
+        self.responder = responder
+        await responder.revoke(deviceID: device.id, name: device.name, servers: provider())
     }
 
     /// Brings the profile picture in line with the sync blob. A newer copy in the blob is applied on this Mac; a newer
@@ -366,6 +409,9 @@ public final class AccountHub {
             while !Task.isCancelled {
                 guard self != nil else { return }
                 await self?.refreshPending()
+                if let hub = self, let configs = hub.accessServers?().map(\.config) {
+                    await hub.runAccessCycle(configs: configs)
+                }
                 try? await Task.sleep(for: .seconds(30))
             }
         }
