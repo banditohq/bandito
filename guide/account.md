@@ -13,6 +13,7 @@ The sheet that the profile button at the bottom of the sidebar opens, and that S
 4. To change your name, click it (or the pencil), type a new one and press Return or click the check; Escape or the cross keeps the old one.
 5. In This Mac, the code is the one to compare when you approve a new device; the icon next to it copies it.
 6. In Devices, to drop a device from the list, click Disconnect (Отключить) on its row.
+   Under the list, Connect iPhone (Подключить iPhone) opens a short wizard: it asks which server only when there are several, turns on Via the Bandito cloud (Через облако Bandito) by itself (or takes the one that is on), shows the QR code and the six words, and waits. When the iPhone connects it says Done, the iPhone is connected (Готово, iPhone подключён). Under the code, No app yet? Install Bandito from TestFlight (Нет приложения? Установите Bandito из TestFlight) opens the invitation. It needs a signed-in account and a connected server that is up to date.
 7. In Sync, Sync (Синхронизировать) sends your server list and photo now.
 8. Reset account (Reset account) signs the other devices out and erases the sync settings. Your servers and the agents on them stay as they are.
 9. Close the sheet with Close (Закрыть).
