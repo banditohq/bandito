@@ -105,6 +105,7 @@ struct ChatApprovalCard: View {
     }
 
     private func answer(_ allow: Bool) async {
+        guard !busy else { return }
         busy = true
         defer { busy = false }
         switch await onAnswer(allow, remember) {
@@ -191,6 +192,7 @@ struct ChatFormCard: View {
     }
 
     private func send(_ action: FormAction) async {
+        guard !busy else { return }
         var values: [String: JSONValue]?
         if action == .submit {
             switch FormAnswer.values(spec: row.spec, inputs: inputs) {
@@ -242,6 +244,7 @@ struct ChatConnectCard: View {
             }
             Button(L10n.Approval.deny) {
                 Task {
+                    guard !busy else { return }
                     busy = true
                     failed = !(await onDecline())
                     busy = false

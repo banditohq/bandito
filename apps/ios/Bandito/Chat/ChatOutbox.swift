@@ -91,6 +91,13 @@ final class ChatOutbox {
         return item
     }
 
+    /// Drops everything written to a server that is forgotten.
+    func forget(serverID: UUID) {
+        let mine = queue.items.filter { $0.serverID == serverID }.map(\.id)
+        guard !mine.isEmpty else { return }
+        change { queue in for id in mine { queue.remove(id) } }
+    }
+
     func retry(_ id: String) {
         guard let item = queue.items.first(where: { $0.id == id }) else { return }
         change { $0.retry(id) }

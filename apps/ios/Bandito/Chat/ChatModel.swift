@@ -225,12 +225,30 @@ final class ChatModel {
         return height
     }
 
-    /// A card says its height changed (an error line appeared in a form).
+    private var hostedChanges: [String: CGFloat] = [:]
+    private var hostedTask: Task<Void, Never>?
+
+    /// A card says its height changed (an error line appeared in a form). The change is taken a turn of the run loop
+    /// later and together with the others: the card says it while the list is being laid out, and the list must not
+    /// be changed inside its own layout.
     func hostedHeightChanged(rowID: String, to height: CGFloat) {
-        guard let row = rows.first(where: { $0.id == rowID }), abs((heights[rowID] ?? 0) - height) > 0.5 else { return }
-        hostedHeights["\(row.id)|\(row.version)"] = height
-        heights[rowID] = height
-        onUpdate?(ChatUpdate(rows: rows, heights: heights, changed: [], prepended: 0, initial: false))
+        guard abs((heights[rowID] ?? 0) - height) > 0.5 else { return }
+        hostedChanges[rowID] = height
+        guard hostedTask == nil else { return }
+        hostedTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            self.hostedTask = nil
+            var any = false
+            for (rowID, height) in self.hostedChanges {
+                guard let row = self.rows.first(where: { $0.id == rowID }), abs((self.heights[rowID] ?? 0) - height) > 0.5 else { continue }
+                self.hostedHeights["\(row.id)|\(row.version)"] = height
+                self.heights[rowID] = height
+                any = true
+            }
+            self.hostedChanges = [:]
+            if any { self.onUpdate?(ChatUpdate(rows: self.rows, heights: self.heights, changed: [], prepended: 0, initial: false)) }
+        }
     }
 
     // MARK: actions
