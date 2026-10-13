@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Sets (or checks) the Bandito version in the three places that must agree:
+# Sets (or checks) the Bandito version in the places that must agree:
 #   apps/mac/project.yml   MARKETING_VERSION
+#   apps/ios/project.yml   MARKETING_VERSION, in both targets (BanditoIOS and BanditoWidgets)
 #   daemon/Cargo.toml      [package] version
 #   daemon/Cargo.lock      the `bandito` package entry
 #
@@ -40,9 +41,10 @@ printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$' \
   || { echo "bump-version: '$version' is not X.Y.Z or X.Y.Z-beta.N" >&2; exit 2; }
 
 yml="$root/apps/mac/project.yml"
+ios="$root/apps/ios/project.yml"
 toml="$root/daemon/Cargo.toml"
 lock="$root/daemon/Cargo.lock"
-for f in "$yml" "$toml" "$lock"; do
+for f in "$yml" "$ios" "$toml" "$lock"; do
   [ -f "$f" ] || { echo "bump-version: missing $f" >&2; exit 1; }
 done
 
@@ -52,6 +54,21 @@ read_yml() {
   n="$(grep -cE '^[[:space:]]*MARKETING_VERSION:' "$yml" || true)"
   [ "$n" = 1 ] || { echo "bump-version: expected one MARKETING_VERSION in $yml, found $n" >&2; return 1; }
   grep -E '^[[:space:]]*MARKETING_VERSION:' "$yml" | sed -E 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([^"[:space:]]+)"?[[:space:]]*$/\1/'
+}
+# The iPhone app has two targets (BanditoIOS, BanditoWidgets); both must have the same version, and there must be
+# exactly two. A third target means this script needs a look, so it fails loudly.
+read_ios() {
+  awk '
+    /^[[:space:]]*MARKETING_VERSION:/ {
+      n++
+      v = $0
+      sub(/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?/, "", v)
+      sub(/"?[[:space:]]*$/, "", v)
+      if (n == 1) first = v
+      else if (v != first) differ = 1
+    }
+    END { if (n != 2 || differ) exit 1; print first }
+  ' "$ios" || { echo "bump-version: expected two MARKETING_VERSION in $ios (BanditoIOS, BanditoWidgets), equal to each other" >&2; return 1; }
 }
 read_toml() {
   awk '
@@ -71,19 +88,20 @@ read_lock() {
 
 if [ "$check" = 1 ]; then
   bad=0
-  for pair in "project.yml:$(read_yml)" "Cargo.toml:$(read_toml)" "Cargo.lock:$(read_lock)"; do
+  for pair in "mac/project.yml:$(read_yml)" "ios/project.yml:$(read_ios)" "Cargo.toml:$(read_toml)" "Cargo.lock:$(read_lock)"; do
     if [ "${pair#*:}" != "$version" ]; then
       echo "bump-version: ${pair%%:*} says ${pair#*:}, expected $version" >&2
       bad=1
     fi
   done
   [ "$bad" = 0 ] || exit 1
-  echo "all three files say $version"
+  echo "all four files say $version"
   exit 0
 fi
 
 # Read first (this fails on a malformed file before anything is written).
 read_yml > /dev/null
+read_ios > /dev/null
 read_toml > /dev/null
 read_lock > /dev/null
 
@@ -91,6 +109,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 sed -E "s/^([[:space:]]*MARKETING_VERSION:[[:space:]]*)\"?[^\"[:space:]]+\"?[[:space:]]*$/\1$version/" "$yml" > "$tmp/yml"
+sed -E "s/^([[:space:]]*MARKETING_VERSION:[[:space:]]*)\"?[^\"[:space:]]+\"?[[:space:]]*$/\1$version/" "$ios" > "$tmp/ios"
 awk -v v="$version" '
   /^\[/ { in_pkg = ($0 == "[package]") }
   in_pkg && !done && /^version[[:space:]]*=/ { print "version = \"" v "\""; done = 1; next }
@@ -104,11 +123,12 @@ awk -v v="$version" '
 ' "$lock" > "$tmp/lock"
 
 cat "$tmp/yml" > "$yml"
+cat "$tmp/ios" > "$ios"
 cat "$tmp/toml" > "$toml"
 cat "$tmp/lock" > "$lock"
 
 "$0" "$version" --check --root "$root" > /dev/null
-echo "version set to $version in project.yml, Cargo.toml, Cargo.lock"
+echo "version set to $version in apps/mac/project.yml, apps/ios/project.yml, daemon/Cargo.toml, daemon/Cargo.lock"
 # A release ships its "What's new" notes (release-notes/X.Y.Z.json, checked by scripts/check_release_notes.py).
 [ -f "$root/release-notes/$version.json" ] \
   || echo "bump-version: warning: release-notes/$version.json does not exist; write the notes before releasing (CI fails a release PR without them)" >&2

@@ -17,6 +17,8 @@ Both parts are built by GitHub Actions. Nobody builds a release on a laptop.
    notarized and uploaded; then the run opens the appcast PR in `banditohq/platform`, which merges it itself when its ci passes (`appcast-merge.yml` there), and waits for that merge.
    A Telegram message says when it is done (`notify.yml`). Betas (`X.Y.Z-beta.N`) use the `beta` environment, no approval.
 
+The iPhone app's version (`MARKETING_VERSION` in `apps/ios/project.yml`) changes with the same bump; its TestFlight build is `apps/ios/scripts/testflight.sh`.
+
 `scripts/test_bump_version.sh` tests the version bump. The check "appcast == newest release with a zip" lives in
 `uptime.yml`, not here.
 
