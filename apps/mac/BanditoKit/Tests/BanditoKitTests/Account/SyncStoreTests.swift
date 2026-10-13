@@ -143,6 +143,43 @@ import Testing
         #expect(store.state == .idle)
     }
 
+    @Test func updateRunsAgainOnTheNewestCopyAfterAConflict() async throws {
+        let keys = MemorySecretStore()
+        let key = SymmetricKey(size: .bits256)
+        try SyncKey.save(key, to: keys)
+        func request(_ device: String) -> AccessRequest {
+            AccessRequest(deviceID: device, serverID: serverA.id.uuidString, noiseKey: "k", at: 1)
+        }
+        let first = try blob(of: SyncPayload(servers: [serverA], accessRequests: [request("a")]), key: key, version: 5)
+        // Meanwhile another device added a request of its own.
+        let second = try blob(
+            of: SyncPayload(servers: [serverA], accessRequests: [request("a"), request("b")]), key: key, version: 6)
+        let http = ScriptedHTTP([
+            "GET /sync": [
+                ScriptedReply(#"{"ok":true,"version":5,"blob":"\#(first)"}"#),
+                ScriptedReply(#"{"ok":true,"version":6,"blob":"\#(second)"}"#),
+            ],
+            "PUT /sync": [
+                ScriptedReply(#"{"ok":false,"error":"conflict","version":6}"#, status: 409),
+                ScriptedReply(#"{"ok":true,"version":7}"#),
+            ],
+        ])
+        let store = try makeStore(http: http, keys: keys)
+        var runs = 0
+
+        let stored = try await store.update { payload in
+            runs += 1
+            payload.accessRequests.removeAll { $0.deviceID == "a" }
+        }
+
+        // The removal was applied to the newest copy, so the other device's request stays and the removed one does not come back.
+        #expect(runs == 2)
+        #expect(stored.accessRequests.map(\.deviceID) == ["b"])
+        #expect(try payload(in: try #require(http.requests.last), key: key).accessRequests.map(\.deviceID) == ["b"])
+        #expect(store.knownVersion == 7)
+        #expect(store.state == .idle)
+    }
+
     @Test func secondConflictGivesUpAfterOneRetry() async throws {
         let keys = MemorySecretStore()
         let key = SymmetricKey(size: .bits256)

@@ -9,6 +9,7 @@ import UIKit
 struct SettingsTab: View {
     @Bindable var settings: IOSSettings
     let session: ServerSession
+    let account: IOSAccount
     let biometrics: any BiometricAuthenticating
     let onConnect: () -> Void
 
@@ -26,6 +27,7 @@ struct SettingsTab: View {
     var body: some View {
         NavigationStack {
             List {
+                accountSection
                 serversSection
                 notificationsSection
                 securitySection
@@ -73,6 +75,19 @@ struct SettingsTab: View {
     }
 
     // MARK: Sections
+
+    @ViewBuilder private var accountSection: some View {
+        Section {
+            NavigationLink {
+                AccountScreen(account: account)
+            } label: {
+                AccountSettingsRow(account: account)
+            }
+            .accessibilityIdentifier("settings.account")
+        } header: {
+            sectionHeader(L10n.Ios.Settings.Header.account)
+        }
+    }
 
     @ViewBuilder private var serversSection: some View {
         Section {

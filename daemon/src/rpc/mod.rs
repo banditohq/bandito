@@ -797,6 +797,43 @@ struct RedeemParams {
     #[serde(default)]
     noise_key: Option<String>,
 }
+#[derive(Deserialize)]
+struct IssueParams {
+    name: String,
+    platform: String,
+    #[serde(default)]
+    noise_key: Option<String>,
+}
+/// The most device rows `devices.issue` allows on one server.
+const MAX_DEVICES: usize = 50;
+/// The longest device name that is kept, in characters.
+const ISSUE_NAME_CHARS: usize = 100;
+/// The name of an issued device: trimmed, cut to [`ISSUE_NAME_CHARS`], never empty.
+fn issue_name(name: &str) -> Result<String, RpcError> {
+    let name: String = name
+        .trim()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(ISSUE_NAME_CHARS)
+        .collect();
+    if name.trim().is_empty() {
+        return Err(RpcError::new(INVALID_PARAMS, "name must not be empty"));
+    }
+    Ok(name.trim().to_string())
+}
+/// The platform of an issued device: a short lowercase word (`macos`, `ios`).
+fn issue_platform(platform: &str) -> Result<&str, RpcError> {
+    let p = platform.trim();
+    let fine = !p.is_empty()
+        && p.len() <= 32
+        && p.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if fine {
+        Ok(p)
+    } else {
+        Err(RpcError::new(INVALID_PARAMS, "platform must be a short lowercase word"))
+    }
+}
 /// A phone's Noise public key: base64url without padding, 32 bytes. Returned in its canonical spelling.
 fn valid_noise_key(key: &str) -> Result<String, RpcError> {
     use base64::Engine;
@@ -1848,6 +1885,45 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 app.cancel_device(&id);
             }
             ok(json!({ "revoked": revoked }))
+        }
+
+        "devices.issue" => {
+            // Owner peers only: `allowed` already refused anonymous callers and agents; this is the second lock.
+            if !matches!(peer, Peer::Local | Peer::Device(_)) {
+                return Err(denied(peer, method));
+            }
+            let r: IssueParams = params(p)?;
+            let name = issue_name(&r.name)?;
+            let platform = issue_platform(&r.platform)?;
+            // A key that cannot be one is refused before anything is written.
+            let noise_key = r.noise_key.as_deref().map(valid_noise_key).transpose()?;
+            // A device with the account's access can mint more: the number of rows is capped, so a loop of requests
+            // cannot fill the table.
+            if store.device_list()?.len() >= MAX_DEVICES {
+                return Err(RpcError::new(
+                    SERVER_ERROR,
+                    format!("this server already has {MAX_DEVICES} devices: remove one in Settings and try again"),
+                ));
+            }
+            let token = pairing::new_token();
+            let d = store.device_add_keyed(&name, &token, noise_key.as_deref())?;
+            tracing::info!(device = %d.id, platform, "issued a device token to another device of the owner");
+            ok(json!({ "device_id": d.id, "token": token }))
+        }
+        "phone.info" => {
+            // How a phone reaches this daemon, without a pairing code (what `pair.create` adds to its link).
+            if !matches!(peer, Peer::Local | Peer::Device(_)) {
+                return Err(denied(peer, method));
+            }
+            let relay = app.relay.link_info();
+            ok(json!({
+                "relay": relay.as_ref().map(crate::phone::RelayLink::param),
+                "relay_host": relay.as_ref().map(|r| r.host.as_str()),
+                "sid": relay.as_ref().map(|r| r.sid.as_str()),
+                "noise_key": relay.as_ref().map(|r| r.nk.as_str()),
+                "fingerprint": app.phone.fingerprint(),
+                "hosts": app.phone.hosts_now(),
+            }))
         }
 
         "usage.limits" => ok(store.usage_list()?),
@@ -4399,6 +4475,8 @@ mod trust_tests {
         "approvals.resolve",
         "devices.list",
         "devices.revoke",
+        "devices.issue",
+        "phone.info",
         "secrets.list",
         "secrets.set",
         "secrets.delete",
@@ -4982,6 +5060,185 @@ mod folder_and_device_tests {
         let p = json!({"name": "Forge", "runtime": "claude", "cwd": "/nonexistent/folder/for/test"});
         assert!(dispatch(&app, &Peer::Local, "agents.create", p).await.is_err());
         assert!(store.agent_list().unwrap().is_empty(), "nothing is left behind");
+    }
+
+    fn noise(byte: u8) -> String {
+        use base64::Engine;
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([byte; 32])
+    }
+
+    #[tokio::test]
+    async fn devices_issue_makes_a_device_without_a_code() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        let key = noise(7);
+        let issued = dispatch(
+            &app,
+            &Peer::Local,
+            "devices.issue",
+            json!({ "name": "  My iPhone ", "platform": "ios", "noise_key": key }),
+        )
+        .await
+        .unwrap();
+        let id = issued["device_id"].as_str().unwrap().to_string();
+        let token = issued["token"].as_str().unwrap().to_string();
+        assert!(token.starts_with("bdt_") && token.len() == 68);
+        // The row is a normal device: it authenticates, keeps the Noise key and shows in the list.
+        let found = store.device_auth(&token).unwrap().unwrap();
+        assert_eq!((found.id.as_str(), found.name.as_str()), (id.as_str(), "My iPhone"));
+        assert_eq!(store.device_noise_key(&id).unwrap().as_deref(), Some(key.as_str()));
+        let list = dispatch(&app, &Peer::Local, "devices.list", json!({})).await.unwrap();
+        assert!(
+            list.as_array()
+                .unwrap()
+                .iter()
+                .any(|d| d["id"] == json!(id) && d["name"] == json!("My iPhone"))
+        );
+        // Two calls are two devices with different tokens.
+        let again = dispatch(
+            &app,
+            &Peer::Local,
+            "devices.issue",
+            json!({ "name": "My iPhone", "platform": "ios" }),
+        )
+        .await
+        .unwrap();
+        assert_ne!(again["token"], issued["token"]);
+        assert_ne!(again["device_id"], issued["device_id"]);
+        assert_eq!(
+            store.device_noise_key(again["device_id"].as_str().unwrap()).unwrap(),
+            None
+        );
+        // A device that was issued one may be revoked like any other.
+        let revoked = dispatch(&app, &Peer::Local, "devices.revoke", json!({ "id": id }))
+            .await
+            .unwrap();
+        assert_eq!(revoked["revoked"], json!(true));
+        assert!(store.device_auth(&token).unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn an_app_that_is_paired_may_issue_a_device() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let mine = store.device_add("Mac", "tok-1").unwrap();
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        let issued = dispatch(
+            &app,
+            &Peer::Device(mine),
+            "devices.issue",
+            json!({ "name": "Phone", "platform": "ios", "noise_key": noise(1) }),
+        )
+        .await
+        .unwrap();
+        assert!(store.device_auth(issued["token"].as_str().unwrap()).unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn devices_issue_and_phone_info_are_not_for_agents_or_strangers() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        let params = json!({ "name": "Phone", "platform": "ios", "noise_key": noise(2) });
+        for method in ["devices.issue", "phone.info"] {
+            for peer in [
+                Peer::Agent("agent-a".into()),
+                Peer::Anonymous("203.0.113.7".into(), None),
+            ] {
+                let err = dispatch(&app, &peer, method, params.clone()).await.unwrap_err();
+                assert_eq!(err.code, UNAUTHORIZED, "{method} from {peer:?}");
+            }
+            assert!(!allowed(&Peer::Agent("agent-a".into()), method));
+            assert!(!allowed(&Peer::Anonymous("x".into(), None), method));
+        }
+        assert!(store.device_list().unwrap().is_empty(), "nothing was written");
+    }
+
+    #[tokio::test]
+    async fn devices_issue_checks_its_params_before_it_writes() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        let bad = [
+            json!({ "name": "P", "platform": "ios", "noise_key": "not-a-key" }),
+            json!({ "name": "P", "platform": "ios", "noise_key": noise(3) + "A" }),
+            // Standard base64 with padding is not the relay's spelling.
+            json!({ "name": "P", "platform": "ios", "noise_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" }),
+            json!({ "name": "   ", "platform": "ios" }),
+            json!({ "name": "P", "platform": "" }),
+            json!({ "name": "P", "platform": "iOS 17" }),
+            json!({ "name": "P" }),
+            json!({ "platform": "ios" }),
+        ];
+        for p in bad {
+            let err = dispatch(&app, &Peer::Local, "devices.issue", p.clone())
+                .await
+                .unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{p}");
+        }
+        assert!(
+            store.device_list().unwrap().is_empty(),
+            "a refused call leaves no device"
+        );
+        // A long name is cut, not refused.
+        let long = "x".repeat(300);
+        let ok = dispatch(
+            &app,
+            &Peer::Local,
+            "devices.issue",
+            json!({ "name": long, "platform": "macos" }),
+        )
+        .await
+        .unwrap();
+        let name = store
+            .device_list()
+            .unwrap()
+            .into_iter()
+            .find(|d| d.id == ok["device_id"].as_str().unwrap())
+            .unwrap()
+            .name;
+        assert_eq!(name.chars().count(), ISSUE_NAME_CHARS);
+    }
+
+    #[tokio::test]
+    async fn devices_issue_stops_at_fifty_devices_with_a_clear_error() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        for i in 0..MAX_DEVICES {
+            store.device_add(&format!("d{i}"), &format!("tok-{i}")).unwrap();
+        }
+        let err = dispatch(
+            &app,
+            &Peer::Local,
+            "devices.issue",
+            json!({ "name": "P", "platform": "ios" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, SERVER_ERROR);
+        assert!(err.message.contains("50 devices"), "{}", err.message);
+        assert_eq!(store.device_list().unwrap().len(), MAX_DEVICES);
+        // Removing one makes room again.
+        let first = store.device_list().unwrap()[0].id.clone();
+        dispatch(&app, &Peer::Local, "devices.revoke", json!({ "id": first }))
+            .await
+            .unwrap();
+        assert!(
+            dispatch(
+                &app,
+                &Peer::Local,
+                "devices.issue",
+                json!({ "name": "P", "platform": "ios" })
+            )
+            .await
+            .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn phone_info_tells_how_a_phone_reaches_the_server() {
+        let app = app_with(Arc::new(Store::open_in_memory().unwrap()), PathBuf::from("/unused"));
+        let info = dispatch(&app, &Peer::Local, "phone.info", json!({})).await.unwrap();
+        assert_eq!(info["relay"], json!(null));
+        assert_eq!(info["noise_key"], json!(null));
+        assert_eq!(info["hosts"], json!([]));
     }
 
     #[tokio::test]

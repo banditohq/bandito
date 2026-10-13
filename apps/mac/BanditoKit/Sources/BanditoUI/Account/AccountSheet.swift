@@ -596,6 +596,8 @@ struct AccountSheet: View {
     private func remove(_ device: AccountDevice) async {
         do {
             try await hub.client?.deleteDevice(id: device.id, force: false)
+            // A lost phone loses its access to the servers too (revoked on every server this Mac can reach).
+            await hub.revokeAccess(of: device)
             await reload()
         } catch {
             errorText = SignInMessages.text(for: error)

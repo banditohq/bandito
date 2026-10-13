@@ -655,17 +655,21 @@ impl PhoneAccess {
         self.limits.clone()
     }
 
+    /// The addresses a phone can reach this daemon at right now, best first. Empty when nothing listens.
+    pub fn hosts_now(&self) -> Vec<String> {
+        let status = self.status();
+        if status.listening.is_empty() {
+            return Vec::new();
+        }
+        let sources = self.sources();
+        let tailscale = (sources.tailscale)();
+        pair_hosts(status.mode, status.port, &(sources.ifaces)(), &tailscale)
+    }
+
     /// The link and hosts for a pairing `code`, from what is listening now.
     pub fn pair_info(&self, code: &str, server_name: &str, relay: Option<&RelayLink>) -> PairInfo {
-        let status = self.status();
         let fingerprint = self.fingerprint();
-        let hosts = if status.listening.is_empty() {
-            Vec::new()
-        } else {
-            let sources = self.sources();
-            let tailscale = (sources.tailscale)();
-            pair_hosts(status.mode, status.port, &(sources.ifaces)(), &tailscale)
-        };
+        let hosts = self.hosts_now();
         // Direct hosts need the certificate to pin; the relay needs only its key. With neither, there is no link.
         let link = match (&fingerprint, hosts.is_empty(), relay) {
             (Some(fp), false, relay) => Some(pair_link_with_relay(code, Some(fp), server_name, &hosts, relay)),

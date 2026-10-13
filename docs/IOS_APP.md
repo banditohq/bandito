@@ -72,6 +72,15 @@ and Activity) opens the composer with an agent picker (last used first).
 - Haptics: light on send, success on an allowed request, warning on a refusal or a stop.
 - Not yet: reactions, reply quotes, mentions, and the pictures other clients sent (see `apps/ios/CLAUDE.md`).
 
+### The account (built)
+
+Settings → Account (and the welcome step's "I have a Bandito account") signs in to bandito.dev: GitHub device flow or an
+email code, the same Kit logic as the Mac. A new iPhone shows its own code and waits; a Mac approves it by comparing
+codes, then the iPhone shows the Mac's code to confirm before it keeps the sync key. Then the servers of the account are
+listed with their state: "Waiting for the Mac…" while a request is open, "Connected" once the Mac issued this iPhone a
+token (docs/RELAY.md, "One account on every device"). Sign out parks the sync key, so signing in again needs no approval.
+Code: `apps/ios/Bandito/Account/`.
+
 ## iOS-native extras (phase order)
 
 1. Actionable notifications (local now, push later), Face ID lock (optional, off by default), haptics on approve/send.

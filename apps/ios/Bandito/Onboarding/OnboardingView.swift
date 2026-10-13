@@ -14,6 +14,8 @@ struct OnboardingView: View {
     let motion: MotionPreference
     /// The connect step hands over to the pairing flow; the mode says which way the person picked.
     let onConnect: (OnboardingConnectMode) -> Void
+    /// "I have a Bandito account" on the welcome step: the account screen opens (nil hides the button).
+    var onHaveAccount: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
@@ -34,7 +36,8 @@ struct OnboardingView: View {
                     WelcomeStep(
                         reduceMotion: reduceMotion,
                         onStart: { go(OnboardingRules.forward(from: position)) },
-                        onHaveServer: { go(OnboardingRules.skipToConnect()) })
+                        onHaveServer: { go(OnboardingRules.skipToConnect()) },
+                        onHaveAccount: onHaveAccount)
                 case .features:
                     FeaturesStep(
                         card: Binding(
@@ -130,6 +133,7 @@ struct WelcomeStep: View {
     let reduceMotion: Bool
     let onStart: () -> Void
     let onHaveServer: () -> Void
+    var onHaveAccount: (() -> Void)?
 
     var body: some View {
         OnboardingPage {
@@ -170,6 +174,13 @@ struct WelcomeStep: View {
                     }
                     .buttonStyle(OnboardingLinkStyle())
                     .accessibilityIdentifier("onboarding.welcome.haveServer")
+                    if let onHaveAccount {
+                        Button(action: onHaveAccount) {
+                            Text(L10n.Ios.Onboarding.Welcome.haveAccount)
+                        }
+                        .buttonStyle(OnboardingLinkStyle())
+                        .accessibilityIdentifier("onboarding.welcome.haveAccount")
+                    }
                 }
                 .padding(.bottom, BanditoSpace.s6)
             }

@@ -45,7 +45,9 @@ end-to-end encrypted session (Noise) through it, so the relay never sees command
   sends `ping` to both sides every 25 s; both the daemon and the phone answer `pong` and send their own `ping` every
   25 s; 60 s of silence closes with 4002.
 - Close codes: 4001 replaced by a newer server connection, 4002 silence timeout, 4003 registration deleted, 4004 the
-  server left (sent to phones), 4008 monthly traffic limit, 4009 message over 1 MiB. Before the upgrade: 401 bad
+  server left (sent to phones), 4008 monthly traffic limit (checked at 95%), 4009 message over 1 MiB or any text but
+  `ping`/`pong`, 4010 too many messages (200/s per phone socket, 2000/s per server socket), 4011 a phone stream sent no
+  binary frame within 15 s of opening. Before the upgrade: 401 bad
   secret, 503 `{"error":"offline"}` (server not connected or unknown sid), 429 `{"error":"too_many_streams"}` or
   `{"error":"rate"}`.
 - Phone: `GET wss://relay.bandito.dev/v1/client/<sid>` (no auth at the relay: the Noise session is the auth). If the
@@ -87,3 +89,61 @@ the same network), then the relay.
 - Revoking a device closes its relay streams too (the device cancel token of `phone.rs`).
 - `relay.disable` closes the outbound connection and every stream at once.
 - Deleting the account deletes its relay registrations.
+
+## One account on every device: servers follow you
+
+Signing in to the same bandito.dev account on the iPhone shows the servers added on the Mac, and a server added on the
+phone appears on the Mac. Built on the existing end-to-end encrypted sync (`docs/ACCOUNTS_API.md`: device approval,
+sync key envelopes, `SyncPayload` in BanditoKit — shared by both apps).
+
+- **iPhone sign-in**: the same flows as the Mac (GitHub device flow, email code) from Settings → Account and from the
+  onboarding («У меня есть аккаунт»). A new phone is approved on the Mac by comparing the code, as for a new Mac.
+- **What syncs per server** (`SyncedServer`): besides today's endpoint, an optional `phone` record
+  `{sid?, relay_host?, nk?, fp?, hosts[]}` — how any device can reach the daemon without SSH. Written by whichever
+  device turns relay or direct access on. Device tokens are **never** in the shared blob.
+- **Access is issued, not copied.** Each device needs its own device token from each daemon. A device that sees a
+  server it has no token for adds a request to the blob: `access_requests: [{device_id, server_id, noise_key, at}]`.
+  Any approved device that is connected to that daemon (the Mac over SSH, or a phone already paired) answers it:
+  daemon RPC `devices.issue {name, platform, noise_key}` (owner peers only) returns a fresh device token for a new
+  device row; the answering device seals it with HPKE to the requesting device's account public key (the same suite as
+  sync key envelopes, info `bandito-device-token:v1`, AAD `<accountID>:<requestingDeviceID>:<serverID>`) and writes
+  `access_grants: [{device_id, server_id, sealed, at}]`. The requester opens it, stores the token in its Keychain,
+  connects (direct or relay), and removes its request and grant from the blob. Requests older than 7 days are dropped.
+- So: sign in on the phone → approve it on the Mac → within seconds (while the Mac is online) every server with relay
+  or direct access appears and connects. A server added on the phone by QR syncs to the Mac the same way (the phone
+  answers the Mac's request).
+- Revoking a device in the account removes it from the account; the Mac then also revokes its device rows on the
+  servers it can reach (`devices.revoke`), so a lost phone loses access everywhere.
+
+**As built** (BanditoKit `Account/Access`, daemon `devices.issue` and `phone.info`, see docs/ARCHITECTURE.md):
+
+- The wire names are snake_case: `phone`, `access_requests`, `access_grants`, `device_id`, `server_id`, `noise_key`, `relay_host`.
+  A request also carries `public_key`: the asking device's X25519 key. The answering device issues only if that key is the
+  `public_key` that `GET /me` lists for the same device id (and the device is approved). An account service that lists no
+  keys (an older one) gets no answers; the app logs that the service needs updating. A blob without the new fields reads
+  as before, and fields a build does not know are kept when it writes the blob back.
+- The sealed message is `0x01 || sender_pub (32) || enc (32) || ct`, base64, HPKE auth mode (`DeviceTokenSeal`). The
+  requester opens it with its own key, for its own device id and server id; when `GET /me` lists device keys the sender
+  must be one of them.
+- A merge keeps the newest request and grant per device and server and drops entries older than 7 days. Removing an
+  answered request is done on a fresh copy of the blob (`SyncStore.update` reads, changes and writes again on a version
+  conflict), so a merge cannot bring it back. The answering device remembers on its own what it issued
+  (`AccessLedger`): a request that comes back is not answered twice, a grant that could not be written is written by the
+  next cycle without a second token, and the daemon's row id of every issue is kept for revocation.
+- The Mac runs the answering side every 30 seconds with its connected servers, and writes `phone` for the servers whose
+  daemon says it has a way in (`phone.info`: relay on, or a phone listener up). At most one issue per device and server
+  in ten minutes, and a daemon holds at most 50 device rows (`devices.issue` says so). Before an issue the blob is read
+  again and the request is skipped if another Mac answered; a grant never overwrites another device's grant for the same
+  request, and a row whose grant did not stand is revoked at once.
+- Revoking: every cycle compares the rows this device issued (its ledger) with the account's device list. A row issued
+  to a device that is no longer in the account, or not approved, is revoked by the row id the ledger kept and forgotten
+  (`devices.revoke`), whoever removed the device and however (another Mac, the device itself, an account reset). A
+  device never revokes a row it did not issue and never looks rows up by name; with several Macs each one cleans its own.
+  Servers that are offline are cleaned when they come back.
+- The iPhone runs the asking side (`AccessRequester`) while the app is in front: every 10 seconds while a server waits,
+  every minute otherwise. A token it receives goes to a `ServerAccessSink`; the connection itself is the relay and direct
+  transports' job.
+
+**Residual risk.** A device removed from the account still holds the sync key: the key is not rotated on removal. It
+cannot write the blob or read a newer one without a session of the account, and its session ends with the removal. Its
+access to the servers is revoked by the rule above on the next cycle of any Mac that issued it.

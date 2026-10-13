@@ -167,11 +167,13 @@ Works for any valid session, including devices waiting for approval. A pending d
   "user": { "id": "...", "email": "...", "name": "...", "github_login": "..." },
   "device": { "id": "...", "approved": false },
   "devices": [
-    { "id": "...", "name": "...", "platform": "macos", "approved": true,
+    { "id": "...", "name": "...", "platform": "macos", "public_key": "<base64, raw X25519, 32 bytes>", "approved": true,
       "created_at": "...", "last_seen_at": "...", "current": false }
   ]
 }
 ```
+
+`public_key` is the device's X25519 key, the one it registered at sign-in (it never changes, see `key_mismatch`). A device that hands another device access to a server answers only a request whose key is the key listed here for that device id (docs/RELAY.md).
 
 `last_seen_at` of the session and of the device is written at most once every 10 minutes.
 

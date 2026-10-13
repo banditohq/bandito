@@ -98,8 +98,10 @@ public actor DeviceIdentityStore {
     private let secrets: SecretStore
     private var loaded: DeviceIdentity?
 
-    /// Tests inject an in-memory store through `@testable import`. The app does not create stores.
-    init(secrets: SecretStore) {
+    /// Tests inject an in-memory store through `@testable import`. An app creates exactly one store, over the secret
+    /// store it keeps its device keys in (the iPhone needs a fallback store on the unsigned Simulator build); the
+    /// Mac uses `shared`. Two stores over one place could make two key pairs.
+    public init(secrets: SecretStore) {
         self.secrets = secrets
     }
 
