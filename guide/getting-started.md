@@ -111,7 +111,7 @@ The step where the crew is made. On the left are the ready teams (Web project, S
 ## First task
 
 <!-- id: gs-task; covers: onboarding:task -->
-The last step. Four suggestions are written for the crew you hired, for example Look around this project and tell me what it does, or Check the server's disk and updates. Pick one or write your own. Send to the first agent (Отправить) sends it and opens that agent's chat with the reply already coming in: the introduction ends inside a working conversation. If the send fails, nothing was started, and you can try again without sending it twice.
+The last step. Four suggestions are written for the crew you hired, for example Look around this project and tell me what it does, or Check the server's disk and updates. Pick one or write your own. Send to the first agent (Отправить) sends it and opens that agent's chat with the reply already coming in: the introduction ends inside a working conversation. If the send fails, nothing was started, and you can try again: Bandito reads the agent's thread from the server first, so a message that did arrive is not sent twice. Without an agent (you skipped the crew), the step offers Choose a crew (Выбрать команду) to go back.
 Где: Introduction → step 7 of 7 (First task) → Send (Отправить)
 1. Click a suggestion, or type a task in the field.
 2. Click the send button at the bottom right. The chat opens.

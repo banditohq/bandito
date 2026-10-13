@@ -283,6 +283,8 @@ public final class ServerModel: Identifiable {
     /// When `runtimes` was last read from the daemon; nil until the first answer.
     public private(set) var runtimesFetchedAt: Date?
     /// The models each agent CLI offers, by runtime raw value (`claude`, `codex`, `grok`). Kept after a later failure.
+    /// Teams being made or made on this server, kept when a sheet closes (see `AgentCreationStore`).
+    @ObservationIgnored public let creations = AgentCreationStore()
     public private(set) var runtimeModels: [String: RuntimeModelList] = [:]
     /// What the last request for `runtimeModels` came to. See `RuntimeModelsStatus`.
     public private(set) var runtimeModelsStatus: RuntimeModelsStatus = .unknown

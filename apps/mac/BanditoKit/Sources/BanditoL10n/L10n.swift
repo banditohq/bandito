@@ -2637,6 +2637,7 @@ public enum L10n {
         }
 
         public enum Task {
+            public static var chooseCrew: String { L10n.tr("onboarding.task.chooseCrew") }
             public static var failed: String { L10n.tr("onboarding.task.failed") }
             public static var later: String { L10n.tr("onboarding.task.later") }
             public static var noAgent: String { L10n.tr("onboarding.task.noAgent") }

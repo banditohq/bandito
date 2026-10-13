@@ -3327,5 +3327,6 @@
   "onboarding.crew.workplaceShared": "和其他智能体一样，直接在服务器上运行。",
   "onboarding.crew.resumed": "该团队 {total} 个智能体中已有 {made} 个在服务器上。可以创建其余的，或直接继续。",
   "onboarding.crew.goOn": "就用这些继续",
-  "onboarding.crew.hireRest": "创建其余的"
+  "onboarding.crew.hireRest": "创建其余的",
+  "onboarding.task.chooseCrew": "选择团队"
 }

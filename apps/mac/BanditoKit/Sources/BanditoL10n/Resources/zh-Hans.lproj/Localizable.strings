@@ -1840,6 +1840,7 @@
 "onboarding.subs.stateNotInstalled" = "服务器上未安装";
 "onboarding.subs.stateSignedIn" = "已登录";
 "onboarding.subs.stateUnverified" = "已安装；服务器无法检查登录状态";
+"onboarding.task.chooseCrew" = "选择团队";
 "onboarding.task.failed" = "任务未能发送。请重试，没有任何内容被启动。";
 "onboarding.task.later" = "打开聊天，稍后再写";
 "onboarding.task.noAgent" = "还没有可以接收任务的智能体。请返回并创建一个。";

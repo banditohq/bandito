@@ -85,7 +85,10 @@ import Testing
         let made = crew.firstAgent
         #expect(made != nil)
         // A new model (a new launch) is told the agent the flow remembers: the crew is shown as made.
-        let again = CrewModel(server: world.server, subscriptions: world.session!.subscriptions)
+        let onboarding = world.onboarding
+        let again = CrewModel(
+            server: world.server, subscriptions: world.session!.subscriptions,
+            createdIDs: { onboarding.createdAgentIDs }, noteCreated: { onboarding.rememberCreated($0) })
         again.adopt(try #require(made))
         #expect(again.isDone)
         #expect(again.madeAgents.map(\.id) == [made!.id])
@@ -98,7 +101,10 @@ import Testing
         _ = await crew.create()
         try await world.server.readAgentsNow()
         // A new model (the app was closed in the middle): two of three are on the server.
-        let again = CrewModel(server: world.server, subscriptions: world.session!.subscriptions)
+        let onboarding = world.onboarding
+        let again = CrewModel(
+            server: world.server, subscriptions: world.session!.subscriptions,
+            createdIDs: { onboarding.createdAgentIDs }, noteCreated: { onboarding.rememberCreated($0) })
         await again.start()
         try? await Task.sleep(for: .milliseconds(400))
         #expect(again.choice == .team("web-project"))
@@ -110,6 +116,26 @@ import Testing
         #expect(again.isDone)
         try await world.server.readAgentsNow()
         #expect(world.server.agents.count == 3)
+    }
+
+    @Test func anAgentOfTheSameTemplateFromElsewhereDoesNotMakeTheStepDone() async throws {
+        let (world, crew) = await ready()
+        defer { Task { await world.stop() } }
+        // The Marketplace made the three agents of the team before this introduction.
+        let request = NewBundle(bundleId: "web-project", language: "en", runtime: "claude")
+        let elsewhere = try await world.server.createBundle(request)
+        #expect(elsewhere.agents.count == 3)
+        try await world.server.readAgentsNow()
+        #expect(world.server.agents.count == 3)
+        #expect(crew.existingMade.isEmpty)
+        #expect(!crew.isResumed)
+        #expect(!crew.isDone)
+        // Hiring makes this introduction's own three, and those are what the step remembers.
+        try? await Task.sleep(for: .milliseconds(400))
+        _ = await crew.create()
+        #expect(crew.isDone)
+        #expect(world.server.agents.count == 6)
+        #expect(world.onboarding.createdAgentIDs.count == 3)
     }
 }
 #endif

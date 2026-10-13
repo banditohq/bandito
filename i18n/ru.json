@@ -3454,5 +3454,6 @@
   "onboarding.crew.workplaceShared": "На самом сервере, как и остальные.",
   "onboarding.crew.resumed": "{made} из {total} агентов этой команды уже есть на сервере. Наймите остальных или идите дальше с этими.",
   "onboarding.crew.goOn": "Идти дальше с этими",
-  "onboarding.crew.hireRest": "Нанять остальных"
+  "onboarding.crew.hireRest": "Нанять остальных",
+  "onboarding.task.chooseCrew": "Выбрать команду"
 }

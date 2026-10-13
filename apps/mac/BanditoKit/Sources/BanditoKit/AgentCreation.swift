@@ -48,7 +48,7 @@ public final class TeamCreation {
     public let bundle: AgentBundle
     public let members: [BotTemplate]
     @ObservationIgnored private let server: AgentCreationServer
-    @ObservationIgnored private let runtime: RuntimeKind
+    public let runtime: RuntimeKind
     @ObservationIgnored private let model: String?
     @ObservationIgnored private let languageCode: String
     @ObservationIgnored private let texts: AgentCreationTexts
@@ -63,6 +63,9 @@ public final class TeamCreation {
     public private(set) var missingIntegrations: [MissingIntegration] = []
     public private(set) var failure: String?
     public private(set) var busy = false
+    /// A failed attempt may have made agents, and the list could not be read to find out: the next attempt reads first
+    /// and makes nothing until it has. The ids on the server before that attempt are kept to tell the new ones.
+    @ObservationIgnored private var unreadSince: Set<String>?
     /// Counts the complete teams (a haptic on each).
     public private(set) var madeCount = 0
 
@@ -110,6 +113,19 @@ public final class TeamCreation {
         busy = true
         defer { busy = false }
         failure = nil
+        if let since = unreadSince {
+            do { try await server.readAgentsNow() } catch {
+                // Still unknown: nothing is made, the person can try again.
+                failure = texts.describe(error)
+                return false
+            }
+            unreadSince = nil
+            markFresh(since: since)
+            if isComplete {
+                madeCount += 1
+                return true
+            }
+        }
         do {
             let path: String
             if let folder {
@@ -141,7 +157,12 @@ public final class TeamCreation {
                 if !isComplete { failure = answer.agents.compactMap(\.error).first }
             } catch {
                 failure = texts.describe(error)
-                await markFresh(since: before)
+                do {
+                    try await server.readAgentsNow()
+                    markFresh(since: before)
+                } catch {
+                    unreadSince = before
+                }
             }
         } catch {
             failure = texts.describe(error)
@@ -158,8 +179,7 @@ public final class TeamCreation {
     }
 
     /// Reads the agents again and marks the positions that a new agent (one not in `before`) stands for.
-    private func markFresh(since before: Set<String>) async {
-        _ = try? await server.readAgentsNow()
+    private func markFresh(since before: Set<String>) {
         for agent in server.agents where !before.contains(agent.id) {
             if let member = members.first(where: { $0.id == agent.templateId }) {
                 if made[member.id] == nil { made[member.id] = agent }
@@ -190,6 +210,8 @@ public final class SingleAgentCreation {
     public private(set) var failure: String?
     public private(set) var busy = false
     public private(set) var madeCount = 0
+    /// The failed request and the ids before it, while the list could not be read to find out whether it made the agent.
+    @ObservationIgnored private var unread: (request: NewAgent, before: Set<String>)?
 
     public init(server: AgentCreationServer, describe: @escaping (Error) -> String) {
         self.server = server
@@ -208,6 +230,18 @@ public final class SingleAgentCreation {
         busy = true
         defer { busy = false }
         failure = nil
+        if let pending = unread {
+            do { try await server.readAgentsNow() } catch {
+                failure = describe(error)
+                return false
+            }
+            unread = nil
+            if let fresh = Self.find(pending.request, in: server.agents, before: pending.before) {
+                agent = fresh
+                madeCount += 1
+                return true
+            }
+        }
         do {
             let path: String
             if let folder {
@@ -226,15 +260,16 @@ public final class SingleAgentCreation {
                 agent = try await server.createAgent(new)
             } catch {
                 // The answer may be lost after the daemon made the agent: the list decides, not the error.
-                _ = try? await server.readAgentsNow()
-                if let fresh = server.agents.first(where: {
-                    !before.contains($0.id) && $0.name == new.name && $0.cwd == new.cwd
-                }) {
-                    agent = fresh
-                } else {
-                    failure = describe(error)
+                failure = describe(error)
+                do {
+                    try await server.readAgentsNow()
+                } catch {
+                    unread = (new, before)
                     return false
                 }
+                guard let fresh = Self.find(new, in: server.agents, before: before) else { return false }
+                agent = fresh
+                failure = nil
             }
             madeCount += 1
             return true
@@ -243,4 +278,26 @@ public final class SingleAgentCreation {
             return false
         }
     }
+
+    /// A new agent (not in `before`) with the name and folder of `request` is the one the failed request made.
+    private static func find(_ request: NewAgent, in agents: [Agent], before: Set<String>) -> Agent? {
+        agents.first { !before.contains($0.id) && $0.name == request.name && $0.cwd == request.cwd }
+    }
+}
+
+/// The creations in progress or finished on one server, by a key (a bundle id, per screen). A sheet that is closed and
+/// opened again finds its creation here and shows the same progress or result; an attempt that is running when the sheet
+/// closes finishes anyway, and its result is there on the next open.
+@MainActor
+public final class AgentCreationStore {
+    private var teams: [String: TeamCreation] = [:]
+
+    public init() {}
+
+    public func team(_ key: String) -> TeamCreation? { teams[key] }
+
+    public func setTeam(_ creation: TeamCreation, for key: String) { teams[key] = creation }
+
+    /// A finished team that the person has seen: the next open starts again.
+    public func forgetTeam(_ key: String) { teams[key] = nil }
 }

@@ -38,7 +38,7 @@ final class TeamCreationModel {
             texts: AgentCreationTexts(
                 describe: { AgentForms.errorText($0) },
                 partial: { L10n.Market.Bundle.resultTitle(created: String($0), total: String($1)) },
-                noRuntime: L10n.AgentSheet.statusNotInstalled, none: L10n.AgentSheet.statusNotInstalled))
+                noRuntime: L10n.AgentSheet.statusNotInstalled, none: L10n.Market.Bundle.Status.notMade))
     }
 
     var bundle: AgentBundle { core.bundle }

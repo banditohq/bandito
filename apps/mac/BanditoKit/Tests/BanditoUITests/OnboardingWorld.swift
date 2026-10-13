@@ -69,7 +69,9 @@ final class OnboardingWorld {
         _ = BanditoFont.registerBundledFonts()
         await server.connect()
         guard readServerSteps else { return }
-        let session = OnboardingSession(server: server)
+        let session = OnboardingSession(
+            server: server, createdIDs: { [onboarding] in onboarding.createdAgentIDs },
+            noteCreated: { [onboarding] in onboarding.rememberCreated($0) })
         await session.subscriptions.checkAgain()
         await session.crew.start()
         // The tasks the models started (the folder that is free) finish while no view is alive.

@@ -232,18 +232,18 @@ public struct OnboardingFlow: View {
     private func taskStep(_ session: OnboardingSession) -> some View {
         let agentID = onboarding.firstAgentID ?? session.crew.firstAgent?.id ?? ""
         let model = session.taskModel(agentID: agentID, teamID: onboarding.firstTeamID)
-        FirstTaskStep(model: model, onSent: { openChat(agentID, on: session.server) }, onLater: {
-            openChat(agentID, on: session.server)
-        })
+        FirstTaskStep(
+            model: model, onSent: { openChat(agentID, on: session.server) },
+            onLater: { openChat(agentID, on: session.server) }, onChooseCrew: { onboarding.back() })
     }
 
     /// The flow ends inside the agent's chat: the agent is chosen, the Team mode is in front, and the reply is already
     /// coming in (the task was sent before this).
     private func openChat(_ agentID: String, on server: ServerModel) {
-        if !agentID.isEmpty {
-            router.selectAgent(agentID, on: server)
-            router.select(mode: .team)
-        }
+        // Without an agent there is no chat to open: the flow does not end in silence (the step offers the way back).
+        guard !agentID.isEmpty else { return }
+        router.selectAgent(agentID, on: server)
+        router.select(mode: .team)
         onboarding.finish()
     }
 }

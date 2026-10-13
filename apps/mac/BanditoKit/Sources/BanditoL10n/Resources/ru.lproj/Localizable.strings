@@ -1840,6 +1840,7 @@
 "onboarding.subs.stateNotInstalled" = "не установлен на сервере";
 "onboarding.subs.stateSignedIn" = "вошли";
 "onboarding.subs.stateUnverified" = "установлен; сервер не может проверить вход";
+"onboarding.task.chooseCrew" = "Выбрать команду";
 "onboarding.task.failed" = "Задача не отправлена. Попробуйте ещё раз: ничего не запущено.";
 "onboarding.task.later" = "Открыть чат, напишу позже";
 "onboarding.task.noAgent" = "Пока некому отправить задачу. Вернитесь назад и наймите агента.";

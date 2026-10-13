@@ -255,6 +255,7 @@ private struct ApprovalFeatureCard: View {
                     Circle()
                         .fill(allowed ? Color.Bandito.ok : Color.Bandito.signal)
                         .frame(width: 8, height: 8)
+                    // Demo content, not translated (names and a command, as on Welcome).
                     Text("Forge")
                         .font(BanditoFont.display(size: 14, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
@@ -263,6 +264,7 @@ private struct ApprovalFeatureCard: View {
                         .foregroundStyle(Color.Bandito.text3)
                     Spacer(minLength: 0)
                 }
+                // Demo content, not translated.
                 Text("git push origin main")
                     .font(BanditoFont.mono(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)

@@ -3327,5 +3327,6 @@
   "onboarding.crew.workplaceShared": "他のエージェントと同じく、サーバー上で動きます。",
   "onboarding.crew.resumed": "このチームの {total} 人中 {made} 人はすでにサーバー上にいます。残りを迎えるか、このまま進めます。",
   "onboarding.crew.goOn": "このまま進む",
-  "onboarding.crew.hireRest": "残りを迎える"
+  "onboarding.crew.hireRest": "残りを迎える",
+  "onboarding.task.chooseCrew": "チームを選ぶ"
 }

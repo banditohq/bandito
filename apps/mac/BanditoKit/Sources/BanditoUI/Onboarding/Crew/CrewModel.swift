@@ -48,7 +48,16 @@ final class CrewModel {
     /// An agent a previous run made: the crew counts as made and nothing is made again.
     private(set) var adopted: Agent?
 
-    init(server: ServerModel, subscriptions: SubscriptionsModel, preview: ReadyTeamPreview? = nil) {
+    /// The ids of the agents this introduction made (see `OnboardingModel.createdAgentIDs`), and where new ones are noted.
+    @ObservationIgnored private let createdIDs: () -> Set<String>
+    @ObservationIgnored private let noteCreated: ([String]) -> Void
+
+    init(
+        server: ServerModel, subscriptions: SubscriptionsModel, preview: ReadyTeamPreview? = nil,
+        createdIDs: @escaping () -> Set<String> = { [] }, noteCreated: @escaping ([String]) -> Void = { _ in }
+    ) {
+        self.createdIDs = createdIDs
+        self.noteCreated = noteCreated
         self.server = server
         self.subscriptions = subscriptions
         self.preview = preview
@@ -314,13 +323,17 @@ final class CrewModel {
         }
     }
 
-    /// The agents of the chosen team that are already on the server (by template): an earlier run made them, or this one
-    /// did and the app was closed. Shown as made; Hire makes only the rest.
+    /// The agents of the chosen team that this introduction made and that are still on the server: the app was closed in
+    /// the middle. Shown as made; Hire makes only the rest. Agents of the same template that were there before (the
+    /// Marketplace, another run) are not counted.
     var existingMade: [String: Agent] {
         guard case .team = choice else { return [:] }
         var found: [String: Agent] = [:]
+        let mine = createdIDs()
         for member in selectedMembers {
-            if let agent = server.agents.first(where: { $0.templateId == member.id }) { found[member.id] = agent }
+            if let agent = server.agents.first(where: { $0.templateId == member.id && mine.contains($0.id) }) {
+                found[member.id] = agent
+            }
         }
         return found
     }
@@ -366,6 +379,7 @@ final class CrewModel {
             await creation.create(
                 folder: { if makes { try await server.ensureFolder(path) }; return path },
                 items: scheduleItems, enabled: enabled)
+            noteCreated(creation.made.values.map(\.id))
             if creation.isComplete { Telemetry.count(.agentCreate(.bundle)) }
             return creation.isComplete ? creation.firstAgent : nil
         case .single:
@@ -386,6 +400,7 @@ final class CrewModel {
                         approvalMode: .risky, systemPrompt: template.instructions.isEmpty ? nil : template.instructions,
                         effort: template.effort, workspaceId: workspaceID)
                 })
+            if let agent = creation.agent { noteCreated([agent.id]) }
             if made { Telemetry.count(.agentCreate(template == .scratch ? .plain : .template)) }
             return made ? creation.agent : nil
         case nil:

@@ -3369,5 +3369,6 @@
   "onboarding.crew.workplaceShared": "En el propio servidor, como los demás.",
   "onboarding.crew.resumed": "{made} de {total} agentes de este equipo ya están en el servidor. Contrata al resto o sigue con estos.",
   "onboarding.crew.goOn": "Seguir con estos",
-  "onboarding.crew.hireRest": "Contratar al resto"
+  "onboarding.crew.hireRest": "Contratar al resto",
+  "onboarding.task.chooseCrew": "Elegir un equipo"
 }

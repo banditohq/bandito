@@ -1840,6 +1840,7 @@
 "onboarding.subs.stateNotInstalled" = "auf dem Server nicht installiert";
 "onboarding.subs.stateSignedIn" = "angemeldet";
 "onboarding.subs.stateUnverified" = "installiert; der Server kann die Anmeldung nicht prüfen";
+"onboarding.task.chooseCrew" = "Team wählen";
 "onboarding.task.failed" = "Die Aufgabe wurde nicht gesendet. Versuchen Sie es erneut: Es wurde nichts gestartet.";
 "onboarding.task.later" = "Chat öffnen, ich schreibe später";
 "onboarding.task.noAgent" = "Es gibt noch keinen Agenten für die Aufgabe. Gehen Sie zurück und stellen Sie einen ein.";

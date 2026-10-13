@@ -14,11 +14,15 @@ final class OnboardingSession {
     /// The first-task model, made when the step opens for an agent. Not observed: it is made while the step is drawn.
     @ObservationIgnored private var task: FirstTaskModel?
 
-    init(server: ServerModel) {
+    init(
+        server: ServerModel, createdIDs: @escaping () -> Set<String> = { [] },
+        noteCreated: @escaping ([String]) -> Void = { _ in }
+    ) {
         self.server = server
         let subscriptions = SubscriptionsModel(server: server)
         self.subscriptions = subscriptions
-        crew = CrewModel(server: server, subscriptions: subscriptions)
+        crew = CrewModel(
+            server: server, subscriptions: subscriptions, createdIDs: createdIDs, noteCreated: noteCreated)
     }
 
     /// The task model for `agentID`; a new one when the agent changed.
@@ -44,7 +48,11 @@ struct OnboardingSessionHost<Content: View>: View {
                 content(session)
             } else {
                 // One frame of nothing while the session is made: it is state, so it cannot be written while drawing.
-                Color.clear.onAppear { session = OnboardingSession(server: server) }
+                Color.clear.onAppear {
+                    session = OnboardingSession(
+                        server: server, createdIDs: { onboarding.createdAgentIDs },
+                        noteCreated: { onboarding.rememberCreated($0) })
+                }
             }
         } else {
             VStack(alignment: .leading, spacing: 14) {

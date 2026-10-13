@@ -1840,6 +1840,7 @@
 "onboarding.subs.stateNotInstalled" = "서버에 설치되지 않았어요";
 "onboarding.subs.stateSignedIn" = "로그인됨";
 "onboarding.subs.stateUnverified" = "설치됐어요. 서버에서 로그인 상태를 확인할 수 없어요";
+"onboarding.task.chooseCrew" = "팀 선택";
 "onboarding.task.failed" = "작업을 보내지 못했습니다. 다시 시도하세요. 아무것도 시작되지 않았습니다.";
 "onboarding.task.later" = "채팅 열기, 나중에 쓸게요";
 "onboarding.task.noAgent" = "아직 작업을 받을 에이전트가 없습니다. 돌아가서 에이전트를 만드세요.";

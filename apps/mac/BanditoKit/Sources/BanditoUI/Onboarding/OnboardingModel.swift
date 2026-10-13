@@ -66,6 +66,7 @@ public final class OnboardingModel {
     public static let historyKey = "onboarding.history"
     public static let firstAgentKey = "onboarding.firstAgent"
     public static let firstTeamKey = "onboarding.firstTeam"
+    public static let createdKey = "onboarding.createdAgents"
 
     public private(set) var step: OnboardingStep
     /// The card on screen at "What you get" (0-based).
@@ -74,6 +75,9 @@ public final class OnboardingModel {
     public private(set) var history: [OnboardingStep]
     /// The agent the crew step made first: the first task goes to it.
     public private(set) var firstAgentID: String?
+    /// The ids of the agents this introduction made. Only they make the crew step "done" after a relaunch: an agent of
+    /// the same template that was already on the server (from the Marketplace, say) is not this crew.
+    public private(set) var createdAgentIDs: Set<String>
     /// The ready team the crew step made (its bundle id), or nil for one agent: the first task's suggestions follow it.
     public private(set) var firstTeamID: String?
     /// Whether the flow is in front of the main window.
@@ -113,11 +117,12 @@ public final class OnboardingModel {
         step = start
         card = OnboardingRules.clampedCard(defaults.object(forKey: Self.cardKey) as? Int)
         history = Self.readHistory(defaults.string(forKey: Self.historyKey), before: start)
-        // The server step was passed by connecting: Back from the next step returns to it.
-        if remapped { history.append(.server) }
         firstAgentID = defaults.string(forKey: Self.firstAgentKey)
         firstTeamID = defaults.string(forKey: Self.firstTeamKey)
+        createdAgentIDs = Set((defaults.string(forKey: Self.createdKey) ?? "").split(separator: ",").map(String.init))
         isActive = !defaults.bool(forKey: Self.doneKey) && (!hasSavedServers || resumesAfterServer)
+        // The server step was passed by connecting: Back from the next step returns to it.
+        if remapped { history.append(.server) }
         wasDoneAtLaunch = !isActive
     }
 
@@ -209,6 +214,12 @@ public final class OnboardingModel {
         defaults.set(team, forKey: Self.firstTeamKey)
     }
 
+    /// The crew step made these agents (all it has made so far): a relaunch remembers them.
+    public func rememberCreated(_ ids: [String]) {
+        createdAgentIDs.formUnion(ids)
+        defaults.set(createdAgentIDs.sorted().joined(separator: ","), forKey: Self.createdKey)
+    }
+
     /// "Choose a server" on a step that found none: back to the server step, forgetting the steps after it.
     public func returnToServer() {
         needsApproval = false
@@ -232,6 +243,8 @@ public final class OnboardingModel {
         persistHistory()
         firstAgentID = nil
         firstTeamID = nil
+        createdAgentIDs = []
+        defaults.removeObject(forKey: Self.createdKey)
         defaults.removeObject(forKey: Self.firstAgentKey)
         defaults.removeObject(forKey: Self.firstTeamKey)
         setCard(0)

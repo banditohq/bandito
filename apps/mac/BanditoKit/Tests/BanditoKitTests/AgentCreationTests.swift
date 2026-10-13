@@ -17,6 +17,9 @@ private final class FakeServer: AgentCreationServer {
     var failingTemplates: Set<String> = []
     var losesBundleAnswer = false
     var failsBundleBeforeMaking = false
+    /// How many of the next `readAgentsNow` calls fail (the connection is down).
+    var readFailures = 0
+    var emptyBundleAnswer = false
     var losesAgentAnswer = false
     var agentFailures = 0
     var clockOffset: Int64 = 0
@@ -25,7 +28,13 @@ private final class FakeServer: AgentCreationServer {
 
     private var now: Int64 { Int64(Date().timeIntervalSince1970 * 1000) + clockOffset }
 
-    func readAgentsNow() async throws { readCount += 1 }
+    func readAgentsNow() async throws {
+        readCount += 1
+        if readFailures > 0 {
+            readFailures -= 1
+            throw Boom()
+        }
+    }
 
     func createAgent(_ new: NewAgent) async throws -> Agent {
         agentRequests.append(new)
@@ -42,6 +51,7 @@ private final class FakeServer: AgentCreationServer {
     func createBundle(_ new: NewBundle) async throws -> BundleCreation {
         bundleRequests.append(new)
         if failsBundleBeforeMaking { throw Boom() }
+        if emptyBundleAnswer { return BundleCreation(agents: []) }
         var entries: [BundleEntry] = []
         for id in new.templates ?? [] {
             if failingTemplates.contains(id) {
@@ -244,5 +254,99 @@ private final class FakeServer: AgentCreationServer {
         #expect(server.agentRequests.isEmpty)
         #expect(await creation.create(folder: { "/p" }, workplace: { tries += 1; return "box" }, build: build))
         #expect(server.agentRequests.first?.workspaceId == "box")
+    }
+
+    // MARK: unknown state (the read fails too)
+
+    @Test func whenTheListCannotBeReadAfterAFailureTheRetryMakesNothingUntilItCan() async {
+        let server = FakeServer()
+        server.losesBundleAnswer = true
+        server.readFailures = 2
+        let creation = team(server)
+        #expect(await run(creation, Folders()) == false)
+        #expect(server.agents.count == 3)  // the daemon made them; we do not know
+        #expect(creation.made.isEmpty)
+        // Retry 1: the read fails again: no request goes out, the error is shown.
+        #expect(await run(creation, Folders()) == false)
+        #expect(server.bundleRequests.count == 1)
+        #expect(creation.failure == "failed")
+        // Retry 2: the read passes: the new agents are counted, nothing is made twice.
+        #expect(await run(creation, Folders()))
+        #expect(server.bundleRequests.count == 1)
+        #expect(server.agents.count == 3)
+        #expect(creation.isComplete)
+    }
+
+    @Test func afterTheListIsReadTheMissingAreMadeOnce() async {
+        let server = FakeServer()
+        server.failsBundleBeforeMaking = true
+        server.readFailures = 1
+        let creation = team(server)
+        #expect(await run(creation, Folders()) == false)
+        server.failsBundleBeforeMaking = false
+        #expect(await run(creation, Folders()))
+        #expect(server.bundleRequests.last?.templates == ids)
+        #expect(server.agents.count == 3)
+    }
+
+    @Test func oneAgentWhoseAnswerAndListAreBothLostIsCountedAfterTheNextRead() async {
+        let server = FakeServer()
+        server.losesAgentAnswer = true
+        server.readFailures = 1
+        let creation = SingleAgentCreation(server: server, describe: { _ in "failed" })
+        let build: (String, String?) -> NewAgent = { folder, _ in NewAgent(name: "Forge", runtime: .claude, cwd: folder) }
+        #expect(await creation.create(folder: { "/p" }, build: build) == false)
+        // The read fails again: nothing is made.
+        server.readFailures = 1
+        #expect(await creation.create(folder: { "/p" }, build: build) == false)
+        #expect(server.agentRequests.count == 1)
+        // The read passes: the agent the first request made is the one.
+        #expect(await creation.create(folder: { "/p" }, build: build))
+        #expect(server.agentRequests.count == 1)
+        #expect(server.agents.count == 1)
+        #expect(creation.agent?.name == "Forge")
+    }
+
+    @Test func anEmptyAnswerIsNotMadeAndSaysSo() async {
+        let server = FakeServer()
+        server.emptyBundleAnswer = true
+        let creation = team(server)
+        #expect(await run(creation, Folders()) == false)
+        #expect(creation.failure == "nothing")
+    }
+
+    // MARK: kept across a closed sheet
+
+    @Test func aPartialFailureClosedAndOpenedAgainContinuesWithoutDuplicates() async {
+        let server = FakeServer()
+        server.failingTemplates = ["t2"]
+        let store = AgentCreationStore()
+        let first = team(server)
+        store.setTeam(first, for: "sheet:b")
+        #expect(await run(first, Folders()) == false)
+        // The sheet is closed and opened again: the store gives back the same creation with its progress.
+        let again = try? #require(store.team("sheet:b"))
+        #expect(again === first)
+        #expect(again?.madeTemplateIDs == ["t1", "t3"])
+        #expect(again?.failure != nil)
+        server.failingTemplates = []
+        #expect(await run(again!, Folders()))
+        #expect(server.agents.count == 3)
+        #expect(server.bundleRequests[1].templates == ["t2"])
+        store.forgetTeam("sheet:b")
+        #expect(store.team("sheet:b") == nil)
+    }
+
+    @Test func anAttemptRunningWhenTheSheetClosesFinishesAndItsResultIsThereOnTheNextOpen() async {
+        let server = FakeServer()
+        let store = AgentCreationStore()
+        let creation = team(server)
+        store.setTeam(creation, for: "sheet:b")
+        // The sheet's task is not tied to the sheet: it runs to the end with nobody looking.
+        let folders = Folders()
+        let running = Task { await run(creation, folders) }
+        _ = await running.value
+        #expect(store.team("sheet:b")?.isComplete == true)
+        #expect(store.team("sheet:b")?.result.agents.count == 3)
     }
 }

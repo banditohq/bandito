@@ -3,23 +3,42 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
+/// What the first task needs from a server: `ServerModel` in the app, a fake in the tests.
+@MainActor
+protocol TaskSending: AnyObject {
+    var agents: [Agent] { get }
+    func send(_ text: String, to agentId: String) async throws
+    /// Reads the agent's thread from the server (not the local echo) into `thread(for:)`.
+    func loadHistory(_ agentId: String) async throws
+    func thread(for agentId: String) -> AgentThread
+}
+
+extension ServerModel: TaskSending {
+    func send(_ text: String, to agentId: String) async throws {
+        try await send(text, to: agentId, replyTo: nil, attachments: [], mentions: [], viaButton: false)
+    }
+}
+
 /// What the "First task" step shows and does: four suggestions for the crew that was hired, a field for the person's
-/// own, and the send. A send that failed can be tried again without sending the task twice: the thread is looked at
-/// first, because the answer of a request may be lost after the agent got the message.
+/// own, and the send. A send that failed can be tried again without sending the task twice. The daemon has no id for a
+/// message the client makes up, so the server's own thread decides: before the first send the thread is read from the
+/// server and the messages with this text are counted; after a failed send it is read again, and one more message with
+/// this text means the agent has it (the answer was lost). If the thread cannot be read, nothing is sent: the person is
+/// told the connection failed and can try again. (Counted, not timed: the server's clock and ours may differ.)
 @MainActor
 @Observable
 final class FirstTaskModel {
-    let server: ServerModel
+    let server: TaskSending
     let agentID: String
     let teamID: String?
 
     private(set) var text = ""
     private(set) var sending = false
     private(set) var failure: UserFacingMessage?
-    /// The text of the attempt that failed and how many such messages the thread had before it.
+    /// The text of the attempt that failed and how many messages with it the server's thread had before it.
     @ObservationIgnored private var attempt: (text: String, baseline: Int)?
 
-    init(server: ServerModel, agentID: String, teamID: String?) {
+    init(server: TaskSending, agentID: String, teamID: String?) {
         self.server = server
         self.agentID = agentID
         self.teamID = teamID
@@ -51,19 +70,29 @@ final class FirstTaskModel {
         sending = true
         failure = nil
         defer { sending = false }
-        if let attempt, attempt.text == message, userMessages(with: message) > attempt.baseline {
+        do {
+            try await server.loadHistory(agentID)
+        } catch {
+            var message = UserFacingError.message(for: error)
+            message.canRetry = true
+            failure = message
+            return false
+        }
+        let count = userMessages(with: message)
+        if let attempt, attempt.text == message, count > attempt.baseline {
             // The earlier request failed on the way back, but the agent has the message: do not send it twice.
             self.attempt = nil
             return true
         }
-        let baseline = attempt?.text == message ? attempt?.baseline ?? userMessages(with: message) : userMessages(with: message)
+        let baseline = attempt?.text == message ? attempt?.baseline ?? count : count
         do {
             try await server.send(message, to: agentID)
             attempt = nil
             return true
         } catch {
             attempt = (message, baseline)
-            failure = UserFacingMessage(text: L10n.Onboarding.Task.failed, technical: UserFacingError.message(for: error).technical, canRetry: true)
+            failure = UserFacingMessage(
+                text: L10n.Onboarding.Task.failed, technical: UserFacingError.message(for: error).technical, canRetry: true)
             return false
         }
     }
@@ -84,6 +113,8 @@ struct FirstTaskStep: View {
     var onSent: () -> Void
     /// "Open the chat, I will write later": the chat opens with nothing sent.
     var onLater: () -> Void
+    /// "Choose a crew": back to the step that makes the agents, when there is no agent to send to.
+    var onChooseCrew: () -> Void
 
     @FocusState private var fieldFocused: Bool
 
@@ -171,10 +202,15 @@ struct FirstTaskStep: View {
     }
 
     private var noAgent: some View {
-        Text(L10n.Onboarding.Task.noAgent)
-            .font(BanditoFont.text(size: 14, weight: 400))
-            .foregroundStyle(Color.Bandito.text2)
-            .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 14) {
+            Text(L10n.Onboarding.Task.noAgent)
+                .font(BanditoFont.text(size: 14, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(L10n.Onboarding.Task.chooseCrew, action: onChooseCrew)
+                .banditoButton(.signal())
+                .fixedSize()
+        }
     }
 
     private var nextAction: OnboardingNextAction? {

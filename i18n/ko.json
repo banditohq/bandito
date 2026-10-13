@@ -3327,5 +3327,6 @@
   "onboarding.crew.workplaceShared": "다른 에이전트처럼 서버에서 직접 실행됩니다.",
   "onboarding.crew.resumed": "이 팀의 {total}명 중 {made}명이 이미 서버에 있습니다. 나머지를 만들거나 이대로 진행하세요.",
   "onboarding.crew.goOn": "이대로 진행",
-  "onboarding.crew.hireRest": "나머지 만들기"
+  "onboarding.crew.hireRest": "나머지 만들기",
+  "onboarding.task.chooseCrew": "팀 선택"
 }

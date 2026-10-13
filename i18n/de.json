@@ -3368,5 +3368,6 @@
   "onboarding.crew.workplaceShared": "Auf dem Server selbst, wie die anderen.",
   "onboarding.crew.resumed": "{made} von {total} Agenten dieses Teams sind schon auf dem Server. Stellen Sie die übrigen ein oder machen Sie mit diesen weiter.",
   "onboarding.crew.goOn": "Mit diesen weitermachen",
-  "onboarding.crew.hireRest": "Übrige einstellen"
+  "onboarding.crew.hireRest": "Übrige einstellen",
+  "onboarding.task.chooseCrew": "Team wählen"
 }

@@ -1840,6 +1840,7 @@
 "onboarding.subs.stateNotInstalled" = "サーバーにインストールされていません";
 "onboarding.subs.stateSignedIn" = "サインイン済み";
 "onboarding.subs.stateUnverified" = "インストール済み。サーバーではサインインを確認できません";
+"onboarding.task.chooseCrew" = "チームを選ぶ";
 "onboarding.task.failed" = "タスクを送れませんでした。もう一度お試しください。何も開始されていません。";
 "onboarding.task.later" = "チャットを開く（後で書く）";
 "onboarding.task.noAgent" = "まだ送る相手のエージェントがいません。戻ってエージェントを迎えてください。";

@@ -3369,5 +3369,6 @@
   "onboarding.crew.workplaceShared": "On the server itself, like the others.",
   "onboarding.crew.resumed": "{made} of {total} agents of this team are already on the server. Hire the rest, or go on with these.",
   "onboarding.crew.goOn": "Go on with these",
-  "onboarding.crew.hireRest": "Hire the rest"
+  "onboarding.crew.hireRest": "Hire the rest",
+  "onboarding.task.chooseCrew": "Choose a crew"
 }
