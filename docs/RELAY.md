@@ -45,7 +45,9 @@ end-to-end encrypted session (Noise) through it, so the relay never sees command
   sends `ping` to both sides every 25 s; both the daemon and the phone answer `pong` and send their own `ping` every
   25 s; 60 s of silence closes with 4002.
 - Close codes: 4001 replaced by a newer server connection, 4002 silence timeout, 4003 registration deleted, 4004 the
-  server left (sent to phones), 4008 monthly traffic limit, 4009 message over 1 MiB. Before the upgrade: 401 bad
+  server left (sent to phones), 4008 monthly traffic limit (checked at 95%), 4009 message over 1 MiB or any text but
+  `ping`/`pong`, 4010 too many messages (200/s per phone socket, 2000/s per server socket), 4011 a phone stream sent no
+  binary frame within 15 s of opening. Before the upgrade: 401 bad
   secret, 503 `{"error":"offline"}` (server not connected or unknown sid), 429 `{"error":"too_many_streams"}` or
   `{"error":"rate"}`.
 - Phone: `GET wss://relay.bandito.dev/v1/client/<sid>` (no auth at the relay: the Noise session is the auth). If the
@@ -87,3 +89,28 @@ the same network), then the relay.
 - Revoking a device closes its relay streams too (the device cancel token of `phone.rs`).
 - `relay.disable` closes the outbound connection and every stream at once.
 - Deleting the account deletes its relay registrations.
+
+## One account on every device: servers follow you
+
+Signing in to the same bandito.dev account on the iPhone shows the servers added on the Mac, and a server added on the
+phone appears on the Mac. Built on the existing end-to-end encrypted sync (`docs/ACCOUNTS_API.md`: device approval,
+sync key envelopes, `SyncPayload` in BanditoKit — shared by both apps).
+
+- **iPhone sign-in**: the same flows as the Mac (GitHub device flow, email code) from Settings → Account and from the
+  onboarding («У меня есть аккаунт»). A new phone is approved on the Mac by comparing the code, as for a new Mac.
+- **What syncs per server** (`SyncedServer`): besides today's endpoint, an optional `phone` record
+  `{sid?, relay_host?, nk?, fp?, hosts[]}` — how any device can reach the daemon without SSH. Written by whichever
+  device turns relay or direct access on. Device tokens are **never** in the shared blob.
+- **Access is issued, not copied.** Each device needs its own device token from each daemon. A device that sees a
+  server it has no token for adds a request to the blob: `access_requests: [{device_id, server_id, noise_key, at}]`.
+  Any approved device that is connected to that daemon (the Mac over SSH, or a phone already paired) answers it:
+  daemon RPC `devices.issue {name, platform, noise_key}` (owner peers only) returns a fresh device token for a new
+  device row; the answering device seals it with HPKE to the requesting device's account public key (the same suite as
+  sync key envelopes, info `bandito-device-token:v1`, AAD `<accountID>:<requestingDeviceID>:<serverID>`) and writes
+  `access_grants: [{device_id, server_id, sealed, at}]`. The requester opens it, stores the token in its Keychain,
+  connects (direct or relay), and removes its request and grant from the blob. Requests older than 7 days are dropped.
+- So: sign in on the phone → approve it on the Mac → within seconds (while the Mac is online) every server with relay
+  or direct access appears and connects. A server added on the phone by QR syncs to the Mac the same way (the phone
+  answers the Mac's request).
+- Revoking a device in the account removes it from the account; the Mac then also revokes its device rows on the
+  servers it can reach (`devices.revoke`), so a lost phone loses access everywhere.
