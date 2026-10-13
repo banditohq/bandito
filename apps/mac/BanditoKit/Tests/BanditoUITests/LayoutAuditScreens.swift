@@ -219,7 +219,7 @@ extension LayoutAuditSnapshots {
             env.showOnboarding(.team)
             return AnyView(OnboardingFlow())
         },
-        AuditCase(name: "onboarding-team-preview", width: 772, height: 640) { env in
+        AuditCase(name: "onboarding-team-preview", width: 772, scrolls: true) { env in
             // The step on its own, at the width the flow gives it, with the catalog the daemon ships in place of the
             // server's answer.
             let subscriptions = SubscriptionsModel(server: env.server)

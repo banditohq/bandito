@@ -60,10 +60,17 @@ public struct RootView: View {
         .task { QAHooks.start(router: router, onboarding: onboarding, telemetry: telemetry) }
         #endif
         .task { await app.keepUsageFresh() }
-        // The introduction is over: now the system may ask to show notifications (it asks only the first time).
-        .onChange(of: onboarding.isActive) { _, active in
-            if !active { app.askNotificationPermission() }
-        }
+        // Not up front: the first time an agent waits for the person or finishes, the app asks whether to tell them.
+        .alert(
+            L10n.Notify.Ask.title(name: app.notificationQuestion?.agentName ?? ""),
+            isPresented: Binding(
+                get: { app.notificationQuestion != nil && !onboarding.isActive },
+                set: { shown in if !shown, app.notificationQuestion != nil { app.answerNotificationQuestion(yes: false) } }),
+            actions: {
+                Button(L10n.Notify.Ask.yes) { app.answerNotificationQuestion(yes: true) }
+                Button(L10n.Notify.Ask.no, role: .cancel) { app.answerNotificationQuestion(yes: false) }
+            },
+            message: { Text(L10n.Notify.Ask.message) })
         // The unread count on the Dock icon (see `DockBadge`), watched from the first appearance on.
         .task {
             guard dockIcon == nil else { return }
