@@ -106,7 +106,7 @@ The step where the crew is made. On the left are the ready teams (Web project, S
 Где: Introduction → step 6 of 7 (Your crew) → Hire the crew (Нанять команду)
 1. Pick a team. For one agent, pick a role, type a name (the default is the role) and check the folder.
 2. Change the project folder with the folder button if you want another one. By default Bandito makes a free folder in `projects` once.
-3. Click Hire the crew (Нанять команду) (or Hire the agent (Нанять агента)). A message that names how many are ready asks you to press the button again after a failure.
+3. Click Hire the crew (Нанять команду) (or Hire the agent (Нанять агента)). A message that names how many are ready asks you to press the button again after a failure. If you come back to this step (or reopen the app) and some of the team is already on the server, the step shows them as made: Hire the rest (Нанять остальных) makes the missing ones, or Go on with these (Идти дальше с этими) skips them. For one agent you also choose Where it runs (Где работает): on the server itself, or in a separate container (when Docker is on the server).
 
 ## First task
 
@@ -120,7 +120,7 @@ The last step. Four suggestions are written for the crew you hired, for example 
 ## Notifications: asked when they matter
 
 <!-- id: gs-notify-ask; covers: -->
-Bandito does not ask for notifications up front. The first time an agent waits for you or finishes a turn, it asks once: Want to know when Forge needs you? Yes, notify me (Да, уведомлять) asks the system; Not now (Не сейчас) leaves it. You can change this in Settings → Notifications.
+The first-run notice about anonymous statistics does not cover your first chat either: it waits until the first reply is complete and the field is empty, or the next launch. Bandito does not ask for notifications up front. The first time an agent waits for you or finishes a turn, it asks once: Want to know when Forge needs you? Yes, notify me (Да, уведомлять) asks the system; Not now (Не сейчас) leaves it. You can change this in Settings → Notifications.
 Где: Main window → the question at the first approval or finished turn
 1. Answer Yes, notify me or Not now.
 

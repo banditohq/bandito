@@ -126,6 +126,8 @@ struct BundlePanel: View {
     @State private var error: UserFacingMessage?
     /// A request failed: the bots already made are read from the list, and Create makes the rest.
     @State private var retrying = false
+    /// Keeps what exists across attempts (ids decide, never the clock): a retry asks only for the missing bots.
+    @State private var creation: TeamCreation?
 
     init(
         bundle: AgentBundle, members: [BotTemplate], services: [BotLogic.Service], server: ServerModel,
@@ -364,45 +366,36 @@ struct BundlePanel: View {
 
     // MARK: actions
 
-    /// Makes the team. After a failed request only the bots without a recent agent of their template are asked for, and
-    /// the answer lists the bots made before as well.
+    /// Makes the team. After a failed attempt only the bots that do not exist yet are asked for (`TeamCreation`).
     private func create() {
         guard !creating, let runtime else { return }
-        let now = Date()
-        let earlier = retrying ? BundleLogic.recentEntries(members: members, agents: server.agents, now: now) : []
-        let targets = retrying ? BundleLogic.remaining(members: members, agents: server.agents, now: now) : members
+        let attempt: TeamCreation
+        if let creation {
+            attempt = creation
+        } else {
+            attempt = TeamCreation(
+                server: server, bundle: bundle, members: members, runtime: runtime, model: nil, languageCode: languageCode,
+                texts: AgentCreationTexts(
+                    describe: { UserFacingError.message(for: $0).text },
+                    partial: { L10n.Market.Bundle.resultTitle(created: String($0), total: String($1)) },
+                    noRuntime: L10n.AgentSheet.statusNotInstalled, none: L10n.Market.Bundle.Status.notMade))
+            creation = attempt
+        }
         error = nil
         creating = true
         Task {
-            do {
-                var made = BundleCreation()
-                if !targets.isEmpty {
-                    guard let request = BundleLogic.request(
-                        bundle: bundle, runtime: runtime, languageCode: languageCode,
-                        templates: retrying ? targets.map(\.id) : nil)
-                    else {
-                        creating = false
-                        return
-                    }
-                    made = try await server.createBundle(request)
-                    Telemetry.count(.agentCreate(.bundle))
-                }
-                let answer = retrying ? BundleLogic.combined(members: members, earlier: earlier, made: made) : made
-                for row in BundleLogic.rows(of: answer, templates: members, languageCode: languageCode) {
-                    if let problem = row.problem {
-                        Self.log.error("bundle \(bundle.id, privacy: .public) \(row.id, privacy: .public): \(problem, privacy: .public)")
-                    }
-                }
-                result = answer
+            defer { creating = false }
+            let complete = await attempt.create(folder: { "" }, items: [], enabled: [])
+            for (id, problem) in attempt.problems {
+                Self.log.error("bundle \(bundle.id, privacy: .public) \(id, privacy: .public): \(problem, privacy: .public)")
+            }
+            if complete {
+                Telemetry.count(.agentCreate(.bundle))
+                result = attempt.result
                 retrying = false
-                creating = false
-            } catch {
-                Self.log.error("agents.create_bundle \(bundle.id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
-                self.error = UserFacingError.message(for: error)
-                // The daemon may have made some of the bots before the request failed: read the list first.
-                try? await server.readAgentsNow()
+            } else {
+                if let text = attempt.failure { error = UserFacingMessage(text: text, canRetry: true) }
                 retrying = true
-                creating = false
             }
         }
     }

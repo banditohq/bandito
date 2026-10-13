@@ -376,30 +376,10 @@ import Testing
         #expect(OnboardingModel.nextStep(after: .done, needsApproval: false) == .done)
     }
 
-    // MARK: tour
-
-    @Test func creatingTheFirstAgentFinishesWithTheTour() {
-        let model = OnboardingModel(defaults: makeDefaults())
-        model.finishWithTour()
-        #expect(model.isDone)
-        #expect(!model.isActive)
-        #expect(model.tourRequested)
-        model.endTour()
-        #expect(!model.tourRequested)
-    }
-
-    @Test func skippingTheFlowDoesNotStartTheTour() {
+    @Test func skippingTheFlowFinishesIt() {
         let model = OnboardingModel(defaults: makeDefaults())
         model.skip()
         #expect(model.isDone)
-        #expect(!model.tourRequested)
-    }
-
-    @Test func replayClearsAPendingTour() {
-        let model = OnboardingModel(defaults: makeDefaults())
-        model.finishWithTour()
-        model.replay()
-        #expect(!model.tourRequested)
-        #expect(model.isActive)
+        #expect(!model.isActive)
     }
 }

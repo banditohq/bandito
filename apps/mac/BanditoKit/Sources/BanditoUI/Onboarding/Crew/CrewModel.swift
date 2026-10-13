@@ -35,10 +35,14 @@ final class CrewModel {
     private(set) var resolvingFolder = false
     /// The keys of the schedules switched on. Empty at first: nothing runs before the person confirms it.
     private(set) var enabled: Set<String> = []
+    /// Where one agent runs: the shared server, or a separate container (Docker on the server).
+    let workplaces: WorkspacesModel
+    private(set) var workplace: WorkplaceChoice = .shared
+    private(set) var newWorkplace = NewWorkplaceDraft()
     private(set) var template: AgentTemplate = .builder
     private(set) var name = ""
     @ObservationIgnored private var teamCreations: [String: TeamCreation] = [:]
-    private(set) var oneCreation: OneAgentCreation?
+    private(set) var oneCreation: SingleAgentCreation?
     @ObservationIgnored private var folderGeneration = 0
     private(set) var loadedOnce = false
     /// An agent a previous run made: the crew counts as made and nothing is made again.
@@ -48,6 +52,7 @@ final class CrewModel {
         self.server = server
         self.subscriptions = subscriptions
         self.preview = preview
+        workplaces = WorkspacesModel(server: server)
         if preview != nil { loadedOnce = true }
     }
 
@@ -108,6 +113,7 @@ final class CrewModel {
             await bots.load(from: server)
         }
         if home == nil { home = try? await server.list("~").path }
+        await workplaces.load()
         runtime = BundleLogic.runtime(keeping: runtime, available: available)
         if choice == nil { select(teams.first.map { .team($0.id) } ?? .single) }
         loadedOnce = true
@@ -162,6 +168,40 @@ final class CrewModel {
     }
 
     // MARK: single agent
+
+    var workplaceReady: Bool {
+        switch workplace {
+        case .shared: true
+        case .existing(let id): workplaces.containers.contains { $0.id == id }
+        case .new: workplaces.canCreateSeparate && newWorkplace.canCreate
+        }
+    }
+
+    /// Shared server, or a separate workplace. Switching to separate picks the first container, or a new one.
+    func setSeparate(_ separate: Bool) {
+        guard !isLocked else { return }
+        guard separate else {
+            workplace = .shared
+            return
+        }
+        guard workplaces.canCreateSeparate, workplace == .shared else { return }
+        workplace = workplaces.containers.first.map { .existing($0.id) } ?? .new
+    }
+
+    func chooseExisting(_ id: String) {
+        guard !isLocked else { return }
+        workplace = .existing(id)
+    }
+
+    func chooseNewWorkplace() {
+        guard !isLocked else { return }
+        workplace = .new
+    }
+
+    func setNewWorkplaceName(_ text: String) {
+        guard !isLocked else { return }
+        newWorkplace.name = text
+    }
 
     var effectiveName: String {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
@@ -231,18 +271,20 @@ final class CrewModel {
     var isDone: Bool {
         if adopted != nil { return true }
         switch choice {
-        case .team: return teamCreation?.isComplete ?? false
+        case .team: return teamCreation?.isComplete ?? teamAlreadyThere
         case .single: return oneCreation?.agent != nil
         case nil: return false
         }
     }
 
     var failure: UserFacingMessage? {
+        let text: String?
         switch choice {
-        case .team: teamCreation?.failure
-        case .single: oneCreation?.failure
-        case nil: nil
+        case .team: text = teamCreation?.failure
+        case .single: text = oneCreation?.failure
+        case nil: text = nil
         }
+        return text.map { UserFacingMessage(text: $0, canRetry: true) }
     }
 
     var canCreate: Bool {
@@ -252,7 +294,7 @@ final class CrewModel {
             return ReadyTeamsLogic.canCreate(runtime: runtime, folder: folder, members: selectedMembers, busy: false)
                 && !selectedMembers.isEmpty
         case .single:
-            return nameProblem == nil && !folder.trimmingCharacters(in: .whitespaces).isEmpty
+            return nameProblem == nil && !folder.trimmingCharacters(in: .whitespaces).isEmpty && workplaceReady
         case nil:
             return false
         }
@@ -263,13 +305,40 @@ final class CrewModel {
         if let adopted { return [adopted] }
         switch choice {
         case .team:
-            guard let creation = teamCreation else { return [] }
+            guard let creation = teamCreation else { return Array(existingMade.values).sorted { rank($0) < rank($1) } }
             return creation.members.compactMap { creation.made[$0.id] }
         case .single:
             return oneCreation?.agent.map { [$0] } ?? []
         case nil:
             return []
         }
+    }
+
+    /// The agents of the chosen team that are already on the server (by template): an earlier run made them, or this one
+    /// did and the app was closed. Shown as made; Hire makes only the rest.
+    var existingMade: [String: Agent] {
+        guard case .team = choice else { return [:] }
+        var found: [String: Agent] = [:]
+        for member in selectedMembers {
+            if let agent = server.agents.first(where: { $0.templateId == member.id }) { found[member.id] = agent }
+        }
+        return found
+    }
+
+    private var teamAlreadyThere: Bool {
+        let members = selectedMembers
+        return !members.isEmpty && existingMade.count == members.count
+    }
+
+    /// Some of the team is on the server and some is not, and nothing was made in this run yet: the step offers to make
+    /// the rest or to go on.
+    var isResumed: Bool {
+        guard case .team = choice, teamCreation == nil, adopted == nil else { return false }
+        return !existingMade.isEmpty && !teamAlreadyThere
+    }
+
+    private func rank(_ agent: Agent) -> Int {
+        selectedMembers.firstIndex { $0.id == agent.templateId } ?? Int.max
     }
 
     /// The agent the first task goes to.
@@ -290,23 +359,33 @@ final class CrewModel {
             guard let bundle = teams.first(where: { $0.id == id }) else { return nil }
             let creation = teamCreations[id] ?? TeamCreation(
                 server: server, bundle: bundle, members: members(of: bundle), runtime: runtime,
-                model: ReadyTeamsLogic.model(runtime: runtime, models: models(for: runtime)), languageCode: languageCode)
+                model: ReadyTeamsLogic.model(runtime: runtime, models: models(for: runtime)), languageCode: languageCode,
+                texts: CrewTexts.creation, alreadyMade: existingMade)
             teamCreations[id] = creation
+            let path = folder, makes = makesFolder, server = server
             await creation.create(
-                folder: folder, makeFolder: makesFolder, items: scheduleItems, enabled: enabled)
+                folder: { if makes { try await server.ensureFolder(path) }; return path },
+                items: scheduleItems, enabled: enabled)
             if creation.isComplete { Telemetry.count(.agentCreate(.bundle)) }
             return creation.isComplete ? creation.firstAgent : nil
         case .single:
-            let creation = oneCreation ?? OneAgentCreation(server: server)
+            let creation = oneCreation ?? SingleAgentCreation(server: server, describe: {
+                WorkspaceText.failure($0) ?? UserFacingError.message(for: $0).text
+            })
             oneCreation = creation
             let template = template
             let agentName = effectiveName
-            let made = await creation.create(folder: folder, makeFolder: makesFolder) { path in
-                NewAgent(
-                    name: agentName, role: template == .scratch ? "" : template.title, runtime: runtime, cwd: path,
-                    approvalMode: .risky, systemPrompt: template.instructions.isEmpty ? nil : template.instructions,
-                    effort: template.effort)
-            }
+            let path = folder, makes = makesFolder, server = server
+            let place = workplace, draft = newWorkplace
+            let made = await creation.create(
+                folder: { if makes { try await server.ensureFolder(path) }; return path },
+                workplace: { try await WorkplaceCreation.prepare(place, new: draft, on: server) },
+                build: { folder, workspaceID in
+                    NewAgent(
+                        name: agentName, role: template == .scratch ? "" : template.title, runtime: runtime, cwd: folder,
+                        approvalMode: .risky, systemPrompt: template.instructions.isEmpty ? nil : template.instructions,
+                        effort: template.effort, workspaceId: workspaceID)
+                })
             if made { Telemetry.count(.agentCreate(template == .scratch ? .plain : .template)) }
             return made ? creation.agent : nil
         case nil:

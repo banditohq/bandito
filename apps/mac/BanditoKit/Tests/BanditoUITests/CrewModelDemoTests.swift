@@ -40,7 +40,7 @@ import Testing
         #expect(crew.isDone)
         try await world.server.readAgentsNow()
         #expect(world.server.agents.count == 3)
-        #expect(Set(world.server.agents.map(\.name)).count == 3)
+        #expect(Set(world.server.agents.map(\.templateId)).count == 3)
         #expect(crew.teamCreation?.folder == folderBefore)
         #expect(Set(world.server.agents.map(\.cwd)).count == 1)
         // A third tap does nothing.
@@ -89,6 +89,27 @@ import Testing
         again.adopt(try #require(made))
         #expect(again.isDone)
         #expect(again.madeAgents.map(\.id) == [made!.id])
+    }
+
+    @Test func comingBackMidwayShowsTheAgentsThatExistAndMakesTheRest() async throws {
+        let (world, crew) = await ready()
+        defer { Task { await world.stop() } }
+        await world.transport.failBundleEntry(templateID: "qa-tester", failing: true)
+        _ = await crew.create()
+        try await world.server.readAgentsNow()
+        // A new model (the app was closed in the middle): two of three are on the server.
+        let again = CrewModel(server: world.server, subscriptions: world.session!.subscriptions)
+        await again.start()
+        try? await Task.sleep(for: .milliseconds(400))
+        #expect(again.choice == .team("web-project"))
+        #expect(again.isResumed)
+        #expect(again.existingMade.count == 2)
+        #expect(!again.isDone)
+        await world.transport.failBundleEntry(templateID: "qa-tester", failing: false)
+        _ = await again.create()
+        #expect(again.isDone)
+        try await world.server.readAgentsNow()
+        #expect(world.server.agents.count == 3)
     }
 }
 #endif

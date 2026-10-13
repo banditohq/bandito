@@ -32,8 +32,9 @@ struct ReadyTeamSheet: View {
     @State private var creating = false
     @State private var result: BundleCreation?
     @State private var error: UserFacingMessage?
-    /// A request failed: the agents it made are read from the list, and Create makes only the missing ones.
-    @State private var retrying = false
+    /// The first attempt makes it (it keeps the folder and what exists); a retry continues it and makes only the missing
+    /// agents (judged by ids on the server, never by the clock).
+    @State private var creation: TeamCreation?
 
     private var languageCode: String { ModelDescription.currentLanguageCode }
     private var bundle: AgentBundle? { (preview?.bundles ?? bots.bundles).first { $0.id == bundleID } }
@@ -229,7 +230,7 @@ struct ReadyTeamSheet: View {
                     .contentShape(Rectangle())
                 }
                 .banditoButton(.row(cornerRadius: 12))
-                .disabled(creating)
+                .disabled(creating || creation != nil)
                 .popover(isPresented: $pickerOpen, arrowEdge: .top) {
                     FolderPicker(server: server, selection: $folder) { pickerOpen = false }
                 }
@@ -245,6 +246,7 @@ struct ReadyTeamSheet: View {
                     }
                     .banditoButton(.icon(size: 26, label: L10n.AgentSheet.folderClear))
                     .help(L10n.AgentSheet.folderClear)
+                    .disabled(creating || creation != nil)
                 }
             }
         }
@@ -266,7 +268,7 @@ struct ReadyTeamSheet: View {
                     sections: [SelectSection(options: available.map { SelectOption(value: $0, title: $0.title) })],
                     label: L10n.AgentSheet.runtime, placeholder: ""
                 )
-                .disabled(creating)
+                .disabled(creating || creation != nil)
             }
         }
     }
@@ -368,40 +370,34 @@ struct ReadyTeamSheet: View {
     private func create(_ bundle: AgentBundle) {
         guard !creating, let runtime else { return }
         let items = ReadyTeamsLogic.scheduleItems(members: members, languageCode: languageCode)
-        guard
-            var request = ReadyTeamsLogic.request(
-                bundle: bundle, runtime: runtime, languageCode: languageCode,
-                model: ReadyTeamsLogic.model(runtime: runtime, models: models(for: runtime)), folder: folder,
-                items: items, enabled: enabled)
-        else { return }
-        let now = Date()
-        let earlier = retrying ? BundleLogic.recentEntries(members: members, agents: server.agents, now: now) : []
-        let targets = retrying ? BundleLogic.remaining(members: members, agents: server.agents, now: now) : members
-        request.templates = retrying ? targets.map(\.id) : nil
+        let attempt: TeamCreation
+        if let creation {
+            attempt = creation
+        } else {
+            attempt = TeamCreation(
+                server: server, bundle: bundle, members: members, runtime: runtime,
+                model: ReadyTeamsLogic.model(runtime: runtime, models: models(for: runtime)),
+                languageCode: languageCode,
+                texts: AgentCreationTexts(
+                    describe: { UserFacingError.message(for: $0).text },
+                    partial: { L10n.Market.Bundle.resultTitle(created: String($0), total: String($1)) },
+                    noRuntime: L10n.AgentSheet.statusNotInstalled, none: L10n.Market.Bundle.Status.notMade))
+            creation = attempt
+        }
+        let wanted = folder
         error = nil
         creating = true
         Task {
             defer { creating = false }
-            do {
-                var made = BundleCreation()
-                if !targets.isEmpty {
-                    made = try await server.createBundle(request)
-                    Telemetry.count(.agentCreate(.bundle))
-                }
-                let answer = retrying ? BundleLogic.combined(members: members, earlier: earlier, made: made) : made
-                for row in BundleLogic.rows(of: answer, templates: members, languageCode: languageCode) {
-                    if let problem = row.problem {
-                        Self.log.error("ready team \(bundle.id, privacy: .public) \(row.id, privacy: .public): \(problem, privacy: .public)")
-                    }
-                }
-                result = answer
-                retrying = false
-            } catch {
-                Self.log.error("agents.create_bundle \(bundle.id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
-                self.error = UserFacingError.message(for: error)
-                // The daemon may have made some of the agents before the request failed: read the list first.
-                try? await server.readAgentsNow()
-                retrying = true
+            let complete = await attempt.create(folder: { wanted }, items: items, enabled: enabled)
+            for (id, problem) in attempt.problems {
+                Self.log.error("ready team \(bundle.id, privacy: .public) \(id, privacy: .public): \(problem, privacy: .public)")
+            }
+            if complete {
+                Telemetry.count(.agentCreate(.bundle))
+                result = attempt.result
+            } else if let text = attempt.failure {
+                self.error = UserFacingMessage(text: text, canRetry: true)
             }
         }
     }

@@ -142,6 +142,9 @@ public final class AppModel {
     /// The question put to the person at the first approval or finished turn: "Want to know when {name} needs you?".
     /// The window shows it as an alert. Nil when there is none to ask.
     public private(set) var notificationQuestion: NotificationQuestion?
+    /// Agent turns that finished since the app started: the first one ends the wait of the first-run notice about
+    /// statistics (`ConsentTiming`).
+    public private(set) var completedTurns = 0
 
     public struct NotificationQuestion: Equatable, Sendable {
         public let agentName: String
@@ -191,6 +194,7 @@ public final class AppModel {
             if let sound = Self.soundEvent(for: event.body, quiet: server.thread(for: event.agentId).quietTurn) {
                 SoundPlayer.play(sound)
             }
+            if case .turnCompleted = event.body { self.completedTurns += 1 }
             guard let notice = Self.notice(for: event, in: server) else { return }
             self.askNotificationsIfFirst(notice)
             self.notifications?.handle(notice, serverID: server.id)

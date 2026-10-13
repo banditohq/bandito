@@ -15,6 +15,16 @@ public struct RootView: View {
 
     public init() {}
 
+    /// The statistics notice does not close the first chat: it waits for the first finished reply and an empty field,
+    /// or the next launch (`ConsentTiming`).
+    private var noticeMayShow: Bool {
+        let draft = router.selectedAgentID.flatMap { router.drafts[$0] } ?? ""
+        return ConsentTiming.mayShow(
+            introductionActive: onboarding.isActive, introductionWasDoneAtLaunch: onboarding.wasDoneAtLaunch,
+            firstReplyDone: app.completedTurns > 0,
+            draftIsEmpty: draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
     public var body: some View {
         Group {
             if onboarding.isActive {
@@ -33,7 +43,7 @@ public struct RootView: View {
         }
         .background(Color.Bandito.bg)
         // The first-run notice and the crash question wait until the first-run flow is over; they answer with a button.
-        .sheet(isPresented: .constant(telemetry.showsNotice && !onboarding.isActive)) {
+        .sheet(isPresented: .constant(telemetry.showsNotice && noticeMayShow)) {
             TelemetryNoticeSheet(telemetry: telemetry)
                 .interactiveDismissDisabled()
         }

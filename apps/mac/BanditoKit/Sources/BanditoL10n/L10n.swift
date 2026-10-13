@@ -2408,8 +2408,10 @@ public enum L10n {
 
         public enum Crew {
             public static var done: String { L10n.tr("onboarding.crew.done") }
+            public static var goOn: String { L10n.tr("onboarding.crew.goOn") }
             public static var hire: String { L10n.tr("onboarding.crew.hire") }
             public static var hireOne: String { L10n.tr("onboarding.crew.hireOne") }
+            public static var hireRest: String { L10n.tr("onboarding.crew.hireRest") }
             public static var hiring: String { L10n.tr("onboarding.crew.hiring") }
             public static var loading: String { L10n.tr("onboarding.crew.loading") }
             public static var next: String { L10n.tr("onboarding.crew.next") }
@@ -2418,10 +2420,13 @@ public enum L10n {
             public static var noTeams: String { L10n.tr("onboarding.crew.noTeams") }
             public static var noneMade: String { L10n.tr("onboarding.crew.noneMade") }
             public static func partial(made: String, total: String) -> String { L10n.tr("onboarding.crew.partial", made, total) }
+            public static func resumed(made: String, total: String) -> String { L10n.tr("onboarding.crew.resumed", made, total) }
             public static var role: String { L10n.tr("onboarding.crew.role") }
             public static var subtitle: String { L10n.tr("onboarding.crew.subtitle") }
             public static var title: String { L10n.tr("onboarding.crew.title") }
             public static var toServer: String { L10n.tr("onboarding.crew.toServer") }
+            public static var workplace: String { L10n.tr("onboarding.crew.workplace") }
+            public static var workplaceShared: String { L10n.tr("onboarding.crew.workplaceShared") }
 
             public enum Single {
                 public static var text: String { L10n.tr("onboarding.crew.single.text") }
@@ -4307,38 +4312,6 @@ public enum L10n {
             public static var showPrompt: String { L10n.tr("thread.scheduleRun.showPrompt") }
             public static func today(time: String) -> String { L10n.tr("thread.scheduleRun.today", time) }
             public static func yesterday(time: String) -> String { L10n.tr("thread.scheduleRun.yesterday", time) }
-        }
-    }
-
-    public enum Tour {
-        public static func counter(step: String, total: String) -> String { L10n.tr("tour.counter", step, total) }
-        public static var finish: String { L10n.tr("tour.finish") }
-        public static var hintAria: String { L10n.tr("tour.hintAria") }
-        public static var skip: String { L10n.tr("tour.skip") }
-
-        public enum Agents {
-            public static var text: String { L10n.tr("tour.agents.text") }
-            public static var title: String { L10n.tr("tour.agents.title") }
-        }
-
-        public enum Approvals {
-            public static var text: String { L10n.tr("tour.approvals.text") }
-            public static var title: String { L10n.tr("tour.approvals.title") }
-        }
-
-        public enum Composer {
-            public static var text: String { L10n.tr("tour.composer.text") }
-            public static var title: String { L10n.tr("tour.composer.title") }
-        }
-
-        public enum Modes {
-            public static var text: String { L10n.tr("tour.modes.text") }
-            public static var title: String { L10n.tr("tour.modes.title") }
-        }
-
-        public enum QuickOpen {
-            public static var text: String { L10n.tr("tour.quickOpen.text") }
-            public static var title: String { L10n.tr("tour.quickOpen.title") }
         }
     }
 

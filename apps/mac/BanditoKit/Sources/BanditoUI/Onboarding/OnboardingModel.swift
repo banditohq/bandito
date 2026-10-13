@@ -78,8 +78,8 @@ public final class OnboardingModel {
     public private(set) var firstTeamID: String?
     /// Whether the flow is in front of the main window.
     public private(set) var isActive = false
-    /// The tour over the main window runs after the first task is sent. Cleared by `endTour`.
-    public private(set) var tourRequested = false
+    /// The flow was not in front when the app started: there was nothing to go through (done earlier, or servers saved).
+    public private(set) var wasDoneAtLaunch = true
     /// True while the signed-in device waits for approval from another device.
     public private(set) var needsApproval = false
 
@@ -118,6 +118,7 @@ public final class OnboardingModel {
         firstAgentID = defaults.string(forKey: Self.firstAgentKey)
         firstTeamID = defaults.string(forKey: Self.firstTeamKey)
         isActive = !defaults.bool(forKey: Self.doneKey) && (!hasSavedServers || resumesAfterServer)
+        wasDoneAtLaunch = !isActive
     }
 
     /// True once the person has finished or skipped the flow.
@@ -225,7 +226,6 @@ public final class OnboardingModel {
 
     /// "Show the introduction again" from the Help menu: starts at welcome, whatever the server state.
     public func replay() {
-        tourRequested = false
         defaults.set(false, forKey: Self.doneKey)
         needsApproval = false
         history = []
@@ -237,17 +237,6 @@ public final class OnboardingModel {
         setCard(0)
         set(.welcome)
         isActive = true
-    }
-
-    /// The first task is sent: the flow is done and the tour starts over the main window.
-    public func finishWithTour() {
-        tourRequested = true
-        finish()
-    }
-
-    /// The tour ended, by "Finish", "Skip", or because there was nothing to point at.
-    public func endTour() {
-        tourRequested = false
     }
 
     /// The flow is over: the done flag is stored and the main window takes over.
@@ -264,7 +253,6 @@ public final class OnboardingModel {
     /// come through the steps before it. Not in a release build.
     public func qaShow(_ target: OnboardingStep, card number: Int = 0) {
         defaults.set(false, forKey: Self.doneKey)
-        tourRequested = false
         needsApproval = false
         history = OnboardingStep.allCases.filter { $0 != .approval && $0 != .done && $0.position < target.position }
         persistHistory()

@@ -131,6 +131,7 @@ struct CrewStep: View {
                 EmptyView()
             }
             folderSection
+            if model.choice == .single { workplaceSection }
             runtimeSection
         }
         .padding(22)
@@ -141,6 +142,26 @@ struct CrewStep: View {
 
     @ViewBuilder
     private var teamPreview: some View {
+        if model.isResumed {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L10n.Onboarding.Crew.resumed(
+                    made: String(model.existingMade.count), total: String(model.selectedMembers.count)))
+                    .font(BanditoFont.text(size: 13, weight: 500))
+                    .foregroundStyle(Color.Bandito.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(L10n.Onboarding.Crew.goOn) {
+                    if let first = model.firstAgent {
+                        onMade(first, model.teamID)
+                        onContinue()
+                    }
+                }
+                .banditoButton(.quiet(size: .regular))
+                .fixedSize()
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel(L10n.ReadyTeam.agents)
             ForEach(model.selectedMembers) { member in
@@ -286,6 +307,66 @@ struct CrewStep: View {
         }
     }
 
+    /// Where the agent runs: the shared server, or a separate workplace (an existing container or a new one). Separate
+    /// needs Docker on the server; without it the row only says where the agent runs.
+    private var workplaceSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(L10n.Onboarding.Crew.workplace)
+            if model.workplaces.canCreateSeparate {
+                HStack(spacing: 6) {
+                    placeChip(L10n.Workspace.Choice.shared, selected: model.workplace.mode == .shared) { model.setSeparate(false) }
+                    placeChip(L10n.Workspace.Choice.separate, selected: model.workplace.mode == .separate) { model.setSeparate(true) }
+                }
+                if model.workplace.mode == .separate {
+                    HStack(spacing: 6) {
+                        ForEach(model.workplaces.containers) { container in
+                            placeChip(container.name, selected: model.workplace == .existing(container.id)) {
+                                model.chooseExisting(container.id)
+                            }
+                        }
+                        placeChip(L10n.Workspace.Choice.newOne, selected: model.workplace == .new) { model.chooseNewWorkplace() }
+                    }
+                    if model.workplace == .new {
+                        TextField(
+                            L10n.Workspace.Create.name,
+                            text: Binding(get: { model.newWorkplace.name }, set: { model.setNewWorkplaceName($0) })
+                        )
+                        .banditoField()
+                        .font(BanditoFont.text(size: 14, weight: 400))
+                        .disabled(model.isLocked)
+                    }
+                    Text(L10n.Workspace.Choice.isolation)
+                        .font(BanditoFont.text(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(L10n.Workspace.Choice.lost)
+                        .font(BanditoFont.text(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Text(L10n.Onboarding.Crew.workplaceShared)
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if model.workplaces.supported {
+                    Text(L10n.Workspace.Choice.dockerNeeded)
+                        .font(BanditoFont.text(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func placeChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .banditoButton(.quiet(size: .regular))
+            .overlay(Capsule().stroke(selected ? Color.Bandito.signal : .clear, lineWidth: 1.5))
+            .disabled(model.isLocked)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
     @ViewBuilder
     private var runtimeSection: some View {
         if model.available.count > 1 {
@@ -349,12 +430,14 @@ struct CrewStep: View {
         guard model.load == .ready else { return nil }
         if model.isDone {
             return OnboardingNextAction(title: L10n.Onboarding.Crew.next, isEnabled: model.firstAgent != nil) {
+                if let first = model.firstAgent { onMade(first, model.teamID) }
                 onContinue()
             }
         }
         let title = model.isBusy || creating
             ? L10n.Onboarding.Crew.hiring
-            : (model.choice == .single ? L10n.Onboarding.Crew.hireOne : L10n.Onboarding.Crew.hire)
+            : (model.choice == .single ? L10n.Onboarding.Crew.hireOne
+                : (model.isResumed ? L10n.Onboarding.Crew.hireRest : L10n.Onboarding.Crew.hire))
         return OnboardingNextAction(title: title, isEnabled: model.canCreate && !creating) {
             guard !creating else { return }
             creating = true
