@@ -2522,6 +2522,8 @@
 "settings.group.playback" = "Reproducción";
 "settings.group.system" = "Sistema";
 "settings.group.versions" = "Versiones";
+"settings.iphoneBeta.hint" = "Muestra el bloque de iPhone en los ajustes del servidor: acceso desde el teléfono y el código QR para conectarlo. La app para iPhone está por ahora en pruebas cerradas.";
+"settings.iphoneBeta.title" = "App para iPhone (beta)";
 "settings.keysIntro" = "Todo funciona como en las apps de Mac que ya conoces. Haz clic en un atajo para cambiarlo.";
 "settings.language" = "Idioma";
 "settings.language.system" = "Sistema";

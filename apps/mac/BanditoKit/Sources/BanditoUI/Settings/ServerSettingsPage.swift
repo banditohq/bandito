@@ -11,6 +11,7 @@ struct ServerSettingsPage: View {
     let onBack: () -> Void
     let previewDevices: [Device]?
     @State private var model: ServerSettingsModel
+    @AppStorage(PhoneAccessRules.betaStorageKey) private var iphoneBeta = false
 
     /// `preview` and `previewStats` show the given values without a connection (the layout audit); a live page reads
     /// them from the server.
@@ -37,7 +38,7 @@ struct ServerSettingsPage: View {
             notice
             ServerMainSection(server: server)
             ServerConnectionSection(server: server, onBack: onBack)
-            if PhoneAccessRules.showsIPhoneBlock {
+            if PhoneAccessRules.showsIPhoneBlock(betaEnabled: iphoneBeta, serverMode: model.snapshot?.settings.phoneAccess) {
                 ServerPhoneSection(server: server, model: model, previewDevices: previewDevices)
             }
             ServerAgentDefaultsSection(server: server, model: model)

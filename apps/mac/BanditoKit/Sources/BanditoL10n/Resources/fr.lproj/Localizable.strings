@@ -2522,6 +2522,8 @@
 "settings.group.playback" = "Lecture";
 "settings.group.system" = "Système";
 "settings.group.versions" = "Versions";
+"settings.iphoneBeta.hint" = "Affiche le bloc iPhone dans les réglages du serveur : accès depuis le téléphone et code QR pour se connecter. L’app iPhone est pour l’instant en test fermé.";
+"settings.iphoneBeta.title" = "App iPhone (bêta)";
 "settings.keysIntro" = "Tout fonctionne comme dans les apps Mac que vous connaissez. Cliquez sur un raccourci pour le modifier.";
 "settings.language" = "Langue";
 "settings.language.system" = "Système";

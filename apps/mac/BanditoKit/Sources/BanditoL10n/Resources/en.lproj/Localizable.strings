@@ -2522,6 +2522,8 @@
 "settings.group.playback" = "Playback";
 "settings.group.system" = "System";
 "settings.group.versions" = "Versions";
+"settings.iphoneBeta.hint" = "Shows the iPhone block in the server settings: access from a phone and the QR code to connect. The iPhone app is in closed testing for now.";
+"settings.iphoneBeta.title" = "iPhone app (beta)";
 "settings.keysIntro" = "Everything works as in the Mac apps you know. Click a shortcut to change it.";
 "settings.language" = "Language";
 "settings.language.system" = "System";

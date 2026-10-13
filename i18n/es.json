@@ -304,6 +304,8 @@
   "settings.menuBar": "Mostrar en la barra de menús",
   "settings.launchAtLogin": "Abrir al iniciar sesión",
   "settings.launchAtLoginHint": "Bandito se abre solo al iniciar sesión en este Mac.",
+  "settings.iphoneBeta.title": "App para iPhone (beta)",
+  "settings.iphoneBeta.hint": "Muestra el bloque de iPhone en los ajustes del servidor: acceso desde el teléfono y el código QR para conectarlo. La app para iPhone está por ahora en pruebas cerradas.",
   "settings.chatLinks.open": "Abrir los enlaces del chat en",
   "settings.chatLinks.openHint": "⌘-clic abre siempre la otra opción.",
   "settings.chatLinks.builtIn": "Navegador integrado",

@@ -89,4 +89,28 @@ import Testing
         #expect(ServerSettingChange.phoneAccess(.lan).differs(from: current))
         #expect(!ServerSettingChange.phoneAccess(.off).differs(from: current), "the value already set sends nothing")
     }
+
+    @Test func theIPhoneBlockShowsOnlyInDebugOrWithTheBetaSwitchOrWhenTheServerAllowsPhones() {
+        // (debug build, beta switch, the server's phone access; nil = settings not loaded yet, shown as off, shown?)
+        let rows: [(debug: Bool, beta: Bool, mode: PhoneAccessMode?, shown: Bool)] = [
+            (false, false, nil, false), (false, false, .off, false), (false, false, .tailscale, true), (false, false, .lan, true),
+            (false, true, nil, true), (false, true, .off, true), (false, true, .tailscale, true), (false, true, .lan, true),
+            (true, false, nil, true), (true, false, .off, true), (true, false, .tailscale, true), (true, false, .lan, true),
+            (true, true, nil, true), (true, true, .off, true), (true, true, .tailscale, true), (true, true, .lan, true),
+        ]
+        for row in rows {
+            #expect(
+                PhoneAccessRules.showsIPhoneBlock(betaEnabled: row.beta, serverMode: row.mode, debugBuild: row.debug)
+                    == row.shown,
+                "debug \(row.debug), beta \(row.beta), mode \(String(describing: row.mode))")
+        }
+        #expect(
+            PhoneAccessRules.showsIPhoneBlock(betaEnabled: false, serverMode: .off)
+                == PhoneAccessRules.isDebugBuild,
+            "the default reads the build: this suite runs in a debug build")
+    }
+
+    @Test func theBetaSwitchIsStoredUnderItsOwnKey() {
+        #expect(PhoneAccessRules.betaStorageKey == "iphoneBeta.enabled")
+    }
 }

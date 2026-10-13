@@ -2522,6 +2522,8 @@
 "settings.group.playback" = "再生";
 "settings.group.system" = "システム";
 "settings.group.versions" = "バージョン";
+"settings.iphoneBeta.hint" = "サーバーの設定に iPhone のブロックを表示します。スマートフォンからのアクセスと接続用の QR コードです。iPhone 版アプリは現在クローズドテスト中です。";
+"settings.iphoneBeta.title" = "iPhone アプリ（ベータ）";
 "settings.keysIntro" = "使い慣れた Mac のアプリと同じように操作できます。ショートカットをクリックすると変更できます。";
 "settings.language" = "言語";
 "settings.language.system" = "システム";

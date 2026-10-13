@@ -11,6 +11,7 @@ struct GeneralSection: View {
     @State private var launchError: String?
     @AppStorage(ChatLinkSettings.openTargetDefaultsKey) private var linkTarget = ChatLinkOpenTarget.builtIn.rawValue
     @AppStorage(ChatLinkSettings.signInDefaultsKey) private var signInInMacBrowser = true
+    @AppStorage(PhoneAccessRules.betaStorageKey) private var iphoneBeta = false
 
     private static let systemLanguage = InterfaceLanguageChoice.systemTag
 
@@ -79,6 +80,16 @@ struct GeneralSection: View {
                     keepsControlBeside: true
                 ) {
                     Toggle("", isOn: $launchAtLogin)
+                        .labelsHidden()
+                        .toggleStyle(BanditoToggleStyle())
+                }
+                Divider().padding(.horizontal, 16)
+                SettingsRow(
+                    title: L10n.Settings.IphoneBeta.title, hint: L10n.Settings.IphoneBeta.hint,
+                    icon: SettingsIcon(symbol: "iphone", tint: BanditoPalette.badgeSlate),
+                    keepsControlBeside: true
+                ) {
+                    Toggle("", isOn: $iphoneBeta)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())
                 }

@@ -2522,6 +2522,8 @@
 "settings.group.playback" = "Wiedergabe";
 "settings.group.system" = "System";
 "settings.group.versions" = "Versionen";
+"settings.iphoneBeta.hint" = "Zeigt den iPhone-Block in den Server-Einstellungen: Zugriff vom Telefon und den QR-Code zum Verbinden. Die iPhone-App ist derzeit im geschlossenen Test.";
+"settings.iphoneBeta.title" = "iPhone-App (Beta)";
 "settings.keysIntro" = "Alles funktioniert wie in den Mac-Apps, die Sie kennen. Klicken Sie auf eine Tastenkombination, um sie zu ändern.";
 "settings.language" = "Sprache";
 "settings.language.system" = "System";

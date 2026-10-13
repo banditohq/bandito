@@ -3669,6 +3669,11 @@ public enum L10n {
             public static var versions: String { L10n.tr("settings.group.versions") }
         }
 
+        public enum IphoneBeta {
+            public static var hint: String { L10n.tr("settings.iphoneBeta.hint") }
+            public static var title: String { L10n.tr("settings.iphoneBeta.title") }
+        }
+
         public enum Language {
             public static var system: String { L10n.tr("settings.language.system") }
         }
