@@ -81,11 +81,15 @@ Dispatch it from the default branch: the workflow file is read from the branch y
 Entitlements: `apps/mac/Config/Bandito.entitlements` (`audio-input`, for dictation) comes from `project.yml`; `release-app.sh` re-signs with the entitlements of the built app, so it is kept.
 
 - `dry_run`: builds, signs and notarizes, verifies, signs the appcast item, and stops: nothing goes to the release, no
-  appcast PR. Use it to try a change to the workflow.
-- `ref` (dry run only): build this branch, tag or commit instead of the tag `v<version>`, which then need not exist.
-  Example: `gh workflow run release-app.yml --ref my-branch -f version=0.1.99-beta.1 -f channel=beta -f dry_run=true -f ref=my-branch`.
+  appcast PR. The tag must exist and its commit must be on the default branch.
+- `ref` (dry run only): a compile check of a branch, tag or commit instead of the tag `v<version>`, which then need not
+  exist. Only `check` and `compile` run, with the caches off: nothing is signed, no secret is read, `assemble` and
+  `publish` are skipped. Example: `gh workflow run release-app.yml --ref my-branch -f version=0.1.99-beta.1 -f channel=beta -f dry_run=true -f ref=my-branch`.
 
 Entitlements: `apps/mac/Config/Bandito.entitlements` (`audio-input`, for dictation) comes from `project.yml`; `release-app.sh` re-signs with the entitlements of the built app, so it is kept.
+
+Permissions: the workflow is `contents: read`; only `publish` has `contents: write`, and `GH_TOKEN` is set only in `check`
+and `publish`. A real run is refused if the commit of the tag is not on the default branch (`check`).
 
 Four jobs (macOS 15 runners), so that the slow work comes before the owner's approval:
 
@@ -111,7 +115,8 @@ Four jobs (macOS 15 runners), so that the slow work comes before the owner's app
    are deleted at the end, always.
 
 Caches (per architecture; keyed by the Xcode version, the Rust version and `daemon/Cargo.lock` or `Package.resolved`,
-with prefix fallbacks): the Rust registry and target folder, and the Swift packages (`SourcePackages`). Xcode's build
+with a fallback on the same Rust version only; the keys carry `tag`: only runs without `ref`, started from the default
+branch, write them): the Rust registry and target folder, and the Swift packages (`SourcePackages`). Xcode's build
 products are not cached on purpose: a checkout gives every file a new modification time, so Xcode would recompile
 them anyway, and a stale product must never reach a signed release. A cache entry is never trusted for the result:
 cargo and SwiftPM check their inputs, and the app itself is always compiled from the checkout.
@@ -119,6 +124,10 @@ cargo and SwiftPM check their inputs, and the app itself is always compiled from
 ## 4. Approval (stable)
 
 The `stable` environment must have the owner as a required reviewer (set in the repository settings, Environments).
+The environments `beta` and `stable` accept deployments only from `main` and from tags `v*` (deployment branch policy).
+To check a CI branch use a compile check (`ref`, which needs no environment); a full run on a branch needs a temporary
+rule in `beta` for that branch, removed after the merge.
+
 Only the `publish` job uses it, so a stable run waits for the approval after the build is done (Review deployments)
 and the Approve takes minutes. The `beta` environment has no approval gate; it also holds the Developer ID certificate
 and the App Store Connect key that `assemble` uses for both channels, so keep those two secrets identical in `beta`

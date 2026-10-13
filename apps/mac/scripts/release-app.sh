@@ -353,10 +353,15 @@ if [ "$do_finish" -eq 1 ]; then
     # on its own, inside out.
     # The entitlements are read from the same item of $ent_root: the app itself, or (assemble) the arm64 build, whose
     # signature is intact; the joined binaries have lost theirs.
+    app_entitlements="$here/Config/Bandito.entitlements"
+    [ -f "$app_entitlements" ] || { echo "error: no $app_entitlements" >&2; exit 1; }
     sign_item() {
         local path="$1" ent_path
         ent_path="${path/#"$app"/"$ent_root"}"
-        if codesign -d --entitlements :- "$ent_path" > "$work/entitlements.plist" 2>/dev/null && [ -s "$work/entitlements.plist" ]; then
+        if [ "$path" = "$app" ]; then
+            # The app itself is signed with the entitlements committed in the repository, not with what the build carries.
+            codesign --force --options runtime --timestamp --entitlements "$app_entitlements" --sign "$IDENTITY" "$path"
+        elif codesign -d --entitlements :- "$ent_path" > "$work/entitlements.plist" 2>/dev/null && [ -s "$work/entitlements.plist" ]; then
             plutil -remove com.apple.security.get-task-allow "$work/entitlements.plist" 2>/dev/null || true
             codesign --force --options runtime --timestamp --entitlements "$work/entitlements.plist" --sign "$IDENTITY" "$path"
         else
@@ -388,6 +393,22 @@ if [ "$do_finish" -eq 1 ]; then
         echo "error: the app still carries com.apple.security.get-task-allow; notarization would refuse it" >&2
         exit 1
     fi
+    # The signed app must carry exactly the committed entitlements (and nothing a build added).
+    codesign -d --entitlements :- "$app" 2> /dev/null > "$work/app-entitlements.plist" || true
+    python3 - "$work/app-entitlements.plist" "$app_entitlements" <<'PY'
+import plistlib
+import sys
+
+def load(path):
+    with open(path, "rb") as fh:
+        data = fh.read()
+    return plistlib.loads(data) if data.strip() else {}
+
+signed, reference = load(sys.argv[1]), load(sys.argv[2])
+if signed != reference:
+    sys.exit(f"error: the signed app's entitlements differ from Config/Bandito.entitlements: signed {signed}, committed {reference}")
+print("app entitlements match Config/Bandito.entitlements:", sorted(reference))
+PY
     codesign --verify --deep --strict "$app"
     codesign -dvv "$app" 2>&1 | grep -E '^(Authority=Developer ID|TeamIdentifier|CodeDirectory)' || true
     # --- (c) first archive, for notarization ------------------------------------------------------------------------------

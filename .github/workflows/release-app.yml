@@ -11,7 +11,8 @@ name: release-app
 #   publish   environment <channel>: `stable` needs the owner's approval. Verifies the signed files, signs the update
 #             with the Sparkle key (only here), uploads to the GitHub release, opens the appcast PR in banditohq/platform
 #             and waits until that repo merges it.
-# See docs/RELEASING.md.
+# A run with `ref` (a branch, dry run only) is a compile check: only `check` and `compile` run, nothing is signed and
+# no secret is read. See docs/RELEASING.md.
 
 on:
   workflow_dispatch:
@@ -32,13 +33,14 @@ on:
         type: boolean
         default: false
       ref:
-        description: "Dry run only: build this branch, tag or commit instead of the tag v<version> (which then need not exist)"
+        description: "Dry run only, a compile check: compile this branch, tag or commit with the caches off; nothing is signed or published (assemble and publish do not run)"
         required: false
         type: string
         default: ""
 
+# Read-only by default; only `publish` may write (the release upload).
 permissions:
-  contents: write
+  contents: read
 
 # One run per version at a time: a second dispatch waits instead of racing for the same release.
 concurrency:
@@ -50,13 +52,16 @@ env:
   CHANNEL: ${{ inputs.channel }}
   DRY_RUN: ${{ inputs.dry_run }}
   TAG: v${{ inputs.version }}
-  GH_TOKEN: ${{ github.token }}
 
 jobs:
   check:
     name: Check ${{ inputs.version }} (${{ inputs.channel }}${{ inputs.dry_run && ', dry run' || '' }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       sha: ${{ steps.check.outputs.sha }}
     steps:
@@ -92,6 +97,13 @@ jobs:
                 || fail "release $TAG has no $name: publish the server release first (release.yml)"
             done
             sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)"
+            # A release is built only from a commit that is on the default branch.
+            default="$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
+            rel="$(gh api "repos/$GITHUB_REPOSITORY/compare/$default...$sha" --jq .status)"
+            case "$rel" in
+              identical | behind) ;;
+              *) fail "the commit of $TAG ($sha) is not on $default (compare says '$rel'): a release is built from $default only" ;;
+            esac
           fi
           printf '%s\n' "$sha" | grep -Eq '^[0-9a-f]{40}$' || fail "bad commit '$sha'"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
@@ -151,25 +163,24 @@ jobs:
 
       - name: Restore the Rust cache
         id: cache-cargo
+        if: ${{ inputs.ref == '' }}
         uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             ${{ runner.temp }}/cargo-target
-          key: cargo-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ steps.ver.outputs.rust }}-${{ hashFiles('daemon/Cargo.lock') }}
+          key: cargo-tag-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ steps.ver.outputs.rust }}-${{ hashFiles('daemon/Cargo.lock') }}
           restore-keys: |
-            cargo-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ steps.ver.outputs.rust }}-
-            cargo-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-
+            cargo-tag-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ steps.ver.outputs.rust }}-
 
       - name: Restore the Swift packages cache
         id: cache-spm
+        if: ${{ inputs.ref == '' }}
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/derived-data/SourcePackages
-          key: spm-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ hashFiles('apps/mac/BanditoKit/Package.resolved', 'apps/mac/project.yml') }}
-          restore-keys: |
-            spm-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-
+          key: spm-tag-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ hashFiles('apps/mac/BanditoKit/Package.resolved', 'apps/mac/project.yml') }}
 
       - name: Compile ${{ matrix.arch }}
         env:
@@ -180,21 +191,22 @@ jobs:
           apps/mac/scripts/release-app.sh "$VERSION" --stage compile --arch "${{ matrix.arch }}"
 
       - name: Save the Rust cache
-        if: ${{ !cancelled() && steps.cache-cargo.outputs.cache-hit != 'true' && hashFiles('daemon/Cargo.lock') != '' }}
+        # Only builds of a release tag, run from the default branch, write the caches.
+        if: ${{ !cancelled() && inputs.ref == '' && github.ref_name == github.event.repository.default_branch && steps.cache-cargo.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             ${{ runner.temp }}/cargo-target
-          key: cargo-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ steps.ver.outputs.rust }}-${{ hashFiles('daemon/Cargo.lock') }}
+          key: cargo-tag-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ steps.ver.outputs.rust }}-${{ hashFiles('daemon/Cargo.lock') }}
 
       - name: Save the Swift packages cache
-        if: ${{ !cancelled() && steps.cache-spm.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && inputs.ref == '' && github.ref_name == github.event.repository.default_branch && steps.cache-spm.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/derived-data/SourcePackages
-          key: spm-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ hashFiles('apps/mac/BanditoKit/Package.resolved', 'apps/mac/project.yml') }}
+          key: spm-tag-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ hashFiles('apps/mac/BanditoKit/Package.resolved', 'apps/mac/project.yml') }}
 
       # upload-artifact does not keep symlinks or permissions, so the bundle goes in as a ditto zip.
       - name: Pack the compiled app
@@ -217,9 +229,15 @@ jobs:
   assemble:
     name: Sign and notarize
     needs: [check, compile]
+    if: ${{ inputs.ref == '' }}
     runs-on: macos-15
     environment: beta
     timeout-minutes: 60
+    outputs:
+      build: ${{ steps.manifest.outputs.build }}
+      commit: ${{ steps.manifest.outputs.commit }}
+      zip_sha256: ${{ steps.manifest.outputs.zip_sha256 }}
+      dmg_sha256: ${{ steps.manifest.outputs.dmg_sha256 }}
     steps:
       - name: Check the secrets
         env:
@@ -321,6 +339,7 @@ jobs:
             --arm64-app "$RUNNER_TEMP/compiled/arm64/Bandito.app" --x86-app "$RUNNER_TEMP/compiled/x86_64/Bandito.app"
 
       - name: Write the manifest of the signed files
+        id: manifest
         env:
           SHA: ${{ needs.check.outputs.sha }}
         run: |
@@ -335,6 +354,8 @@ jobs:
             printf 'dmg_sha256=%s\n' "$(shasum -a 256 "Bandito-$VERSION.dmg" | cut -d' ' -f1)"
           } > manifest.txt
           cat manifest.txt
+          # The same values go through job outputs: publish compares them with the manifest in the artifact.
+          cat manifest.txt >> "$GITHUB_OUTPUT"
 
       - name: Keep the signed files for publish
         uses: actions/upload-artifact@v4
@@ -375,9 +396,14 @@ jobs:
   publish:
     name: Publish ${{ inputs.version }} (${{ inputs.channel }}${{ inputs.dry_run && ', dry run' || '' }})
     needs: [check, assemble]
+    if: ${{ inputs.ref == '' }}
     runs-on: macos-15
     environment: ${{ inputs.channel }}
     timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Set paths
         run: |
@@ -412,6 +438,10 @@ jobs:
       - name: Verify the signed files
         env:
           SHA: ${{ needs.check.outputs.sha }}
+          OUT_BUILD: ${{ needs.assemble.outputs.build }}
+          OUT_COMMIT: ${{ needs.assemble.outputs.commit }}
+          OUT_ZIP_SHA256: ${{ needs.assemble.outputs.zip_sha256 }}
+          OUT_DMG_SHA256: ${{ needs.assemble.outputs.dmg_sha256 }}
         run: |
           set -euo pipefail
           fail() { echo "::error::$*"; exit 1; }
@@ -426,6 +456,11 @@ jobs:
             done
           }
           get() { sed -n "s/^$1=//p" manifest.txt; }
+          # The values the assemble job reported must be the ones in the artifact, and the files must match them.
+          [ -n "$OUT_ZIP_SHA256" ] && [ -n "$OUT_DMG_SHA256" ] && [ -n "$OUT_BUILD" ] || fail "assemble reported no manifest values"
+          [ "$(get build)" = "$OUT_BUILD" ] && [ "$(get commit)" = "$OUT_COMMIT" ] \
+            && [ "$(get zip_sha256)" = "$OUT_ZIP_SHA256" ] && [ "$(get dmg_sha256)" = "$OUT_DMG_SHA256" ] \
+            || fail "the manifest in the artifact differs from what the assemble job reported"
           [ "$(get version)" = "$VERSION" ] || fail "manifest is for version $(get version), not $VERSION"
           [ "$(get commit)" = "$SHA" ] || fail "manifest is for commit $(get commit), not $SHA"
           [ "$(shasum -a 256 "Bandito-$VERSION.zip" | cut -d' ' -f1)" = "$(get zip_sha256)" ] || fail "the zip does not match the manifest"
