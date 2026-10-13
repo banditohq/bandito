@@ -1,0 +1,6 @@
+/* iOSが表示する許可の説明文。 */
+"NSCameraUsageDescription" = "Banditoは、サーバーのペアリング用QRコードを読み取るため、またメッセージに添付する写真を撮るためにカメラを使用します。";
+"NSLocalNetworkUsageDescription" = "Banditoは、ローカルネットワーク上のMacまたはサーバーと通信します。";
+"NSFaceIDUsageDescription" = "Banditoは、アプリのロックとリスクのある操作の確認にFace IDを使用します。";
+"NSMicrophoneUsageDescription" = "Banditoは、メッセージを音声入力している間だけマイクを使用します。";
+"NSSpeechRecognitionUsageDescription" = "Banditoは、メッセージを音声入力している間だけ音声をテキストに変換します。";

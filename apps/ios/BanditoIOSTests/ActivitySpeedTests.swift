@@ -31,7 +31,7 @@ import UIKit
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
         let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
-        window.rootViewController = UIHostingController(rootView: ActivityScreen(servers: [server]))
+        window.rootViewController = UIHostingController(rootView: ActivityScreen(servers: [server], settings: IOSSettings()))
         window.makeKeyAndVisible()
         window.layoutIfNeeded()
         await settle()

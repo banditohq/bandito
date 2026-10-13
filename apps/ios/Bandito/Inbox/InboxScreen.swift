@@ -14,6 +14,8 @@ struct InboxScreen: View {
     var authenticator: any BiometricAuthenticating = DeviceAuthenticator()
     /// An Inbox item to open at once: a notice's route sets it (the approval's item id), and the screen clears it.
     var focus: Binding<String?> = .constant(nil)
+    /// Opens an agent's chat: the app switches to the Crew and pushes it.
+    var openChat: ((UUID, String) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The items answered here, hidden at once while the server takes the answer (the daemon's event removes them for good).
@@ -37,7 +39,10 @@ struct InboxScreen: View {
             .toolbarBackground(.hidden, for: .navigationBar)
             .background(Color.Bandito.bg.ignoresSafeArea())
             .sheet(item: $opened) { item in
-                InboxDetailSheet(item: item, riskyNeedsFaceID: settings.riskyNeedsFaceID) { action in
+                InboxDetailSheet(
+                    item: item, riskyNeedsFaceID: settings.riskyNeedsFaceID,
+                    openChat: openChat.map { open in { open(item.serverID, item.agentID) } }
+                ) { action in
                     await act(item, action)
                 }
             }

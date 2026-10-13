@@ -174,8 +174,7 @@ enum WorkbenchRules {
 
     /// A browser tool of an agent, by its name: `browser_*`, or the Bandito server's `mcp__bandito__browser_*`.
     static func isBrowserTool(_ tool: String) -> Bool {
-        let name = tool.lowercased()
-        return name.hasPrefix("browser_") || name.hasPrefix("mcp__bandito__browser_")
+        ToolNames.isBrowser(tool)
     }
 
     /// The names of the tools running now: calls without a result that started within `runningToolWindowMs`

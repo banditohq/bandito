@@ -16,6 +16,8 @@ enum InboxAct: Equatable {
 struct InboxDetailSheet: View {
     let item: InboxItem
     let riskyNeedsFaceID: Bool
+    /// Opens the agent's chat (closing the sheet first); nil leaves the button out.
+    var openChat: (() -> Void)?
     let onAct: (InboxAct) async -> InboxAnswer.Outcome
 
     @Environment(\.dismiss) private var dismiss
@@ -26,9 +28,13 @@ struct InboxDetailSheet: View {
     @State private var message: String?
     @State private var busy = false
 
-    init(item: InboxItem, riskyNeedsFaceID: Bool, onAct: @escaping (InboxAct) async -> InboxAnswer.Outcome) {
+    init(
+        item: InboxItem, riskyNeedsFaceID: Bool, openChat: (() -> Void)? = nil,
+        onAct: @escaping (InboxAct) async -> InboxAnswer.Outcome
+    ) {
         self.item = item
         self.riskyNeedsFaceID = riskyNeedsFaceID
+        self.openChat = openChat
         self.onAct = onAct
         if case .form(let row) = item.kind {
             _inputs = State(initialValue: FormAnswer.initialInputs(for: row.spec))
@@ -58,6 +64,18 @@ struct InboxDetailSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L10n.Common.close) { dismiss() }
+                }
+                if let openChat {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            dismiss()
+                            openChat()
+                        } label: {
+                            Image(systemName: "bubble.left.and.text.bubble.right")
+                        }
+                        .accessibilityLabel(L10n.Ios.Crew.openChat(name: item.agentName))
+                        .accessibilityIdentifier("inbox.openChat")
+                    }
                 }
             }
         }
@@ -185,9 +203,7 @@ struct InboxDetailSheet: View {
                     .foregroundStyle(Color.Bandito.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            ForEach(row.spec.fields) { field in
-                fieldView(field)
-            }
+            FormFieldsView(fields: row.spec.fields, inputs: $inputs, problems: problems)
             if !problems.isEmpty {
                 Text(L10n.Ios.Inbox.invalidForm)
                     .font(BanditoFont.text(size: 13, weight: 500))
@@ -216,148 +232,8 @@ struct InboxDetailSheet: View {
         }
     }
 
-    @ViewBuilder private func fieldView(_ field: FormField) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            switch field.type {
-            case .boolean:
-                Toggle(field.label, isOn: flagBinding(field.id))
-                    .font(BanditoFont.text(size: 14, weight: 400))
-                    .tint(Color.Bandito.signal)
-            case .choice:
-                HStack {
-                    Text(field.label)
-                        .font(BanditoFont.text(size: 14, weight: 500))
-                        .foregroundStyle(Color.Bandito.text2)
-                    Spacer()
-                    Picker(field.label, selection: choiceBinding(field.id)) {
-                        Text("—").tag("")
-                        ForEach(field.options ?? [], id: \.self) { option in
-                            Text(option).tag(option)
-                        }
-                    }
-                    .labelsHidden()
-                }
-            case .multichoice:
-                Text(field.label)
-                    .font(BanditoFont.text(size: 14, weight: 500))
-                    .foregroundStyle(Color.Bandito.text2)
-                ForEach(field.options ?? [], id: \.self) { option in
-                    Toggle(option, isOn: optionBinding(field.id, option: option, all: field.options ?? []))
-                        .font(BanditoFont.text(size: 14, weight: 400))
-                        .tint(Color.Bandito.signal)
-                }
-            case .date:
-                labeled(field) {
-                    TextField(field.placeholder ?? "YYYY-MM-DD", text: dateBinding(field.id))
-                        .keyboardType(.numbersAndPunctuation)
-                        .autocorrectionDisabled()
-                }
-            case .number:
-                labeled(field) {
-                    TextField(field.placeholder ?? "", text: textBinding(field.id))
-                        .keyboardType(.decimalPad)
-                }
-            case .email:
-                labeled(field) {
-                    TextField(field.placeholder ?? "", text: textBinding(field.id))
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-            case .textarea:
-                labeled(field) {
-                    TextField(field.placeholder ?? "", text: textBinding(field.id), axis: .vertical)
-                        .lineLimit(3...6)
-                }
-            case .text:
-                labeled(field) {
-                    TextField(field.placeholder ?? "", text: textBinding(field.id))
-                }
-            }
-            if let help = field.help {
-                Text(help)
-                    .font(BanditoFont.text(size: 12.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-            }
-            if problems[field.id] != nil {
-                Text(L10n.Ios.Inbox.invalidForm)
-                    .font(BanditoFont.text(size: 12.5, weight: 500))
-                    .foregroundStyle(Color.Bandito.danger)
-            }
-        }
-    }
-
-    private func labeled<Field: View>(_ field: FormField, @ViewBuilder _ input: () -> Field) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(field.label)
-                .font(BanditoFont.text(size: 14, weight: 500))
-                .foregroundStyle(Color.Bandito.text2)
-            input()
-                .font(BanditoFont.text(size: 15, weight: 400))
-                .foregroundStyle(Color.Bandito.text)
-                .padding(BanditoSpace.s3)
-                .background(RoundedRectangle(cornerRadius: BanditoRadius.md, style: .continuous).fill(Color.Bandito.surface1))
-        }
-    }
-
     private func sectionLabel(_ title: String) -> some View {
         CrewSectionLabel(title: title)
-    }
-
-    // MARK: bindings to the form's inputs
-
-    private func textBinding(_ id: String) -> Binding<String> {
-        Binding(
-            get: {
-                switch inputs[id] {
-                case .text(let t)?: t
-                default: ""
-                }
-            },
-            set: { inputs[id] = .text($0) })
-    }
-
-    private func dateBinding(_ id: String) -> Binding<String> {
-        Binding(
-            get: {
-                if case .date(let d)? = inputs[id] { return d ?? "" }
-                return ""
-            },
-            set: { inputs[id] = .date($0.isEmpty ? nil : $0) })
-    }
-
-    private func flagBinding(_ id: String) -> Binding<Bool> {
-        Binding(
-            get: {
-                if case .flag(let b)? = inputs[id] { return b }
-                return false
-            },
-            set: { inputs[id] = .flag($0) })
-    }
-
-    private func choiceBinding(_ id: String) -> Binding<String> {
-        Binding(
-            get: {
-                if case .option(let o)? = inputs[id] { return o ?? "" }
-                return ""
-            },
-            set: { inputs[id] = .option($0.isEmpty ? nil : $0) })
-    }
-
-    private func optionBinding(_ id: String, option: String, all: [String]) -> Binding<Bool> {
-        Binding(
-            get: {
-                if case .options(let picked)? = inputs[id] { return picked.contains(option) }
-                return false
-            },
-            set: { on in
-                var picked: [String] = []
-                if case .options(let current)? = inputs[id] { picked = current }
-                picked.removeAll { $0 == option }
-                if on { picked.append(option) }
-                // In the order of the field's options, as the answer is sent.
-                inputs[id] = .options(all.filter(picked.contains))
-            })
     }
 
     // MARK: answering

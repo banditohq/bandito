@@ -1,0 +1,6 @@
+/* iOS에 표시되는 권한 안내 문구입니다. */
+"NSCameraUsageDescription" = "Bandito는 서버 페어링 QR 코드를 스캔하고 메시지에 첨부할 사진을 찍는 데 카메라를 사용합니다.";
+"NSLocalNetworkUsageDescription" = "Bandito는 로컬 네트워크에서 Mac 또는 서버와 통신합니다.";
+"NSFaceIDUsageDescription" = "Bandito는 앱을 잠그고 위험한 작업을 확인하는 데 Face ID를 사용합니다.";
+"NSMicrophoneUsageDescription" = "Bandito는 메시지를 받아쓰는 동안에만 마이크를 사용합니다.";
+"NSSpeechRecognitionUsageDescription" = "Bandito는 메시지를 받아쓰는 동안에만 음성을 텍스트로 변환합니다.";

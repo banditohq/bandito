@@ -10,6 +10,8 @@ enum IOSDemo {
     static let launchArgument = "-demo"
     static let emptyArgument = "-demo-empty"
     static let serverID = UUID(uuidString: "6F0B2C1E-8D7A-4C3B-9A51-0B1D2E3F4A5B")!
+    /// The scripted replies of the demo server (the tests set their pace).
+    static var scripts: [UUID: DemoChatScript] = [:]
     static let officeServerID = UUID(uuidString: "2A7D9E40-5B1C-4F8E-8C33-7E0A1B2C3D4E")!
 
     /// One message of a demo agent's history: the person's (or the agent's), how long ago it was.
@@ -97,6 +99,10 @@ enum IOSDemo {
         let (server, transport) = DemoDaemon.server(
             id: serverID, name: "Demo", setup: DemoDaemonSetup(agentIDs: ids, hostname: "demo"))
         await server.connect()
+        // The agents answer a message (a streamed reply, an approval); the tests set their own pace.
+        let script = DemoChatScript(transport: transport)
+        await transport.setClientHook { call in script.handle(call) }
+        scripts[serverID] = script
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         for (index, member) in members.enumerated() {
             var agent = Agent(
@@ -104,7 +110,7 @@ enum IOSDemo {
                 cwd: DemoDaemonFiles.projects, createdAt: now, updatedAt: now, status: member.status)
             agent.lead = member.lead
             // Message n has seq n: the reply ids (`s<seq>`) are what counts a chat's unread replies.
-            let items: [ThreadItem] = member.history.enumerated().map { offset, turn -> ThreadItem in
+            let recent: [ThreadItem] = member.history.enumerated().map { offset, turn -> ThreadItem in
                 let ts = now - turn.minutesAgo * 60_000
                 let id = "s\(offset + 1)"
                 if let schedule = turn.schedule {
@@ -118,6 +124,7 @@ enum IOSDemo {
                     ? .user(id: id, text: turn.text, source: .user, from: nil, ts: ts)
                     : .assistant(id: id, text: turn.text, ts: ts)
             }
+            let items = (member.lead ? forgeBackstory(now: now) : []) + recent
             server.installSyntheticAgent(agent, items: items)
             // The daemon knows the agent too, so that editing and deleting it answer as a real server does.
             await transport.remember(agent)
@@ -188,6 +195,46 @@ enum IOSDemo {
             deliver(.messageAssistant(text: unreadReply), to: scout)
         }
         return (server, transport)
+    }
+
+    /// What Forge said and did before the first look: an earlier task with seven commands and a reply with a list and a
+    /// code block, so the chat opens on something to read. Ids do not look like events (no unread count comes from them).
+    static func forgeBackstory(now: Int64) -> [ThreadItem] {
+        let day: Int64 = 24 * 3_600_000
+        let base = now - day - 40 * 60_000
+        let commands = [
+            "git status --short", "swift build -q", "swift test -q --filter SendQueue", "rg \"retry\" Sources", "git diff --stat",
+            "swiftformat --lint Sources", "git log --oneline -5",
+        ]
+        var items: [ThreadItem] = [
+            .user(id: "demo-b1", text: "Add a retry to the send queue and run the tests.", source: .user, from: nil, ts: base)
+        ]
+        for (index, command) in commands.enumerated() {
+            items.append(
+                .tool(ToolRow(callId: "demo-b-call-\(index)", tool: "bash", title: command, ok: true, output: "ok", startedAt: base + Int64(index) * 4_000)))
+        }
+        items.append(
+            .assistant(
+                id: "demo-b2",
+                text: """
+                    The queue now **resends** a message that dropped midway.
+
+                    ## What changed
+                    - `SendQueue.swift` keeps the message until the server answers
+                    - the order of the messages never changes
+                    - 12 tests cover it
+
+                    ```swift
+                    func retry(_ id: String) {
+                        queue.retry(id)
+                        pump()
+                    }
+                    ```
+
+                    Notes are in the [design doc](https://bandito.dev/docs).
+                    """,
+                ts: base + 60_000))
+        return items
     }
 
     /// A second demo server with no agent, connected.

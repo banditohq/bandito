@@ -1,0 +1,6 @@
+/* Texto de permissão exibido pelo iOS. */
+"NSCameraUsageDescription" = "O Bandito usa a câmera para ler o QR code de pareamento de um servidor e para tirar uma foto que você anexa a uma mensagem.";
+"NSLocalNetworkUsageDescription" = "O Bandito se comunica com seu Mac ou servidor na sua rede local.";
+"NSFaceIDUsageDescription" = "O Bandito usa o Face ID para bloquear o app e confirmar ações de risco.";
+"NSMicrophoneUsageDescription" = "O Bandito usa o microfone apenas enquanto você dita uma mensagem.";
+"NSSpeechRecognitionUsageDescription" = "O Bandito transforma sua fala em texto apenas enquanto você dita uma mensagem.";

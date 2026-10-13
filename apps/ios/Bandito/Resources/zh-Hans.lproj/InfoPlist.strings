@@ -1,0 +1,6 @@
+/* iOS 显示的权限说明。 */
+"NSCameraUsageDescription" = "Bandito 使用相机扫描服务器的配对二维码，并拍摄要附加到消息的照片。";
+"NSLocalNetworkUsageDescription" = "Bandito 在本地网络中与您的 Mac 或服务器通信。";
+"NSFaceIDUsageDescription" = "Bandito 使用 Face ID 锁定应用并确认有风险的操作。";
+"NSMicrophoneUsageDescription" = "Bandito 仅在您语音输入消息时使用麦克风。";
+"NSSpeechRecognitionUsageDescription" = "Bandito 仅在您语音输入消息时将语音转为文字。";

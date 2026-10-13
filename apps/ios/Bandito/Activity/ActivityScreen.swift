@@ -20,6 +20,7 @@ enum ActivityCounters {
 /// top; pull to refresh means "check now"; a tap opens the agent's chat at the entry.
 struct ActivityScreen: View {
     let servers: [ServerModel]
+    let settings: IOSSettings
 
     @State private var filter = ActivityFilter.requested(in: ProcessInfo.processInfo.arguments)
     @State private var path: [ActivityRoute] = []
@@ -31,14 +32,11 @@ struct ActivityScreen: View {
                 .navigationBarTitleDisplayMode(.large)
                 .toolbarBackground(.hidden, for: .navigationBar)
                 .navigationDestination(for: ActivityRoute.self) { route in
-                    ActivityChatStub(route: route, markRead: { markRead(route) })
+                    if let server = servers.first(where: { $0.id == route.serverID }) {
+                        ChatScreen(server: server, agentID: route.agentID, settings: settings, focusRowID: route.eventID)
+                    }
                 }
         }
-    }
-
-    /// Opening a chat reads it, as the Mac's chat does: the replies up to its newest message stop counting as unread.
-    private func markRead(_ route: ActivityRoute) {
-        servers.first { $0.id == route.serverID }?.threadSummary(for: route.agentID).markRead()
     }
 }
 
@@ -203,27 +201,5 @@ struct ActivityRow: View, Equatable {
         .padding(.vertical, BanditoSpace.s1)
         .accessibilityElement(children: .combine)
         .accessibilityValue(facts.isUnread ? L10n.Ios.Crew.unread(count: 1) : "")
-    }
-}
-
-/// The chat of an agent is not built yet: this screen holds the place of the entry, with the agent's name and the event's
-/// id. Shown, it marks the chat read.
-struct ActivityChatStub: View {
-    let route: ActivityRoute
-    let markRead: () -> Void
-
-    var body: some View {
-        VStack(spacing: BanditoSpace.s3) {
-            Text(L10n.Ios.Activity.chatSoon(name: route.name, event: route.eventID))
-                .font(BanditoFont.text(size: 15))
-                .foregroundStyle(Color.Bandito.text2)
-                .multilineTextAlignment(.center)
-        }
-        .padding(BanditoSpace.s6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Bandito.bg.ignoresSafeArea())
-        .navigationTitle(route.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear(perform: markRead)
     }
 }

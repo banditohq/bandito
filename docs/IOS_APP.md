@@ -55,6 +55,23 @@ and Activity) opens the composer with an agent picker (last used first).
   the server again. Pairing a server whose certificate is already known replaces its record. Code: `apps/ios/Bandito/Connect`,
   `BanditoKit/Connect/DirectTransport.swift`, `DevicePairing.swift`.
 
+### The chat (built)
+
+- A list of reused cells over a diffable data source; message text is measured off the main thread and kept by
+  (row, version, width); a streamed reply sets up only its own cell; older history comes in above without moving what is
+  read; "down" shows the count of new messages and the list follows the bottom only while the person is there.
+- Messages: Markdown read into blocks (headings, lists, quotes, rules, code with a horizontal scroll and Copy, links that open
+  in the in-app Safari view, a long press for "Open in Safari" and "Copy"), pictures and files, the time under the last message
+  of a group. Commands fold ("Ran 7 commands"). A finished turn with changes ends with the card "12 files, +240 −30", which
+  opens the list of files and each file's diff.
+- Inside the chat: approvals (a risky one asks for Face ID, as in the Inbox), forms, requests to connect, the agent's quick
+  replies above the box, lines for scheduled runs and quiet turns, the working row with what the agent does and for how long.
+- The box: grows to six lines, a button for photos, the camera and files (uploaded at once, shown as tiles), dictation
+  (Apple's speech recognition, permission asked in place after a line of explanation), send and stop. A draft is kept per agent.
+- Offline: a message written without a connection waits and goes out in order, once, when the connection is back.
+- Haptics: light on send, success on an allowed request, warning on a refusal or a stop.
+- Not yet: reactions, reply quotes, mentions, and the pictures other clients sent (see `apps/ios/CLAUDE.md`).
+
 ## iOS-native extras (phase order)
 
 1. Actionable notifications (local now, push later), Face ID lock (optional, off by default), haptics on approve/send.
