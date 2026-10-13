@@ -779,7 +779,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         guard let dictation else { return }
         dictationBase = composer.text
         composer.setDictating(true)
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
             let outcome = await dictation.start(
                 onPartial: { [weak self] partial in
                     guard let self else { return }
@@ -787,6 +787,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
                     self.composer.text = self.dictationBase + separator + partial
                 },
                 onEnd: { [weak self] in self?.composer.setDictating(false) })
+            guard let self else { return }
             composer.setDictating(dictation.isListening)
             switch outcome {
             case .started, .finished: break

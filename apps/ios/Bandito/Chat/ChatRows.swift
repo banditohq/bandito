@@ -99,12 +99,12 @@ enum ChatRowContent: Equatable, Sendable {
     /// that becomes a line once answered) needs a new cell, not a cell set up again.
     var cellKind: String {
         switch self {
-        case .message: ChatMessageCell.reuse
-        case .day, .chapter, .line: ChatLineCell.reuse
-        case .tools: ChatToolsCell.reuse
-        case .changes: ChatChangesCell.reuse
-        case .working: ChatWorkingCell.reuse
-        case .approval, .form, .connect: ChatHostedCell.reuse
+        case .message: ChatCellID.message
+        case .day, .chapter, .line: ChatCellID.line
+        case .tools: ChatCellID.tools
+        case .changes: ChatCellID.changes
+        case .working: ChatCellID.working
+        case .approval, .form, .connect: ChatCellID.hosted
         }
     }
 
@@ -130,6 +130,16 @@ enum ChatRowContent: Equatable, Sendable {
         case .working: .working
         }
     }
+}
+
+/// The reuse identifiers of the chat's cells (plain strings, readable from any thread).
+enum ChatCellID {
+    static let message = "ChatMessageCell"
+    static let line = "ChatLineCell"
+    static let tools = "ChatToolsCell"
+    static let changes = "ChatChangesCell"
+    static let working = "ChatWorkingCell"
+    static let hosted = "ChatHostedCell"
 }
 
 /// One row of the list.

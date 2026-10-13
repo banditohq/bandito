@@ -21,7 +21,7 @@ protocol ChatCellActions: AnyObject {
 /// A message: the bubble, the blocks in it (text, code, rules), the pictures and files above it and the small line under
 /// it. Views are kept per cell and reused for the next message; the frames come from the measured layout.
 final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDelegate {
-    static let reuse = "ChatMessageCell"
+    static let reuse = ChatCellID.message
 
     weak var actions: ChatCellActions?
     private(set) var rowID = ""
@@ -250,7 +250,7 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
 
 /// A centred quiet line: a day, a chapter, a note, an answered request, a scheduled run (which opens its prompt).
 final class ChatLineCell: UICollectionViewCell {
-    static let reuse = "ChatLineCell"
+    static let reuse = ChatCellID.line
 
     weak var actions: ChatCellActions?
     private var rowID = ""
@@ -339,7 +339,7 @@ final class ChatLineCell: UICollectionViewCell {
 
 /// A folded group of commands: "Ran 7 commands" with the state, opening to a line per command.
 final class ChatToolsCell: UICollectionViewCell {
-    static let reuse = "ChatToolsCell"
+    static let reuse = ChatCellID.tools
 
     weak var actions: ChatCellActions?
     private var rowID = ""
@@ -433,7 +433,7 @@ final class ChatToolsCell: UICollectionViewCell {
 
 /// The card "12 files, +240 −30" at the end of a finished turn; a press opens the list of files.
 final class ChatChangesCell: UICollectionViewCell {
-    static let reuse = "ChatChangesCell"
+    static let reuse = ChatCellID.changes
 
     weak var actions: ChatCellActions?
     private let card = UIView()
@@ -494,7 +494,7 @@ final class ChatChangesCell: UICollectionViewCell {
 /// The row at the end while the agent's turn runs: three dots that rise in a wave (a Core Animation layer, not a SwiftUI
 /// animation), what it does now and how long the turn has run. The time ticks in this cell only.
 final class ChatWorkingCell: UICollectionViewCell {
-    static let reuse = "ChatWorkingCell"
+    static let reuse = ChatCellID.working
 
     private let dotsView = ChatDotsView()
     private let title = ChatTextView()
@@ -609,7 +609,7 @@ final class ChatDotsView: UIView {
 /// A card made in SwiftUI (an approval, a form, a request to connect) inside a cell. The cell reports the card's height
 /// when it changes, so the list gives it room.
 final class ChatHostedCell: UICollectionViewCell {
-    static let reuse = "ChatHostedCell"
+    static let reuse = ChatCellID.hosted
 
     private var host: UIHostingController<AnyView>?
     private(set) var rowID = ""
