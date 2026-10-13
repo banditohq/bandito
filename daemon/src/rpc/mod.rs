@@ -804,6 +804,8 @@ struct IssueParams {
     #[serde(default)]
     noise_key: Option<String>,
 }
+/// The most device rows `devices.issue` allows on one server.
+const MAX_DEVICES: usize = 50;
 /// The longest device name that is kept, in characters.
 const ISSUE_NAME_CHARS: usize = 100;
 /// The name of an issued device: trimmed, cut to [`ISSUE_NAME_CHARS`], never empty.
@@ -1895,6 +1897,14 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let platform = issue_platform(&r.platform)?;
             // A key that cannot be one is refused before anything is written.
             let noise_key = r.noise_key.as_deref().map(valid_noise_key).transpose()?;
+            // A device with the account's access can mint more: the number of rows is capped, so a loop of requests
+            // cannot fill the table.
+            if store.device_list()?.len() >= MAX_DEVICES {
+                return Err(RpcError::new(
+                    SERVER_ERROR,
+                    format!("this server already has {MAX_DEVICES} devices: remove one in Settings and try again"),
+                ));
+            }
             let token = pairing::new_token();
             let d = store.device_add_keyed(&name, &token, noise_key.as_deref())?;
             tracing::info!(device = %d.id, platform, "issued a device token to another device of the owner");
@@ -5185,6 +5195,25 @@ mod folder_and_device_tests {
             .unwrap()
             .name;
         assert_eq!(name.chars().count(), ISSUE_NAME_CHARS);
+    }
+
+    #[tokio::test]
+    async fn devices_issue_stops_at_fifty_devices_with_a_clear_error() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store.clone(), PathBuf::from("/unused"));
+        for i in 0..MAX_DEVICES {
+            store.device_add(&format!("d{i}"), &format!("tok-{i}")).unwrap();
+        }
+        let err = dispatch(&app, &Peer::Local, "devices.issue", json!({ "name": "P", "platform": "ios" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, SERVER_ERROR);
+        assert!(err.message.contains("50 devices"), "{}", err.message);
+        assert_eq!(store.device_list().unwrap().len(), MAX_DEVICES);
+        // Removing one makes room again.
+        let first = store.device_list().unwrap()[0].id.clone();
+        dispatch(&app, &Peer::Local, "devices.revoke", json!({ "id": first })).await.unwrap();
+        assert!(dispatch(&app, &Peer::Local, "devices.issue", json!({ "name": "P", "platform": "ios" })).await.is_ok());
     }
 
     #[tokio::test]

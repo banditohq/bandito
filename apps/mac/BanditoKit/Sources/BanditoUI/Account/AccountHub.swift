@@ -261,20 +261,20 @@ public final class AccountHub {
             let responder = self.responder ?? AccessResponder(
                 sync: store, account: client, identity: identity, ledger: accessLedger)
             self.responder = responder
-            try await responder.run(servers: servers)
+            let outcome = try await responder.run(servers: servers)
+            if outcome.updateNeeded > 0 {
+                Logger.account.notice("Access: \(outcome.updateNeeded) request(s) wait: bandito.dev does not list device keys yet, update the account service.")
+            }
         } catch {
             Logger.account.error("Access cycle: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    /// A device left the account: its device rows on the servers this Mac can reach are revoked (servers that are not
-    /// reachable now are cleaned when they are). Call after the account removed the device.
+    /// A device left the account: runs a round now, which revokes the rows this Mac issued to it (the round compares what
+    /// this Mac issued with the account's device list, so a removal from another device is handled the same way).
     public func revokeAccess(of device: AccountDevice) async {
-        guard let provider = accessServers, let client, let identity, let store = syncStore else { return }
-        let responder = self.responder ?? AccessResponder(
-            sync: store, account: client, identity: identity, ledger: accessLedger)
-        self.responder = responder
-        await responder.revoke(deviceID: device.id, name: device.name, servers: provider())
+        guard let configs = accessServers?().map(\.config) else { return }
+        await runAccessCycle(configs: configs)
     }
 
     /// Brings the profile picture in line with the sync blob. A newer copy in the blob is applied on this Mac; a newer

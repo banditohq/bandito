@@ -22,9 +22,16 @@ extension AccountClient: AccessAccount {}
 /// account's blob and, for every request to a server this device is connected to, asks the daemon for a device
 /// (`devices.issue`), seals the token to the asking device (`DeviceTokenSeal`), writes the grant and removes the request.
 ///
-/// One request is answered once: the issue is remembered in the `AccessLedger` before anything else is written, a grant
-/// that could not be written is kept there and written by the next cycle, and a request that comes back after it was
-/// answered is removed, not answered again.
+/// - A request is answered only if the key it carries is the key `GET /me` lists for that device id. A server that
+///   lists no keys (an older one) gets no answers: `Outcome.updateNeeded` counts them.
+/// - One request is answered once: the issue is remembered in the `AccessLedger` before anything else is written, a
+///   grant that could not be written is kept there and written by the next cycle, and a request that comes back after
+///   it was answered is removed, not answered again. At most one issue per device and server in ten minutes.
+/// - Two Macs may answer together: the blob is read again before an issue, the grant never overwrites a newer one of
+///   another device, and a row whose grant did not stand is revoked at once.
+/// - Every cycle compares the ledger with the account: a row this device issued to a device that is no longer in the
+///   account (or not approved) is revoked and forgotten. That covers removal from any device, self-removal and a reset.
+///   Rows are found by the id this device kept, never by name.
 @MainActor
 public final class AccessResponder {
     public struct Outcome: Equatable, Sendable {
@@ -36,7 +43,17 @@ public final class AccessResponder {
         public var waiting = 0
         /// Device rows revoked in this cycle.
         public var revoked = 0
+        /// Requests left alone because `GET /me` lists no public key for the device: the account service is older than
+        /// this app. Shown in the log as "update bandito.dev support".
+        public var updateNeeded = 0
+        /// Requests that wait out the ten-minute pause between two issues for one device and server.
+        public var cooledDown = 0
+        /// Requests another device answered first.
+        public var answeredElsewhere = 0
     }
+
+    /// The pause between two issues for one device and server.
+    static let issueCooldownMs: Int64 = 10 * 60 * 1000
 
     private let sync: AccessSyncing
     private let account: AccessAccount
@@ -58,6 +75,13 @@ public final class AccessResponder {
 
     private var nowMs: Int64 { Int64(now().timeIntervalSince1970 * 1000) }
 
+    /// A grant waiting to be written, with what it answers.
+    private struct Planned {
+        var grant: AccessGrant
+        var requestAt: Int64
+        var rowID: String
+    }
+
     /// One cycle over the servers this device knows. A cycle that starts while another runs does nothing.
     @discardableResult
     public func run(servers: [any AccessServer]) async throws -> Outcome {
@@ -70,23 +94,26 @@ public final class AccessResponder {
         let me = try await account.me()
         guard me.device.approved else { return outcome }
         let accountID = session.user.id
-
-        outcome.revoked = await finishRevocations(accountID: accountID, servers: servers)
-
-        guard let payload = try await sync.pull() else { return outcome }
         let byServer = Dictionary(
             servers.map { ($0.accessServerID.uuidString.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
+        let approved = Set(me.devices.filter(\.approved).map(\.id))
+        let members = Set(me.devices.map(\.id))
+
+        outcome.revoked = await revokeRowsOfLeftDevices(accountID: accountID, approved: approved, byServer: byServer)
+
+        guard let payload = try await sync.pull() else { return outcome }
         let known = Set(payload.servers.map { $0.id.uuidString.lowercased() })
 
-        var grants: [AccessGrant] = []
+        var planned: [AccessKey: Planned] = [:]
         var answered: [AccessKey: Int64] = [:]
         var dropped: [AccessKey: Int64] = [:]
 
         // Grants that were made but never written (the write failed): write them now, once.
-        for issue in ledger.issues where issue.accountID == accountID {
+        for issue in ledger.issues where issue.accountID == accountID && approved.contains(issue.deviceID) {
             if let pending = issue.pending {
-                grants.append(pending)
-                answered[AccessKey(deviceID: issue.deviceID, serverID: issue.serverID)] = issue.requestAt
+                let key = AccessKey(deviceID: issue.deviceID, serverID: issue.serverID)
+                planned[key] = Planned(grant: pending, requestAt: issue.requestAt, rowID: issue.rowID)
+                answered[key] = issue.requestAt
             }
         }
 
@@ -108,16 +135,29 @@ public final class AccessResponder {
                 outcome.waiting += 1
                 continue
             }
-            // The key the answer is sealed to: the one the asking device wrote in its request (inside the encrypted
-            // blob), which must agree with the account's list when that lists keys.
-            let recipient = request.publicKey ?? asking.publicKey
-            if let listed = asking.publicKey, let written = request.publicKey, listed != written {
+            // The key the answer is sealed to is the one the account lists for that device id, and the request must
+            // carry the same key. An account service that lists none cannot be trusted with this: no answer.
+            guard let listed = asking.publicKey else {
+                outcome.updateNeeded += 1
+                continue
+            }
+            guard request.publicKey == listed, Self.isPublicKey(listed) else {
                 outcome.failed += 1
                 continue
             }
-            guard let recipient, Self.isPublicKey(recipient) else {
-                outcome.failed += 1
+            if let last = ledger.lastIssue(accountID: accountID, deviceID: request.deviceID, serverID: request.serverID),
+                nowMs - last < Self.issueCooldownMs
+            {
+                outcome.cooledDown += 1
                 continue
+            }
+            // Another Mac may have answered since this cycle read the blob: read it again before issuing anything.
+            if let fresh = try await sync.pull() {
+                let stillAsked = fresh.accessRequests.contains { $0.key == key && $0.at == request.at }
+                if !stillAsked || fresh.accessGrants.contains(where: { $0.key == key && $0.at >= request.at }) {
+                    outcome.answeredElsewhere += 1
+                    continue
+                }
             }
             do {
                 let issued = try await server.issueDeviceToken(
@@ -126,7 +166,7 @@ public final class AccessResponder {
                 let sealed: String
                 do {
                     sealed = try DeviceTokenSeal.seal(
-                        token: issued.token, forPublicKey: recipient, sender: identity,
+                        token: issued.token, forPublicKey: listed, sender: identity,
                         accountID: accountID, deviceID: request.deviceID, serverID: request.serverID)
                 } catch {
                     try? await server.revokeDeviceRow(issued.deviceId)
@@ -140,7 +180,7 @@ public final class AccessResponder {
                         accountID: accountID, deviceID: request.deviceID, deviceName: asking.name,
                         serverID: request.serverID, requestAt: request.at, rowID: issued.deviceId, issuedAt: nowMs,
                         pending: grant))
-                grants.append(grant)
+                planned[key] = Planned(grant: grant, requestAt: request.at, rowID: issued.deviceId)
                 answered[key] = max(answered[key] ?? 0, request.at)
                 outcome.issued += 1
             } catch let error as RPCError where error.code == RPCError.invalidParams {
@@ -151,21 +191,45 @@ public final class AccessResponder {
                 outcome.failed += 1
             }
         }
+        // Requests and grants of devices that left the account are of no use any more.
+        let hasStale = payload.accessRequests.contains { !members.contains($0.deviceID) }
+            || payload.accessGrants.contains { !members.contains($0.deviceID) }
 
         let removals = answered.merging(dropped) { max($0, $1) }
-        guard !grants.isEmpty || !removals.isEmpty else { return outcome }
-        try await sync.update { payload in
-            for grant in grants {
-                payload.accessGrants.removeAll { $0.key == grant.key }
-                payload.accessGrants.append(grant)
+        guard !planned.isEmpty || !removals.isEmpty || hasStale else { return outcome }
+        let writes = planned
+        let stored = try await sync.update { payload in
+            for (key, plan) in writes {
+                // Never over a grant that answers the same request and is not ours: that one stands.
+                if let existing = payload.accessGrants.first(where: { $0.key == key }),
+                    existing.at >= plan.requestAt, existing.sealed != plan.grant.sealed
+                {
+                    continue
+                }
+                payload.accessGrants.removeAll { $0.key == key }
+                payload.accessGrants.append(plan.grant)
             }
             payload.accessRequests.removeAll { request in
+                if !members.contains(request.deviceID) { return true }
                 guard let at = removals[request.key] else { return false }
                 return request.at <= at
             }
+            payload.accessGrants.removeAll { !members.contains($0.deviceID) }
         }
-        for issue in ledger.issues where issue.pending != nil && grants.contains(where: { $0.sealed == issue.pending?.sealed }) {
-            ledger.markWritten(issue)
+        // A grant that did not stand (another Mac's won) leaves a row nobody holds: revoke it.
+        for (key, plan) in planned {
+            let standing = stored.accessGrants.first(where: { $0.key == key })?.sealed == plan.grant.sealed
+            guard let issue = ledger.issues.first(where: { $0.rowID == plan.rowID && $0.serverID == key.serverID }) else {
+                continue
+            }
+            if standing {
+                ledger.markWritten(issue)
+            } else if let server = byServer[key.serverID] {
+                try? await server.revokeDeviceRow(plan.rowID)
+                ledger.remove(rowID: plan.rowID, serverID: key.serverID)
+                outcome.issued -= 1
+                outcome.answeredElsewhere += 1
+            }
         }
         await replaceOldRows(accountID: accountID, byServer: byServer)
         return outcome
@@ -173,66 +237,24 @@ public final class AccessResponder {
 
     // MARK: revoking
 
-    /// The device `deviceID` ("`name`") left the account: its rows on the servers go. Servers that are not reachable
-    /// now are cleaned by later cycles (`run`).
-    @discardableResult
-    public func revoke(deviceID: String, name: String, servers: [any AccessServer]) async -> Int {
-        guard let accountID = try? await account.restoreSession()?.user.id else { return 0 }
-        ledger.addRevocation(
-            AccessLedger.Revocation(
-                accountID: accountID, deviceID: deviceID, deviceName: name, requestedAt: nowMs, done: []))
-        let count = await finishRevocations(accountID: accountID, servers: servers)
-        // Its open requests and grants are of no use any more.
-        _ = try? await sync.update { payload in
-            payload.accessRequests.removeAll { $0.deviceID == deviceID }
-            payload.accessGrants.removeAll { $0.deviceID == deviceID }
-        }
-        return count
-    }
-
-    /// Cleans the servers that are reachable for every open revocation of `accountID`.
-    private func finishRevocations(accountID: String, servers: [any AccessServer]) async -> Int {
-        ledger.dropOldRevocations(nowMs: nowMs)
-        var revoked = 0
-        for revocation in ledger.revocations where revocation.accountID == accountID {
-            for server in servers where server.isReachable {
-                let serverID = server.accessServerID.uuidString.lowercased()
-                if revocation.done.contains(serverID) { continue }
-                do {
-                    revoked += try await removeRows(of: revocation, on: server, serverID: serverID)
-                    ledger.markDone(revocation, serverID: serverID)
-                } catch {
-                    // Not reachable after all: the next cycle tries again.
-                }
-            }
-        }
-        return revoked
-    }
-
-    /// Revokes the rows this device issued for the device (by the id it kept), and, for a row it did not issue (another
-    /// Mac answered), the rows with the device's name that are not the caller's own.
-    private func removeRows(of revocation: AccessLedger.Revocation, on server: any AccessServer, serverID: String) async throws -> Int {
+    /// Revokes the rows this device issued to a device that is no longer in the account, or is not approved: the
+    /// account's list is the truth, whoever changed it. Only rows this device issued are touched, found by the row id it
+    /// kept. A server that is not reachable is cleaned by a later cycle.
+    private func revokeRowsOfLeftDevices(
+        accountID: String, approved: Set<String>, byServer: [String: any AccessServer]
+    ) async -> Int {
         var count = 0
-        let mine = ledger.issues.filter {
-            $0.accountID == revocation.accountID && $0.deviceID == revocation.deviceID && $0.serverID == serverID
-        }
-        let rows = try await server.deviceRows()
-        var revokedIDs = Set<String>()
-        for issue in mine {
-            if rows.contains(where: { $0.id == issue.rowID }) {
-                try await server.revokeDeviceRow(issue.rowID)
-                count += 1
-            }
-            revokedIDs.insert(issue.rowID)
-            ledger.remove(rowID: issue.rowID, serverID: serverID)
-        }
-        // Rows that another device of the account issued carry the same name; this device's own row never matches.
-        let name = revocation.deviceName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !name.isEmpty {
-            for row in rows
-            where row.name == name && row.current != true && !revokedIDs.contains(row.id) && !ledger.isIssuedToOther(rowID: row.id, than: revocation.deviceID) {
-                try await server.revokeDeviceRow(row.id)
-                count += 1
+        for issue in ledger.issues where issue.accountID == accountID && !approved.contains(issue.deviceID) {
+            guard let server = byServer[issue.serverID], server.isReachable else { continue }
+            do {
+                let rows = try await server.deviceRows()
+                if rows.contains(where: { $0.id == issue.rowID && $0.current != true }) {
+                    try await server.revokeDeviceRow(issue.rowID)
+                    count += 1
+                }
+                ledger.remove(rowID: issue.rowID, serverID: issue.serverID)
+            } catch {
+                // Not reachable after all: the next cycle tries again.
             }
         }
         return count
@@ -268,12 +290,5 @@ public final class AccessResponder {
     static func platform(_ platform: String) -> String {
         let cleaned = platform.lowercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
         return cleaned.isEmpty ? "ios" : String(cleaned.prefix(32))
-    }
-}
-
-extension AccessLedger {
-    /// Whether the row is one this device issued for a device other than `deviceID`: such a row is not touched by name.
-    func isIssuedToOther(rowID: String, than deviceID: String) -> Bool {
-        issues.contains { $0.rowID == rowID && $0.deviceID != deviceID }
     }
 }
