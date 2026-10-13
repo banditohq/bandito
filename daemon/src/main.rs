@@ -742,6 +742,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     if safe_mode.is_none() {
         // The listener for phones, when the owner has switched it on (docs/ARCHITECTURE.md#phone-access).
         app.phone.spawn_watcher();
+        // Bandito Relay, when the owner has switched it on (docs/RELAY.md).
+        app.relay.start().await;
         bandito::scheduler::spawn_loop(sup.clone());
         rpc::integrations::spawn_oauth_refresher(app.clone());
         // Polls the Telegram bot when a token is set (never in safe mode: the database is not the real one).
@@ -831,6 +833,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     shutdown_signal().await;
     tracing::info!("shutting down");
     app.phone.shutdown().await;
+    app.relay.shutdown().await;
     app.terminals.shutdown_all();
     app.screens.shutdown_all().await;
     sup.stop_all().await;

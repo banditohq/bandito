@@ -359,6 +359,10 @@ pub enum EventBody {
     /// with an empty agent id: the app reads `telegram.status` again.
     #[serde(rename = "telegram.changed")]
     TelegramChanged,
+    /// The relay's status changed: switched on or off, connected or not, a new error (see docs/RELAY.md). Broadcast
+    /// only, never stored, with an empty agent id: the app reads `relay.status` again.
+    #[serde(rename = "relay.changed")]
+    RelayChanged,
     /// The owner changed server settings (see docs/ARCHITECTURE.md#server-settings). Broadcast only, never stored,
     /// with an empty agent id. `keys` are the names that changed; the app reads `server.settings_get` again.
     #[serde(rename = "server.settings_changed")]
@@ -375,7 +379,7 @@ impl EventBody {
     pub fn is_persisted(&self) -> bool {
         !matches!(
             self,
-            EventBody::MessageDelta { .. } | EventBody::TelegramChanged | EventBody::ServerSettingsChanged { .. }
+            EventBody::MessageDelta { .. } | EventBody::TelegramChanged | EventBody::RelayChanged | EventBody::ServerSettingsChanged { .. }
         )
     }
 
@@ -507,6 +511,19 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&body).unwrap(),
             serde_json::json!({"kind": "telegram.changed"})
+        );
+    }
+
+    #[test]
+    fn relay_changed_carries_no_data_and_is_not_stored() {
+        let body = EventBody::RelayChanged;
+        assert!(!body.is_persisted());
+        let (kind, payload) = body.to_parts();
+        assert_eq!(kind, "relay.changed");
+        assert_eq!(EventBody::from_parts(&kind, payload).unwrap(), body);
+        assert_eq!(
+            serde_json::to_value(&body).unwrap(),
+            serde_json::json!({"kind": "relay.changed"})
         );
     }
 

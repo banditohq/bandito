@@ -26,8 +26,10 @@ rcgen = { version = "0.14", default-features = false, features = ["ring", "pem",
 rand = "0.10.3"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rustls-native-certs = "0.8.4"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+snow = "0.10.0"
 sha2 = "0.11.0"
 tar = { version = "0.4.46", default-features = false }
 thiserror = "2.0.21"

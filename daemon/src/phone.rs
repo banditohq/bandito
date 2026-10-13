@@ -315,18 +315,57 @@ pub fn pair_hosts(mode: PhoneMode, port: u16, ifaces: &[IfaceAddr], tailscale_ip
         .collect()
 }
 
+/// The relay part of a pairing link (docs/RELAY.md): where the phone reaches the server, and the key it pins.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelayLink {
+    /// The relay's host, with its port when it is not the default: `relay.bandito.dev`.
+    pub host: String,
+    /// The server's relay id (26 base32 characters).
+    pub sid: String,
+    /// The daemon's Noise static public key, base64url without padding.
+    pub nk: String,
+}
+
+impl RelayLink {
+    /// The `relay` parameter of the link: `<host>/<sid>`.
+    pub fn param(&self) -> String {
+        format!("{}/{}", self.host, self.sid)
+    }
+}
+
 /// The pairing link: `bandito://pair?v=1&code=…&fp=…&name=…&host=…&host=…`. `host` repeats, best first.
 /// Values are percent-encoded; `fp` is 64 lower-case hex digits.
 pub fn pair_link(code: &str, fingerprint: &str, name: &str, hosts: &[String]) -> String {
+    pair_link_with_relay(code, Some(fingerprint), name, hosts, None)
+}
+
+/// The pairing link with the relay's parameters when relay mode is on: `…&relay=<host>/<sid>&nk=<base64url>`. `fp` is
+/// left out when the server has no phone certificate (relay only, no `host`).
+pub fn pair_link_with_relay(
+    code: &str,
+    fingerprint: Option<&str>,
+    name: &str,
+    hosts: &[String],
+    relay: Option<&RelayLink>,
+) -> String {
     let name: String = name.chars().take(MAX_NAME_CHARS).collect();
-    let mut link = format!(
-        "bandito://pair?v={LINK_VERSION}&code={}&fp={fingerprint}&name={}",
-        percent_encode(code),
-        percent_encode(&name)
-    );
+    let mut link = format!("bandito://pair?v={LINK_VERSION}&code={}", percent_encode(code));
+    if let Some(fp) = fingerprint {
+        link.push_str("&fp=");
+        link.push_str(fp);
+    }
+    link.push_str("&name=");
+    link.push_str(&percent_encode(&name));
     for host in hosts {
         link.push_str("&host=");
         link.push_str(&percent_encode(host));
+    }
+    if let Some(relay) = relay {
+        link.push_str("&relay=");
+        // The slash between host and id stays readable; each part is encoded on its own.
+        link.push_str(&format!("{}/{}", percent_encode(&relay.host), percent_encode(&relay.sid)));
+        link.push_str("&nk=");
+        link.push_str(&percent_encode(&relay.nk));
     }
     link
 }
@@ -341,6 +380,16 @@ fn percent_encode(s: &str) -> String {
         }
     }
     out
+}
+
+/// Waits as long as an anonymous connection may live: [`ANONYMOUS_IDLE`] without a `pair.redeem`, and
+/// [`ANONYMOUS_AFTER_REDEEM`] more once `redeem_seen` is set. Used by the direct socket and by relay streams alike.
+pub async fn anonymous_deadline(redeem_seen: &std::sync::atomic::AtomicBool) {
+    tokio::time::sleep(ANONYMOUS_IDLE).await;
+    if !redeem_seen.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    tokio::time::sleep(ANONYMOUS_AFTER_REDEEM).await;
 }
 
 /// Anonymous upgrades by source and time: at most [`ATTEMPT_MAX`] in [`ATTEMPT_WINDOW_MS`] from one source (an IPv4
@@ -603,7 +652,7 @@ impl PhoneAccess {
     }
 
     /// The link and hosts for a pairing `code`, from what is listening now.
-    pub fn pair_info(&self, code: &str, server_name: &str) -> PairInfo {
+    pub fn pair_info(&self, code: &str, server_name: &str, relay: Option<&RelayLink>) -> PairInfo {
         let status = self.status();
         let fingerprint = self.fingerprint();
         let hosts = if status.listening.is_empty() {
@@ -613,8 +662,16 @@ impl PhoneAccess {
             let tailscale = (sources.tailscale)();
             pair_hosts(status.mode, status.port, &(sources.ifaces)(), &tailscale)
         };
-        let link = match (&fingerprint, hosts.is_empty()) {
-            (Some(fp), false) => Some(pair_link(code, fp, server_name, &hosts)),
+        // Direct hosts need the certificate to pin; the relay needs only its key. With neither, there is no link.
+        let link = match (&fingerprint, hosts.is_empty(), relay) {
+            (Some(fp), false, relay) => Some(pair_link_with_relay(code, Some(fp), server_name, &hosts, relay)),
+            (fp, _, Some(relay)) => Some(pair_link_with_relay(
+                code,
+                fp.as_deref().filter(|_| !hosts.is_empty()),
+                server_name,
+                &hosts,
+                Some(relay),
+            )),
             _ => None,
         };
         PairInfo {
@@ -1010,7 +1067,7 @@ fn set_mode(path: &Path, mode: u32) -> Result<()> {
 }
 
 /// Writes `bytes` to `path` as a file only the owner reads, through a temporary file and a rename.
-fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
+pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
     let tmp = path.with_extension(format!("tmp-{}", hex::encode(rand::random::<[u8; 6]>())));

@@ -35,6 +35,7 @@ pub mod phone;
 pub mod policy;
 pub mod recommend;
 pub mod redact;
+pub mod relay;
 pub mod rpc;
 pub mod runtime;
 pub mod sanitize;

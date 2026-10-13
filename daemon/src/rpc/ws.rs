@@ -570,7 +570,7 @@ fn percent_encode(s: &str) -> String {
 
 /// Whether a message is a `pair.redeem` request: its `method` is that name. The text anywhere else in a message (a
 /// param, say) does not count.
-fn asks_to_pair(text: &str) -> bool {
+pub(crate) fn asks_to_pair(text: &str) -> bool {
     serde_json::from_str::<serde_json::Value>(text)
         .ok()
         .and_then(|v| v.get("method").and_then(|m| m.as_str()).map(|m| m == "pair.redeem"))
@@ -615,11 +615,7 @@ async fn handle(app: Arc<App>, peer: Peer, socket: WebSocket, anonymous_slot: Op
         if !(anonymous && _slot.is_some()) {
             return std::future::pending::<()>().await;
         }
-        tokio::time::sleep(crate::phone::ANONYMOUS_IDLE).await;
-        if !redeem_seen.load(std::sync::atomic::Ordering::Relaxed) {
-            return;
-        }
-        tokio::time::sleep(crate::phone::ANONYMOUS_AFTER_REDEEM).await;
+        crate::phone::anonymous_deadline(&redeem_seen).await;
     };
     tokio::select! {
         () = serve(app, peer, in_rx, out_tx) => {}

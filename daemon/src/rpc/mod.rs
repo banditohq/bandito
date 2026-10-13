@@ -43,6 +43,7 @@ pub mod host;
 pub mod integrations;
 pub mod migrate;
 pub mod preview;
+pub mod relay;
 pub mod schedules;
 pub mod screen;
 pub mod secrets;
@@ -122,6 +123,7 @@ pub fn features() -> Vec<&'static str> {
         "agent_migrate",
         "server_settings",
         "phone_access",
+        "relay",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -178,6 +180,8 @@ pub struct App {
     pub migrate: crate::migrate::Registry,
     /// The TLS listener for phones (see docs/ARCHITECTURE.md#phone-access). Off until the owner switches it on.
     pub phone: Arc<crate::phone::PhoneAccess>,
+    /// The connection to Bandito Relay (see docs/RELAY.md). Off until the owner switches it on.
+    pub relay: Arc<crate::relay::Relay>,
     /// One cancellation token per paired device: revoking the device cancels it, and every long connection of the device
     /// (RPC, tunnel, DevTools, a file or preview stream) ends with it (see [`App::device_cancel`]).
     device_cancels: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
@@ -250,6 +254,7 @@ impl App {
             creations: team_create::Creations::default(),
             migrate: crate::migrate::Registry::default(),
             phone: Arc::new(crate::phone::PhoneAccess::new(data_home.clone(), me.clone())),
+            relay: Arc::new(crate::relay::Relay::new(data_home.clone(), me.clone())),
             device_cancels: Mutex::new(HashMap::new()),
             data_home,
         })
@@ -473,6 +478,8 @@ pub const WORKSPACE_ERROR: i64 = -32028;
 pub const TELEGRAM_ERROR: i64 = -32029;
 /// An agent migration step failed; `error.data.reason` says why (see rpc::migrate).
 pub const MIGRATE_ERROR: i64 = -32030;
+/// A relay call failed on the server (the key or settings file); `error.data.reason` says why (see rpc::relay).
+pub const RELAY_ERROR: i64 = -32031;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -785,6 +792,21 @@ struct ScheduleUpdate {
 struct RedeemParams {
     code: String,
     device_name: String,
+    /// The phone's Noise static public key (base64url, 32 bytes) when it pairs for the relay (docs/RELAY.md).
+    #[serde(default)]
+    noise_key: Option<String>,
+}
+/// A phone's Noise public key: base64url without padding, 32 bytes. Returned in its canonical spelling.
+fn valid_noise_key(key: &str) -> Result<String, RpcError> {
+    use base64::Engine;
+    let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    match engine.decode(key.trim()) {
+        Ok(bytes) if bytes.len() == 32 => Ok(engine.encode(bytes)),
+        _ => Err(RpcError::new(
+            INVALID_PARAMS,
+            "noise_key must be 32 bytes as base64url without padding",
+        )),
+    }
 }
 #[derive(Deserialize)]
 struct TeamAgentParams {
@@ -1235,6 +1257,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     }
     if method.starts_with("screen.") {
         return screen::dispatch(app, peer, method, p).await;
+    }
+    if method.starts_with("relay.") {
+        return relay::dispatch(app, method, p).await;
     }
     if method.starts_with("telegram.") {
         return telegram::dispatch(app, method, p).await;
@@ -1869,7 +1894,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let code = pairing::new_code();
             store.pairing_add(&code, pairing::CODE_TTL_MS)?;
             // For a phone: the link (and the QR text, the same string) when the phone listener is up.
-            let phone = app.phone.pair_info(&code, &app.hostname);
+            let relay = app.relay.link_info();
+            let phone = app.phone.pair_info(&code, &app.hostname, relay.as_ref());
             ok(json!({
                 "code": code,
                 "expires_in_ms": pairing::CODE_TTL_MS,
@@ -1877,10 +1903,14 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 "qr": phone.link,
                 "hosts": phone.hosts,
                 "fingerprint": phone.fingerprint,
+                "relay": relay.as_ref().map(crate::phone::RelayLink::param),
+                "noise_key": relay.as_ref().map(|r| r.nk.as_str()),
             }))
         }
         "pair.redeem" => {
             let r: RedeemParams = params(p)?;
+            // A key that cannot be one is refused before the code is looked at, so a typo does not burn the code.
+            let noise_key = r.noise_key.as_deref().map(valid_noise_key).transpose()?;
             let now = crate::store::now_ms();
             let source = redeem_source(peer);
             let mut limiter = app.redeem.lock().unwrap_or_else(|e| e.into_inner());
@@ -1898,7 +1928,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let name = r.device_name.trim();
             let name = if name.is_empty() { "device" } else { name };
             let token = pairing::new_token();
-            let d = store.device_add(name, &token)?;
+            let d = store.device_add_keyed(name, &token, noise_key.as_deref())?;
             ok(json!({ "token": token, "device": d }))
         }
 
@@ -4413,6 +4443,9 @@ mod trust_tests {
         "backups.create",
         "backups.restore",
         "backups.leave_safe_mode",
+        "relay.enable",
+        "relay.disable",
+        "relay.status",
         "telegram.status",
         "telegram.set_token",
         "telegram.remove_token",
