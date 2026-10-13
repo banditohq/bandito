@@ -33,7 +33,7 @@ extension ServerModel {
             throw RPCError(
                 code: RPCError.unsupportedTransport,
                 message: "this Mac's server is not set up for the app yet; it is paired at the next launch")
-        case .direct:
+        case .direct, .reachable:
             // The HTTP routes would need the pinned session of `DirectTransport`; no screen asks for them yet.
             throw RPCError(
                 code: RPCError.unsupportedTransport,
@@ -96,7 +96,7 @@ extension ServerModel {
     private func tokenMayTravel() -> Bool {
         switch config.endpoint {
         case .webSocket(let server): WebSocketTransport.allowsToken(for: server)
-        case .ssh, .direct: true
+        case .ssh, .direct, .reachable: true
         case .local: false
         }
     }

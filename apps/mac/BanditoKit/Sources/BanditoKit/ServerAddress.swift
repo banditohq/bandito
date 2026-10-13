@@ -16,6 +16,8 @@ public enum ServerAddress: Equatable, Sendable {
         case .direct(let hosts, _):
             // The address the app reached last is not known here: the first one is the best the server gave.
             self = .remote(hosts.first ?? "—")
+        case .reachable(let hosts, _, let relay, _):
+            self = .remote(hosts.first ?? relay?.host ?? "—")
         case .webSocket(let url):
             var host = url.host() ?? ""
             if host.contains(":"), !host.hasPrefix("[") {

@@ -40,6 +40,7 @@ struct ServerPicker: View {
         case .webSocket(let url): return url.host ?? url.absoluteString
         case .ssh(let server, _): return server.targetText
         case .direct(let hosts, _): return hosts.first ?? thisMacLabel
+        case .reachable(let hosts, _, let relay, _): return hosts.first ?? relay?.host ?? thisMacLabel
         }
     }
 

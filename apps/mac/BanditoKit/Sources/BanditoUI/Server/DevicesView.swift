@@ -210,6 +210,8 @@ struct PairSheet: View {
             return server.targetText
         case .direct(let hosts, _):
             return hosts.first ?? ""
+        case .reachable(let hosts, _, let relay, _):
+            return hosts.first ?? relay?.host ?? ""
         }
     }
 }
