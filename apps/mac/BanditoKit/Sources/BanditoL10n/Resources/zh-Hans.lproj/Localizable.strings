@@ -945,6 +945,7 @@
 "ios.account.servers.header" = "账户中的服务器";
 "ios.account.servers.hidden" = "已隐藏";
 "ios.account.servers.noAccess" = "无远程访问";
+"ios.account.servers.updateNeeded" = "需要更新 Bandito";
 "ios.account.servers.waiting" = "等待 Mac…";
 "ios.account.signIn.text" = "登录后即可在这台 iPhone 上看到你 Mac 上的服务器。列表已加密，密钥只保存在你的设备上。";
 "ios.account.signOut.message" = "已连接的服务器会保留。再次登录此账户无需批准。";

@@ -455,12 +455,36 @@ final class Clock: @unchecked Sendable {
     @Test func aRequestIsNotAnsweredWithoutTheAccountListingTheKey() async throws {
         let sync = AccessFakeSync(blobWithServer())
         // An older account service: /me lists no keys.
-        let (responder, requester, _, _) = suite(sync: sync, devices: devices(keys: false))
-        _ = try await requester.run()
+        let (responder, _, _, _) = suite(sync: sync, devices: devices(keys: false))
+        // A request written by a newer build of the phone (it carries the key it would be sealed to).
+        sync.payload?.accessRequests = [
+            AccessRequest(
+                deviceID: "phone", serverID: serverID.uuidString.lowercased(), noiseKey: "k", publicKey: phone.publicKeyBase64,
+                at: Int64(now.timeIntervalSince1970 * 1000))
+        ]
         let server = AccessFakeDaemon(serverID)
         let outcome = try await responder.run(servers: [server])
         #expect(outcome.updateNeeded == 1 && outcome.issued == 0 && server.issuedCalls.isEmpty)
         #expect(sync.payload?.accessRequests.count == 1, "the request waits")
+    }
+
+    @Test func withoutTheAccountListingKeysNoGrantIsOpenedAndNothingIsAsked() async throws {
+        let sync = AccessFakeSync(blobWithServer())
+        let (_, requester, sink, _) = suite(sync: sync, devices: devices(keys: false))
+        // A forged grant (version 2, sealed by a stranger) for this phone.
+        let stranger = try makeIdentity()
+        let forged = try DeviceTokenSeal.seal(
+            token: "bdt_evil", phone: phoneInfo, forPublicKey: phone.publicKeyBase64, sender: stranger, accountID: "u1",
+            deviceID: "phone", serverID: serverID.uuidString.lowercased())
+        sync.payload?.accessGrants = [
+            AccessGrant(deviceID: "phone", serverID: serverID.uuidString.lowercased(), sealed: forged, at: Int64(now.timeIntervalSince1970 * 1000))
+        ]
+        let writes = sync.updates
+        let states = try await requester.run()
+        #expect(states.map(\.status) == [.updateNeeded])
+        #expect(await sink.received.isEmpty, "a grant that cannot be told from a forged one is not opened")
+        #expect(sync.payload?.accessRequests.isEmpty == true, "and nothing is asked for")
+        #expect(sync.updates == writes)
     }
 
     @Test func aRequestWithoutAKeyOfItsOwnIsNotAnswered() async throws {

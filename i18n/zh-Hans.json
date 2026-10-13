@@ -3453,5 +3453,6 @@
   "phoneWizard.orSignIn": "或者在 iPhone 上用此账户登录 Bandito，并在此处确认登录：服务器会自动出现。",
   "account.hidden.show": "显示已隐藏的服务器（{count}）",
   "account.hidden.hint": "您已从此设备移除的账户服务器。显示它们后会重新出现。",
-  "ios.account.servers.hidden": "已隐藏"
+  "ios.account.servers.hidden": "已隐藏",
+  "ios.account.servers.updateNeeded": "需要更新 Bandito"
 }

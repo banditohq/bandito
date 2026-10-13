@@ -55,6 +55,8 @@ final class IOSAccount {
     @ObservationIgnored private let ledger: AccessLedger
     /// The servers of the account the person removed on this iPhone: not asked for again until shown.
     @ObservationIgnored private let dismissed: DismissedServers
+    /// Servers the person removed before the account was known; marked as soon as it is.
+    @ObservationIgnored private var queuedDismissals: [ServerConfig] = []
     /// How many are hidden for the signed-in account (the account screen offers to show them).
     private(set) var hiddenCount = 0
     @ObservationIgnored private var responder: AccessResponder?
@@ -263,6 +265,7 @@ final class IOSAccount {
             let result = try await AccountInspector.inspect(
                 client: client, keys: keys, isSigningOut: { [weak self] in self?.signingOut ?? true })
             me = result.me
+            flushQueuedDismissals()
             errorText = nil
             switch result.route {
             case .firstDevice:
@@ -371,14 +374,31 @@ final class IOSAccount {
     private var accountID: String? { me?.user.id }
 
     /// The person removed this server on this iPhone: the account does not bring it back.
+    /// When the account is not known yet (signed out, or being read) the mark waits and is written once it is.
     func dismiss(_ config: ServerConfig) {
-        guard let accountID, stage == .ready else { return }
+        guard let accountID else {
+            queuedDismissals.append(config)
+            if queuedDismissals.count > 50 { queuedDismissals.removeFirst() }
+            return
+        }
         dismissed.insert(accountID: accountID, serverID: config.id, phone: SyncedPhone(endpoint: config.endpoint))
         hiddenCount = dismissed.count(accountID: accountID)
     }
 
+    /// Writes the marks that waited for the account.
+    private func flushQueuedDismissals() {
+        guard accountID != nil, !queuedDismissals.isEmpty else { return }
+        let waiting = queuedDismissals
+        queuedDismissals = []
+        for config in waiting { dismiss(config) }
+    }
+
     /// A server was added here: a mark that hid it (by id, or as the same daemon) is lifted.
     func lift(_ config: ServerConfig) {
+        let phone = SyncedPhone(endpoint: config.endpoint)
+        queuedDismissals.removeAll { waiting in
+            waiting.id == config.id || (phone.map { $0.isSameDaemon(as: waiting.endpoint) } ?? false)
+        }
         guard let accountID else { return }
         dismissed.lift(accountID: accountID, serverID: config.id, phone: SyncedPhone(endpoint: config.endpoint))
         hiddenCount = dismissed.count(accountID: accountID)
@@ -467,6 +487,7 @@ final class IOSAccount {
         // The hidden servers belong to the account that is leaving; the next one starts with none.
         if let accountID { dismissed.clear(accountID: accountID) }
         hiddenCount = 0
+        queuedDismissals = []
         pending = nil
         stage = .signedOut
         me = nil
@@ -491,7 +512,7 @@ extension IOSAccount {
     /// An account in a given stage with no network, for the screenshots (`-account-preview <stage>`) and the previews.
     static func preview(
         stage: Stage, servers: [AccessServerState] = [], who: String = "anna@example.com",
-        dismissed: DismissedServers = DismissedServers()
+        dismissed: DismissedServers = DismissedServers(), known: Bool = true
     ) -> IOSAccount {
         let account = IOSAccount(
             keys: MemorySecretStore(), identities: DeviceIdentityStore(secrets: MemorySecretStore()),
@@ -500,10 +521,18 @@ extension IOSAccount {
         account.inert = true
         account.stage = stage
         account.servers = servers
-        account.me = Me(
+        if known { account.previewSignIn(who: who) }
+        return account
+    }
+}
+
+extension IOSAccount {
+    /// The account becomes known (a sign-in that was read): what waited for it is written.
+    func previewSignIn(who: String = "anna@example.com") {
+        me = Me(
             user: AccountUser(id: "preview", email: who, name: nil, githubLogin: nil),
             device: DeviceRef(id: "phone", approved: stage != .signedOut), devices: [])
-        return account
+        flushQueuedDismissals()
     }
 }
 

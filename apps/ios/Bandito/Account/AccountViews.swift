@@ -349,7 +349,7 @@ struct ServerStateRow: View {
         switch server.status {
         case .connected: Color.Bandito.ok
         case .waitingForMac: Color.Bandito.signal
-        case .noRemoteAccess, .hidden: Color.Bandito.text3
+        case .noRemoteAccess, .hidden, .updateNeeded: Color.Bandito.text3
         }
     }
 
@@ -359,6 +359,7 @@ struct ServerStateRow: View {
         case .waitingForMac: L10n.Ios.Account.Servers.waiting
         case .noRemoteAccess: L10n.Ios.Account.Servers.noAccess
         case .hidden: L10n.Ios.Account.Servers.hidden
+        case .updateNeeded: L10n.Ios.Account.Servers.updateNeeded
         }
     }
 }

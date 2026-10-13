@@ -945,6 +945,7 @@
 "ios.account.servers.header" = "アカウントのサーバー";
 "ios.account.servers.hidden" = "非表示";
 "ios.account.servers.noAccess" = "リモートアクセスなし";
+"ios.account.servers.updateNeeded" = "Bandito の更新が必要";
 "ios.account.servers.waiting" = "Mac を待っています…";
 "ios.account.signIn.text" = "サインインすると、Mac のサーバーをこの iPhone で見られます。リストは暗号化され、鍵はお使いのデバイスにだけ残ります。";
 "ios.account.signOut.message" = "接続済みのサーバーはそのまま残ります。同じアカウントへの再サインインに承認は不要です。";

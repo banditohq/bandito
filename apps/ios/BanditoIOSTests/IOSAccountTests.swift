@@ -49,8 +49,8 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
     private func me(approved: Bool) -> String {
         """
         {"ok":true,"user":{"id":"u1","email":"anna@example.com"},"device":{"id":"phone","approved":\(approved)},\
-        "devices":[{"id":"mac","name":"Studio","platform":"macos","approved":true,"created_at":"","last_seen_at":"","current":false},\
-        {"id":"phone","name":"iPhone","platform":"ios","approved":\(approved),"created_at":"","last_seen_at":"","current":true}]}
+        "devices":[{"id":"mac","name":"Studio","platform":"macos","approved":true,"created_at":"","last_seen_at":"","current":false,"public_key":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="},\
+        {"id":"phone","name":"iPhone","platform":"ios","approved":\(approved),"created_at":"","last_seen_at":"","current":true,"public_key":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="}]}
         """
     }
 

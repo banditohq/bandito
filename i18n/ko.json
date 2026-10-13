@@ -3453,5 +3453,6 @@
   "phoneWizard.orSignIn": "또는 iPhone의 Bandito에 이 계정으로 로그인하고 여기서 로그인을 승인하세요. 서버가 저절로 나타납니다.",
   "account.hidden.show": "숨긴 서버 표시 ({count})",
   "account.hidden.hint": "이 기기에서 제거한 계정의 서버입니다. 표시하면 다시 나타납니다.",
-  "ios.account.servers.hidden": "숨김"
+  "ios.account.servers.hidden": "숨김",
+  "ios.account.servers.updateNeeded": "Bandito 업데이트 필요"
 }

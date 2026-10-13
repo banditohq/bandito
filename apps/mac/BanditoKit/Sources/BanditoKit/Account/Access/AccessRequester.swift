@@ -11,6 +11,9 @@ public struct AccessServerState: Equatable, Sendable, Identifiable {
         case noRemoteAccess
         /// The person removed this server on this device: it is not asked for again until they show it.
         case hidden
+        /// The account service lists no public keys of the devices (an older one): a grant cannot be told from a forged
+        /// one, so none is opened and nothing is asked for until the service is updated.
+        case updateNeeded
     }
 
     public var id: UUID
@@ -84,7 +87,18 @@ public final class AccessRequester {
 
         // Keys of the account's devices, when the account lists them: a grant must come from one of them.
         let listed = Set(me.devices.filter(\.approved).compactMap(\.publicKey))
-        let senders: Set<String>? = listed.isEmpty ? nil : listed
+        guard !listed.isEmpty else {
+            // Without the account's keys any device (or the service) could write a grant that opens: refuse, as the
+            // answering side does. No grant is opened and no request is made.
+            var waiting: [AccessServerState] = []
+            for server in payload.servers {
+                let held = await sink.hasAccess(serverID: server.id, phone: server.phone)
+                waiting.append(
+                    AccessServerState(id: server.id, name: server.name, status: held ? .connected : .updateNeeded, phone: server.phone))
+            }
+            return waiting
+        }
+        let senders: Set<String>? = listed
 
         var doneGrants = Set<AccessKey>()
         var newRequests: [AccessRequest] = []

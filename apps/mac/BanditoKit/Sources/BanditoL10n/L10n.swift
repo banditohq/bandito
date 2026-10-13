@@ -1377,6 +1377,7 @@ public enum L10n {
                 public static var header: String { L10n.tr("ios.account.servers.header") }
                 public static var hidden: String { L10n.tr("ios.account.servers.hidden") }
                 public static var noAccess: String { L10n.tr("ios.account.servers.noAccess") }
+                public static var updateNeeded: String { L10n.tr("ios.account.servers.updateNeeded") }
                 public static var waiting: String { L10n.tr("ios.account.servers.waiting") }
             }
 

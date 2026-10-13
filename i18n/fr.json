@@ -3495,5 +3495,6 @@
   "phoneWizard.orSignIn": "Ou connectez-vous à Bandito sur l’iPhone avec ce compte et confirmez la connexion ici : les serveurs apparaissent tout seuls.",
   "account.hidden.show": "Afficher les serveurs masqués ({count})",
   "account.hidden.hint": "Serveurs du compte que vous avez retirés de cet appareil. Affichez-les et ils reviennent.",
-  "ios.account.servers.hidden": "Masqué"
+  "ios.account.servers.hidden": "Masqué",
+  "ios.account.servers.updateNeeded": "Mettez Bandito à jour"
 }

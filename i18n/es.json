@@ -3495,5 +3495,6 @@
   "phoneWizard.orSignIn": "O inicia sesión en Bandito en el iPhone con esta cuenta y confirma el acceso aquí: los servidores aparecerán solos.",
   "account.hidden.show": "Mostrar servidores ocultos ({count})",
   "account.hidden.hint": "Servidores de la cuenta que quitaste de este dispositivo. Muéstralos y volverán.",
-  "ios.account.servers.hidden": "Oculto"
+  "ios.account.servers.hidden": "Oculto",
+  "ios.account.servers.updateNeeded": "Actualiza Bandito"
 }

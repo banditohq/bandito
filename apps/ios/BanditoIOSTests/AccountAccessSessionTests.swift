@@ -112,4 +112,24 @@ import Testing
         account.showHiddenServers()
         #expect(account.hiddenCount == 0 && hidden.count(accountID: "preview") == 0)
     }
+
+    @Test func aServerRemovedBeforeTheAccountIsKnownIsMarkedAsSoonAsItIs() throws {
+        let hidden = DismissedServers(defaults: UserDefaults(suiteName: "ios-hidden-\(UUID().uuidString)")!)
+        let account = IOSAccount.preview(stage: .signedOut, dismissed: hidden, known: false)
+        let kept = ServerConfig(
+            name: "Studio", endpoint: .reachable(hosts: [], fingerprint: nil, relay: RelayRoute(host: "relay.bandito.dev", sid: Self.sid), noiseKey: Self.nk),
+            token: "t")
+        let readded = ServerConfig(
+            name: "Other", endpoint: .reachable(hosts: [], fingerprint: nil, relay: RelayRoute(host: "relay.bandito.dev", sid: "zzzzzzzzzzzzzzzzzzzzzzzzzz"), noiseKey: Base64URL.encode(Data(repeating: 7, count: 32))),
+            token: "t")
+        account.dismiss(kept)
+        account.dismiss(readded)
+        #expect(account.hiddenCount == 0 && hidden.count(accountID: "preview") == 0, "nothing to write it under yet")
+        // One of them was added again before the sign-in: its mark never gets written.
+        account.lift(readded)
+        account.previewSignIn()
+        #expect(hidden.count(accountID: "preview") == 1 && account.hiddenCount == 1)
+        #expect(hidden.contains(accountID: "preview", serverID: kept.id, phone: nil))
+        #expect(!hidden.contains(accountID: "preview", serverID: readded.id, phone: nil))
+    }
 }

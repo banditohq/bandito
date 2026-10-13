@@ -945,6 +945,7 @@
 "ios.account.servers.header" = "SERVER IHRES KONTOS";
 "ios.account.servers.hidden" = "Ausgeblendet";
 "ios.account.servers.noAccess" = "Kein Fernzugriff";
+"ios.account.servers.updateNeeded" = "Bandito aktualisieren";
 "ios.account.servers.waiting" = "Wartet auf den Mac …";
 "ios.account.signIn.text" = "Melden Sie sich an, um die Server Ihres Mac auf diesem iPhone zu sehen. Die Liste ist verschlüsselt: Der Schlüssel bleibt auf Ihren Geräten.";
 "ios.account.signOut.message" = "Bereits verbundene Server bleiben erhalten. Die erneute Anmeldung bei diesem Konto braucht keine Bestätigung.";

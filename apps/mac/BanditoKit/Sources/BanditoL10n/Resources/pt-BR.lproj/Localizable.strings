@@ -945,6 +945,7 @@
 "ios.account.servers.header" = "SERVIDORES DA SUA CONTA";
 "ios.account.servers.hidden" = "Oculto";
 "ios.account.servers.noAccess" = "Sem acesso remoto";
+"ios.account.servers.updateNeeded" = "Atualize o Bandito";
 "ios.account.servers.waiting" = "Aguardando o Mac…";
 "ios.account.signIn.text" = "Entre para ver os servidores do seu Mac neste iPhone. A lista é criptografada: a chave fica só nos seus dispositivos.";
 "ios.account.signOut.message" = "Os servidores já conectados permanecem. Entrar de novo nesta conta não exige aprovação.";

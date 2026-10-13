@@ -945,6 +945,7 @@
 "ios.account.servers.header" = "SERVEURS DE VOTRE COMPTE";
 "ios.account.servers.hidden" = "Masqué";
 "ios.account.servers.noAccess" = "Pas d’accès distant";
+"ios.account.servers.updateNeeded" = "Mettez Bandito à jour";
 "ios.account.servers.waiting" = "En attente du Mac…";
 "ios.account.signIn.text" = "Connectez-vous pour voir les serveurs de votre Mac sur cet iPhone. La liste est chiffrée : la clé reste sur vos appareils.";
 "ios.account.signOut.message" = "Les serveurs déjà connectés restent. Se reconnecter à ce compte ne demande aucune validation.";

@@ -3580,5 +3580,6 @@
   "phoneWizard.orSignIn": "Или войдите в Bandito на iPhone этим аккаунтом и подтвердите вход здесь — серверы появятся сами.",
   "account.hidden.show": "Показать скрытые серверы ({count})",
   "account.hidden.hint": "Серверы аккаунта, которые вы убрали с этого устройства. Покажите их, и они появятся снова.",
-  "ios.account.servers.hidden": "Скрыт"
+  "ios.account.servers.hidden": "Скрыт",
+  "ios.account.servers.updateNeeded": "Нужно обновить Bandito"
 }

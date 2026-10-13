@@ -945,6 +945,7 @@
 "ios.account.servers.header" = "СЕРВЕРЫ АККАУНТА";
 "ios.account.servers.hidden" = "Скрыт";
 "ios.account.servers.noAccess" = "Нет удалённого доступа";
+"ios.account.servers.updateNeeded" = "Нужно обновить Bandito";
 "ios.account.servers.waiting" = "Ожидает Mac…";
 "ios.account.signIn.text" = "Войдите, чтобы увидеть серверы вашего Mac на этом iPhone. Список зашифрован: ключ остаётся только на ваших устройствах.";
 "ios.account.signOut.message" = "Уже подключённые серверы останутся. Войти в этот аккаунт снова можно без подтверждения.";
