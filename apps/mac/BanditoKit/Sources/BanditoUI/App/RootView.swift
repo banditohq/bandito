@@ -15,12 +15,6 @@ public struct RootView: View {
 
     public init() {}
 
-    /// The statistics notice does not close the first chat: it waits for the first finished reply and an empty field,
-    /// or the next launch (`ConsentTiming`).
-    private var noticeMayShow: Bool {
-        Self.noticeMayShow(router: router, onboarding: onboarding, app: app)
-    }
-
     /// Whether the statistics notice may be on screen now. Also read by `WhatsNewPresenter`, which waits only for a
     /// notice that is really shown, not for one that is itself waiting.
     static func noticeMayShow(router: Router, onboarding: OnboardingModel, app: AppModel) -> Bool {
@@ -49,10 +43,7 @@ public struct RootView: View {
         }
         .background(Color.Bandito.bg)
         // The first-run notice and the crash question wait until the first-run flow is over; they answer with a button.
-        .sheet(isPresented: .constant(telemetry.showsNotice && noticeMayShow)) {
-            TelemetryNoticeSheet(telemetry: telemetry)
-                .interactiveDismissDisabled()
-        }
+        .modifier(TelemetryNoticePresenter())
         .sheet(isPresented: .constant(telemetry.showsCrashQuestion && !onboarding.isActive)) {
             TelemetryConfirmSheet(
                 title: L10n.Telemetry.Crash.title,
@@ -113,5 +104,25 @@ public struct RootView: View {
         .modifier(WhatsNewPresenter())
         .modifier(OAuthSignInPresenter())
         .modifier(DeviceSignInPresenter())
+    }
+}
+
+/// Shows the statistics notice. It does not close the first chat: it waits for the first finished reply and an empty
+/// field, or the next launch (`ConsentTiming`). A modifier of its own, so what it reads (the finished turns, the
+/// drafts) re-evaluates only this modifier, not the root view and the window under it.
+private struct TelemetryNoticePresenter: ViewModifier {
+    @Environment(OnboardingModel.self) private var onboarding
+    @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
+    @Environment(TelemetryCenter.self) private var telemetry
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: .constant(
+                telemetry.showsNotice && RootView.noticeMayShow(router: router, onboarding: onboarding, app: app)
+            )) {
+                TelemetryNoticeSheet(telemetry: telemetry)
+                    .interactiveDismissDisabled()
+            }
     }
 }
