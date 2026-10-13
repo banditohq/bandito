@@ -94,6 +94,9 @@ struct MainWindow: View {
         .task {
             // Only with a session: without one nobody can ask for pending devices, and no device key is needed yet.
             hub.accessServers = { [weak app] in app?.servers ?? [] }
+            hub.accessSink = MacAccessSink(
+                app: { [weak app] in app }, noiseKeys: ServerNoiseKeyStore(secrets: hub.keys),
+                ownRecords: { [weak hub] in hub?.ownPhoneRecords ?? [:] })
             guard hub.signedIn else { return }
             try? await hub.prepare()
             await hub.refreshPending()

@@ -25,9 +25,16 @@ public struct ServerAccess: Sendable, Equatable, CustomStringConvertible, Custom
 public protocol ServerAccessSink: Sendable {
     /// Whether this device already holds a token for the server `serverID` (the id the account syncs).
     func hasAccess(serverID: UUID) async -> Bool
+    /// The same, for a server the account knows with this `phone` record: also true when this device holds the same
+    /// daemon under another id (it was paired by link here before the account knew it). The default asks by id only.
+    func hasAccess(serverID: UUID, phone: SyncedPhone?) async -> Bool
     /// Takes the new access. Throwing keeps the grant in the blob, and the next cycle tries again, so an
     /// implementation that failed must not have kept half of it.
     func receive(_ access: ServerAccess) async throws
+}
+
+extension ServerAccessSink {
+    public func hasAccess(serverID: UUID, phone: SyncedPhone?) async -> Bool { await hasAccess(serverID: serverID) }
 }
 
 /// The Noise static key this device uses for one server (docs/RELAY.md): made on the first request for the server,

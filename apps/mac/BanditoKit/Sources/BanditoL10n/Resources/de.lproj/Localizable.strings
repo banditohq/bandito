@@ -2003,6 +2003,7 @@
 "phoneWizard.done.title" = "Fertig, das iPhone ist verbunden";
 "phoneWizard.install" = "Bandito für das iPhone ist noch in der geschlossenen Testphase: Schreib uns, um eine Einladung zu bekommen";
 "phoneWizard.noServer" = "Es ist kein verbundener Server vorhanden, der über die Cloud laufen kann. Verbinde einen Server oder aktualisiere ihn.";
+"phoneWizard.orSignIn" = "Oder melde dich auf dem iPhone einfach mit diesem Konto bei Bandito an: Die Server erscheinen von selbst.";
 "phoneWizard.pick.hint" = "Das iPhone erreicht ihn über die Bandito-Cloud, aus jedem Netz.";
 "phoneWizard.pick.title" = "Mit welchem Server soll sich das iPhone verbinden?";
 "phoneWizard.preparing" = "Verbindung wird vorbereitet …";

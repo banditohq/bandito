@@ -499,6 +499,14 @@ public final class AppModel {
             lastError = "Could not save the device token in the Keychain. The server was not added."
             return
         }
+        // A server reached through Bandito Relay keeps its Noise key next to the token; the two stand or fall together.
+        if config.endpoint.relayPart != nil {
+            guard config.noiseSecret != nil, Keychain.setNoiseSecret(config.noiseSecret, for: config.id) else {
+                Keychain.setToken(nil, for: config.id)
+                lastError = "Could not save the relay key in the Keychain. The server was not added."
+                return
+            }
+        }
         // Connecting the same server again (a reinstall, "This Mac" twice) replaces its entry instead of
         // adding a second one: the new token is the valid one.
         if let existing = servers.first(where: { $0.config.endpoint == config.endpoint && $0.id != config.id }) {
@@ -527,6 +535,7 @@ public final class AppModel {
         #endif
         Task { await s.disconnect() }
         Keychain.setToken(nil, for: id)
+        Keychain.setNoiseSecret(nil, for: id)
         FileFavorites.forget(serverID: id)
         if selectedServerID == id { selectedServerID = servers.first?.id }
         save()
@@ -596,6 +605,7 @@ public final class AppModel {
         servers = configs.map { c in
             var c = c
             c.token = Keychain.token(for: c.id)
+            if c.endpoint.relayPart != nil { c.noiseSecret = Keychain.noiseSecret(for: c.id) }
             let model = ServerModel(config: c, readMarks: ReadMarks(serverID: c.id))
             attachNotifications(model)
             return model
@@ -614,6 +624,7 @@ public final class AppModel {
         let configs = servers.map { s -> ServerConfig in
             var c = s.config
             c.token = nil
+            c.noiseSecret = nil
             return c
         }
         if let data = try? JSONEncoder().encode(configs) {

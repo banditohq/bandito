@@ -3576,5 +3576,6 @@
   "ios.account.signOut.title": "Выйти из аккаунта?",
   "ios.account.signOut.message": "Уже подключённые серверы останутся. Войти в этот аккаунт снова можно без подтверждения.",
   "ios.account.sender.title": "Одобрено одним из ваших устройств. Совпадает ли код на его экране с кодом ниже?",
-  "ios.account.sender.codeLabel": "Код одобрившего устройства"
+  "ios.account.sender.codeLabel": "Код одобрившего устройства",
+  "phoneWizard.orSignIn": "Или просто войдите в Bandito на iPhone этим аккаунтом: серверы появятся сами."
 }

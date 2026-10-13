@@ -2003,6 +2003,7 @@
 "phoneWizard.done.title" = "Pronto, o iPhone está conectado";
 "phoneWizard.install" = "O Bandito para iPhone está por enquanto em teste fechado: escreva para nós e receba um convite";
 "phoneWizard.noServer" = "Não há servidor conectado que funcione pela nuvem. Conecte um servidor ou atualize-o.";
+"phoneWizard.orSignIn" = "Ou simplesmente entre no Bandito do iPhone com esta conta: os servidores aparecem sozinhos.";
 "phoneWizard.pick.hint" = "O iPhone chegará a ele pela nuvem do Bandito, de qualquer rede.";
 "phoneWizard.pick.title" = "A qual servidor o iPhone deve se conectar?";
 "phoneWizard.preparing" = "Preparando a conexão…";

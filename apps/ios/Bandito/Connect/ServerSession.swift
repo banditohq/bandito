@@ -34,6 +34,10 @@ final class ServerSession {
     /// The server the Crew screen shows. One for now: the first.
     var active: ServerModel? { current.first }
 
+    /// Servers the person disconnected on purpose, by id. The account does not offer them again: without this a server
+    /// disconnected here would come back with the next round of "servers follow you".
+    static let dismissedKey = "servers.dismissed.v1"
+    @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let store: ServerStore
     @ObservationIgnored private let secrets: SecretStore
     /// Connects a new model. Replaced in tests, so no network is touched.
@@ -49,8 +53,9 @@ final class ServerSession {
 
     init(
         store: ServerStore = ServerStore(), secrets: SecretStore = ServerSession.deviceSecrets(),
-        connect: (@MainActor (ServerModel) -> Void)? = nil
+        connect: (@MainActor (ServerModel) -> Void)? = nil, defaults: UserDefaults = .standard
     ) {
+        self.defaults = defaults
         self.store = store
         self.secrets = secrets
         self.connectOverride = connect
@@ -163,8 +168,26 @@ final class ServerSession {
             throw SessionError.keychain
         }
         if let replaced { drop(replaced) }
+        if dismissed.contains(config.id) { setDismissed(dismissed.subtracting([config.id])) }
         start(config)
         save()
+    }
+
+    /// The ids the person disconnected on purpose.
+    var dismissed: Set<UUID> {
+        Set((defaults.stringArray(forKey: Self.dismissedKey) ?? []).compactMap(UUID.init(uuidString:)))
+    }
+
+    private func setDismissed(_ ids: Set<UUID>) {
+        defaults.set(ids.map(\.uuidString).sorted(), forKey: Self.dismissedKey)
+    }
+
+    /// Whether this iPhone has the server `id` from the account, or the same daemon under another id, or the person
+    /// disconnected it on purpose.
+    func holds(serverID: UUID, phone: SyncedPhone?) -> Bool {
+        if servers.contains(where: { $0.id == serverID }) || dismissed.contains(serverID) { return true }
+        guard let phone else { return false }
+        return servers.contains { phone.isSameDaemon(as: $0.config.endpoint) }
     }
 
     /// Renames a server. The name is cleaned like every name (`ServerNameRules`); one with nothing left changes nothing.
@@ -211,6 +234,7 @@ final class ServerSession {
         if config.endpoint.isPaired { revoked = await revokeSelf(withToken) }
         if let fingerprint = config.endpoint.pinnedFingerprint { DirectHostMemory.shared.forget(fingerprint) }
         drop(id)
+        setDismissed(dismissed.union([id]))
         forgetCursor(id)
         save()
         return .removed(revokedOnServer: revoked)
@@ -226,6 +250,7 @@ final class ServerSession {
         guard drop(id) else { return }
         try? secrets.save(nil, account: id.uuidString)
         try? secrets.save(nil, account: Self.noiseAccount(id))
+        setDismissed(dismissed.union([id]))
         forgetCursor(id)
         // What was written to this server and not sent stays with it no longer.
         ChatOutbox.shared.forget(serverID: id)

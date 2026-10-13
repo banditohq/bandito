@@ -3491,5 +3491,6 @@
   "ios.account.signOut.title": "Se déconnecter du compte ?",
   "ios.account.signOut.message": "Les serveurs déjà connectés restent. Se reconnecter à ce compte ne demande aucune validation.",
   "ios.account.sender.title": "Validé par l'un de vos appareils. Le code affiché sur son écran correspond-il à celui ci-dessous ?",
-  "ios.account.sender.codeLabel": "Code de l'appareil qui a validé"
+  "ios.account.sender.codeLabel": "Code de l'appareil qui a validé",
+  "phoneWizard.orSignIn": "Ou connectez-vous simplement à Bandito sur l’iPhone avec ce compte : les serveurs apparaissent tout seuls."
 }

@@ -2003,6 +2003,7 @@
 "phoneWizard.done.title" = "完了しました。iPhone を接続しました";
 "phoneWizard.install" = "iPhone 版 Bandito は現在クローズドテスト中です。招待をご希望の方はご連絡ください";
 "phoneWizard.noServer" = "クラウドで動作できる接続済みサーバーがありません。サーバーを接続するか、更新してください。";
+"phoneWizard.orSignIn" = "または、iPhone の Bandito にこのアカウントでサインインするだけで、サーバーが自動的に表示されます。";
 "phoneWizard.pick.hint" = "iPhone は Bandito クラウド経由で、どのネットワークからでもこのサーバーに接続します。";
 "phoneWizard.pick.title" = "iPhone をどのサーバーに接続しますか？";
 "phoneWizard.preparing" = "接続を準備しています…";

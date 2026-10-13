@@ -3491,5 +3491,6 @@
   "ios.account.signOut.title": "¿Cerrar sesión en su cuenta?",
   "ios.account.signOut.message": "Los servidores ya conectados se conservan. Volver a iniciar sesión en esta cuenta no requiere aprobación.",
   "ios.account.sender.title": "Aprobado por uno de sus dispositivos. ¿Coincide el código de su pantalla con el de abajo?",
-  "ios.account.sender.codeLabel": "Código del dispositivo que aprobó"
+  "ios.account.sender.codeLabel": "Código del dispositivo que aprobó",
+  "phoneWizard.orSignIn": "O simplemente inicia sesión en Bandito en el iPhone con esta cuenta: los servidores aparecerán solos."
 }

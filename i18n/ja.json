@@ -3449,5 +3449,6 @@
   "ios.account.signOut.title": "アカウントからサインアウトしますか？",
   "ios.account.signOut.message": "接続済みのサーバーはそのまま残ります。同じアカウントへの再サインインに承認は不要です。",
   "ios.account.sender.title": "お使いのデバイスのひとつが承認しました。そのデバイスの画面のコードは、下のコードと一致していますか？",
-  "ios.account.sender.codeLabel": "承認したデバイスのコード"
+  "ios.account.sender.codeLabel": "承認したデバイスのコード",
+  "phoneWizard.orSignIn": "または、iPhone の Bandito にこのアカウントでサインインするだけで、サーバーが自動的に表示されます。"
 }

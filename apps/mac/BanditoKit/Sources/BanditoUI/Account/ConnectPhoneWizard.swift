@@ -29,6 +29,10 @@ struct ConnectPhoneWizard: View {
         .frame(width: 420)
         .background(Color.Bandito.surface2)
         .task { await begin() }
+        .onChange(of: model?.step) { _, step in
+            // The cloud is on and the code shows: tell the account at once, so the iPhone that signs in finds the server.
+            if case .scan = step { hub.requestAccessCycle() }
+        }
         .onDisappear { model?.cancel() }
     }
 
@@ -155,6 +159,13 @@ struct ConnectPhoneWizard: View {
                     Text(L10n.PhoneWizard.waiting)
                         .font(BanditoFont.text(size: 12.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text2)
+                }
+                if hub.signedIn {
+                    Text(L10n.PhoneWizard.orSignIn)
+                        .font(BanditoFont.text(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Button {
                     SystemActions.open(IPhoneApp.requestInvite)

@@ -3491,5 +3491,6 @@
   "ios.account.signOut.title": "Sign out of your account?",
   "ios.account.signOut.message": "Servers that are already connected stay. Signing in to this account again needs no approval.",
   "ios.account.sender.title": "Approved by one of your devices. Does the code on its screen match the one below?",
-  "ios.account.sender.codeLabel": "Code of the approving device"
+  "ios.account.sender.codeLabel": "Code of the approving device",
+  "phoneWizard.orSignIn": "Or just sign in to Bandito on the iPhone with this account: the servers appear by themselves."
 }

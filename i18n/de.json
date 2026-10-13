@@ -3490,5 +3490,6 @@
   "ios.account.signOut.title": "Vom Konto abmelden?",
   "ios.account.signOut.message": "Bereits verbundene Server bleiben erhalten. Die erneute Anmeldung bei diesem Konto braucht keine Bestätigung.",
   "ios.account.sender.title": "Von einem Ihrer Geräte bestätigt. Stimmt der Code auf dessen Bildschirm mit dem unten überein?",
-  "ios.account.sender.codeLabel": "Code des bestätigenden Geräts"
+  "ios.account.sender.codeLabel": "Code des bestätigenden Geräts",
+  "phoneWizard.orSignIn": "Oder melde dich auf dem iPhone einfach mit diesem Konto bei Bandito an: Die Server erscheinen von selbst."
 }

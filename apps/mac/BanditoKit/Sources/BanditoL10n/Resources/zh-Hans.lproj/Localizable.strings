@@ -2003,6 +2003,7 @@
 "phoneWizard.done.title" = "完成，iPhone 已连接";
 "phoneWizard.install" = "iPhone 版 Bandito 目前处于封闭测试：请给我们写信以获取邀请";
 "phoneWizard.noServer" = "没有可通过云工作的已连接服务器。请连接服务器或更新它。";
+"phoneWizard.orSignIn" = "或者直接在 iPhone 上用此账户登录 Bandito：服务器会自动出现。";
 "phoneWizard.pick.hint" = "iPhone 将通过 Bandito 云从任何网络连接到它。";
 "phoneWizard.pick.title" = "iPhone 要连接到哪台服务器？";
 "phoneWizard.preparing" = "正在准备连接…";

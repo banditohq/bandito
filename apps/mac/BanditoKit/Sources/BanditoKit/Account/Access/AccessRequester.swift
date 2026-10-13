@@ -88,7 +88,7 @@ public final class AccessRequester {
         for server in payload.servers {
             let serverKey = server.id.uuidString.lowercased()
             let key = AccessKey(deviceID: myID, serverID: serverKey)
-            var connected = await sink.hasAccess(serverID: server.id)
+            var connected = await sink.hasAccess(serverID: server.id, phone: server.phone)
 
             if let grant = payload.accessGrants.first(where: { $0.key == key }) {
                 if connected {
@@ -138,7 +138,8 @@ public final class AccessRequester {
         let accountServers = Set(payload.servers.map { $0.id.uuidString.lowercased() })
         for request in payload.accessRequests where request.deviceID == myID {
             let id = UUID(uuidString: request.serverID)
-            let held = id != nil ? await sink.hasAccess(serverID: id!) : false
+            let phone = payload.servers.first { $0.id == id }?.phone
+            let held = id != nil ? await sink.hasAccess(serverID: id!, phone: phone) : false
             if held || !accountServers.contains(request.serverID) { doneRequests.insert(request.key) }
         }
 

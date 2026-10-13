@@ -31,7 +31,7 @@ struct ServerPhoneSection: View {
                     .padding(16)
             } else if let settings = model.snapshot?.settings {
                 if server.supportsRelay {
-                    CloudAccessBlock(cloud: cloud, preview: previewCloud, onSignIn: signIn)
+                    CloudAccessBlock(cloud: cloud, preview: previewCloud, onSignIn: signIn, onChanged: { hub.requestAccessCycle() })
                     Divider().padding(.horizontal, 16)
                     SectionLabel(L10n.ServerSettings.Phone.Direct.title)
                         .padding(.horizontal, 16)

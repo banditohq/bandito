@@ -49,6 +49,11 @@ final class IOSAccount {
     @ObservationIgnored private let baseURL: URL
     @ObservationIgnored private let deviceName: String
     @ObservationIgnored private let sink: ServerAccessSink
+    /// The servers this iPhone is connected to: it answers the account's requests for them and publishes the ones it was
+    /// paired with by a link. Empty in previews and tests that do not need it.
+    @ObservationIgnored private let connectedServers: @MainActor () -> [ServerModel]
+    @ObservationIgnored private let ledger: AccessLedger
+    @ObservationIgnored private var responder: AccessResponder?
     @ObservationIgnored private let noiseKeys: ServerNoiseKeyStore
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let pollInterval: Duration
@@ -68,6 +73,7 @@ final class IOSAccount {
 
     init(
         keys: SecretStore, identities: DeviceIdentityStore, sink: ServerAccessSink, noiseKeys: ServerNoiseKeyStore,
+        connectedServers: @escaping @MainActor () -> [ServerModel] = { [] }, ledger: AccessLedger = AccessLedger(),
         http: HTTPClient = URLSessionHTTPClient(), baseURL: URL = AccountClient.defaultBaseURL,
         deviceName: String = IOSAccount.currentDeviceName(), defaults: UserDefaults = .standard,
         pollInterval: Duration = .seconds(3)
@@ -76,6 +82,8 @@ final class IOSAccount {
         self.identities = identities
         self.sink = sink
         self.noiseKeys = noiseKeys
+        self.connectedServers = connectedServers
+        self.ledger = ledger
         self.http = http
         self.baseURL = baseURL
         self.deviceName = deviceName
@@ -87,9 +95,15 @@ final class IOSAccount {
     private static func makeDefault() -> IOSAccount {
         let secrets = deviceSecrets(service: "dev.bandito.ios.account", fallback: "account-secrets")
         let identitySecrets = deviceSecrets(service: DeviceIdentity.keychainService, fallback: "device-keys")
+        let noiseKeys = ServerNoiseKeyStore(secrets: secrets)
+        // A server the account hands over goes into the same list as a scanned one, and connects at once.
+        let session = AccessSession(
+            add: { try ServerSession.shared.add($0) },
+            holds: { ServerSession.shared.holds(serverID: $0, phone: $1) })
         return IOSAccount(
             keys: secrets, identities: DeviceIdentityStore(secrets: identitySecrets),
-            sink: AccountAccessSink(secrets: secrets), noiseKeys: ServerNoiseKeyStore(secrets: secrets))
+            sink: AccountAccessSink(secrets: secrets, session: session, noiseKeys: noiseKeys), noiseKeys: noiseKeys,
+            connectedServers: { ServerSession.shared.servers })
     }
 
     /// The Keychain; on the Simulator an unsigned build has no Keychain access group and refuses every write, so there a
@@ -156,6 +170,7 @@ final class IOSAccount {
         self.identity = identity
         self.client = client
         syncStore = store
+        responder = AccessResponder(sync: store, account: client, identity: identity, ledger: ledger)
         requester = AccessRequester(
             sync: store, account: client, identity: identity, sink: sink, noiseKeys: noiseKeys, defaults: defaults)
         github = PhoneGitHubSignIn(service: client)
@@ -347,6 +362,15 @@ final class IOSAccount {
     func runCycle() async {
         guard stage == .ready, let requester else { return }
         do {
+            // Tell the account about the servers added here by a link, answer what its other devices ask for, then ask for
+            // what this iPhone lacks.
+            let connected = connectedServers()
+            if let store = syncStore, let deviceID = me?.device.id {
+                try? await PairedServerPublishing.publish(configs: connected.map(\.config), to: store, deviceID: deviceID)
+            }
+            if let responder {
+                _ = try? await responder.run(servers: connected)
+            }
             servers = try await requester.run()
         } catch AccountError.api(let code, _) where code == "unauthorized" {
             await dropSession()

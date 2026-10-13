@@ -3491,5 +3491,6 @@
   "ios.account.signOut.title": "Sair da sua conta?",
   "ios.account.signOut.message": "Os servidores já conectados permanecem. Entrar de novo nesta conta não exige aprovação.",
   "ios.account.sender.title": "Aprovado por um dos seus dispositivos. O código na tela dele é igual ao de baixo?",
-  "ios.account.sender.codeLabel": "Código do dispositivo que aprovou"
+  "ios.account.sender.codeLabel": "Código do dispositivo que aprovou",
+  "phoneWizard.orSignIn": "Ou simplesmente entre no Bandito do iPhone com esta conta: os servidores aparecem sozinhos."
 }

@@ -99,6 +99,11 @@ public final class AccountHub {
     /// What this Mac last wrote as phone records, so the blob is written again only when they change.
     @ObservationIgnored private var publishedPhones: [UUID: SyncedPhone] = [:]
     @ObservationIgnored private var responder: AccessResponder?
+    @ObservationIgnored private var requester: AccessRequester?
+    /// Where the accesses other devices issue for this Mac go (`MacAccessSink`). Set by the main window.
+    @ObservationIgnored public var accessSink: (any ServerAccessSink)?
+    /// The phone records this Mac last published for its own servers.
+    var ownPhoneRecords: [UUID: SyncedPhone] { publishedPhones }
     @ObservationIgnored private let accessLedger = AccessLedger()
     @ObservationIgnored private var watchTask: Task<Void, Never>?
     /// The first `prepare` in progress. Calls that come meanwhile wait for it, so the device identity is read once.
@@ -222,6 +227,7 @@ public final class AccountHub {
         pending = []
         signedIn = false
         responder = nil
+        requester = nil
         publishedPhones = [:]
         if let accountID = session?.user.id { accessLedger.forget(accountID: accountID) }
         profile.clear()
@@ -265,9 +271,24 @@ public final class AccountHub {
             if outcome.updateNeeded > 0 {
                 Logger.account.notice("Access: \(outcome.updateNeeded) request(s) wait: bandito.dev does not list device keys yet, update the account service.")
             }
+            // The other way: servers the account has (added on the iPhone) that this Mac does not.
+            if let sink = accessSink {
+                let asking = self.requester ?? AccessRequester(
+                    sync: store, account: client, identity: identity, sink: sink,
+                    noiseKeys: ServerNoiseKeyStore(secrets: keys))
+                self.requester = asking
+                _ = try await asking.run()
+            }
         } catch {
             Logger.account.error("Access cycle: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Runs a round of the access cycle now, without waiting for the next tick: after the cloud was switched on or off, so
+    /// the account's other devices see the way in (or its loss) within seconds.
+    public func requestAccessCycle() {
+        guard signedIn, let configs = accessServers?().map(\.config) else { return }
+        Task { await runAccessCycle(configs: configs) }
     }
 
     /// A device left the account: runs a round now, which revokes the rows this Mac issued to it (the round compares what

@@ -11,6 +11,8 @@ struct CloudAccessBlock: View {
     /// A state to show without a controller (the layout audit).
     var preview: CloudAccessRules.Status?
     let onSignIn: () -> Void
+    /// Called after the cloud was turned on or off (an attempt that ended, whatever its result).
+    var onChanged: () -> Void = {}
 
     private var status: CloudAccessRules.Status {
         if let preview { return preview }
@@ -75,7 +77,10 @@ struct CloudAccessBlock: View {
             },
             set: { on in
                 guard let cloud else { return }
-                Task { if on { await cloud.enable() } else { await cloud.disable() } }
+                Task {
+                    if on { await cloud.enable() } else { await cloud.disable() }
+                    onChanged()
+                }
             })
     }
 

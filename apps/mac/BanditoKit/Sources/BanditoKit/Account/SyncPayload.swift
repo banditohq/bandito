@@ -401,7 +401,7 @@ extension SyncPayload {
             accessRequests: newest(local.accessRequests, remote.accessRequests, key: \.key, at: \.at),
             accessGrants: newest(local.accessGrants, remote.accessGrants, key: \.key, at: \.at),
             extras: remote.extras.merging(local.extras) { _, mine in mine })
-        merged = merged.pruned(now: now)
+        merged = merged.pruned(now: now).collapsingSameDaemon()
         return merged
     }
 

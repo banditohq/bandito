@@ -2886,6 +2886,7 @@ public enum L10n {
     public enum PhoneWizard {
         public static var install: String { L10n.tr("phoneWizard.install") }
         public static var noServer: String { L10n.tr("phoneWizard.noServer") }
+        public static var orSignIn: String { L10n.tr("phoneWizard.orSignIn") }
         public static var preparing: String { L10n.tr("phoneWizard.preparing") }
         public static var retry: String { L10n.tr("phoneWizard.retry") }
         public static var signIn: String { L10n.tr("phoneWizard.signIn") }

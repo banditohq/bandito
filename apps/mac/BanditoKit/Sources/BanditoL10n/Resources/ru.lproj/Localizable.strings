@@ -2003,6 +2003,7 @@
 "phoneWizard.done.title" = "Готово, iPhone подключён";
 "phoneWizard.install" = "Bandito для iPhone пока в закрытом тестировании: напишите нам, чтобы получить приглашение";
 "phoneWizard.noServer" = "Нет подключённого сервера, который умеет работать через облако. Подключите сервер или обновите его.";
+"phoneWizard.orSignIn" = "Или просто войдите в Bandito на iPhone этим аккаунтом: серверы появятся сами.";
 "phoneWizard.pick.hint" = "iPhone будет подключаться к нему через облако Bandito, из любой сети.";
 "phoneWizard.pick.title" = "К какому серверу подключить iPhone?";
 "phoneWizard.preparing" = "Готовлю подключение…";

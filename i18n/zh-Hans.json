@@ -3449,5 +3449,6 @@
   "ios.account.signOut.title": "退出账户？",
   "ios.account.signOut.message": "已连接的服务器会保留。再次登录此账户无需批准。",
   "ios.account.sender.title": "已由你的某台设备批准。它屏幕上的代码与下方的代码一致吗？",
-  "ios.account.sender.codeLabel": "批准设备的代码"
+  "ios.account.sender.codeLabel": "批准设备的代码",
+  "phoneWizard.orSignIn": "或者直接在 iPhone 上用此账户登录 Bandito：服务器会自动出现。"
 }
