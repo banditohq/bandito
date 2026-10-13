@@ -767,6 +767,50 @@ mod tests {
         assert!(value.get("result").is_some(), "{text}");
     }
 
+    /// A token from `devices.issue` is a device token like any other: the `/v1/rpc` socket takes it.
+    #[tokio::test]
+    async fn an_issued_token_works_on_the_rpc_socket() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as ClientMessage;
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+        use tokio_tungstenite::tungstenite::http::HeaderValue;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let app = served(dir.path());
+        let issued = crate::rpc::dispatch(
+            &app,
+            &crate::rpc::Peer::Local,
+            "devices.issue",
+            serde_json::json!({ "name": "Phone", "platform": "ios" }),
+        )
+        .await
+        .unwrap();
+        let token = issued["token"].as_str().unwrap().to_string();
+        let addr = serve_rpc(app).await;
+
+        let mut req = format!("ws://{addr}/v1/rpc").into_client_request().unwrap();
+        req.headers_mut().insert(
+            "authorization",
+            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+        );
+        let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
+        ws.send(ClientMessage::Text(
+            r#"{"id":1,"method":"devices.list","params":{}}"#.to_string().into(),
+        ))
+        .await
+        .unwrap();
+        let ClientMessage::Text(text) = ws.next().await.unwrap().unwrap() else {
+            panic!("expected a text reply")
+        };
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let rows = value["result"].as_array().unwrap_or_else(|| panic!("{text}"));
+        let me = rows
+            .iter()
+            .find(|d| d["id"] == issued["device_id"])
+            .expect("the issued device lists itself");
+        assert_eq!(me["current"], serde_json::json!(true));
+    }
+
     /// A socket that is not paired yet takes only small messages: 64 KB. A big one closes it, so an anonymous client
     /// cannot send a large body. A paired device gets the full limit (the test above).
     #[tokio::test]
