@@ -149,7 +149,10 @@ import Testing
         let with = toolbarPicture(model: running, name: "screen-toolbar-running-ru")
         let without = toolbarPicture(model: asleep, name: "screen-toolbar-asleep-ru")
         #expect(with != nil && without != nil)
-        #expect(with != without, "the running screen's toolbar has one more button")
+        // The moon is always in the toolbar, enabled only while the screen runs (compared on the model, not on the
+        // picture: a headless runner can draw both states to the same bytes).
+        #expect(running.canSleep)
+        #expect(!asleep.canSleep)
         await server.disconnect()
         await server2.disconnect()
     }

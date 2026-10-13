@@ -366,7 +366,7 @@ pub fn wallpaper(fonts: &Fonts, width: u32, height: u32) -> Pixmap {
 /// gradient steps visibly). The same pixels every time.
 fn dither(pm: &mut Pixmap) {
     let width = pm.width() as usize;
-    for (index, px) in pm.data_mut().chunks_exact_mut(4).enumerate() {
+    for (index, px) in pm.data_mut().as_chunks_mut::<4>().0.iter_mut().enumerate() {
         let (x, y) = ((index % width) as u32, (index / width) as u32);
         let hash = x.wrapping_mul(0x9E37_79B1) ^ y.wrapping_mul(0x85EB_CA6B);
         let hash = (hash ^ (hash >> 15)).wrapping_mul(0x2C1B_3C6D);
@@ -623,7 +623,7 @@ pub fn panel(fonts: &Fonts, width: u32, view: &PanelView) -> (Pixmap, PanelLayou
 pub fn to_bgrx(pm: &Pixmap) -> Vec<u8> {
     let src = pm.data();
     let mut out = Vec::with_capacity(src.len());
-    for px in src.chunks_exact(4) {
+    for px in src.as_chunks::<4>().0.iter() {
         out.extend_from_slice(&[px[2], px[1], px[0], 0]);
     }
     out
@@ -685,13 +685,15 @@ mod tests {
     fn wallpaper_has_the_screen_size_and_is_opaque_and_dark() {
         let pm = wallpaper(&fonts(), 640, 400);
         assert_eq!((pm.width(), pm.height()), (640, 400));
-        assert!(pm.data().chunks_exact(4).all(|p| p[3] == 255));
+        assert!(pm.data().as_chunks::<4>().0.iter().all(|p| p[3] == 255));
         // A corner is the dark edge of the ground, the center is lit by the lockup.
         let corner = &pm.data()[0..4];
         assert!(corner[0] < 0x20 && corner[1] < 0x20 && corner[2] < 0x20, "{corner:?}");
         let lit = pm
             .data()
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|p| p[0] > 0xC0 && p[1] > 0xC0 && p[2] > 0xB0)
             .count();
         assert!(lit > 200, "the lockup is drawn ({lit} light pixels)");
@@ -752,7 +754,7 @@ mod tests {
         let (pm, layout) = panel(&fonts(), 800, &empty);
         assert_eq!(layout.hits.len(), 1);
         assert!(
-            pm.data().chunks_exact(4).any(|p| p[0] > 0xE0),
+            pm.data().as_chunks::<4>().0.iter().any(|p| p[0] > 0xE0),
             "the clock text is drawn"
         );
     }
