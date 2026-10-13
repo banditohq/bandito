@@ -338,8 +338,9 @@ pub enum Peer {
     /// A paired app.
     Device(Device),
     /// Not authenticated yet: only `daemon.hello` and `pair.redeem`. Holds where the
-    /// connection came from (an IP for WebSocket), for the rate limit of `pair.redeem`.
-    Anonymous(String),
+    /// connection came from (an IP for WebSocket), for the rate limit of `pair.redeem`, and, on a relay
+    /// stream, the phone's Noise key that the handshake proved (`pair.redeem` must agree with it).
+    Anonymous(String, Option<String>),
     /// An agent's crew server on `agent.sock`, with the agent its session token names.
     Agent(String),
 }
@@ -399,7 +400,7 @@ pub fn is_agent_only(method: &str) -> bool {
 /// Whether `peer` may call `method` at all. [`dispatch`] and the event stream check it first.
 pub fn allowed(peer: &Peer, method: &str) -> bool {
     match peer {
-        Peer::Anonymous(_) => matches!(method, "daemon.hello" | "pair.redeem"),
+        Peer::Anonymous(..) => matches!(method, "daemon.hello" | "pair.redeem"),
         Peer::Agent(_) => AGENT_METHODS.contains(&method),
         Peer::Local | Peer::Device(_) => !is_agent_only(method),
     }
@@ -408,7 +409,7 @@ pub fn allowed(peer: &Peer, method: &str) -> bool {
 /// The refusal for a call `peer` may not make.
 fn denied(peer: &Peer, method: &str) -> RpcError {
     match peer {
-        Peer::Anonymous(_) => RpcError::new(UNAUTHORIZED, "not paired: run `bandito pair` on the server"),
+        Peer::Anonymous(..) => RpcError::new(UNAUTHORIZED, "not paired: run `bandito pair` on the server"),
         Peer::Agent(_) => RpcError::new(UNAUTHORIZED, format!("agents cannot call {method}")),
         Peer::Local | Peer::Device(_) => RpcError::new(UNAUTHORIZED, format!("{method} is only for agents")),
     }
@@ -436,7 +437,7 @@ fn bind_to_agent(agent: &str, mut p: Value) -> Result<Value, RpcError> {
 pub(crate) fn redeem_source(peer: &Peer) -> String {
     match peer {
         Peer::Local => "local".into(),
-        Peer::Anonymous(source) => source.clone(),
+        Peer::Anonymous(source, _) => source.clone(),
         Peer::Device(device) => format!("device:{}", device.id),
         Peer::Agent(agent) => format!("agent:{agent}"),
     }
@@ -1317,7 +1318,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "name": "bandito",
             "version": VERSION,
             "hostname": app.hostname,
-            "authenticated": !matches!(peer, Peer::Anonymous(_)),
+            "authenticated": !matches!(peer, Peer::Anonymous(..)),
         })),
         "daemon.info" => ok(json!({
             "version": VERSION,
@@ -1911,6 +1912,17 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let r: RedeemParams = params(p)?;
             // A key that cannot be one is refused before the code is looked at, so a typo does not burn the code.
             let noise_key = r.noise_key.as_deref().map(valid_noise_key).transpose()?;
+            // Through the relay the phone's key is the one its handshake proved: the parameter may be left out,
+            // and when it is given it must be that key. Checked before the code is taken, as the key is.
+            let noise_key = match peer {
+                Peer::Anonymous(_, Some(session_key)) => {
+                    if noise_key.as_deref().is_some_and(|k| k != session_key) {
+                        return Err(RpcError::new(INVALID_PARAMS, "noise_key does not match the session"));
+                    }
+                    Some(session_key.clone())
+                }
+                _ => noise_key,
+            };
             let now = crate::store::now_ms();
             let source = redeem_source(peer);
             let mut limiter = app.redeem.lock().unwrap_or_else(|e| e.into_inner());
@@ -4520,7 +4532,7 @@ mod trust_tests {
     async fn only_the_owner_and_apps_may_update_the_daemon() {
         // Refused by the gate before anything runs, so no network call happens here.
         let agent = Peer::Agent("agent-a".into());
-        let anonymous = Peer::Anonymous("203.0.113.7".into());
+        let anonymous = Peer::Anonymous("203.0.113.7".into(), None);
         for method in ["daemon.update_check", "daemon.update_apply"] {
             for peer in [&agent, &anonymous] {
                 let err = dispatch(&app(), peer, method, json!({ "version": "9.9.9" }))
@@ -4536,7 +4548,7 @@ mod trust_tests {
     #[test]
     fn who_may_call_what() {
         let agent = Peer::Agent("agent-a".into());
-        let anonymous = Peer::Anonymous("203.0.113.7".into());
+        let anonymous = Peer::Anonymous("203.0.113.7".into(), None);
         for method in AGENT_METHODS {
             assert!(allowed(&agent, method), "{method}");
         }
@@ -4583,7 +4595,7 @@ mod trust_tests {
     #[tokio::test]
     async fn a_source_gets_five_failed_redeems_then_is_stopped() {
         let app = app();
-        let attacker = Peer::Anonymous("203.0.113.7".into());
+        let attacker = Peer::Anonymous("203.0.113.7".into(), None);
         for _ in 0..REDEEM_MAX_FAILURES_PER_SOURCE {
             let err = try_redeem(&app, &attacker).await.unwrap_err();
             assert_eq!(err.code, UNAUTHORIZED);
@@ -4591,7 +4603,7 @@ mod trust_tests {
         let err = try_redeem(&app, &attacker).await.unwrap_err();
         assert_eq!(err.code, RATE_LIMITED);
         // Another source is not held back by it.
-        let other = Peer::Anonymous("198.51.100.9".into());
+        let other = Peer::Anonymous("198.51.100.9".into(), None);
         let err = try_redeem(&app, &other).await.unwrap_err();
         assert_eq!(err.code, UNAUTHORIZED);
     }

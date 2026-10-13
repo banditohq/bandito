@@ -1214,7 +1214,7 @@ async fn only_the_owner_and_apps_may_move_agents() {
     let s = server();
     let id = make_source_named(&s, "Forge").await;
     let agent = Peer::Agent(id.clone());
-    let anonymous = Peer::Anonymous("203.0.113.7".into());
+    let anonymous = Peer::Anonymous("203.0.113.7".into(), None);
     let params = json!({"agent_id": id, "token": "mg_x", "offset": 0, "length": 1, "upload_id": "up_x", "size": 1, "sha256": sha(b"x"), "data": ""});
     for method in METHODS {
         for peer in [&agent, &anonymous] {
