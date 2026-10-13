@@ -1,4 +1,3 @@
-import BanditoKit
 import Foundation
 
 /// A message split into running text and fenced code blocks.

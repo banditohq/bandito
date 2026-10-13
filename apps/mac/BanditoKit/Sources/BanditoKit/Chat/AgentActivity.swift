@@ -1,9 +1,8 @@
-import BanditoKit
 import BanditoL10n
 import Foundation
 
 /// What the agent is doing while its turn runs, for the typing bubble at the end of the thread.
-enum AgentActivity: Equatable {
+public enum AgentActivity: Equatable {
     case thinking
     case coding
     case command
@@ -13,7 +12,7 @@ enum AgentActivity: Equatable {
 
     /// The activity a running tool call stands for: commands, edits, file reads, the browser, web search. Any other
     /// tool reads as thinking.
-    static func forTool(_ tool: String) -> AgentActivity {
+    public static func forTool(_ tool: String) -> AgentActivity {
         let name = tool.lowercased()
         if name.contains("bash") || name.contains("shell") || name.contains("exec") || name.contains("terminal") {
             return .command
@@ -34,7 +33,7 @@ enum AgentActivity: Equatable {
     }
 
     /// The newest tool call that has not finished decides the activity; with none running, the agent is thinking.
-    static func current(in items: [ThreadItem]) -> AgentActivity {
+    public static func current(in items: [ThreadItem]) -> AgentActivity {
         for item in items.reversed() {
             if case .tool(let row) = item, row.ok == nil {
                 return forTool(row.tool)
@@ -44,7 +43,7 @@ enum AgentActivity: Equatable {
     }
 
     /// The localized caption of this activity.
-    var title: String {
+    public var title: String {
         switch self {
         case .thinking: L10n.Team.Activity.thinking
         case .coding: L10n.Team.Activity.coding
@@ -56,14 +55,14 @@ enum AgentActivity: Equatable {
     }
 
     /// Whole seconds since `startMs` (Unix ms) at `now`, never negative. `nil` without a start.
-    static func elapsedSeconds(since startMs: Int64?, now: Date) -> Int? {
+    public static func elapsedSeconds(since startMs: Int64?, now: Date) -> Int? {
         guard let startMs else { return nil }
         let nowMs = Int64(now.timeIntervalSince1970 * 1000)
         return max(0, Int((nowMs - startMs) / 1000))
     }
 
     /// "12 s" under a minute, then whole minutes: "3 min".
-    static func elapsedText(seconds: Int) -> String {
+    public static func elapsedText(seconds: Int) -> String {
         seconds < 60 ? L10n.Team.Activity.seconds(count: seconds) : L10n.Team.Activity.minutes(count: seconds / 60)
     }
 }

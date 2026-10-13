@@ -2,7 +2,6 @@
 import Foundation
 import Testing
 
-@testable import BanditoUI
 
 /// Browser calls of an agent in a row are one live card; command calls around them stay command groups.
 @Suite struct BrowserRunGroupingTests {
@@ -57,8 +56,8 @@ import Testing
     }
 
     @Test func otherBrowserNamesCount() {
-        #expect(WorkbenchRules.isBrowserTool("browser_click"))
-        #expect(WorkbenchRules.isBrowserTool("mcp__bandito__browser_open"))
-        #expect(!WorkbenchRules.isBrowserTool("Bash"))
+        #expect(ToolNames.isBrowser("browser_click"))
+        #expect(ToolNames.isBrowser("mcp__bandito__browser_open"))
+        #expect(!ToolNames.isBrowser("Bash"))
     }
 }

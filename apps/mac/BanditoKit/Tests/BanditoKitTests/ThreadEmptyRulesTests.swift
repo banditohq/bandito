@@ -1,7 +1,6 @@
-import BanditoKit
 import Testing
+@testable import BanditoKit
 
-@testable import BanditoUI
 
 /// The suggestions of an empty thread: the capabilities' ones first, in a fixed order, then the general ones, at most four.
 @Suite struct ThreadEmptyRulesTests {

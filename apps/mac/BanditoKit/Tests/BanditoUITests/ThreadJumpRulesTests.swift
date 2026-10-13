@@ -1,3 +1,4 @@
+import BanditoKit
 import Testing
 
 @testable import BanditoUI

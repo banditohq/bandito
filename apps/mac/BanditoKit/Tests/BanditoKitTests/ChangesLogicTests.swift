@@ -3,7 +3,6 @@ import Testing
 
 @testable import BanditoKit
 @testable import BanditoL10n
-@testable import BanditoUI
 
 /// Pure logic behind the "What changed" sheet: unified diff parsing, side-by-side pairs, partial rollback
 /// selection, restore points and their captions.

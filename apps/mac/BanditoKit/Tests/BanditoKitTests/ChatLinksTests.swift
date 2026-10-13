@@ -1,7 +1,7 @@
 import Foundation
 import Testing
+@testable import BanditoKit
 
-@testable import BanditoUI
 
 @Suite struct ChatLinksTests {
     /// The file links of a text, as the paths they carry.

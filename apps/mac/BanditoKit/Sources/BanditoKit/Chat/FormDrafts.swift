@@ -1,4 +1,3 @@
-import BanditoKit
 import Foundation
 import Observation
 
@@ -7,46 +6,46 @@ import Observation
 /// agent. A form's draft is dropped when the form is over.
 @MainActor
 @Observable
-final class FormDrafts {
-    static let shared = FormDrafts()
+public final class FormDrafts {
+    public static let shared = FormDrafts()
 
-    struct Draft: Equatable {
-        var inputs: [String: FormInput]
+    public struct Draft: Equatable {
+        public var inputs: [String: FormInput]
         /// The optional reason of a rejection.
-        var comment = ""
+        public var comment = ""
         /// The answer was sent and the daemon took it; the form's own event has not come yet.
-        var sent = false
+        public var sent = false
     }
 
-    private(set) var drafts: [String: Draft] = [:]
+    public private(set) var drafts: [String: Draft] = [:]
 
-    init() {}
+    public init() {}
 
     /// The draft of a form: what was typed, or the form's first state.
-    func draft(for formId: String, spec: FormSpec) -> Draft {
+    public func draft(for formId: String, spec: FormSpec) -> Draft {
         drafts[formId] ?? Draft(inputs: FormAnswer.initialInputs(for: spec))
     }
 
-    func setInput(_ input: FormInput, field: String, formId: String, spec: FormSpec) {
+    public func setInput(_ input: FormInput, field: String, formId: String, spec: FormSpec) {
         var d = draft(for: formId, spec: spec)
         d.inputs[field] = input
         drafts[formId] = d
     }
 
-    func setComment(_ comment: String, formId: String, spec: FormSpec) {
+    public func setComment(_ comment: String, formId: String, spec: FormSpec) {
         var d = draft(for: formId, spec: spec)
         d.comment = comment
         drafts[formId] = d
     }
 
-    func markSent(formId: String, spec: FormSpec) {
+    public func markSent(formId: String, spec: FormSpec) {
         var d = draft(for: formId, spec: spec)
         d.sent = true
         drafts[formId] = d
     }
 
     /// Drops the draft of a form that is over. Safe to call for a form with none.
-    func clear(formId: String) {
+    public func clear(formId: String) {
         if drafts[formId] != nil { drafts[formId] = nil }
     }
 }

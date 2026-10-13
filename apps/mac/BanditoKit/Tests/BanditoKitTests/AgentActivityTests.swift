@@ -2,7 +2,6 @@
 import Foundation
 import Testing
 
-@testable import BanditoUI
 
 /// Logic behind the typing bubble: what the agent is doing, and how long the turn has run.
 @Suite struct AgentActivityTests {

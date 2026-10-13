@@ -174,45 +174,6 @@ final class MessageRenderCache: @unchecked Sendable {
     }
 }
 
-/// Where a streaming message splits into the part that will not change and the part being written. Pure, tested.
-enum StreamingSplit {
-    /// The end of the last blank line (`\n\n`) that is outside a code fence, or nil when there is none (or the text
-    /// is short enough to parse whole).
-    static func stableEnd(of text: String) -> String.Index? {
-        guard text.utf8.count > 400 else { return nil }
-        var fenceOpen = false
-        var lastSplit: String.Index?
-        var index = text.startIndex
-        var lineStart = true
-        while index < text.endIndex {
-            let character = text[index]
-            if lineStart, text[index...].hasPrefix("```") { fenceOpen.toggle() }
-            if character == "\n" {
-                let next = text.index(after: index)
-                if !fenceOpen, next < text.endIndex, text[next] == "\n" {
-                    lastSplit = text.index(after: next)
-                }
-                lineStart = true
-            } else if character != " " {
-                lineStart = false
-            }
-            index = text.index(after: index)
-        }
-        guard let lastSplit, lastSplit < text.endIndex else { return nil }
-        return lastSplit
-    }
-
-}
-
-private extension String {
-    /// The text without the line breaks at its end.
-    var trimmingTrailingNewlines: String {
-        var end = endIndex
-        while end > startIndex, self[index(before: end)] == "\n" { end = index(before: end) }
-        return String(self[..<end])
-    }
-}
-
 /// A fenced code block: the language in the corner, the code in monospace (a long line scrolls sideways), and a Copy
 /// button that says "Copied" for a moment.
 struct CodeBlockView: View {
@@ -295,17 +256,6 @@ struct CodeBlockView: View {
     }
 }
 
-/// Whether a code block scrolls sideways. Pure.
-enum CodeBlockLayout {
-    /// The longest line that fits a narrow bubble without a scroll (12.5 pt mono is about 7.5 pt a character; an agent's
-    /// bubble in the narrowest window is about 400 pt).
-    static let fittingLine = 48
-
-    static func needsScroll(_ code: String) -> Bool {
-        code.split(separator: "\n", omittingEmptySubsequences: false).contains { $0.count > fittingLine }
-    }
-}
-
 /// The message a reply answers, quoted at the top of the reply: a bar in the agent's colour, the sender and the first
 /// lines. A click goes to the original.
 struct ReplyQuoteView: View {
@@ -346,5 +296,14 @@ struct ReplyQuoteView: View {
         .banditoButton(.row(cornerRadius: 8))
         .help(L10n.Reply.jump)
         .accessibilityLabel("\(name) \(text.map { MessageBlocks.excerpt($0, limit: 80) } ?? L10n.Reply.earlier)")
+    }
+}
+
+private extension String {
+    /// The text without the line breaks at its end.
+    var trimmingTrailingNewlines: String {
+        var end = endIndex
+        while end > startIndex, self[index(before: end)] == "\n" { end = index(before: end) }
+        return String(self[..<end])
     }
 }

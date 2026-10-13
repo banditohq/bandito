@@ -1,17 +1,16 @@
-import BanditoKit
 import Foundation
 
 /// A guess of how tall a row will be, from what it holds. Only used for rows the list has not measured yet (see
 /// `ThreadListView`); it has to be roughly right and always the same for the same row.
-enum ThreadHeightGuess {
+public enum ThreadHeightGuess {
     /// Characters of a line of message text at the usual width, and the height of a line with its spacing.
-    static let charsPerLine = 80
-    static let lineHeight: CGFloat = 21.5
-    static let codeLineHeight: CGFloat = 17.5
+    public static let charsPerLine = 80
+    public static let lineHeight: CGFloat = 21.5
+    public static let codeLineHeight: CGFloat = 17.5
     /// A bubble's padding plus the gap under a message that is reserved for its action row.
-    static let bubbleChrome: CGFloat = 20 + 16
+    public static let bubbleChrome: CGFloat = 20 + 16
 
-    static func height(of row: ThreadRow) -> CGFloat {
+    public static func height(of row: ThreadRow) -> CGFloat {
         switch row {
         case .day: 36
         case .chapter: 64
@@ -37,7 +36,7 @@ enum ThreadHeightGuess {
     }
 
     /// Lines of running text and of code, counted without parsing Markdown.
-    static func textHeight(_ text: String) -> CGFloat {
+    public static func textHeight(_ text: String) -> CGFloat {
         var lines: CGFloat = 0
         var codeLines: CGFloat = 0
         var inCode = false

@@ -1,22 +1,21 @@
 import BanditoL10n
-import BanditoKit
 
 /// The suggestions of an empty thread: what the person can write to a new agent to begin with. The ones the agent's
 /// capabilities suggest come first, in a fixed order; the general ones fill up to `limit`. Pure, so the rules are tested
 /// without a view (see `ThreadEmptyState`).
-enum ThreadEmptyRules {
+public enum ThreadEmptyRules {
     /// One suggestion chip: an SF Symbol and the key of its line.
-    struct Suggestion: Equatable, Identifiable {
-        enum Key: String, CaseIterable {
+    public struct Suggestion: Equatable, Identifiable, Sendable {
+        public enum Key: String, CaseIterable, Sendable {
             case listProject, fixErrors, news, meetTeam, capabilities, dayPlan
         }
 
-        let key: Key
-        let symbol: String
+        public let key: Key
+        public let symbol: String
 
-        var id: Key { key }
+        public var id: Key { key }
 
-        var text: String {
+        public var text: String {
             switch key {
             case .listProject: L10n.Thread.Empty.Suggest.listProject
             case .fixErrors: L10n.Thread.Empty.Suggest.fixErrors
@@ -29,7 +28,7 @@ enum ThreadEmptyRules {
     }
 
     /// The most chips the empty thread shows.
-    static let limit = 4
+    public static let limit = 4
 
     private static let listProject = Suggestion(key: .listProject, symbol: "folder")
     private static let fixErrors = Suggestion(key: .fixErrors, symbol: "wrench.and.screwdriver")
@@ -40,7 +39,7 @@ enum ThreadEmptyRules {
 
     /// The chips for `agent`, at most `limit`, with no key twice. A nil capability list means every capability
     /// (see `AgentCapability.set(from:)`); a capability the app does not know is ignored.
-    static func suggestions(for agent: Agent) -> [Suggestion] {
+    public static func suggestions(for agent: Agent) -> [Suggestion] {
         let enabled = AgentCapability.set(from: agent.capabilities)
         var candidates: [Suggestion] = []
         if enabled.contains(.terminal) || enabled.contains(.files) {

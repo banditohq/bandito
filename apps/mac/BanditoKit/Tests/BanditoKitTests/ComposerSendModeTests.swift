@@ -1,8 +1,7 @@
-import BanditoKit
 import Foundation
 import Testing
+@testable import BanditoKit
 
-@testable import BanditoUI
 
 @Suite struct ComposerSendModeTests {
     private func form(_ id: String) -> FormRow {

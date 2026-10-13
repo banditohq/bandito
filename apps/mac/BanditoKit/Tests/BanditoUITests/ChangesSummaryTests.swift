@@ -1,6 +1,7 @@
 import Testing
 
 @testable import BanditoL10n
+@testable import BanditoKit
 @testable import BanditoUI
 
 /// Pure formats of the changes header and file list: the stats line, the footer layout and the icon of a changed file.

@@ -1,6 +1,6 @@
 import Testing
+@testable import BanditoKit
 
-@testable import BanditoUI
 
 @Suite struct ThreadScrollTests {
     @Test func threadShownForTheFirstTimeStartsAtTheNewestMessage() {

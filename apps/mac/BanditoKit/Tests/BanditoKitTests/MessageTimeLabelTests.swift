@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 @testable import BanditoL10n
-@testable import BanditoUI
+@testable import BanditoKit
 
 /// The time under a message: the word for the last two days, the date for the older ones, the clock with seconds.
 /// The calendar is Vladivostok (the owner's zone), so the midnight cases are the owner's midnight.
