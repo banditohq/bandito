@@ -1,0 +1,194 @@
+import Testing
+@testable import BanditoKit
+
+
+@Suite struct ThreadScrollTests {
+    @Test func threadShownForTheFirstTimeStartsAtTheNewestMessage() {
+        #expect(ThreadScroll.restoreTarget(nil) == .bottom)
+    }
+
+    @Test func threadComesBackToWhereItWasLeft() {
+        #expect(ThreadScroll.restoreTarget(.row("r42")) == .row("r42"))
+        #expect(ThreadScroll.restoreTarget(.bottom) == .bottom)
+    }
+
+    @Test func leavingAtTheBottomKeepsTheBottom() {
+        #expect(ThreadScroll.place(atBottom: true, topRowID: "r7") == .bottom)
+        #expect(ThreadScroll.place(atBottom: true, topRowID: nil) == .bottom)
+    }
+
+    @Test func leavingAboveKeepsTheRowOnTop() {
+        #expect(ThreadScroll.place(atBottom: false, topRowID: "r7") == .row("r7"))
+    }
+
+    @Test func leavingAboveWithoutAKnownTopRowFallsBackToTheBottom() {
+        #expect(ThreadScroll.place(atBottom: false, topRowID: nil) == .bottom)
+    }
+
+    private func m(distance: Int, offset: Int, content: Int, height: Int = 800) -> ThreadScrollMetrics {
+        ThreadScrollMetrics(distance: distance, height: height, offset: offset, contentHeight: content)
+    }
+
+    @Test func metricsAreRoundedToWholePoints() {
+        let metrics = ThreadScrollMetrics(offset: 99.6, contentHeight: 1500.2, height: 800.2)
+        #expect(metrics.offset == 100)
+        #expect(metrics.contentHeight == 1500)
+        #expect(metrics.height == 800)
+        #expect(metrics.distance == 600)
+    }
+
+    @Test func jumpButtonWithoutDistanceFollowsTheBottomMarker() {
+        #expect(ThreadScroll.showsJump(atBottom: false, distance: nil))
+        #expect(!ThreadScroll.showsJump(atBottom: true, distance: nil))
+    }
+
+    @Test func jumpButtonShowsMoreThan120PointsAway() {
+        #expect(ThreadScroll.showsJump(atBottom: false, distance: 121))
+        #expect(ThreadScroll.showsJump(atBottom: false, distance: 1500))
+        #expect(!ThreadScroll.showsJump(atBottom: false, distance: 120), "exactly 120 is not more")
+        #expect(!ThreadScroll.showsJump(atBottom: false, distance: 60))
+    }
+
+    @Test func jumpButtonStaysHiddenWhileFollowing() {
+        #expect(!ThreadScroll.showsJump(atBottom: true, distance: 900))
+    }
+
+    @Test func within48PointsIsAtTheBottom() {
+        let at = ThreadScroll.atBottom(was: false, old: nil, new: m(distance: 48, offset: 500, content: 1348))
+        #expect(at)
+        let far = ThreadScroll.atBottom(was: false, old: nil, new: m(distance: 49, offset: 500, content: 1349))
+        #expect(!far)
+    }
+
+    @Test func contentGrowingBelowKeepsTheBottom() {
+        let old = m(distance: 0, offset: 500, content: 1300)
+        let grown = m(distance: 400, offset: 500, content: 1700)
+        #expect(ThreadScroll.atBottom(was: true, old: old, new: grown))
+    }
+
+    @Test func aResizedPanelKeepsTheBottom() {
+        let old = m(distance: 0, offset: 500, content: 1300)
+        let narrower = m(distance: 300, offset: 500, content: 1600, height: 800)
+        #expect(ThreadScroll.atBottom(was: true, old: old, new: narrower))
+        let shorter = m(distance: 100, offset: 500, content: 1300, height: 700)
+        #expect(ThreadScroll.atBottom(was: true, old: old, new: shorter))
+    }
+
+    @Test func aTallerScreenMovingTheOffsetDownIsNotAScrollUp() {
+        // The composer shrank after a send: the screen got 40 taller, the offset fell, rounding left a distance of 1.
+        let old = m(distance: 0, offset: 500, content: 1300)
+        let taller = m(distance: 1, offset: 460, content: 1300, height: 840)
+        #expect(!ThreadScroll.leavesBottom(old: old, new: taller))
+        #expect(ThreadScroll.atBottom(was: true, old: old, new: taller))
+        // Even a wider gap on a screen that changed height is not the person's scroll.
+        let gap = m(distance: 30, offset: 440, content: 1300, height: 840)
+        #expect(ThreadScroll.atBottom(was: true, old: old, new: gap))
+    }
+
+    @Test func aRealScrollUpStillLeavesTheBottom() {
+        let old = m(distance: 0, offset: 500, content: 1300)
+        let up = m(distance: 30, offset: 470, content: 1300)
+        #expect(ThreadScroll.leavesBottom(old: old, new: up))
+        // A one-point wobble with a distance of 1 is not a scroll.
+        #expect(!ThreadScroll.leavesBottom(old: old, new: m(distance: 1, offset: 499, content: 1300)))
+    }
+
+    @Test func afterASendTheThreadFollowsUntilThePersonScrollsUp() {
+        let old = m(distance: 60, offset: 500, content: 1360)
+        // Content grew with a rounding wobble, screen changed: the pinned thread stays at the bottom.
+        let grown = m(distance: 160, offset: 480, content: 1480, height: 840)
+        #expect(ThreadScroll.flags(was: false, old: old, new: grown, pinned: true).atBottom)
+        #expect(!ThreadScroll.flags(was: false, old: old, new: grown, pinned: true).jump)
+        // Without the pin, away from the bottom, growth alone does not bring it back.
+        #expect(!ThreadScroll.atBottom(was: false, old: old, new: grown))
+        // The person's own scroll up ends the follow even when pinned.
+        let up = m(distance: 100, offset: 460, content: 1360)
+        #expect(!ThreadScroll.atBottom(was: true, old: old, new: up, pinned: true))
+    }
+
+    @Test func smallScrollUpIsNotUndoneByTheNextChunk() {
+        let atEnd = m(distance: 0, offset: 500, content: 1300)
+        let up = m(distance: 30, offset: 470, content: 1300)
+        #expect(!ThreadScroll.atBottom(was: true, old: atEnd, new: up))
+        let chunk = m(distance: 40, offset: 470, content: 1310)
+        let still = ThreadScroll.atBottom(was: false, old: up, new: chunk)
+        #expect(!still)
+        #expect(!ThreadScroll.shouldFollow(atBottom: still, old: up, new: chunk))
+        let down = m(distance: 0, offset: 510, content: 1310)
+        #expect(ThreadScroll.atBottom(was: false, old: chunk, new: down))
+    }
+
+    @Test func aRowNotLoadedFallsBackToTheBottom() {
+        #expect(ThreadScroll.resolved(.row("x"), rowIDs: ["a", "b"]) == .bottom)
+        #expect(ThreadScroll.resolved(.row("a"), rowIDs: ["a", "b"]) == .row("a"))
+        #expect(ThreadScroll.resolved(.bottom, rowIDs: []) == .bottom)
+    }
+
+    @Test func scrollingUpLeavesTheBottomAndStaysAway() {
+        let old = m(distance: 0, offset: 500, content: 1300)
+        let up = m(distance: 200, offset: 300, content: 1300)
+        #expect(!ThreadScroll.atBottom(was: true, old: old, new: up))
+        // The stream grows on while the person reads above: still away.
+        let grown = m(distance: 600, offset: 300, content: 1700)
+        #expect(!ThreadScroll.atBottom(was: false, old: up, new: grown))
+    }
+
+    @Test func reachingTheBottomAgainReturnsToIt() {
+        let up = m(distance: 200, offset: 300, content: 1300)
+        let down = m(distance: 20, offset: 480, content: 1300)
+        #expect(ThreadScroll.atBottom(was: false, old: up, new: down))
+    }
+
+    @Test func scrollingDownTowardsTheBottomKeepsFollowing() {
+        // The animated jump to the bottom: the offset only rises, the bottom is still far for a moment.
+        let old = m(distance: 600, offset: 100, content: 1500)
+        let mid = m(distance: 300, offset: 400, content: 1500)
+        #expect(ThreadScroll.atBottom(was: true, old: old, new: mid))
+    }
+
+    @Test func contentShrinkingAtTheBottomStaysAtTheBottom() {
+        let old = m(distance: 0, offset: 700, content: 1500)
+        let shrunk = m(distance: 0, offset: 500, content: 1300)
+        #expect(ThreadScroll.atBottom(was: true, old: old, new: shrunk))
+    }
+
+    @Test func followsWhenTheLayoutGrowsAtTheBottom() {
+        let old = m(distance: 0, offset: 500, content: 1300)
+        let grown = m(distance: 120, offset: 500, content: 1420)
+        #expect(ThreadScroll.shouldFollow(atBottom: true, old: old, new: grown))
+    }
+
+    @Test func doesNotFollowWhenTheBottomIsAlreadyOnScreen() {
+        let old = m(distance: 0, offset: 500, content: 1300)
+        let same = m(distance: 1, offset: 500, content: 1301)
+        #expect(!ThreadScroll.shouldFollow(atBottom: true, old: old, new: same))
+    }
+
+    @Test func doesNotFollowAPlainScrollOrAwayFromTheBottom() {
+        let old = m(distance: 0, offset: 500, content: 1300)
+        let scrolled = m(distance: 30, offset: 470, content: 1300)
+        #expect(!ThreadScroll.shouldFollow(atBottom: true, old: old, new: scrolled), "no layout change, no follow")
+        let grown = m(distance: 400, offset: 300, content: 1500)
+        #expect(!ThreadScroll.shouldFollow(atBottom: false, old: old, new: grown))
+        #expect(!ThreadScroll.shouldFollow(atBottom: true, old: nil, new: grown))
+    }
+
+    @Test func emptyThreadNeitherFollowsNorShowsJump() {
+        let empty = m(distance: 0, offset: 0, content: 0)
+        #expect(ThreadScroll.atBottom(was: true, old: nil, new: empty))
+        #expect(!ThreadScroll.shouldFollow(atBottom: true, old: empty, new: empty))
+        #expect(!ThreadScroll.showsJump(atBottom: true, distance: 0))
+    }
+
+    @Test func nearTopIsWithin300Points() {
+        #expect(ThreadScroll.nearTop(offset: 0))
+        #expect(ThreadScroll.nearTop(offset: 300))
+        #expect(!ThreadScroll.nearTop(offset: 301))
+    }
+
+    @Test func unseenCountIsTheGrowthOfTheThread() {
+        #expect(ThreadScroll.unseenAdded(previousCount: 10, currentCount: 13) == 3)
+        #expect(ThreadScroll.unseenAdded(previousCount: 13, currentCount: 13) == 0)
+        #expect(ThreadScroll.unseenAdded(previousCount: 13, currentCount: 10) == 0)
+    }
+}

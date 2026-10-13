@@ -58,12 +58,38 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
 - The large title is the system's; the navigation bar background is transparent (`toolbarBackground(.hidden)`). A UIKit
   navigation appearance hid the title (see `BrandAppearance.swift`), so the bar is not styled in UIKit.
 
+## The chat (`Chat/`)
+
+The screen every day. Read the rules before changing it; each came from the Mac's freezes.
+
+- The list is a `UICollectionView` with a diffable data source over `ChatListLayout` (a running sum of row heights, no
+  self-sizing). `ChatModel` turns the thread into `ChatRow`s (`ChatRowBuilder`, pure, off the main thread) and says what
+  changed (`ChatUpdate`); `ChatViewController` applies it, sets up only the cells of changed rows (`reconfigureItems`; a row
+  that becomes another kind of row, as an approval card that is answered becomes a line, is `reloadItems`: a reconfigure
+  with another cell kind crashes) and keeps the reading place (`ThreadAnchor`) or the bottom.
+- Text is measured off the main thread by `ChatLayoutEngine`, once per (row id, row version, width, size category); the
+  cells only place what it measured (`ChatTextView` draws an attributed string, no `UITextView`/`UILabel` per message).
+  A new kind of row is a new layout type there and a cell in `ChatCells.swift`.
+- Rare, form-heavy rows (an approval, a form, a connect request) are SwiftUI in `ChatHostedCell`; their height is measured by
+  hosting them once (`ChatHostedSizer`) and again when the card says it changed. Their SwiftUI root has `.id(row id)`: a reused
+  cell must not keep another row's typed text.
+- Never read the thread in the screen: `ChatModel` follows it with one observation, folds a stream's tokens into one update
+  per turn of the main actor, and the frame (header, box, quick replies) reads `threadSummary(for:)`.
+- The message box is read only by itself; the screen hears about the first and the last character (`onHasContentChange`).
+- Messages go through `ChatOutbox` (a file, `SendQueue`): written without a connection they wait ("Waiting for connection"),
+  leave in order, once. The daemon has no client id: a send that ended without an answer is checked against the thread
+  (more messages with its text than when the attempt began) before it is sent again.
+- Budgets (`ChatSpeedTests`, counted not timed): a stream of 100 pieces sets up one cell and measures one row per update;
+  typing touches no row; scrolling 500 messages measures each row once. `ChatCounters` has the numbers.
+- Debug launch arguments: `-chat <agent>` (Crew), `-chat-draft <text>`, `-chat-send <text>`, `-chat-top`, `-chat-row <id part>`.
+  The demo agents answer (`Demo/DemoChatScript.swift`: commands, a streamed reply, an approval for Forge, two buttons).
+
 ## Known gaps before a release
 
 - `AppIcon` is `brand/png/icon-1024.png` with an alpha channel; App Store Connect rejects an icon with alpha: flatten it
   before the first upload.
-- `bandito://pair…` opens the connect sheet (shown and confirmed before anything is sent); the other `bandito://` links (`inbox`, `crew`, `agent/<server>/<agent>`) are read by `BanditoLink` (`Shared/WidgetSnapshot.swift`) and opened in `RootView`: the tab switches, and an agent opens its row in the Crew (the chat is still a stub).
-- The chat is a stub (Crew shows it as "coming soon").
+- `bandito://pair…` opens the connect sheet (shown and confirmed before anything is sent); the other `bandito://` links (`inbox`, `crew`, `agent/<server>/<agent>`) are read by `BanditoLink` (`Shared/WidgetSnapshot.swift`) and opened in `RootView`: the tab switches, and an agent opens its chat in the Crew (`CrewFocus`). A notification's press and the Inbox sheet's chat button take the same way.
+- Not in the chat yet: reactions, reply quotes and mentions (the Mac has them), pictures that other clients sent (the daemon's file route is not reachable over `.direct`, so only pictures this phone sent show; others are a tile with the name), and a thread cache for a cold start without a connection (threads live in memory).
 - The agent card (`Agent/AgentDetailView.swift`) and the creation sheet (`Agent/NewAgentSheet.swift`, `OneAgentForm.swift`)
   are built. The rules they use (`NewAgentModelRules`, `NewAgentFolderRules`, `ReadyTeamsLogic`, `AgentCapability`,
   `BotScheduleWords`) live in BanditoKit; `Agent/AgentForms.swift` holds only the form glue.

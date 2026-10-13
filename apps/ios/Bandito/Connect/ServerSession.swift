@@ -209,6 +209,8 @@ final class ServerSession {
         guard drop(id) else { return }
         try? secrets.save(nil, account: id.uuidString)
         forgetCursor(id)
+        // What was written to this server and not sent stays with it no longer.
+        ChatOutbox.shared.forget(serverID: id)
         save()
     }
 
@@ -224,7 +226,10 @@ final class ServerSession {
     /// Forgets everything.
     func reset() {
         for config in store.load() { try? secrets.save(nil, account: config.id.uuidString) }
-        for server in servers { Task { await server.disconnect() } }
+        for server in servers {
+            ChatOutbox.shared.forget(serverID: server.id)
+            Task { await server.disconnect() }
+        }
         servers = []
         store.clear()
     }

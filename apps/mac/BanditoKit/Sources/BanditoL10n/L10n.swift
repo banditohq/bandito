@@ -1341,7 +1341,6 @@ public enum L10n {
     public enum Ios {
 
         public enum Activity {
-            public static func chatSoon(name: String, event: String) -> String { L10n.tr("ios.activity.chatSoon", name, event) }
             public static var emptyErrors: String { L10n.tr("ios.activity.emptyErrors") }
             public static var emptyMessage: String { L10n.tr("ios.activity.emptyMessage") }
             public static var emptyTitle: String { L10n.tr("ios.activity.emptyTitle") }
@@ -1363,6 +1362,79 @@ public enum L10n {
 
             public enum Delete {
                 public static var button: String { L10n.tr("ios.agent.delete.button") }
+            }
+        }
+
+        public enum Chat {
+            public static var copyLink: String { L10n.tr("ios.chat.copyLink") }
+            public static var discard: String { L10n.tr("ios.chat.discard") }
+            public static var loadingOlder: String { L10n.tr("ios.chat.loadingOlder") }
+            public static var notSent: String { L10n.tr("ios.chat.notSent") }
+            public static var openInSafari: String { L10n.tr("ios.chat.openInSafari") }
+            public static var openSettings: String { L10n.tr("ios.chat.openSettings") }
+            public static var retry: String { L10n.tr("ios.chat.retry") }
+            public static var sending: String { L10n.tr("ios.chat.sending") }
+            public static var uncertain: String { L10n.tr("ios.chat.uncertain") }
+            public static var waitingForConnection: String { L10n.tr("ios.chat.waitingForConnection") }
+
+            public enum Approval {
+                public static var allowed: String { L10n.tr("ios.chat.approval.allowed") }
+                public static var denied: String { L10n.tr("ios.chat.approval.denied") }
+                public static var failed: String { L10n.tr("ios.chat.approval.failed") }
+            }
+
+            public enum Attach {
+                public static var camera: String { L10n.tr("ios.chat.attach.camera") }
+                public static var files: String { L10n.tr("ios.chat.attach.files") }
+                public static var noPreview: String { L10n.tr("ios.chat.attach.noPreview") }
+                public static var photos: String { L10n.tr("ios.chat.attach.photos") }
+            }
+
+            public enum Camera {
+                public static var denied: String { L10n.tr("ios.chat.camera.denied") }
+            }
+
+            public enum Changes {
+                public static var failed: String { L10n.tr("ios.chat.changes.failed") }
+            }
+
+            public enum Connection {
+                public static var offline: String { L10n.tr("ios.chat.connection.offline") }
+                public static var reconnecting: String { L10n.tr("ios.chat.connection.reconnecting") }
+            }
+
+            public enum Dictation {
+                public static var deniedMicrophone: String { L10n.tr("ios.chat.dictation.deniedMicrophone") }
+                public static var deniedSpeech: String { L10n.tr("ios.chat.dictation.deniedSpeech") }
+                public static var explainMessage: String { L10n.tr("ios.chat.dictation.explainMessage") }
+                public static var explainTitle: String { L10n.tr("ios.chat.dictation.explainTitle") }
+                public static var unavailable: String { L10n.tr("ios.chat.dictation.unavailable") }
+            }
+
+            public enum Diff {
+                public static var failed: String { L10n.tr("ios.chat.diff.failed") }
+            }
+
+            public enum Empty {
+                public static func message(name: String) -> String { L10n.tr("ios.chat.empty.message", name) }
+                public static func title(name: String) -> String { L10n.tr("ios.chat.empty.title", name) }
+            }
+
+            public enum Failed {
+                public static var gaveUp: String { L10n.tr("ios.chat.failed.gaveUp") }
+                public static var insecure: String { L10n.tr("ios.chat.failed.insecure") }
+                public static var key: String { L10n.tr("ios.chat.failed.key") }
+            }
+
+            public enum Header {
+                public static var offline: String { L10n.tr("ios.chat.header.offline") }
+                public static var waiting: String { L10n.tr("ios.chat.header.waiting") }
+                public static var working: String { L10n.tr("ios.chat.header.working") }
+            }
+
+            public enum Tools {
+                public static var hide: String { L10n.tr("ios.chat.tools.hide") }
+                public static var show: String { L10n.tr("ios.chat.tools.show") }
             }
         }
 
@@ -1439,7 +1511,6 @@ public enum L10n {
         }
 
         public enum Crew {
-            public static func chatSoon(name: String) -> String { L10n.tr("ios.crew.chatSoon", name) }
             public static var createAgent: String { L10n.tr("ios.crew.createAgent") }
             public static var emptyMessage: String { L10n.tr("ios.crew.emptyMessage") }
             public static var emptyTitle: String { L10n.tr("ios.crew.emptyTitle") }

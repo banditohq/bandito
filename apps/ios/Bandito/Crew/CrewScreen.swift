@@ -7,6 +7,7 @@ import SwiftUI
 /// area under the large title (a menu when there is more than one server).
 struct CrewScreen: View {
     let servers: [ServerModel]
+    let settings: IOSSettings
     let onConnect: () -> Void
     /// An agent a `bandito://agent/...` link asked for: the screen opens its row, as a tap on the row does.
     var focus: CrewFocus?
@@ -55,7 +56,9 @@ struct CrewScreen: View {
                 }
             }
             .navigationDestination(for: CrewRoute.self) { route in
-                AgentChatStub(name: route.name)
+                if let server = currentServer {
+                    ChatScreen(server: server, agentID: route.agentID, settings: settings)
+                }
             }
             .navigationDestination(for: AgentDetailRoute.self) { route in
                 if let server = currentServer {
@@ -87,6 +90,11 @@ struct CrewScreen: View {
            let agent = server.sortedAgents.first(where: { $0.name == arguments[index + 1] })
         {
             path.append(AgentDetailRoute(agentID: agent.id))
+        }
+        if let name = ChatLaunchHooks.value(after: "-chat", in: arguments),
+           let agent = server.sortedAgents.first(where: { $0.name == name })
+        {
+            path.append(CrewRoute(agentID: agent.id, name: agent.name))
         }
         if let index = arguments.firstIndex(of: "-new-agent") {
             let one = arguments.indices.contains(index + 1) && arguments[index + 1] == "one"
@@ -282,25 +290,6 @@ struct CrewList: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, BanditoSpace.s6)
-    }
-}
-
-/// The chat of an agent is not built yet: this screen holds its place, with the agent's name.
-struct AgentChatStub: View {
-    let name: String
-
-    var body: some View {
-        VStack(spacing: BanditoSpace.s3) {
-            Text(L10n.Ios.Crew.chatSoon(name: name))
-                .font(BanditoFont.text(size: 15))
-                .foregroundStyle(Color.Bandito.text2)
-                .multilineTextAlignment(.center)
-        }
-        .padding(BanditoSpace.s6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Bandito.bg.ignoresSafeArea())
-        .navigationTitle(name)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
