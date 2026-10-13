@@ -99,7 +99,11 @@ public final class AccessResponder {
         let approved = Set(me.devices.filter(\.approved).map(\.id))
         let members = Set(me.devices.map(\.id))
 
-        outcome.revoked = await revokeRowsOfLeftDevices(accountID: accountID, approved: approved, byServer: byServer)
+        // A list of devices without this one is not the account's answer (a fault of the service, a cut reply): it must
+        // not revoke every row this device ever issued.
+        if approved.contains(me.device.id) {
+            outcome.revoked = await revokeRowsOfLeftDevices(accountID: accountID, approved: approved, byServer: byServer)
+        }
 
         guard let payload = try await sync.pull() else { return outcome }
         let known = Set(payload.servers.map { $0.id.uuidString.lowercased() })
