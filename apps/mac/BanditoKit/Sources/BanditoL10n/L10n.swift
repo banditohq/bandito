@@ -2414,6 +2414,30 @@ public enum L10n {
             }
         }
 
+        public enum Crew {
+            public static var done: String { L10n.tr("onboarding.crew.done") }
+            public static var hire: String { L10n.tr("onboarding.crew.hire") }
+            public static var hireOne: String { L10n.tr("onboarding.crew.hireOne") }
+            public static var hiring: String { L10n.tr("onboarding.crew.hiring") }
+            public static var loadFailed: String { L10n.tr("onboarding.crew.loadFailed") }
+            public static var loading: String { L10n.tr("onboarding.crew.loading") }
+            public static var next: String { L10n.tr("onboarding.crew.next") }
+            public static var noRuntime: String { L10n.tr("onboarding.crew.noRuntime") }
+            public static var noServer: String { L10n.tr("onboarding.crew.noServer") }
+            public static var noTeams: String { L10n.tr("onboarding.crew.noTeams") }
+            public static var noneMade: String { L10n.tr("onboarding.crew.noneMade") }
+            public static func partial(made: String, total: String) -> String { L10n.tr("onboarding.crew.partial", made, total) }
+            public static var role: String { L10n.tr("onboarding.crew.role") }
+            public static var subtitle: String { L10n.tr("onboarding.crew.subtitle") }
+            public static var title: String { L10n.tr("onboarding.crew.title") }
+            public static var toServer: String { L10n.tr("onboarding.crew.toServer") }
+
+            public enum Single {
+                public static var text: String { L10n.tr("onboarding.crew.single.text") }
+                public static var title: String { L10n.tr("onboarding.crew.single.title") }
+            }
+        }
+
         public enum Demo {
             public static var allow: String { L10n.tr("onboarding.demo.allow") }
             public static var askPush: String { L10n.tr("onboarding.demo.askPush") }
@@ -2459,6 +2483,12 @@ public enum L10n {
             public static var unauthorized: String { L10n.tr("onboarding.failure.unauthorized") }
         }
 
+        public enum Features {
+            public static func cardOf(current: String, total: String) -> String { L10n.tr("onboarding.features.cardOf", current, total) }
+            public static var nextCard: String { L10n.tr("onboarding.features.nextCard") }
+            public static var previousCard: String { L10n.tr("onboarding.features.previousCard") }
+        }
+
         public enum Install {
             public static var app: String { L10n.tr("onboarding.install.app") }
             public static var check: String { L10n.tr("onboarding.install.check") }
@@ -2468,6 +2498,12 @@ public enum L10n {
             public static var localPair: String { L10n.tr("onboarding.install.localPair") }
             public static var localStart: String { L10n.tr("onboarding.install.localStart") }
             public static var service: String { L10n.tr("onboarding.install.service") }
+        }
+
+        public enum Runtimes {
+            public static var needOne: String { L10n.tr("onboarding.runtimes.needOne") }
+            public static var subtitle: String { L10n.tr("onboarding.runtimes.subtitle") }
+            public static var title: String { L10n.tr("onboarding.runtimes.title") }
         }
 
         public enum Server {
@@ -2512,6 +2548,7 @@ public enum L10n {
             public static func moreHosts(count: Int) -> String { L10n.tr("onboarding.server.moreHosts", count) }
             public static var newHostTitle: String { L10n.tr("onboarding.server.newHostTitle") }
             public static var nextAgent: String { L10n.tr("onboarding.server.nextAgent") }
+            public static var nextRuntimes: String { L10n.tr("onboarding.server.nextRuntimes") }
             public static var nextStepTitle: String { L10n.tr("onboarding.server.nextStepTitle") }
             public static var noPorts: String { L10n.tr("onboarding.server.noPorts") }
             public static var noServer: String { L10n.tr("onboarding.server.noServer") }
@@ -2576,8 +2613,12 @@ public enum L10n {
         public enum Steps {
             public static var account: String { L10n.tr("onboarding.steps.account") }
             public static var agent: String { L10n.tr("onboarding.steps.agent") }
+            public static var crew: String { L10n.tr("onboarding.steps.crew") }
+            public static var features: String { L10n.tr("onboarding.steps.features") }
             public static var intro: String { L10n.tr("onboarding.steps.intro") }
+            public static var runtimes: String { L10n.tr("onboarding.steps.runtimes") }
             public static var server: String { L10n.tr("onboarding.steps.server") }
+            public static var task: String { L10n.tr("onboarding.steps.task") }
             public static var tour: String { L10n.tr("onboarding.steps.tour") }
         }
 
@@ -2603,6 +2644,28 @@ public enum L10n {
             public static var stateUnverified: String { L10n.tr("onboarding.subs.stateUnverified") }
             public static var subtitle: String { L10n.tr("onboarding.subs.subtitle") }
             public static var title: String { L10n.tr("onboarding.subs.title") }
+        }
+
+        public enum Task {
+            public static var failed: String { L10n.tr("onboarding.task.failed") }
+            public static var later: String { L10n.tr("onboarding.task.later") }
+            public static var noAgent: String { L10n.tr("onboarding.task.noAgent") }
+            public static var placeholder: String { L10n.tr("onboarding.task.placeholder") }
+            public static func send(name: String) -> String { L10n.tr("onboarding.task.send", name) }
+            public static var sending: String { L10n.tr("onboarding.task.sending") }
+            public static func subtitle(name: String) -> String { L10n.tr("onboarding.task.subtitle", name) }
+            public static var title: String { L10n.tr("onboarding.task.title") }
+            public static var `try`: String { L10n.tr("onboarding.task.try") }
+
+            public enum Suggest {
+                public static var disk: String { L10n.tr("onboarding.task.suggest.disk") }
+                public static var docs: String { L10n.tr("onboarding.task.suggest.docs") }
+                public static var introduce: String { L10n.tr("onboarding.task.suggest.introduce") }
+                public static var logs: String { L10n.tr("onboarding.task.suggest.logs") }
+                public static var lookAround: String { L10n.tr("onboarding.task.suggest.lookAround") }
+                public static var summary: String { L10n.tr("onboarding.task.suggest.summary") }
+                public static var tests: String { L10n.tr("onboarding.task.suggest.tests") }
+            }
         }
 
         public enum Welcome {
