@@ -14,44 +14,6 @@ import SwiftUI
 import AppKit
 import QuartzCore
 
-/// Keyframes of a periodic value, sampled from the function that defines it.
-enum MotionKeyframes {
-    /// Frames per second the curve is sampled at; the render server interpolates between them.
-    static let rate: Double = 60
-
-    /// A repeating animation of `keyPath` over one `period`, starting at `start` (seconds, the epoch of `value`).
-    static func animation(
-        _ keyPath: String, period: Double, start: Double, value: (Double) -> Double
-    ) -> CAKeyframeAnimation {
-        let count = max(2, Int((period * rate).rounded()))
-        let values = (0...count).map { NSNumber(value: value(start + period * Double($0) / Double(count))) }
-        return repeating(keyPath, values: values, period: period)
-    }
-
-    /// The same for a point (`position`).
-    static func points(_ keyPath: String, period: Double, start: Double, value: (Double) -> CGPoint)
-        -> CAKeyframeAnimation
-    {
-        let count = max(2, Int((period * rate).rounded()))
-        let values = (0...count).map { NSValue(point: value(start + period * Double($0) / Double(count))) }
-        return repeating(keyPath, values: values, period: period)
-    }
-
-    private static func repeating(_ keyPath: String, values: [Any], period: Double) -> CAKeyframeAnimation {
-        let animation = CAKeyframeAnimation(keyPath: keyPath)
-        animation.values = values
-        animation.duration = period
-        animation.repeatCount = .infinity
-        animation.calculationMode = .linear
-        animation.isRemovedOnCompletion = false
-        return animation
-    }
-
-    /// Seconds now, on the clock `AvatarPose` uses.
-    static var now: Double { Date().timeIntervalSinceReferenceDate }
-}
-
-
 /// The view under a layer motion: draws nothing itself, takes no clicks, and says when it is in a window (so the
 /// SwiftUI drawing it stands in for can step back; without a window, in a rendered picture, that drawing stays).
 class MotionLayerView: NSView {

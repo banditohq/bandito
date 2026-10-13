@@ -70,8 +70,15 @@ pub(super) async fn cdp_browser(
         Ok(client) => client,
         Err(_) => return not_running(),
     };
+    let cancel = app.device_cancel(&device.id);
     ws.max_message_size(CDP_MESSAGE_LIMIT)
-        .on_upgrade(move |socket| pump(socket, client, slot))
+        .on_upgrade(move |socket| async move {
+            // Revoking the device ends the DevTools socket.
+            tokio::select! {
+                () = cancel.cancelled() => {}
+                () = pump(socket, client, slot) => {}
+            }
+        })
 }
 
 /// `GET /v1/browser/cdp/page/<target_id>?workspace=`: a WebSocket on one tab, as a plain CDP
@@ -107,8 +114,14 @@ pub(super) async fn cdp_page(
         }
         Err(LinkError::Closed) => return not_running(),
     };
+    let cancel = app.device_cancel(&device.id);
     ws.max_message_size(CDP_MESSAGE_LIMIT)
-        .on_upgrade(move |socket| pump(socket, page, slot))
+        .on_upgrade(move |socket| async move {
+            tokio::select! {
+                () = cancel.cancelled() => {}
+                () = pump(socket, page, slot) => {}
+            }
+        })
 }
 
 /// Carries one DevTools socket: each text message from the app is a command, and each answer or
@@ -431,9 +444,7 @@ mod route_tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         store.device_add("test", TOKEN).unwrap();
         let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
-        let mut app = App::new(sup, dir.to_path_buf());
-        Arc::get_mut(&mut app).expect("the app is not shared yet").browser = BrowserManager::new(dir.to_path_buf());
-        app
+        App::new_with_browser(sup, dir.to_path_buf(), BrowserManager::new(dir.to_path_buf()))
     }
 
     #[test]

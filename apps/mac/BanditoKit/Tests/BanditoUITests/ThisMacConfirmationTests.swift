@@ -10,10 +10,31 @@ import Testing
 /// Answers `info --json` for a daemon running on port 17779, after `delay`.
 private struct RunningDaemon: CommandRunner {
     var delay: Duration = .zero
+    var overlap: Overlap?
 
     func run(_ executable: String, _ arguments: [String], stdin: Data?) async throws -> CommandResult {
+        overlap?.enter()
+        defer { overlap?.leave() }
         if delay > .zero { try await Task.sleep(for: delay) }
         return CommandResult(status: 0, stdout: #"{"listen":"127.0.0.1:17779","running":true}"#, stderr: "")
+    }
+}
+
+/// How many runs of the command were in flight at once, at most.
+private final class Overlap: @unchecked Sendable {
+    private let lock = NSLock()
+    private var now = 0
+    private(set) var most = 0
+
+    func enter() {
+        lock.withLock {
+            now += 1
+            most = max(most, now)
+        }
+    }
+
+    func leave() {
+        lock.withLock { now -= 1 }
     }
 }
 
@@ -75,12 +96,12 @@ extension LocalServerMigrationTests {
         defer { try? FileManager.default.removeItem(at: binary) }
 
         let app = AppModel(defaults: defaults)
-        let start = ContinuousClock.now
+        let overlap = Overlap()
         await app.confirmThisMacServers(
-            binary: binary, runner: RunningDaemon(delay: .milliseconds(800)), timeout: .seconds(3))
-        // Two checks of 800 ms each: one after the other they would take 1.6 s; together about 0.8 s, with room for a
-        // loaded CI runner.
-        #expect(start.duration(to: .now) < .milliseconds(1_400))
+            binary: binary, runner: RunningDaemon(delay: .milliseconds(800), overlap: overlap), timeout: .seconds(10))
+        // Each check takes 800 ms: run together, the second starts while the first still waits. Counted, not timed: a
+        // loaded CI runner (other suites on the main actor) only makes them slower, not serial.
+        #expect(overlap.most == 2)
         #expect(app.servers.allSatisfy { $0.config.isThisMac })
     }
 

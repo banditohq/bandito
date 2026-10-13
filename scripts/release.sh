@@ -87,6 +87,12 @@ if git -C "$wt" diff --quiet; then
   die "origin/main already says $version in all three files; nothing to bump (was this released already?)"
 fi
 
+# --- The "What's new" notes of the version must already be on main (release-notes/X.Y.Z.json) ---
+if ! git cat-file -e "$base:release-notes/$version.json" 2> /dev/null; then
+  msg="release-notes/$version.json is not on origin/main. Write the 'What's new' notes (3-6 items, all 9 languages; copy an earlier file, check with scripts/check_release_notes.py --require $version), merge them to main, then release."
+  if [ "$dry" = 1 ]; then echo "release: WARNING: $msg" >&2; else die "$msg"; fi
+fi
+
 # --- Notes draft: commit titles since the previous tag, grouped by type ---
 notes="$tmp/notes.md"
 range="${prev:+$prev..}$base"

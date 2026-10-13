@@ -86,7 +86,7 @@ Build only from these. Need something that is not here: add it to the system fir
 | Back to the newest message | `ThreadJumpOverlay`, `ThreadJumpButton` (rules: `ThreadJumpRules`, `ThreadFollowRules`) | `Team/ThreadJumpButton.swift`, `Team/ThreadJumpRules.swift` |
 | Menu above the composer (`/`, `@`) | `.composerMenuSurface()`, `ComposerMenuGroupTitle`, `.composerMenuRow(selected:)`, `ComposerMenuFooter` | `Team/ComposerMenuChrome.swift` |
 | Mention of a service, teammate, file or tab | `MentionChip`, `MentionIcon` | `Team/MentionChips.swift`, `Team/MentionMenu.swift` |
-| Agent identity | `RaccoonAvatar`, `AgentAvatar`, `AvatarArtView` | `Components/RaccoonAvatar.swift`, `Avatar/` |
+| Agent identity | `RaccoonAvatar`, `AgentAvatar`, `AvatarArtView` | `Components/RaccoonAvatar.swift`, `Avatar/`; the raccoon's shapes and colors in `BanditoDesign/RaccoonShape.swift` (shared with iPhone) |
 | Animation | `.banditoAnimation`, `.banditoRise` | `Components/Motion.swift`, `RiseIn.swift` |
 | Hover fill for a gesture row | `.rowHighlight()` | `Components/Interaction.swift` |
 | Focus ring on a custom control | `.brandFocusRing(shape:)` | `Components/Interaction.swift` |

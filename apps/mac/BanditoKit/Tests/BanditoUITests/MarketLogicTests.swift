@@ -1,7 +1,8 @@
-import BanditoKit
-import Testing
 
+import BanditoDesign
+import BanditoKit
 @testable import BanditoUI
+import Testing
 
 /// A catalog template with a fixed English and Russian description (the Russian one ends with " (ru)").
 private func template(_ id: String, _ name: String, _ english: String) -> IntegrationCatalogEntry {

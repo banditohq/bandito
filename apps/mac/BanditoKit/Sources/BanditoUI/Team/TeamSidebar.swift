@@ -195,7 +195,6 @@ struct TeamSidebar: View {
             }
             .padding(.horizontal, 18)
             }
-        .tourAnchor(.agents)
     }
 
     // MARK: waiting

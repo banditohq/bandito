@@ -28,6 +28,10 @@ public final class AgentThreadState {
     public private(set) var turnStartedAt: Int64?
     /// The thread has no item.
     public private(set) var isEmpty = true
+    /// The approval requests that wait for an answer, oldest first (the Inbox lists them; the row, not only a count).
+    public private(set) var pendingApprovalRows: [ApprovalRow] = []
+    /// The buttons the agent offers now (the newest set); the Inbox shows them with a question the agent waits on.
+    public private(set) var quickReplies: QuickReplies?
     /// The forms and the service requests that wait for the person, oldest first.
     public private(set) var pendingForms: [FormRow] = []
     public private(set) var pendingConnects: [ConnectRow] = []
@@ -42,6 +46,9 @@ public final class AgentThreadState {
     public private(set) var lastItemTimestamp: Int64?
     /// Replies the person has not looked at yet (`UnreadReplies`). Written only when it changes.
     public private(set) var unreadCount = 0
+    /// The Activity timeline of this agent (`ActivityFeed`), oldest first. Rebuilt only when a persisted event or the read
+    /// mark moves: a streamed token, which has no `seq`, rebuilds none of it, so its readers are not told.
+    public private(set) var activity: [ActivityEntry] = []
 
     /// How much of the newest message `lastMessageHead` keeps.
     public static let previewLength = 240
@@ -57,6 +64,8 @@ public final class AgentThreadState {
     @ObservationIgnored private var readSeq: Int64?
     @ObservationIgnored private var readMarks: ReadMarks?
     @ObservationIgnored private var agentID: String?
+    /// What `activity` was built from (`refreshActivity`).
+    @ObservationIgnored private var activityKey: ActivityKey?
 
     nonisolated init() {}
 
@@ -72,6 +81,7 @@ public final class AgentThreadState {
         guard loaded, let current = resolveReadSeq(), thread.lastSeq > current else { return }
         moveRead(to: thread.lastSeq)
         recount()
+        refreshActivity()
     }
 
     /// The seq the chat was read to. The first time a loaded thread is seen with no stored mark, all of it counts as read.
@@ -95,9 +105,21 @@ public final class AgentThreadState {
         if unreadCount != unread { unreadCount = unread }
     }
 
+    /// Rebuilds `activity` when its inputs moved: the persisted events (`lastSeq`), the items, the read mark. A streamed
+    /// token moves none of them, so it costs one comparison here.
+    private func refreshActivity() {
+        let read = readSeq ?? 0
+        let key = ActivityKey(lastSeq: thread.lastSeq, itemCount: thread.items.count, readSeq: read)
+        guard key != activityKey else { return }
+        activityKey = key
+        let entries = ActivityFeed.entries(agentID: agentID ?? "", items: thread.items, readSeq: read)
+        if activity != entries { activity = entries }
+    }
+
     func summarize() {
         _ = resolveReadSeq()
         recount()
+        refreshActivity()
         let status: AgentStatus? = loaded ? thread.status : nil
         if loadedStatus != status { loadedStatus = status }
         if statusDetail != thread.statusDetail { statusDetail = thread.statusDetail }
@@ -109,6 +131,7 @@ public final class AgentThreadState {
         if lastItemTimestamp != stamp { lastItemTimestamp = stamp }
         // One pass over the items for the rest.
         var approvals = 0
+        var approvalRows: [ApprovalRow] = []
         var firstApprovalTitle: String?
         var forms: [FormRow] = []
         var connects: [ConnectRow] = []
@@ -119,6 +142,7 @@ public final class AgentThreadState {
             case .approval(let row) where row.state == .pending:
                 if approvals == 0 { firstApprovalTitle = row.title }
                 approvals += 1
+                approvalRows.append(row)
             case .form(let row) where row.isPending: forms.append(row)
             case .connect(let row):
                 connectCards += 1
@@ -128,6 +152,9 @@ public final class AgentThreadState {
             }
         }
         if pendingApprovalCount != approvals { pendingApprovalCount = approvals }
+        if pendingApprovalRows != approvalRows { pendingApprovalRows = approvalRows }
+        let quick = thread.quickReplies
+        if quickReplies != quick { quickReplies = quick }
         if firstPendingApprovalTitle != firstApprovalTitle { firstPendingApprovalTitle = firstApprovalTitle }
         if pendingForms != forms { pendingForms = forms }
         if pendingConnects != connects { pendingConnects = connects }
@@ -158,6 +185,13 @@ public final class AgentThreadState {
         lastMessageHead = head
         headWrittenAt = now
     }
+}
+
+/// What the activity timeline of a thread was built from: a streamed token changes none of these.
+private struct ActivityKey: Equatable {
+    let lastSeq: Int64
+    let itemCount: Int
+    let readSeq: Int64
 }
 
 /// When a streamed preview may be written again. Pure, for the tests.

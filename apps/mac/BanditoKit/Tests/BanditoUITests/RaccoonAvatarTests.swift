@@ -1,7 +1,8 @@
+
+import BanditoDesign
+@testable import BanditoUI
 import CoreGraphics
 import Testing
-
-@testable import BanditoUI
 
 /// Avatar color and face must be a pure function of the name: same name, same look, every launch.
 @Suite struct RaccoonAvatarTests {

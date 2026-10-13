@@ -59,9 +59,11 @@ final class AuditEnvironment {
     }
 
     /// The first-run flow, in front, at `step`.
-    func showOnboarding(_ step: OnboardingStep) {
+    func showOnboarding(_ step: OnboardingStep, card: Int = 0) {
         defaults.set(step.rawValue, forKey: OnboardingModel.stepKey)
-        onboarding = OnboardingModel(defaults: defaults, hasSavedServers: false)
+        defaults.set(card, forKey: OnboardingModel.cardKey)
+        // The steps after the server need one on this Mac: the flow resumes there only when a server is saved.
+        onboarding = OnboardingModel(defaults: defaults, hasSavedServers: step.needsServer)
     }
 
     /// The server tells what it can: `features` are the capabilities `server.supports(...)` answers.

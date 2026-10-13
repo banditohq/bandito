@@ -91,7 +91,6 @@ struct MainWindow: View {
             }
         }
         .banditoAnimation(BanditoMotion.ease, value: router.chatLinkNotice?.id)
-        .modifier(TourOverlay(active: onboarding.tourRequested))
         .task {
             // Only with a session: without one nobody can ask for pending devices, and no device key is needed yet.
             guard hub.signedIn else { return }
@@ -176,6 +175,7 @@ struct MainWindow: View {
         case .addServer: AddServerSheet()
         case .importer: ImportSheet()
         case .reportProblem: ReportProblemSheet()
+        case .whatsNew(let skipped): WhatsNewSheet(skipped: skipped)
         case .readyTeam(let bundleID):
             if let server = app.currentServer {
                 ReadyTeamSheet(bundleID: bundleID, server: server)
@@ -200,23 +200,6 @@ struct MainWindow: View {
                     source: source, agent: agent,
                     targets: MigrationTargets.eligible(source: source, among: app.servers))
             }
-        }
-    }
-}
-
-/// The tour over the window. Only while it runs are the anchors of its targets collected: reading them merged a
-/// preference through every view of the window at every layout (a few percent of the main thread at an agent switch).
-/// Starting or ending the tour builds the window again, once.
-private struct TourOverlay: ViewModifier {
-    let active: Bool
-
-    func body(content: Content) -> some View {
-        if active {
-            content
-                .overlayPreferenceValue(TourAnchorKey.self) { anchors in TourLayer(anchors: anchors) }
-                .environment(\.tourActive, true)
-        } else {
-            content
         }
     }
 }

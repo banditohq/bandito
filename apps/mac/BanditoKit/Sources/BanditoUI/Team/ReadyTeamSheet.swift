@@ -29,11 +29,18 @@ struct ReadyTeamSheet: View {
     @State private var pickerOpen = false
     /// The keys of the schedules switched on. Empty at first: nothing runs before the person confirms it.
     @State private var enabled: Set<String> = []
-    @State private var creating = false
-    @State private var result: BundleCreation?
-    @State private var error: UserFacingMessage?
-    /// A request failed: the agents it made are read from the list, and Create makes only the missing ones.
-    @State private var retrying = false
+    /// The first attempt makes it (it keeps the folder and what exists); a retry continues it and makes only the missing
+    /// agents (judged by ids on the server, never by the clock). It lives on the server (`AgentCreationStore`), not in
+    /// the sheet: a sheet closed in the middle and opened again shows the same progress or result.
+    @State private var creation: TeamCreation?
+
+    private var key: String { AgentCreationStore.bundleKey(bundleID) }
+    private var creating: Bool { creation?.busy ?? false }
+    private var result: BundleCreation? { creation?.isComplete == true ? creation?.result : nil }
+    private var error: UserFacingMessage? {
+        guard let creation, !creation.busy, let text = creation.failure else { return nil }
+        return UserFacingMessage(text: text, canRetry: true)
+    }
 
     private var languageCode: String { ModelDescription.currentLanguageCode }
     private var bundle: AgentBundle? { (preview?.bundles ?? bots.bundles).first { $0.id == bundleID } }
@@ -62,6 +69,11 @@ struct ReadyTeamSheet: View {
         .frame(width: 600, height: 620)
         .background(Color.Bandito.surface2)
         .task(id: server.id) {
+            if let kept = server.creations.team(key) {
+                creation = kept
+                folder = kept.folder ?? folder
+                runtime = kept.runtime
+            }
             if preview == nil { await bots.load(from: server) }
             _ = try? await server.refreshRuntimes()
             runtime = BundleLogic.runtime(keeping: runtime, available: available)
@@ -229,7 +241,7 @@ struct ReadyTeamSheet: View {
                     .contentShape(Rectangle())
                 }
                 .banditoButton(.row(cornerRadius: 12))
-                .disabled(creating)
+                .disabled(creating || creation != nil)
                 .popover(isPresented: $pickerOpen, arrowEdge: .top) {
                     FolderPicker(server: server, selection: $folder) { pickerOpen = false }
                 }
@@ -245,6 +257,7 @@ struct ReadyTeamSheet: View {
                     }
                     .banditoButton(.icon(size: 26, label: L10n.AgentSheet.folderClear))
                     .help(L10n.AgentSheet.folderClear)
+                    .disabled(creating || creation != nil)
                 }
             }
         }
@@ -266,7 +279,7 @@ struct ReadyTeamSheet: View {
                     sections: [SelectSection(options: available.map { SelectOption(value: $0, title: $0.title) })],
                     label: L10n.AgentSheet.runtime, placeholder: ""
                 )
-                .disabled(creating)
+                .disabled(creating || creation != nil)
             }
         }
     }
@@ -341,7 +354,7 @@ struct ReadyTeamSheet: View {
         HStack {
             ActionRow {
                 if let result {
-                    Button(L10n.Common.close) { dismiss() }
+                    Button(L10n.Common.close) { server.creations.forgetTeam(key); dismiss() }
                         .banditoButton(.quiet())
                         .fixedSize()
                     if let first = BundleLogic.firstAgent(result) {
@@ -368,46 +381,36 @@ struct ReadyTeamSheet: View {
     private func create(_ bundle: AgentBundle) {
         guard !creating, let runtime else { return }
         let items = ReadyTeamsLogic.scheduleItems(members: members, languageCode: languageCode)
-        guard
-            var request = ReadyTeamsLogic.request(
-                bundle: bundle, runtime: runtime, languageCode: languageCode,
-                model: ReadyTeamsLogic.model(runtime: runtime, models: models(for: runtime)), folder: folder,
-                items: items, enabled: enabled)
-        else { return }
-        let now = Date()
-        let earlier = retrying ? BundleLogic.recentEntries(members: members, agents: server.agents, now: now) : []
-        let targets = retrying ? BundleLogic.remaining(members: members, agents: server.agents, now: now) : members
-        request.templates = retrying ? targets.map(\.id) : nil
-        error = nil
-        creating = true
+        let attempt: TeamCreation
+        if let creation {
+            attempt = creation
+        } else {
+            attempt = TeamCreation(
+                server: server, bundle: bundle, members: members, runtime: runtime,
+                model: ReadyTeamsLogic.model(runtime: runtime, models: models(for: runtime)),
+                languageCode: languageCode,
+                texts: AgentCreationTexts(
+                    describe: { UserFacingError.message(for: $0).text },
+                    partial: { L10n.Market.Bundle.resultTitle(created: String($0), total: String($1)) },
+                    noRuntime: L10n.AgentSheet.statusNotInstalled, none: L10n.Market.Bundle.Status.notMade))
+            creation = attempt
+            server.creations.setTeam(attempt, for: key)
+        }
+        let wanted = folder
+        let enabled = enabled
+        // Not tied to the sheet: closing it does not stop the attempt, and the result is there on the next open.
         Task {
-            defer { creating = false }
-            do {
-                var made = BundleCreation()
-                if !targets.isEmpty {
-                    made = try await server.createBundle(request)
-                    Telemetry.count(.agentCreate(.bundle))
-                }
-                let answer = retrying ? BundleLogic.combined(members: members, earlier: earlier, made: made) : made
-                for row in BundleLogic.rows(of: answer, templates: members, languageCode: languageCode) {
-                    if let problem = row.problem {
-                        Self.log.error("ready team \(bundle.id, privacy: .public) \(row.id, privacy: .public): \(problem, privacy: .public)")
-                    }
-                }
-                result = answer
-                retrying = false
-            } catch {
-                Self.log.error("agents.create_bundle \(bundle.id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
-                self.error = UserFacingError.message(for: error)
-                // The daemon may have made some of the agents before the request failed: read the list first.
-                try? await server.readAgentsNow()
-                retrying = true
+            let complete = await attempt.create(folder: { wanted }, items: items, enabled: enabled)
+            for (id, problem) in attempt.problems {
+                Self.log.error("ready team \(bundle.id, privacy: .public) \(id, privacy: .public): \(problem, privacy: .public)")
             }
+            if complete { Telemetry.count(.agentCreate(.bundle)) }
         }
     }
 
     /// The first agent of the team: its chat opens, if the server in front is still this one.
     private func openFirst(_ agent: Agent) {
+        server.creations.forgetTeam(key)
         if app.currentServer?.id == server.id {
             router.selectAgent(agent.id, on: server)
             router.select(mode: .team)

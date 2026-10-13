@@ -6,6 +6,7 @@ Public repo (FSL-1.1-ALv2). Everything here is visible to the world: no secrets,
 
 - `daemon/` — Rust 2024, one crate `bandito` (server, CLI, runtimes). Rules: `daemon/CLAUDE.md`.
 - `apps/mac/` — SwiftUI app; code in `apps/mac/BanditoKit` (SwiftPM). Rules: `apps/mac/CLAUDE.md`.
+- `apps/ios/` — SwiftUI iPhone app, shares `apps/mac/BanditoKit`. Rules: `apps/ios/CLAUDE.md`; product spec `docs/IOS_APP.md`.
 - `docs/ARCHITECTURE.md` — design source of truth (protocol, store, features). Change it in the same PR as the code.
 - `docs/DESIGN_LANGUAGE.md` — how the app looks and moves: tokens, components, motion, the quality bar.
 - Before any UI work read `docs/DESIGN_LANGUAGE.md`; when a design change is approved, update it and the Design System artifact in the same change.
@@ -55,3 +56,4 @@ Public repo (FSL-1.1-ALv2). Everything here is visible to the world: no secrets,
 - Writing `@State` from geometry, scroll or hover callbacks on every call re-renders whole trees. Write on change.
 - App releases need the server release of the same version (`release.yml` builds and signs the daemon binaries);
   without it "Add a server" fails.
+- Every release needs its "What's new" notes: `release-notes/X.Y.Z.json` (3-6 items, all 9 languages), merged before `scripts/release.sh X.Y.Z`; `scripts/check_release_notes.py` guards it in CI.

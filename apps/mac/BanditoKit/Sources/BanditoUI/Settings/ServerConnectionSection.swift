@@ -36,6 +36,9 @@ struct ServerConnectionSection: View {
                 sshRows
             case .webSocket:
                 webSocketRow
+            case .direct:
+                // Its addresses and pin come from the pairing link: nothing to type here.
+                EmptyView()
             case .local:
                 SettingsRow(
                     title: L10n.ServerSettings.Connection.ThisMac.title, hint: L10n.ServerSettings.Connection.ThisMac.hint
@@ -208,7 +211,7 @@ struct ServerConnectionSection: View {
             keyFile = ssh.identityFile
         case .webSocket(let url):
             address = url.absoluteString
-        case .local:
+        case .local, .direct:
             break
         }
         problem = nil
@@ -242,7 +245,7 @@ struct ServerConnectionSection: View {
             problem = nil
             guard url != current else { return }
             save(.webSocket(url: url))
-        case .local:
+        case .local, .direct:
             break
         }
     }

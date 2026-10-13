@@ -54,10 +54,20 @@ import Testing
         AuditCase(name: "settings-account", width: settingsColumn, scrolls: true) { _ in AnyView(AccountSection()) },
         AuditCase(name: "settings-servers", width: settingsColumn, scrolls: true) { _ in AnyView(ServersSection()) },
         AuditCase(name: "settings-server-detail", width: settingsColumn, scrolls: true) { env in
-            env.serverInfo(features: ["server_settings", "backups", "host", "logs"])
+            env.serverInfo(features: ["server_settings", "backups", "host", "logs", "phone_access", "pairing"])
             return AnyView(
                 ServerSettingsPage(
-                    server: env.server, onBack: {}, preview: serverSettingsPreview, previewStats: serverHostPreview))
+                    server: env.server, onBack: {}, preview: serverSettingsPreview, previewStats: serverHostPreview,
+                    previewDevices: phoneDevicesPreview))
+        },
+        AuditCase(name: "settings-server-phone-failed", width: settingsColumn, scrolls: true) { env in
+            env.serverInfo(features: ["server_settings", "phone_access", "pairing"])
+            var snapshot = serverSettingsPreview
+            snapshot.phone = PhoneAccessStatus(
+                mode: .tailscale, listening: [],
+                error: "Could not listen on 100.101.102.103:7879: Address already in use (os error 98).")
+            snapshot.settings.phoneAccess = .tailscale
+            return AnyView(ServerSettingsPage(server: env.server, onBack: {}, preview: snapshot, previewDevices: []))
         },
         AuditCase(name: "settings-server-detail-old", width: settingsColumn, scrolls: true) { env in
             env.serverInfo(version: "0.1.4", features: ["host"])
@@ -122,7 +132,23 @@ import Testing
                     confirmTitle: L10n.Telemetry.Crash.send, confirmIsDanger: false,
                     cancelTitle: L10n.Telemetry.Notice.decline, onConfirm: {}, onCancel: {}))
         },
+        AuditCase(name: "sheet-whats-new", width: 560, selfSized: true) { _ in
+            AnyView(
+                WhatsNewContent(
+                    notes: try? WhatsNewSnapshots.notes("0.1.15"), version: "0.1.15",
+                    older: (try? WhatsNewSnapshots.notes("0.1.14")).map { [$0] } ?? [],
+                    preferredLanguages: L10n.languages.map(\.code), still: true))
+        },
         AuditCase(name: "sheet-snippet", width: 440, selfSized: true) { _ in AnyView(SnippetEditor(onSave: { _ in })) },
+        AuditCase(name: "sheet-phone-pair", width: 420, selfSized: true) { env in
+            AnyView(PhonePairSheet(server: env.server, preview: phonePairPreview))
+        },
+        AuditCase(name: "sheet-phone-pair-expired", width: 420, selfSized: true) { env in
+            AnyView(PhonePairSheet(server: env.server, preview: .expired))
+        },
+        AuditCase(name: "sheet-phone-pair-off", width: 420, selfSized: true) { env in
+            AnyView(PhonePairSheet(server: env.server, preview: .notListening))
+        },
         AuditCase(name: "sheet-telegram-link", width: 420, selfSized: true) { _ in
             AnyView(TelegramLinkSheet(isPresented: .constant(true), request: { throw URLError(.badURL) }))
         },
@@ -142,10 +168,32 @@ import Testing
     static let serverSettingsPreview = ServerSettingsSnapshot(
         settings: ServerSettingValues(
             screenIdleMinutes: 240, maxRunningAgents: 50, backupEveryHours: 168, backupKeep: 60, autoUpdate: .install,
-            updateChannel: "stable", defaultApprovalMode: .always),
+            updateChannel: "stable", defaultApprovalMode: .always, phoneAccess: .lan, phonePort: 65535),
         defaults: ServerSettingValues(
             screenIdleMinutes: 30, maxRunningAgents: 0, backupEveryHours: 24, backupKeep: 14, autoUpdate: .notify,
-            updateChannel: "stable", defaultApprovalMode: .risky))
+            updateChannel: "stable", defaultApprovalMode: .risky),
+        phone: PhoneAccessStatus(
+            mode: .lan, port: 65535,
+            listening: ["[::]:65535", "0.0.0.0:65535"],
+            tlsFingerprint: String(repeating: "ab", count: 32)))
+
+    /// Paired devices with long names, for the iPhone block of the settings page.
+    static let phoneDevicesPreview: [Device] = [
+        Device(
+            id: "d1", name: "Anna’s iPhone 17 Pro Max with a very long name for the layout check", createdAt: 1_786_000_000_000,
+            lastSeenAt: 1_786_100_000_000, current: false, platform: "ios"),
+        Device(id: "d2", name: "MacBook Pro", createdAt: 1_786_000_000_000, lastSeenAt: nil, current: true, platform: "macos"),
+    ]
+
+    /// A pairing reply the sheet can draw: the link, the six words and the addresses.
+    static let phonePairPreview = PhoneAccessRules.PairState.ready(
+        link: PhonePairLink.make(
+            code: "otter-lava-mint-orbit-crane-fig", fingerprint: String(repeating: "ab", count: 32),
+            name: "Build machine in the Frankfurt datacenter",
+            hosts: ["100.101.102.103:7879", "[fd7a:115c:a1e0:ab12:4843:cd96:6265:4dc6]:7879", "192.168.100.250:65535"]),
+        code: "otter-lava-mint-orbit-crane-fig",
+        hosts: ["100.101.102.103:7879", "[fd7a:115c:a1e0:ab12:4843:cd96:6265:4dc6]:7879", "192.168.100.250:65535"],
+        expiresInMinutes: 10)
 
     /// A server reached over ssh with a key file, that answers the features of the settings page (never connected).
     static func sshServerForAudit() -> ServerModel {

@@ -199,8 +199,36 @@ extension LayoutAuditSnapshots {
             env.showOnboarding(.server)
             return AnyView(OnboardingFlow())
         },
-        AuditCase(name: "onboarding-agent", width: 900, height: 640, selfSized: true, bleeds: true) { env in
-            env.showOnboarding(.agent)
+        AuditCase(name: "onboarding-features-crew", width: 900, height: 640, selfSized: true, bleeds: true) { env in
+            env.showOnboarding(.features, card: 0)
+            return AnyView(OnboardingFlow())
+        },
+        AuditCase(name: "onboarding-features-approval", width: 900, height: 640, selfSized: true, bleeds: true) { env in
+            env.showOnboarding(.features, card: 1)
+            return AnyView(OnboardingFlow())
+        },
+        AuditCase(name: "onboarding-features-night", width: 900, height: 640, selfSized: true, bleeds: true) { env in
+            env.showOnboarding(.features, card: 2)
+            return AnyView(OnboardingFlow())
+        },
+        AuditCase(name: "onboarding-runtimes", width: 900, height: 640, selfSized: true, bleeds: true) { env in
+            env.showOnboarding(.runtimes)
+            return AnyView(OnboardingFlow())
+        },
+        AuditCase(name: "onboarding-team", width: 900, height: 640, selfSized: true, bleeds: true) { env in
+            env.showOnboarding(.team)
+            return AnyView(OnboardingFlow())
+        },
+        AuditCase(name: "onboarding-team-preview", width: 772, scrolls: true) { env in
+            // The step on its own, at the width the flow gives it, with the catalog the daemon ships in place of the
+            // server's answer.
+            let subscriptions = SubscriptionsModel(server: env.server)
+            let crew = CrewModel(server: env.server, subscriptions: subscriptions, preview: LayoutAuditSnapshots.readyTeamCatalog)
+            crew.select(.team("web-project"))
+            return AnyView(CrewStep(model: crew, rememberedAgentID: nil, onMade: { _, _ in }, onContinue: {}))
+        },
+        AuditCase(name: "onboarding-task", width: 900, height: 640, selfSized: true, bleeds: true) { env in
+            env.showOnboarding(.task)
             return AnyView(OnboardingFlow())
         },
     ]

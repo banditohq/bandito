@@ -122,10 +122,19 @@ struct BundlePanel: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @State private var runtime: RuntimeKind?
-    @State private var result: BundleCreation?
-    @State private var error: UserFacingMessage?
-    /// A request failed: the bots already made are read from the list, and Create makes the rest.
-    @State private var retrying = false
+    /// Keeps what exists across attempts (ids decide, never the clock): a retry asks only for the missing bots. It lives
+    /// on the server (`AgentCreationStore`): a panel closed in the middle and opened again shows the same progress or
+    /// result, and an attempt that is running finishes anyway.
+    @State private var creation: TeamCreation?
+
+    private var key: String { AgentCreationStore.bundleKey(bundle.id) }
+    private var result: BundleCreation? { creation?.isComplete == true ? creation?.result : nil }
+    private var error: UserFacingMessage? {
+        guard let creation, !creation.busy, let text = creation.failure else { return nil }
+        return UserFacingMessage(text: text, canRetry: true)
+    }
+    /// An attempt failed: Create makes the bots that do not exist yet.
+    private var retrying: Bool { creation != nil && result == nil && !(creation?.busy ?? false) }
 
     init(
         bundle: AgentBundle, members: [BotTemplate], services: [BotLogic.Service], server: ServerModel,
@@ -140,8 +149,10 @@ struct BundlePanel: View {
         _creating = creating
         self.onClose = onClose
         self.onConnect = onConnect
+        let kept = server.creations.team(AgentCreationStore.bundleKey(bundle.id))
+        _creation = State(initialValue: kept)
         _runtime = State(
-            initialValue: BundleLogic.runtime(
+            initialValue: kept?.runtime ?? BundleLogic.runtime(
                 keeping: nil, available: BotLogic.availableRuntimes(server.runtimes)))
     }
 
@@ -155,14 +166,14 @@ struct BundlePanel: View {
                 resultBody(result)
                 MarketPanelFooter {
                     if let first = BundleLogic.firstAgent(result) {
-                        Button(L10n.Common.close, action: onClose)
+                        Button(L10n.Common.close) { server.creations.forgetTeam(key); onClose() }
                             .banditoButton(.quiet())
                             .fixedSize()
                         Button(L10n.Market.Bundle.openFirst(name: first.name)) { openFirst(first) }
                             .banditoButton(.signal())
                             .fixedSize()
                     } else {
-                        Button(L10n.Common.close, action: onClose)
+                        Button(L10n.Common.close) { server.creations.forgetTeam(key); onClose() }
                             .banditoButton(.quiet())
                             .fixedSize()
                     }
@@ -364,51 +375,36 @@ struct BundlePanel: View {
 
     // MARK: actions
 
-    /// Makes the team. After a failed request only the bots without a recent agent of their template are asked for, and
-    /// the answer lists the bots made before as well.
+    /// Makes the team. After a failed attempt only the bots that do not exist yet are asked for (`TeamCreation`).
     private func create() {
         guard !creating, let runtime else { return }
-        let now = Date()
-        let earlier = retrying ? BundleLogic.recentEntries(members: members, agents: server.agents, now: now) : []
-        let targets = retrying ? BundleLogic.remaining(members: members, agents: server.agents, now: now) : members
-        error = nil
+        let attempt: TeamCreation
+        if let creation {
+            attempt = creation
+        } else {
+            attempt = TeamCreation(
+                server: server, bundle: bundle, members: members, runtime: runtime, model: nil, languageCode: languageCode,
+                texts: AgentCreationTexts(
+                    describe: { UserFacingError.message(for: $0).text },
+                    partial: { L10n.Market.Bundle.resultTitle(created: String($0), total: String($1)) },
+                    noRuntime: L10n.AgentSheet.statusNotInstalled, none: L10n.Market.Bundle.Status.notMade))
+            creation = attempt
+        }
+        server.creations.setTeam(attempt, for: key)
         creating = true
         Task {
-            do {
-                var made = BundleCreation()
-                if !targets.isEmpty {
-                    guard let request = BundleLogic.request(
-                        bundle: bundle, runtime: runtime, languageCode: languageCode,
-                        templates: retrying ? targets.map(\.id) : nil)
-                    else {
-                        creating = false
-                        return
-                    }
-                    made = try await server.createBundle(request)
-                    Telemetry.count(.agentCreate(.bundle))
-                }
-                let answer = retrying ? BundleLogic.combined(members: members, earlier: earlier, made: made) : made
-                for row in BundleLogic.rows(of: answer, templates: members, languageCode: languageCode) {
-                    if let problem = row.problem {
-                        Self.log.error("bundle \(bundle.id, privacy: .public) \(row.id, privacy: .public): \(problem, privacy: .public)")
-                    }
-                }
-                result = answer
-                retrying = false
-                creating = false
-            } catch {
-                Self.log.error("agents.create_bundle \(bundle.id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
-                self.error = UserFacingError.message(for: error)
-                // The daemon may have made some of the bots before the request failed: read the list first.
-                try? await server.readAgentsNow()
-                retrying = true
-                creating = false
+            defer { creating = false }
+            let complete = await attempt.create(folder: { "" }, items: [], enabled: [])
+            for (id, problem) in attempt.problems {
+                Self.log.error("bundle \(bundle.id, privacy: .public) \(id, privacy: .public): \(problem, privacy: .public)")
             }
+            if complete { Telemetry.count(.agentCreate(.bundle)) }
         }
     }
 
     /// The first bot of the team: its chat opens with the input focused, if the server in front is still this one.
     private func openFirst(_ agent: Agent) {
+        server.creations.forgetTeam(key)
         if app.currentServer?.id == server.id {
             router.selectAgent(agent.id, on: server)
             router.select(mode: .team)

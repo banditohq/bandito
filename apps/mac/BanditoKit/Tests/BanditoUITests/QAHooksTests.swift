@@ -41,6 +41,10 @@ import Testing
         #expect(QACommand.parse("settings") == .settings)
         #expect(QACommand.parse("onboarding") == .onboarding)
         #expect(QACommand.parse("onboarding again") == nil)
+        #expect(QACommand.parse("onboarding team") == .onboardingStep(.team, card: 0))
+        #expect(QACommand.parse("onboarding features 2") == .onboardingStep(.features, card: 2))
+        #expect(QACommand.parse("onboarding features -1") == nil)
+        #expect(QACommand.parse("onboarding done") == nil)
     }
 
     @Test func zoomTakesNoArgumentAndIsTheTitleStripDoubleClick() {

@@ -13,9 +13,11 @@ pub const BACKUP_KEEP: &str = "backup_keep";
 pub const AUTO_UPDATE: &str = "auto_update";
 pub const UPDATE_CHANNEL: &str = "update_channel";
 pub const DEFAULT_APPROVAL_MODE: &str = "default_approval_mode";
+pub const PHONE_ACCESS: &str = "phone_access";
+pub const PHONE_PORT: &str = "phone_port";
 
 /// Every setting name, in the order `server.settings_get` lists them.
-pub const KEYS: [&str; 7] = [
+pub const KEYS: [&str; 9] = [
     SCREEN_IDLE_MINUTES,
     MAX_RUNNING_AGENTS,
     BACKUP_EVERY_HOURS,
@@ -23,6 +25,8 @@ pub const KEYS: [&str; 7] = [
     AUTO_UPDATE,
     UPDATE_CHANNEL,
     DEFAULT_APPROVAL_MODE,
+    PHONE_ACCESS,
+    PHONE_PORT,
 ];
 
 /// Allowed range of `screen_idle_minutes`, both ends included.
@@ -33,6 +37,10 @@ const MAX_RUNNING_RANGE: (i64, i64) = (1, 50);
 const BACKUP_EVERY_HOURS_VALUES: [i64; 5] = [6, 12, 24, 48, 168];
 /// Allowed range of `backup_keep`, both ends included.
 const BACKUP_KEEP_RANGE: (i64, i64) = (3, 60);
+/// Allowed range of `phone_port`, both ends included: no privileged ports.
+const PHONE_PORT_RANGE: (i64, i64) = (1024, 65535);
+/// The port of the phone listener when none is set.
+pub const DEFAULT_PHONE_PORT: u16 = 7879;
 const MINUTE_MS: i64 = 60_000;
 const HOUR_MS: i64 = 3_600_000;
 
@@ -61,6 +69,36 @@ impl AutoUpdate {
             "off" => AutoUpdate::Off,
             "notify" => AutoUpdate::Notify,
             "install" => AutoUpdate::Install,
+            _ => return None,
+        })
+    }
+}
+
+/// Who may reach the daemon directly from a phone (`phone_access`, docs/ARCHITECTURE.md#phone-access).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhoneMode {
+    /// No listener besides loopback (the default).
+    Off,
+    /// A TLS listener on this machine's Tailscale addresses only.
+    Tailscale,
+    /// A TLS listener on every address of this machine (the local network, and Tailscale too).
+    Lan,
+}
+
+impl PhoneMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PhoneMode::Off => "off",
+            PhoneMode::Tailscale => "tailscale",
+            PhoneMode::Lan => "lan",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "off" => PhoneMode::Off,
+            "tailscale" => PhoneMode::Tailscale,
+            "lan" => PhoneMode::Lan,
             _ => return None,
         })
     }
@@ -95,6 +133,10 @@ pub struct ServerSettings {
     pub update_channel: UpdateChannel,
     /// The approval mode of a new agent that the creating call does not set.
     pub default_approval_mode: ApprovalMode,
+    /// Whether, and on which addresses, the daemon also listens for phones (TLS only).
+    pub phone_access: PhoneMode,
+    /// The TCP port of the phone listener (1024 to 65535).
+    pub phone_port: u16,
 }
 
 /// The values a daemon with no stored settings uses: the behavior it had before the settings existed.
@@ -107,6 +149,8 @@ pub fn defaults() -> ServerSettings {
         auto_update: AutoUpdate::Notify,
         update_channel: UpdateChannel::Stable,
         default_approval_mode: ApprovalMode::Risky,
+        phone_access: PhoneMode::Off,
+        phone_port: DEFAULT_PHONE_PORT,
     }
 }
 
@@ -139,6 +183,8 @@ impl ServerSettings {
             AUTO_UPDATE: self.auto_update.as_str(),
             UPDATE_CHANNEL: self.update_channel.as_str(),
             DEFAULT_APPROVAL_MODE: self.default_approval_mode.as_str(),
+            PHONE_ACCESS: self.phone_access.as_str(),
+            PHONE_PORT: self.phone_port,
         })
     }
 }
@@ -198,6 +244,13 @@ pub fn check_patch(patch: &Map<String, Value>) -> Result<Vec<(&'static str, Stri
                 Some(mode) => mode.as_str().to_string(),
                 None => return Err(invalid("must be always, risky or never")),
             },
+            PHONE_ACCESS => match value.as_str().and_then(PhoneMode::parse) {
+                Some(mode) => mode.as_str().to_string(),
+                None => return Err(invalid("must be off, tailscale or lan")),
+            },
+            PHONE_PORT => int_in(value, PHONE_PORT_RANGE)
+                .ok_or_else(|| invalid("must be a whole number from 1024 to 65535"))?
+                .to_string(),
             _ => unreachable!("KEYS lists only the names above"),
         };
         out.push((key, text));
@@ -236,6 +289,13 @@ pub fn from_stored(stored: &HashMap<String, String>) -> ServerSettings {
             .get(DEFAULT_APPROVAL_MODE)
             .and_then(|s| ApprovalMode::parse(s))
             .unwrap_or(d.default_approval_mode),
+        phone_access: stored
+            .get(PHONE_ACCESS)
+            .and_then(|s| PhoneMode::parse(s))
+            .unwrap_or(d.phone_access),
+        phone_port: stored_int(stored, PHONE_PORT, i64::from(d.phone_port), |n| {
+            (PHONE_PORT_RANGE.0..=PHONE_PORT_RANGE.1).contains(&n)
+        }) as u16,
     }
 }
 
@@ -277,6 +337,12 @@ mod tests {
         assert_eq!(d.backup_keep, 14);
         assert_eq!(d.auto_update, AutoUpdate::Notify);
         assert_eq!(d.default_approval_mode, ApprovalMode::Risky);
+        assert_eq!(
+            d.phone_access,
+            PhoneMode::Off,
+            "a phone can reach nothing until the owner says so"
+        );
+        assert_eq!(d.phone_port, 7879);
         assert_eq!(from_stored(&HashMap::new()), d);
     }
 
@@ -303,10 +369,12 @@ mod tests {
             "backup_keep": 3,
             "auto_update": "install",
             "update_channel": "stable",
-            "default_approval_mode": "always"
+            "default_approval_mode": "always",
+            "phone_access": "tailscale",
+            "phone_port": 7900
         })))
         .unwrap();
-        assert_eq!(changes.len(), 7);
+        assert_eq!(changes.len(), 9);
         assert!(changes.contains(&(SCREEN_IDLE_MINUTES, "240".to_string())));
         assert!(changes.contains(&(AUTO_UPDATE, "install".to_string())));
         let mut stored = HashMap::new();
@@ -318,6 +386,8 @@ mod tests {
         assert_eq!(s.backup_every_hours, 168);
         assert_eq!(s.default_approval_mode, ApprovalMode::Always);
         assert_eq!(s.auto_update, AutoUpdate::Install);
+        assert_eq!(s.phone_access, PhoneMode::Tailscale);
+        assert_eq!(s.phone_port, 7900);
         assert!(check_patch(&patch(json!({"max_running_agents": 50}))).is_ok());
         assert!(check_patch(&patch(json!({"screen_idle_minutes": 5}))).is_ok());
         assert!(check_patch(&patch(json!({"backup_every_hours": 6}))).is_ok());
@@ -338,6 +408,11 @@ mod tests {
             (json!({"auto_update": "always"}), "auto_update"),
             (json!({"update_channel": "nightly"}), "update_channel"),
             (json!({"default_approval_mode": "ask"}), "default_approval_mode"),
+            (json!({"phone_access": "wan"}), "phone_access"),
+            (json!({"phone_access": true}), "phone_access"),
+            (json!({"phone_port": 80}), "phone_port"),
+            (json!({"phone_port": 65536}), "phone_port"),
+            (json!({"phone_port": "7879"}), "phone_port"),
             (json!({"no_such_setting": 1}), "no_such_setting"),
         ] {
             let e = refused(value.clone());
@@ -365,7 +440,15 @@ mod tests {
         stored.insert(SCREEN_IDLE_MINUTES.to_string(), "9999".to_string());
         stored.insert(AUTO_UPDATE.to_string(), "weekly".to_string());
         stored.insert(BACKUP_KEEP.to_string(), "7".to_string());
+        stored.insert(PHONE_ACCESS.to_string(), "everyone".to_string());
+        stored.insert(PHONE_PORT.to_string(), "22".to_string());
         let s = from_stored(&stored);
+        assert_eq!(
+            s.phone_access,
+            PhoneMode::Off,
+            "a bad stored value never opens the daemon"
+        );
+        assert_eq!(s.phone_port, 7879);
         assert_eq!(s.screen_idle_minutes, 30);
         assert_eq!(s.auto_update, AutoUpdate::Notify);
         assert_eq!(s.backup_keep, 7);

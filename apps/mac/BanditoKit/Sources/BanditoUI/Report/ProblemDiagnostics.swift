@@ -188,6 +188,8 @@ enum ProblemDiagnosticsCollector {
                 if let user = address.user { out.append(user) }
             case .webSocket(let url):
                 if let host = url.host() { out.append(host) }
+            case .direct(let hosts, _):
+                out.append(contentsOf: hosts)
             case .local:
                 break
             }

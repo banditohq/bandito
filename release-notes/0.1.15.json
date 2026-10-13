@@ -1,0 +1,106 @@
+{
+  "version": "0.1.15",
+  "date": "2026-10-13",
+  "items": [
+    {
+      "icon": "sparkles",
+      "title": {
+        "en": "A new first run",
+        "ru": "Новый первый запуск",
+        "de": "Ein neuer erster Start",
+        "es": "Un nuevo primer arranque",
+        "fr": "Un nouveau premier lancement",
+        "ja": "生まれ変わった初回起動",
+        "ko": "새로워진 첫 실행",
+        "pt-BR": "Uma nova primeira execução",
+        "zh-Hans": "全新的首次启动"
+      },
+      "text": {
+        "en": "Seven short steps from a raccoon made of light to your first task: the reply already streams in a live chat.",
+        "ru": "Семь коротких шагов — от енота из огоньков до первой задачи: ответ уже идёт в живом чате.",
+        "de": "Sieben kurze Schritte vom Waschbären aus Lichtpunkten bis zu Ihrer ersten Aufgabe: Die Antwort läuft schon live im Chat ein.",
+        "es": "Siete pasos cortos, del mapache hecho de luces hasta tu primera tarea: la respuesta ya llega en un chat en vivo.",
+        "fr": "Sept courtes étapes, du raton laveur de lumière jusqu’à votre première tâche : la réponse arrive déjà dans un chat en direct.",
+        "ja": "光の点でできたアライグマから最初のタスクまで、7つの短いステップ。返信はもうライブチャットで流れてきます。",
+        "ko": "빛으로 만든 너구리에서 첫 작업까지 짧은 7단계. 답변이 이미 실시간 채팅으로 흘러옵니다.",
+        "pt-BR": "Sete passos curtos, do guaxinim de luzes até a sua primeira tarefa: a resposta já chega em um chat ao vivo.",
+        "zh-Hans": "从光点组成的浣熊到您的第一个任务，只需七个简短步骤：回复已在实时聊天中逐字流出。"
+      }
+    },
+    {
+      "icon": "person.3.fill",
+      "title": {
+        "en": "Hire a ready crew",
+        "ru": "Готовая команда за один клик",
+        "de": "Ein fertiges Team einstellen",
+        "es": "Contrata un equipo ya listo",
+        "fr": "Recrutez une équipe prête à l’emploi",
+        "ja": "できあがったチームを雇う",
+        "ko": "준비된 팀을 바로 고용",
+        "pt-BR": "Contrate uma equipe pronta",
+        "zh-Hans": "一键雇用现成团队"
+      },
+      "text": {
+        "en": "Web project, Server on duty, Morning summary or Docs: see the agents, rights and schedules, then hire them in one click.",
+        "ru": "Веб-проект, Дежурный по серверу, Утренняя сводка или Документация: видно агентов, права и расписания — и нанять одним нажатием.",
+        "de": "Webprojekt, Server-Bereitschaft, Morgenübersicht oder Doku: Sie sehen Agenten, Rechte und Zeitpläne und stellen sie mit einem Klick ein.",
+        "es": "Proyecto web, Guardia del servidor, Resumen matinal o Documentación: ves los agentes, permisos y horarios, y los contratas con un clic.",
+        "fr": "Projet web, Astreinte serveur, Résumé du matin ou Documentation : voyez les agents, les droits et les plannings, puis recrutez-les en un clic.",
+        "ja": "Webプロジェクト、サーバー当番、朝のまとめ、ドキュメント。エージェントと権限、スケジュールを確かめて、ワンクリックで雇えます。",
+        "ko": "웹 프로젝트, 서버 당직, 아침 요약, 문서. 에이전트와 권한, 일정을 확인한 뒤 한 번의 클릭으로 고용하세요.",
+        "pt-BR": "Projeto web, Plantão do servidor, Resumo da manhã ou Documentação: veja os agentes, as permissões e as agendas e contrate tudo com um clique.",
+        "zh-Hans": "网站项目、服务器值班、晨间摘要或文档：先看清智能体、权限和日程，再一键雇用。"
+      }
+    },
+    {
+      "icon": "checkmark.shield.fill",
+      "title": {
+        "en": "No double agents",
+        "ru": "Без двойников",
+        "de": "Keine Doppelgänger",
+        "es": "Sin agentes duplicados",
+        "fr": "Pas de doublons",
+        "ja": "重複エージェントなし",
+        "ko": "중복 에이전트 없음",
+        "pt-BR": "Sem agentes duplicados",
+        "zh-Hans": "不再出现重复智能体"
+      },
+      "text": {
+        "en": "If creating a crew fails halfway, trying again makes only the missing agents — also from the market.",
+        "ru": "Если создание команды оборвалось, повтор досоздаст только недостающих — и в маркетплейсе тоже.",
+        "de": "Bricht das Erstellen eines Teams mittendrin ab, legt ein neuer Versuch nur die fehlenden Agenten an – auch aus dem Marktplatz.",
+        "es": "Si la creación de un equipo se corta a medias, al reintentar solo se crean los agentes que faltan, también desde el marketplace.",
+        "fr": "Si la création d’une équipe s’interrompt en cours de route, une nouvelle tentative ne crée que les agents manquants, y compris depuis la place de marché.",
+        "ja": "チームの作成が途中で止まっても、やり直すと足りないエージェントだけが作られます。マーケットからの場合も同じです。",
+        "ko": "팀 만들기가 중간에 끊겨도 다시 시도하면 빠진 에이전트만 만들어집니다. 마켓에서 만든 경우도 마찬가지예요.",
+        "pt-BR": "Se a criação de uma equipe parar no meio, tentar de novo cria só os agentes que faltam, inclusive pelo marketplace.",
+        "zh-Hans": "如果创建团队中途中断，重试只会补建缺少的智能体，从市场创建时也一样。"
+      }
+    },
+    {
+      "icon": "bell.badge.fill",
+      "title": {
+        "en": "Asked at the right moment",
+        "ru": "Спрашиваем вовремя",
+        "de": "Gefragt zum richtigen Zeitpunkt",
+        "es": "Preguntamos en el momento justo",
+        "fr": "On demande au bon moment",
+        "ja": "ちょうどよいタイミングで確認",
+        "ko": "알맞은 때에 물어봅니다",
+        "pt-BR": "Perguntamos na hora certa",
+        "zh-Hans": "在合适的时机询问"
+      },
+      "text": {
+        "en": "Notifications are offered when an agent first needs you, and the statistics question waits until your first reply is in.",
+        "ru": "Уведомления предлагаем, когда агент впервые ждёт вас, а вопрос о статистике — после первого ответа.",
+        "de": "Mitteilungen bieten wir an, wenn ein Agent Sie zum ersten Mal braucht; die Frage zur Statistik wartet, bis Ihre erste Antwort da ist.",
+        "es": "Las notificaciones se ofrecen cuando un agente te necesita por primera vez, y la pregunta sobre estadísticas espera a que llegue tu primera respuesta.",
+        "fr": "Les notifications vous sont proposées quand un agent a besoin de vous pour la première fois, et la question sur les statistiques attend votre première réponse.",
+        "ja": "通知の確認は、エージェントが初めてあなたを待つときに。統計についての質問は、最初の返信が届いてからにしました。",
+        "ko": "알림은 에이전트가 처음으로 당신을 기다릴 때 제안하고, 통계에 대한 질문은 첫 답변이 도착한 뒤로 미뤘습니다.",
+        "pt-BR": "Oferecemos as notificações quando um agente precisa de você pela primeira vez, e a pergunta sobre estatísticas espera até a sua primeira resposta chegar.",
+        "zh-Hans": "通知会在智能体第一次需要您时再询问，统计信息的问题则等到第一条回复到达之后。"
+      }
+    }
+  ]
+}

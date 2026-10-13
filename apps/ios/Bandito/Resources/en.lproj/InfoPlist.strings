@@ -1,0 +1,4 @@
+/* Permission text shown by iOS. */
+"NSCameraUsageDescription" = "Bandito uses the camera only to scan a server's pairing QR code.";
+"NSLocalNetworkUsageDescription" = "Bandito talks to your Mac or server on your local network.";
+"NSFaceIDUsageDescription" = "Bandito uses Face ID to lock the app and to confirm risky actions.";

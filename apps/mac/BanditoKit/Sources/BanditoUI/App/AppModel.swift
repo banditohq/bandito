@@ -111,8 +111,8 @@ public final class AppModel {
 
     /// Starts system notifications for live agent events (see `NotificationService`). Call once at launch.
     /// `selectedAgentID` and `windowActive` tell the rules what the user is looking at.
-    /// `askPermission` is false while the first-run introduction is on screen: the system's question waits for
-    /// `askNotificationPermission`, which the main window calls once the introduction is over.
+    /// `askPermission` puts the system's question at once. The app passes false: the question comes at the first
+    /// approval or finished turn, after the person said yes (`notificationQuestion`, `answerNotificationQuestion`).
     public func startNotifications(
         askPermission: Bool, selectedAgentID: @escaping () -> String?, windowActive: @escaping () -> Bool
     ) {
@@ -139,9 +139,42 @@ public final class AppModel {
         notifications = service
     }
 
-    /// The system's permission question for notifications, asked once the first-run introduction is over.
-    public func askNotificationPermission() {
-        notificationSink?.requestPermission()
+    /// The question put to the person at the first approval or finished turn: "Want to know when {name} needs you?".
+    /// The window shows it as an alert. Nil when there is none to ask.
+    public private(set) var notificationQuestion: NotificationQuestion?
+    /// Agent turns that finished since the app started: the first one ends the wait of the first-run notice about
+    /// statistics (`ConsentTiming`).
+    public private(set) var completedTurns = 0
+
+    public struct NotificationQuestion: Equatable, Sendable {
+        public let agentName: String
+    }
+
+    /// The first notice that is a reason to ask (an approval, a form, a question, a finished turn) puts the question,
+    /// once: not when it was answered before or when the system was asked in an earlier version of the app.
+    private func askNotificationsIfFirst(_ notice: AgentNotice) {
+        guard notificationQuestion == nil, NotificationAsk.isReason(notice),
+            !defaults.bool(forKey: NotificationAsk.askedKey), let sink = notificationSink
+        else { return }
+        let name = NotificationAsk.agentName(notice) ?? ""
+        Task { [weak self] in
+            let undetermined = await sink.isUndetermined()
+            guard let self else { return }
+            guard NotificationAsk.shouldAsk(notice: notice, asked: self.defaults.bool(forKey: NotificationAsk.askedKey), systemUndetermined: undetermined)
+            else {
+                // The system was asked before (an earlier version did at launch): nothing to ask, ever.
+                if !undetermined { self.defaults.set(true, forKey: NotificationAsk.askedKey) }
+                return
+            }
+            if self.notificationQuestion == nil { self.notificationQuestion = NotificationQuestion(agentName: name) }
+        }
+    }
+
+    /// "Yes" asks the system; "Not now" leaves it. Either way the question is not asked again.
+    public func answerNotificationQuestion(yes: Bool) {
+        defaults.set(true, forKey: NotificationAsk.askedKey)
+        notificationQuestion = nil
+        if yes { notificationSink?.requestPermission() }
     }
 
     /// Feeds one server's live events to the notifications. Servers added later are attached as they come.
@@ -161,7 +194,9 @@ public final class AppModel {
             if let sound = Self.soundEvent(for: event.body, quiet: server.thread(for: event.agentId).quietTurn) {
                 SoundPlayer.play(sound)
             }
+            if case .turnCompleted = event.body { self.completedTurns += 1 }
             guard let notice = Self.notice(for: event, in: server) else { return }
+            self.askNotificationsIfFirst(notice)
             self.notifications?.handle(notice, serverID: server.id)
         }
     }
@@ -291,23 +326,9 @@ public final class AppModel {
         }
     }
 
-    /// The notice an event makes, if any: an approval waiting, a finished turn, or an error.
+    /// The notice an event makes, if any (`AgentNotice.notice(for:in:)`, shared with the iPhone).
     static func notice(for event: Event, in server: ServerModel) -> AgentNotice? {
-        let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
-        switch event.body {
-        case .approvalRequested(let approvalID, _, let tool, let title, let command, _, _, _):
-            return .approval(
-                agentID: event.agentId, agentName: name, approvalID: approvalID, title: title, command: command,
-                reviewOnly: tool == AgentCreateSummary.tool)
-        case .turnCompleted(_, .ok, _, _):
-            // A quiet turn finishes without a notice.
-            if server.thread(for: event.agentId).quietTurn { return nil }
-            return .finished(agentID: event.agentId, agentName: name)
-        case .error(let message):
-            return .failed(agentID: event.agentId, agentName: name, message: message)
-        default:
-            return nil
-        }
+        AgentNotice.notice(for: event, in: server)
     }
 
     /// Marks the saved servers that are this Mac's daemon but were saved before the flag existed

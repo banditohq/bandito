@@ -18,8 +18,6 @@ struct KeptMode: ViewModifier {
             .accessibilityHidden(hidden)
             .disabled(hidden)
             .environment(\.modeHidden, hidden)
-            // The tour points only at what shows.
-            .transformPreference(TourAnchorKey.self) { if hidden { $0 = [:] } }
     }
 }
 

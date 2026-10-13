@@ -106,6 +106,11 @@ jobs:
           VERSION: ${{ steps.resolve.outputs.version }}
         run: bash scripts/bump-version.sh "$VERSION" --check
 
+      - name: Check that the release has its "What's new" notes
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: python3 scripts/check_release_notes.py --require "$VERSION"
+
       - name: Tag the merge commit
         env:
           TAG: ${{ steps.resolve.outputs.tag }}

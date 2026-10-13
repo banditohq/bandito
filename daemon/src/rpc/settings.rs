@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
     let hub = app.sup.hub();
     match method {
-        "server.settings_get" => ok(reply(&hub.store.server_settings()?)),
+        "server.settings_get" => ok(reply(app, &hub.store.server_settings()?)),
         "server.settings_set" => {
             let patch = patch_object(p)?;
             // Every value is checked before anything is written: a refused patch changes nothing.
@@ -21,19 +21,27 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
                 // A changed limit reaches the waiting agents now, not at their next message.
                 hub.turns().wake();
                 let keys = changes.iter().map(|(key, _)| key.to_string()).collect();
+                // The phone listener follows its settings now; a failure (a port in use) is in the reply's `phone`.
+                if changes
+                    .iter()
+                    .any(|(key, _)| matches!(*key, server_settings::PHONE_ACCESS | server_settings::PHONE_PORT))
+                {
+                    app.phone.apply().await;
+                }
                 hub.emit("", EventBody::ServerSettingsChanged { keys });
             }
-            ok(reply(&hub.store.server_settings()?))
+            ok(reply(app, &hub.store.server_settings()?))
         }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
 }
 
-/// What both methods reply: the settings as they apply, and the defaults.
-fn reply(settings: &ServerSettings) -> Value {
+/// What both methods reply: the settings as they apply, the defaults, and what the phone listener is doing.
+fn reply(app: &App, settings: &ServerSettings) -> Value {
     json!({
         "settings": settings.to_json(),
         "defaults": server_settings::defaults_json(),
+        "phone": app.phone.status_json(),
     })
 }
 

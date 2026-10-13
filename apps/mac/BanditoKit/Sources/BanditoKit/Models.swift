@@ -748,6 +748,11 @@ public struct DaemonInfo: Codable, Sendable, Hashable {
     public var safeMode: Bool?
     /// Why the daemon is in safe mode, in one short sentence.
     public var safeModeError: String?
+    /// SHA-256 of the certificate of the daemon's phone listener (64 lower-case hex digits); nil until phone access has
+    /// been switched on once, and on daemons without the `phone_access` feature.
+    public var tlsFingerprint: String?
+    /// `off`, `tailscale` or `lan`: whether the daemon also listens for phones. Nil on daemons without the feature.
+    public var phoneAccess: String?
 
     /// Whether the daemon runs in safe mode: the Backups section is the only one that works.
     public var isSafeMode: Bool { safeMode == true }

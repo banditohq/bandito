@@ -121,6 +121,7 @@ pub fn features() -> Vec<&'static str> {
         "quiet_schedules",
         "agent_migrate",
         "server_settings",
+        "phone_access",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -175,6 +176,11 @@ pub struct App {
     pub creations: team_create::Creations,
     /// The agent archives waiting to be read and the uploads being received (see docs/ARCHITECTURE.md#agent-migration).
     pub migrate: crate::migrate::Registry,
+    /// The TLS listener for phones (see docs/ARCHITECTURE.md#phone-access). Off until the owner switches it on.
+    pub phone: Arc<crate::phone::PhoneAccess>,
+    /// One cancellation token per paired device: revoking the device cancels it, and every long connection of the device
+    /// (RPC, tunnel, DevTools, a file or preview stream) ends with it (see [`App::device_cancel`]).
+    device_cancels: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
 }
 
 impl App {
@@ -199,8 +205,30 @@ impl App {
         files: FileService,
         data_home: PathBuf,
     ) -> Arc<Self> {
+        Self::build(sup, agents_root, files, data_home, BrowserManager::system())
+    }
+
+    /// An app whose browser manager is `browser` (tests that start no real browser).
+    #[cfg(test)]
+    pub fn new_with_browser(sup: Arc<Supervisor>, agents_root: PathBuf, browser: Arc<BrowserManager>) -> Arc<Self> {
+        Self::build(
+            sup,
+            agents_root,
+            Self::default_files(),
+            crate::setup::default_home(),
+            browser,
+        )
+    }
+
+    fn build(
+        sup: Arc<Supervisor>,
+        agents_root: PathBuf,
+        files: FileService,
+        data_home: PathBuf,
+        browser: Arc<BrowserManager>,
+    ) -> Arc<Self> {
         let telegram = crate::telegram::Telegram::new(sup.clone());
-        Arc::new(Self {
+        Arc::new_cyclic(|me| Self {
             sup,
             started_at: crate::store::now_ms(),
             hostname: hostname(),
@@ -211,9 +239,8 @@ impl App {
             tunnels: Arc::new(tunnel::TunnelSlots::default()),
             host: Sampler::new(),
             setup: Setup::system(),
-            browser: BrowserManager::system(),
+            browser,
             screens: Arc::new(crate::screen::ScreenManager::new(screens_dir())),
-            data_home,
             models: crate::runtime::models::ModelCache::default(),
             safe_mode: std::sync::OnceLock::new(),
             oauth: crate::mcp_oauth::Flows::default(),
@@ -222,7 +249,41 @@ impl App {
             connects: connect::Requests::default(),
             creations: team_create::Creations::default(),
             migrate: crate::migrate::Registry::default(),
+            phone: Arc::new(crate::phone::PhoneAccess::new(data_home.clone(), me.clone())),
+            device_cancels: Mutex::new(HashMap::new()),
+            data_home,
         })
+    }
+
+    /// The token that is cancelled when the device is revoked. A device that is already gone gets a cancelled token, so a
+    /// connection that was authenticated just before the revoke ends at once too.
+    pub fn device_cancel(&self, device_id: &str) -> tokio_util::sync::CancellationToken {
+        // The device is looked up under the lock: `devices.revoke` deletes the row before it takes the lock to cancel, so
+        // a connection either sees the device gone here or leaves a token in the map that the revoke then cancels.
+        let mut map = self.device_cancels.lock().unwrap_or_else(|e| e.into_inner());
+        let gone = !self.sup.hub().store.device_exists(device_id).unwrap_or(true);
+        if gone {
+            // Connections that came before the delete hold this one: they end too, whoever cancels first.
+            if let Some(earlier) = map.remove(device_id) {
+                earlier.cancel();
+            }
+            let token = tokio_util::sync::CancellationToken::new();
+            token.cancel();
+            return token;
+        }
+        map.entry(device_id.to_string()).or_default().clone()
+    }
+
+    /// Ends every long connection of the device (it was revoked).
+    pub fn cancel_device(&self, device_id: &str) {
+        let token = self
+            .device_cancels
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(device_id);
+        if let Some(token) = token {
+            token.cancel();
+        }
     }
 
     /// Puts the daemon in safe mode, with the reason. Called once, at start, by `main`.
@@ -1246,6 +1307,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "last_restore": crate::backup::read_last_restore(&app.data_home),
             "safe_mode": app.safe_mode().is_some(),
             "safe_mode_error": app.safe_mode(),
+            "tls_fingerprint": app.phone.fingerprint(),
+            "phone_access": app.phone.status().mode.as_str(),
         })),
         "runtimes.status" => {
             let mut out: Vec<(&'static str, Value)> = Vec::new();
@@ -1753,7 +1816,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         }
         "devices.revoke" => {
             let Id { id } = params(p)?;
-            ok(json!({ "revoked": store.device_revoke(&id)? }))
+            let revoked = store.device_revoke(&id)?;
+            if revoked {
+                // Its open connections (RPC, tunnels, DevTools, file and preview streams) end now.
+                app.cancel_device(&id);
+            }
+            ok(json!({ "revoked": revoked }))
         }
 
         "usage.limits" => ok(store.usage_list()?),
@@ -1800,7 +1868,16 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "pair.create" => {
             let code = pairing::new_code();
             store.pairing_add(&code, pairing::CODE_TTL_MS)?;
-            ok(json!({ "code": code, "expires_in_ms": pairing::CODE_TTL_MS }))
+            // For a phone: the link (and the QR text, the same string) when the phone listener is up.
+            let phone = app.phone.pair_info(&code, &app.hostname);
+            ok(json!({
+                "code": code,
+                "expires_in_ms": pairing::CODE_TTL_MS,
+                "link": phone.link,
+                "qr": phone.link,
+                "hosts": phone.hosts,
+                "fingerprint": phone.fingerprint,
+            }))
         }
         "pair.redeem" => {
             let r: RedeemParams = params(p)?;
@@ -2997,6 +3074,14 @@ async fn recv_event(rx: &mut Option<broadcast::Receiver<Event>>) -> Result<Event
     }
 }
 
+/// Ends when the token is cancelled, or never for a connection that has none.
+async fn cancelled_or_never(token: &Option<tokio_util::sync::CancellationToken>) {
+    match token {
+        Some(token) => token.cancelled().await,
+        None => std::future::pending().await,
+    }
+}
+
 /// Whether a call of an agent may last long, so that `serve` must watch the connection while it runs: a form waits
 /// for the person, and `team.assign` with `wait` for the other agent's turn.
 fn waits_long(method: &str, params: &Value) -> bool {
@@ -3012,8 +3097,14 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
     let mut events: Option<broadcast::Receiver<Event>> = None;
     let mut last: i64 = 0;
     let mut terms = term::Stream::default();
+    // A paired device whose pairing is revoked while it is connected is cut off (also if it is revoked right now).
+    let device_cancel = match &peer {
+        Peer::Device(device) => Some(app.device_cancel(&device.id)),
+        _ => None,
+    };
     loop {
         tokio::select! {
+            () = cancelled_or_never(&device_cancel) => break,
             msg = inbox.recv() => {
                 let Some(msg) = msg else { break };
                 let req: Request = match serde_json::from_str::<Value>(&msg) {

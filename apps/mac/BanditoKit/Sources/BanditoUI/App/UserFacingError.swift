@@ -61,6 +61,7 @@ public enum UserFacingError {
         case "unsupported": L10n.Failure.Reason.unsupported
         case "clone_failed": L10n.Failure.Reason.cloneFailed
         case "decode_failed": L10n.Failure.Reason.decodeFailed
+        case "fingerprint_mismatch": L10n.Failure.Reason.fingerprintMismatch
         default: nil
         }
     }

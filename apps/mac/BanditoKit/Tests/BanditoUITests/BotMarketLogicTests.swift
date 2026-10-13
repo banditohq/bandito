@@ -2,6 +2,7 @@ import BanditoKit
 import Foundation
 import Testing
 
+@testable import BanditoKit
 @testable import BanditoUI
 
 /// The Bots page: the filter and the search, the services a bot needs, the create sheet's draft, and the words for a

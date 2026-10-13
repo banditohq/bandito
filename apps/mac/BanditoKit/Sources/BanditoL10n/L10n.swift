@@ -859,6 +859,7 @@ public enum L10n {
             public static var conflict: String { L10n.tr("failure.reason.conflict") }
             public static var decodeFailed: String { L10n.tr("failure.reason.decodeFailed") }
             public static var exists: String { L10n.tr("failure.reason.exists") }
+            public static var fingerprintMismatch: String { L10n.tr("failure.reason.fingerprintMismatch") }
             public static var forbidden: String { L10n.tr("failure.reason.forbidden") }
             public static var io: String { L10n.tr("failure.reason.io") }
             public static var notEmpty: String { L10n.tr("failure.reason.notEmpty") }
@@ -1337,6 +1338,353 @@ public enum L10n {
         }
     }
 
+    public enum Ios {
+
+        public enum Activity {
+            public static func chatSoon(name: String, event: String) -> String { L10n.tr("ios.activity.chatSoon", name, event) }
+            public static var emptyErrors: String { L10n.tr("ios.activity.emptyErrors") }
+            public static var emptyMessage: String { L10n.tr("ios.activity.emptyMessage") }
+            public static var emptyTitle: String { L10n.tr("ios.activity.emptyTitle") }
+            public static var emptyUnread: String { L10n.tr("ios.activity.emptyUnread") }
+            public static func failed(name: String) -> String { L10n.tr("ios.activity.failed", name) }
+            public static func finished(name: String) -> String { L10n.tr("ios.activity.finished", name) }
+            public static func scheduled(name: String, schedule: String) -> String { L10n.tr("ios.activity.scheduled", name, schedule) }
+
+            public enum Filter {
+                public static var all: String { L10n.tr("ios.activity.filter.all") }
+                public static var errors: String { L10n.tr("ios.activity.filter.errors") }
+                public static var unread: String { L10n.tr("ios.activity.filter.unread") }
+            }
+        }
+
+        public enum Agent {
+            public static func error(message: String) -> String { L10n.tr("ios.agent.error", message) }
+            public static var noSchedules: String { L10n.tr("ios.agent.noSchedules") }
+
+            public enum Delete {
+                public static var button: String { L10n.tr("ios.agent.delete.button") }
+            }
+        }
+
+        public enum Connect {
+            public static var fingerprint: String { L10n.tr("ios.connect.fingerprint") }
+            public static var placeholder: String { L10n.tr("ios.connect.placeholder") }
+            public static var working: String { L10n.tr("ios.connect.working") }
+
+            public enum Camera {
+                public static var allow: String { L10n.tr("ios.connect.camera.allow") }
+                public static var denied: String { L10n.tr("ios.connect.camera.denied") }
+                public static var openSettings: String { L10n.tr("ios.connect.camera.openSettings") }
+                public static var reason: String { L10n.tr("ios.connect.camera.reason") }
+            }
+
+            public enum Confirm {
+                public static var action: String { L10n.tr("ios.connect.confirm.action") }
+                public static func body(address: String) -> String { L10n.tr("ios.connect.confirm.body", address) }
+                public static func bodyScan(address: String) -> String { L10n.tr("ios.connect.confirm.bodyScan", address) }
+                public static func title(name: String) -> String { L10n.tr("ios.connect.confirm.title", name) }
+            }
+
+            public enum Done {
+                public static var action: String { L10n.tr("ios.connect.done.action") }
+                public static var nameLabel: String { L10n.tr("ios.connect.done.nameLabel") }
+                public static var title: String { L10n.tr("ios.connect.done.title") }
+            }
+
+            public enum Error {
+                public static var badAddress: String { L10n.tr("ios.connect.error.badAddress") }
+                public static var badCode: String { L10n.tr("ios.connect.error.badCode") }
+                public static var badFingerprint: String { L10n.tr("ios.connect.error.badFingerprint") }
+                public static var codeRejected: String { L10n.tr("ios.connect.error.codeRejected") }
+                public static var generic: String { L10n.tr("ios.connect.error.generic") }
+                public static var mismatch: String { L10n.tr("ios.connect.error.mismatch") }
+                public static var mismatchTitle: String { L10n.tr("ios.connect.error.mismatchTitle") }
+                public static var noAddress: String { L10n.tr("ios.connect.error.noAddress") }
+                public static var notALink: String { L10n.tr("ios.connect.error.notALink") }
+                public static var saveKey: String { L10n.tr("ios.connect.error.saveKey") }
+                public static var tooMany: String { L10n.tr("ios.connect.error.tooMany") }
+                public static var tryAgain: String { L10n.tr("ios.connect.error.tryAgain") }
+                public static var unreachable: String { L10n.tr("ios.connect.error.unreachable") }
+                public static var updateApp: String { L10n.tr("ios.connect.error.updateApp") }
+            }
+
+            public enum Manual {
+                public static var address: String { L10n.tr("ios.connect.manual.address") }
+                public static var addressHint: String { L10n.tr("ios.connect.manual.addressHint") }
+                public static var button: String { L10n.tr("ios.connect.manual.button") }
+                public static var code: String { L10n.tr("ios.connect.manual.code") }
+                public static var codeHint: String { L10n.tr("ios.connect.manual.codeHint") }
+                public static var fingerprint: String { L10n.tr("ios.connect.manual.fingerprint") }
+                public static var fingerprintHint: String { L10n.tr("ios.connect.manual.fingerprintHint") }
+                public static var submit: String { L10n.tr("ios.connect.manual.submit") }
+                public static var title: String { L10n.tr("ios.connect.manual.title") }
+            }
+
+            public enum Paste {
+                public static var action: String { L10n.tr("ios.connect.paste.action") }
+                public static var hint: String { L10n.tr("ios.connect.paste.hint") }
+            }
+
+            public enum Scan {
+                public static var hint: String { L10n.tr("ios.connect.scan.hint") }
+                public static var noCamera: String { L10n.tr("ios.connect.scan.noCamera") }
+                public static var title: String { L10n.tr("ios.connect.scan.title") }
+            }
+
+            public enum Trust {
+                public static var action: String { L10n.tr("ios.connect.trust.action") }
+                public static var body: String { L10n.tr("ios.connect.trust.body") }
+                public static var title: String { L10n.tr("ios.connect.trust.title") }
+            }
+        }
+
+        public enum Crew {
+            public static func chatSoon(name: String) -> String { L10n.tr("ios.crew.chatSoon", name) }
+            public static var createAgent: String { L10n.tr("ios.crew.createAgent") }
+            public static var emptyMessage: String { L10n.tr("ios.crew.emptyMessage") }
+            public static var emptyTitle: String { L10n.tr("ios.crew.emptyTitle") }
+            public static var lead: String { L10n.tr("ios.crew.lead") }
+            public static var needsYou: String { L10n.tr("ios.crew.needsYou") }
+            public static var noMessages: String { L10n.tr("ios.crew.noMessages") }
+            public static func openChat(name: String) -> String { L10n.tr("ios.crew.openChat", name) }
+            public static var serverSwitch: String { L10n.tr("ios.crew.serverSwitch") }
+            public static func unread(count: Int) -> String { L10n.tr("ios.crew.unread", count) }
+            public static func waitingAnswer(name: String) -> String { L10n.tr("ios.crew.waitingAnswer", name) }
+            public static func waitingForm(name: String) -> String { L10n.tr("ios.crew.waitingForm", name) }
+            public static func wantsToRun(name: String, command: String) -> String { L10n.tr("ios.crew.wantsToRun", name, command) }
+        }
+
+        public enum Demo {
+
+            public enum Schedule {
+                public static var nightly: String { L10n.tr("ios.demo.schedule.nightly") }
+                public static var weekly: String { L10n.tr("ios.demo.schedule.weekly") }
+            }
+        }
+
+        public enum Inbox {
+            public static var command: String { L10n.tr("ios.inbox.command") }
+            public static func connect(name: String, service: String) -> String { L10n.tr("ios.inbox.connect", name, service) }
+            public static var connectOnMac: String { L10n.tr("ios.inbox.connectOnMac") }
+            public static var empty: String { L10n.tr("ios.inbox.empty") }
+            public static var emptyMessage: String { L10n.tr("ios.inbox.emptyMessage") }
+            public static var faceIDHint: String { L10n.tr("ios.inbox.faceIDHint") }
+            public static var faceIDReason: String { L10n.tr("ios.inbox.faceIDReason") }
+            public static var failed: String { L10n.tr("ios.inbox.failed") }
+            public static func form(name: String) -> String { L10n.tr("ios.inbox.form", name) }
+            public static var invalidForm: String { L10n.tr("ios.inbox.invalidForm") }
+            public static var openHint: String { L10n.tr("ios.inbox.openHint") }
+            public static var reason: String { L10n.tr("ios.inbox.reason") }
+            public static var risky: String { L10n.tr("ios.inbox.risky") }
+            public static var send: String { L10n.tr("ios.inbox.send") }
+            public static var service: String { L10n.tr("ios.inbox.service") }
+        }
+
+        public enum Intent {
+
+            public enum Ask {
+                public static var empty: String { L10n.tr("ios.intent.ask.empty") }
+                public static func failed(name: String) -> String { L10n.tr("ios.intent.ask.failed", name) }
+                public static func notConnected(name: String) -> String { L10n.tr("ios.intent.ask.notConnected", name) }
+                public static func sent(name: String) -> String { L10n.tr("ios.intent.ask.sent", name) }
+            }
+
+            public enum NeedsMe {
+                public static func countOnly(count: Int) -> String { L10n.tr("ios.intent.needsMe.countOnly", count) }
+                public static var none: String { L10n.tr("ios.intent.needsMe.none") }
+                public static func waiting(count: Int, names: String) -> String { L10n.tr("ios.intent.needsMe.waiting", count, names) }
+            }
+
+            public enum Open {
+                public static var inbox: String { L10n.tr("ios.intent.open.inbox") }
+            }
+        }
+
+        public enum NewAgent {
+            public static var installTimedOut: String { L10n.tr("ios.newAgent.installTimedOut") }
+            public static var tabOne: String { L10n.tr("ios.newAgent.tabOne") }
+            public static var tabTeams: String { L10n.tr("ios.newAgent.tabTeams") }
+            public static var teamsEmpty: String { L10n.tr("ios.newAgent.teamsEmpty") }
+        }
+
+        public enum Notifications {
+
+            public enum Ask {
+                public static var body: String { L10n.tr("ios.notifications.ask.body") }
+                public static var later: String { L10n.tr("ios.notifications.ask.later") }
+                public static var title: String { L10n.tr("ios.notifications.ask.title") }
+            }
+        }
+
+        public enum Onboarding {
+            public static func progress(current: String, total: String) -> String { L10n.tr("ios.onboarding.progress", current, total) }
+            public static var skip: String { L10n.tr("ios.onboarding.skip") }
+
+            public enum Connect {
+                public static var hint: String { L10n.tr("ios.onboarding.connect.hint") }
+                public static var paste: String { L10n.tr("ios.onboarding.connect.paste") }
+                public static var scan: String { L10n.tr("ios.onboarding.connect.scan") }
+                public static var title: String { L10n.tr("ios.onboarding.connect.title") }
+                public static var type: String { L10n.tr("ios.onboarding.connect.type") }
+            }
+
+            public enum Features {
+
+                public enum Approval {
+                    public static var allowed: String { L10n.tr("ios.onboarding.features.approval.allowed") }
+                    public static var text: String { L10n.tr("ios.onboarding.features.approval.text") }
+                    public static var title: String { L10n.tr("ios.onboarding.features.approval.title") }
+                }
+
+                public enum Crew {
+                    public static var text: String { L10n.tr("ios.onboarding.features.crew.text") }
+                    public static var title: String { L10n.tr("ios.onboarding.features.crew.title") }
+                }
+
+                public enum Night {
+                    public static var event1: String { L10n.tr("ios.onboarding.features.night.event1") }
+                    public static var event2: String { L10n.tr("ios.onboarding.features.night.event2") }
+                    public static var event3: String { L10n.tr("ios.onboarding.features.night.event3") }
+                    public static var event4: String { L10n.tr("ios.onboarding.features.night.event4") }
+                    public static var from: String { L10n.tr("ios.onboarding.features.night.from") }
+                    public static var morning: String { L10n.tr("ios.onboarding.features.night.morning") }
+                    public static var start: String { L10n.tr("ios.onboarding.features.night.start") }
+                    public static var text: String { L10n.tr("ios.onboarding.features.night.text") }
+                    public static var title: String { L10n.tr("ios.onboarding.features.night.title") }
+                    public static var to: String { L10n.tr("ios.onboarding.features.night.to") }
+                }
+            }
+
+            public enum Role {
+                public static var builder: String { L10n.tr("ios.onboarding.role.builder") }
+                public static var docs: String { L10n.tr("ios.onboarding.role.docs") }
+                public static var onCall: String { L10n.tr("ios.onboarding.role.onCall") }
+                public static var researcher: String { L10n.tr("ios.onboarding.role.researcher") }
+            }
+
+            public enum Welcome {
+                public static var assembly: String { L10n.tr("ios.onboarding.welcome.assembly") }
+                public static var haveServer: String { L10n.tr("ios.onboarding.welcome.haveServer") }
+                public static var start: String { L10n.tr("ios.onboarding.welcome.start") }
+                public static var subtitle: String { L10n.tr("ios.onboarding.welcome.subtitle") }
+                public static var title: String { L10n.tr("ios.onboarding.welcome.title") }
+            }
+        }
+
+        public enum Settings {
+            public static var openSettings: String { L10n.tr("ios.settings.openSettings") }
+
+            public enum About {
+                public static var docs: String { L10n.tr("ios.settings.about.docs") }
+                public static var privacy: String { L10n.tr("ios.settings.about.privacy") }
+                public static var report: String { L10n.tr("ios.settings.about.report") }
+                public static var terms: String { L10n.tr("ios.settings.about.terms") }
+                public static var version: String { L10n.tr("ios.settings.about.version") }
+                public static var website: String { L10n.tr("ios.settings.about.website") }
+            }
+
+            public enum Appearance {
+                public static var languageHint: String { L10n.tr("ios.settings.appearance.languageHint") }
+                public static var motionHint: String { L10n.tr("ios.settings.appearance.motionHint") }
+                public static var reduceMotion: String { L10n.tr("ios.settings.appearance.reduceMotion") }
+
+                public enum Motion {
+                    public static var always: String { L10n.tr("ios.settings.appearance.motion.always") }
+                    public static var system: String { L10n.tr("ios.settings.appearance.motion.system") }
+                }
+            }
+
+            public enum Header {
+                public static var about: String { L10n.tr("ios.settings.header.about") }
+                public static var appearance: String { L10n.tr("ios.settings.header.appearance") }
+                public static var notifications: String { L10n.tr("ios.settings.header.notifications") }
+                public static var security: String { L10n.tr("ios.settings.header.security") }
+                public static var servers: String { L10n.tr("ios.settings.header.servers") }
+            }
+
+            public enum Notifications {
+                public static var allow: String { L10n.tr("ios.settings.notifications.allow") }
+                public static var answers: String { L10n.tr("ios.settings.notifications.answers") }
+                public static var approvals: String { L10n.tr("ios.settings.notifications.approvals") }
+                public static var background: String { L10n.tr("ios.settings.notifications.background") }
+                public static var denied: String { L10n.tr("ios.settings.notifications.denied") }
+                public static var errors: String { L10n.tr("ios.settings.notifications.errors") }
+            }
+
+            public enum Security {
+                public static var enableReason: String { L10n.tr("ios.settings.security.enableReason") }
+                public static var faceIDLock: String { L10n.tr("ios.settings.security.faceIDLock") }
+                public static var faceIDLockHint: String { L10n.tr("ios.settings.security.faceIDLockHint") }
+                public static var failed: String { L10n.tr("ios.settings.security.failed") }
+                public static var lockAfter: String { L10n.tr("ios.settings.security.lockAfter") }
+                public static var lockedTitle: String { L10n.tr("ios.settings.security.lockedTitle") }
+                public static func minutes(count: Int) -> String { L10n.tr("ios.settings.security.minutes", count) }
+                public static var riskyFaceID: String { L10n.tr("ios.settings.security.riskyFaceID") }
+                public static var riskyFaceIDHint: String { L10n.tr("ios.settings.security.riskyFaceIDHint") }
+                public static var unavailable: String { L10n.tr("ios.settings.security.unavailable") }
+                public static var unlock: String { L10n.tr("ios.settings.security.unlock") }
+                public static var unlockReason: String { L10n.tr("ios.settings.security.unlockReason") }
+            }
+
+            public enum Servers {
+                public static var disconnect: String { L10n.tr("ios.settings.servers.disconnect") }
+                public static func disconnectMessage(name: String) -> String { L10n.tr("ios.settings.servers.disconnectMessage", name) }
+                public static func disconnectTitle(name: String) -> String { L10n.tr("ios.settings.servers.disconnectTitle", name) }
+                public static var leftOnServerMessage: String { L10n.tr("ios.settings.servers.leftOnServerMessage") }
+                public static var leftOnServerTitle: String { L10n.tr("ios.settings.servers.leftOnServerTitle") }
+                public static var removeFailed: String { L10n.tr("ios.settings.servers.removeFailed") }
+                public static var rename: String { L10n.tr("ios.settings.servers.rename") }
+                public static var renameTitle: String { L10n.tr("ios.settings.servers.renameTitle") }
+
+                public enum Via {
+                    public static var lan: String { L10n.tr("ios.settings.servers.via.lan") }
+                    public static var tailscale: String { L10n.tr("ios.settings.servers.via.tailscale") }
+                }
+            }
+        }
+
+        public enum Tab {
+            public static var activity: String { L10n.tr("ios.tab.activity") }
+            public static var comingSoon: String { L10n.tr("ios.tab.comingSoon") }
+            public static var crew: String { L10n.tr("ios.tab.crew") }
+            public static var inbox: String { L10n.tr("ios.tab.inbox") }
+        }
+
+        public enum Welcome {
+            public static var title: String { L10n.tr("ios.welcome.title") }
+        }
+
+        public enum Widget {
+            public static var allQuiet: String { L10n.tr("ios.widget.allQuiet") }
+            public static func more(names: String, count: Int) -> String { L10n.tr("ios.widget.more", names, count) }
+            public static var `open`: String { L10n.tr("ios.widget.open") }
+            public static var waitingTitle: String { L10n.tr("ios.widget.waitingTitle") }
+
+            public enum Crew {
+                public static var desc: String { L10n.tr("ios.widget.crew.desc") }
+                public static var name: String { L10n.tr("ios.widget.crew.name") }
+            }
+
+            public enum Inbox {
+                public static var desc: String { L10n.tr("ios.widget.inbox.desc") }
+                public static var name: String { L10n.tr("ios.widget.inbox.name") }
+            }
+
+            public enum Lock {
+                public static func waiting(count: Int) -> String { L10n.tr("ios.widget.lock.waiting", count) }
+                public static func working(name: String) -> String { L10n.tr("ios.widget.lock.working", name) }
+            }
+
+            public enum Status {
+                public static var error: String { L10n.tr("ios.widget.status.error") }
+                public static var idle: String { L10n.tr("ios.widget.status.idle") }
+                public static var needsYou: String { L10n.tr("ios.widget.status.needsYou") }
+                public static var offline: String { L10n.tr("ios.widget.status.offline") }
+                public static var working: String { L10n.tr("ios.widget.status.working") }
+            }
+        }
+    }
+
     public enum Journal {
         public static var copyAll: String { L10n.tr("journal.copyAll") }
         public static var empty: String { L10n.tr("journal.empty") }
@@ -1780,6 +2128,7 @@ public enum L10n {
         public static var reportProblem: String { L10n.tr("menu.reportProblem") }
         public static var terminals: String { L10n.tr("menu.terminals") }
         public static var view: String { L10n.tr("menu.view") }
+        public static var whatsNew: String { L10n.tr("menu.whatsNew") }
     }
 
     public enum Menubar {
@@ -1943,12 +2292,24 @@ public enum L10n {
         public static var deny: String { L10n.tr("notify.deny") }
         public static func failed(name: String) -> String { L10n.tr("notify.failed", name) }
         public static func finished(name: String) -> String { L10n.tr("notify.finished", name) }
+        public static func form(name: String) -> String { L10n.tr("notify.form", name) }
         public static var hiddenPreview: String { L10n.tr("notify.hiddenPreview") }
         public static func needsApproval(name: String) -> String { L10n.tr("notify.needsApproval", name) }
         public static func needsYou(name: String, title: String) -> String { L10n.tr("notify.needsYou", name, title) }
+        public static func question(name: String) -> String { L10n.tr("notify.question", name) }
+        public static var reply: String { L10n.tr("notify.reply") }
+        public static var replyPlaceholder: String { L10n.tr("notify.replyPlaceholder") }
         public static var resolveFailed: String { L10n.tr("notify.resolveFailed") }
         public static func reviewLines(count: Int) -> String { L10n.tr("notify.reviewLines", count) }
         public static var reviewLong: String { L10n.tr("notify.reviewLong") }
+        public static func wantsToRun(name: String) -> String { L10n.tr("notify.wantsToRun", name) }
+
+        public enum Ask {
+            public static var message: String { L10n.tr("notify.ask.message") }
+            public static var no: String { L10n.tr("notify.ask.no") }
+            public static func title(name: String) -> String { L10n.tr("notify.ask.title", name) }
+            public static var yes: String { L10n.tr("notify.ask.yes") }
+        }
     }
 
     public enum Onboarding {
@@ -2036,28 +2397,41 @@ public enum L10n {
 
         public enum Agent {
             public static var asks: String { L10n.tr("onboarding.agent.asks") }
-            public static var changeFolder: String { L10n.tr("onboarding.agent.changeFolder") }
-            public static var composerText: String { L10n.tr("onboarding.agent.composerText") }
-            public static var createLater: String { L10n.tr("onboarding.agent.createLater") }
-            public static func firstMessage(name: String) -> String { L10n.tr("onboarding.agent.firstMessage", name) }
-            public static var folderLabel: String { L10n.tr("onboarding.agent.folderLabel") }
-            public static func hire(name: String) -> String { L10n.tr("onboarding.agent.hire", name) }
             public static var nameLabel: String { L10n.tr("onboarding.agent.nameLabel") }
-            public static var needSubscription: String { L10n.tr("onboarding.agent.needSubscription") }
-            public static var noServer: String { L10n.tr("onboarding.agent.noServer") }
-            public static var runtimeLabel: String { L10n.tr("onboarding.agent.runtimeLabel") }
-            public static var subtitle: String { L10n.tr("onboarding.agent.subtitle") }
-            public static var title: String { L10n.tr("onboarding.agent.title") }
-            public static var toSubscriptions: String { L10n.tr("onboarding.agent.toSubscriptions") }
-            public static var workplace: String { L10n.tr("onboarding.agent.workplace") }
-            public static var workplaceShared: String { L10n.tr("onboarding.agent.workplaceShared") }
-            public static var yourFirst: String { L10n.tr("onboarding.agent.yourFirst") }
 
             public enum Err {
                 public static var badCharacters: String { L10n.tr("onboarding.agent.err.badCharacters") }
                 public static var duplicate: String { L10n.tr("onboarding.agent.err.duplicate") }
                 public static var empty: String { L10n.tr("onboarding.agent.err.empty") }
                 public static var tooLong: String { L10n.tr("onboarding.agent.err.tooLong") }
+            }
+        }
+
+        public enum Crew {
+            public static var done: String { L10n.tr("onboarding.crew.done") }
+            public static var goOn: String { L10n.tr("onboarding.crew.goOn") }
+            public static var hire: String { L10n.tr("onboarding.crew.hire") }
+            public static var hireOne: String { L10n.tr("onboarding.crew.hireOne") }
+            public static var hireRest: String { L10n.tr("onboarding.crew.hireRest") }
+            public static var hiring: String { L10n.tr("onboarding.crew.hiring") }
+            public static var loading: String { L10n.tr("onboarding.crew.loading") }
+            public static var next: String { L10n.tr("onboarding.crew.next") }
+            public static var noRuntime: String { L10n.tr("onboarding.crew.noRuntime") }
+            public static var noServer: String { L10n.tr("onboarding.crew.noServer") }
+            public static var noTeams: String { L10n.tr("onboarding.crew.noTeams") }
+            public static var noneMade: String { L10n.tr("onboarding.crew.noneMade") }
+            public static func partial(made: String, total: String) -> String { L10n.tr("onboarding.crew.partial", made, total) }
+            public static func resumed(made: String, total: String) -> String { L10n.tr("onboarding.crew.resumed", made, total) }
+            public static var role: String { L10n.tr("onboarding.crew.role") }
+            public static var subtitle: String { L10n.tr("onboarding.crew.subtitle") }
+            public static var title: String { L10n.tr("onboarding.crew.title") }
+            public static var toServer: String { L10n.tr("onboarding.crew.toServer") }
+            public static var workplace: String { L10n.tr("onboarding.crew.workplace") }
+            public static var workplaceShared: String { L10n.tr("onboarding.crew.workplaceShared") }
+
+            public enum Single {
+                public static var text: String { L10n.tr("onboarding.crew.single.text") }
+                public static var title: String { L10n.tr("onboarding.crew.single.title") }
             }
         }
 
@@ -2106,6 +2480,12 @@ public enum L10n {
             public static var unauthorized: String { L10n.tr("onboarding.failure.unauthorized") }
         }
 
+        public enum Features {
+            public static func cardOf(current: String, total: String) -> String { L10n.tr("onboarding.features.cardOf", current, total) }
+            public static var nextCard: String { L10n.tr("onboarding.features.nextCard") }
+            public static var previousCard: String { L10n.tr("onboarding.features.previousCard") }
+        }
+
         public enum Install {
             public static var app: String { L10n.tr("onboarding.install.app") }
             public static var check: String { L10n.tr("onboarding.install.check") }
@@ -2115,6 +2495,12 @@ public enum L10n {
             public static var localPair: String { L10n.tr("onboarding.install.localPair") }
             public static var localStart: String { L10n.tr("onboarding.install.localStart") }
             public static var service: String { L10n.tr("onboarding.install.service") }
+        }
+
+        public enum Runtimes {
+            public static var needOne: String { L10n.tr("onboarding.runtimes.needOne") }
+            public static var subtitle: String { L10n.tr("onboarding.runtimes.subtitle") }
+            public static var title: String { L10n.tr("onboarding.runtimes.title") }
         }
 
         public enum Server {
@@ -2159,6 +2545,7 @@ public enum L10n {
             public static func moreHosts(count: Int) -> String { L10n.tr("onboarding.server.moreHosts", count) }
             public static var newHostTitle: String { L10n.tr("onboarding.server.newHostTitle") }
             public static var nextAgent: String { L10n.tr("onboarding.server.nextAgent") }
+            public static var nextRuntimes: String { L10n.tr("onboarding.server.nextRuntimes") }
             public static var nextStepTitle: String { L10n.tr("onboarding.server.nextStepTitle") }
             public static var noPorts: String { L10n.tr("onboarding.server.noPorts") }
             public static var noServer: String { L10n.tr("onboarding.server.noServer") }
@@ -2181,7 +2568,6 @@ public enum L10n {
             public static var subtitle: String { L10n.tr("onboarding.server.subtitle") }
             public static var thisMacDesc: String { L10n.tr("onboarding.server.thisMacDesc") }
             public static var thisMacName: String { L10n.tr("onboarding.server.thisMacName") }
-            public static var title: String { L10n.tr("onboarding.server.title") }
             public static var trustHost: String { L10n.tr("onboarding.server.trustHost") }
             public static var viaProxy: String { L10n.tr("onboarding.server.viaProxy") }
             public static var whatHappens: String { L10n.tr("onboarding.server.whatHappens") }
@@ -2222,10 +2608,12 @@ public enum L10n {
 
         public enum Steps {
             public static var account: String { L10n.tr("onboarding.steps.account") }
-            public static var agent: String { L10n.tr("onboarding.steps.agent") }
+            public static var crew: String { L10n.tr("onboarding.steps.crew") }
+            public static var features: String { L10n.tr("onboarding.steps.features") }
             public static var intro: String { L10n.tr("onboarding.steps.intro") }
+            public static var runtimes: String { L10n.tr("onboarding.steps.runtimes") }
             public static var server: String { L10n.tr("onboarding.steps.server") }
-            public static var tour: String { L10n.tr("onboarding.steps.tour") }
+            public static var task: String { L10n.tr("onboarding.steps.task") }
         }
 
         public enum Subs {
@@ -2239,7 +2627,6 @@ public enum L10n {
             public static func linkHost(host: String) -> String { L10n.tr("onboarding.subs.linkHost", host) }
             public static var loginAfter: String { L10n.tr("onboarding.subs.loginAfter") }
             public static func loginTitle(name: String) -> String { L10n.tr("onboarding.subs.loginTitle", name) }
-            public static var needOne: String { L10n.tr("onboarding.subs.needOne") }
             public static var noInstaller: String { L10n.tr("onboarding.subs.noInstaller") }
             public static var openLink: String { L10n.tr("onboarding.subs.openLink") }
             public static var signIn: String { L10n.tr("onboarding.subs.signIn") }
@@ -2248,26 +2635,34 @@ public enum L10n {
             public static var stateNotInstalled: String { L10n.tr("onboarding.subs.stateNotInstalled") }
             public static var stateSignedIn: String { L10n.tr("onboarding.subs.stateSignedIn") }
             public static var stateUnverified: String { L10n.tr("onboarding.subs.stateUnverified") }
-            public static var subtitle: String { L10n.tr("onboarding.subs.subtitle") }
-            public static var title: String { L10n.tr("onboarding.subs.title") }
+        }
+
+        public enum Task {
+            public static var chooseCrew: String { L10n.tr("onboarding.task.chooseCrew") }
+            public static var failed: String { L10n.tr("onboarding.task.failed") }
+            public static var later: String { L10n.tr("onboarding.task.later") }
+            public static var noAgent: String { L10n.tr("onboarding.task.noAgent") }
+            public static var placeholder: String { L10n.tr("onboarding.task.placeholder") }
+            public static func send(name: String) -> String { L10n.tr("onboarding.task.send", name) }
+            public static var sending: String { L10n.tr("onboarding.task.sending") }
+            public static func subtitle(name: String) -> String { L10n.tr("onboarding.task.subtitle", name) }
+            public static var title: String { L10n.tr("onboarding.task.title") }
+            public static var `try`: String { L10n.tr("onboarding.task.try") }
+
+            public enum Suggest {
+                public static var disk: String { L10n.tr("onboarding.task.suggest.disk") }
+                public static var docs: String { L10n.tr("onboarding.task.suggest.docs") }
+                public static var introduce: String { L10n.tr("onboarding.task.suggest.introduce") }
+                public static var logs: String { L10n.tr("onboarding.task.suggest.logs") }
+                public static var lookAround: String { L10n.tr("onboarding.task.suggest.lookAround") }
+                public static var summary: String { L10n.tr("onboarding.task.suggest.summary") }
+                public static var tests: String { L10n.tr("onboarding.task.suggest.tests") }
+            }
         }
 
         public enum Welcome {
-            public static var askText: String { L10n.tr("onboarding.welcome.askText") }
-            public static var askTitle: String { L10n.tr("onboarding.welcome.askTitle") }
             public static var footer: String { L10n.tr("onboarding.welcome.footer") }
-            public static var hasAccount: String { L10n.tr("onboarding.welcome.hasAccount") }
-            public static var haveAccount: String { L10n.tr("onboarding.welcome.haveAccount") }
-            public static var headline: String { L10n.tr("onboarding.welcome.headline") }
-            public static var headlineAccent: String { L10n.tr("onboarding.welcome.headlineAccent") }
-            public static var serverText: String { L10n.tr("onboarding.welcome.serverText") }
-            public static var serverTitle: String { L10n.tr("onboarding.welcome.serverTitle") }
             public static var signIn: String { L10n.tr("onboarding.welcome.signIn") }
-            public static var sleepText: String { L10n.tr("onboarding.welcome.sleepText") }
-            public static var sleepTitle: String { L10n.tr("onboarding.welcome.sleepTitle") }
-            public static var start: String { L10n.tr("onboarding.welcome.start") }
-            public static var subsText: String { L10n.tr("onboarding.welcome.subsText") }
-            public static var subsTitle: String { L10n.tr("onboarding.welcome.subsTitle") }
             public static var subtitle: String { L10n.tr("onboarding.welcome.subtitle") }
         }
     }
@@ -3010,6 +3405,64 @@ public enum L10n {
             public static var hint: String { L10n.tr("serverSettings.maxRunning.hint") }
             public static var none: String { L10n.tr("serverSettings.maxRunning.none") }
             public static var title: String { L10n.tr("serverSettings.maxRunning.title") }
+        }
+
+        public enum Phone {
+            public static func error(reason: String) -> String { L10n.tr("serverSettings.phone.error", reason) }
+            public static func listening(addresses: String) -> String { L10n.tr("serverSettings.phone.listening", addresses) }
+            public static var notListening: String { L10n.tr("serverSettings.phone.notListening") }
+            public static var title: String { L10n.tr("serverSettings.phone.title") }
+            public static var unsupported: String { L10n.tr("serverSettings.phone.unsupported") }
+
+            public enum Access {
+                public static var hint: String { L10n.tr("serverSettings.phone.access.hint") }
+                public static var title: String { L10n.tr("serverSettings.phone.access.title") }
+            }
+
+            public enum Connect {
+                public static var hint: String { L10n.tr("serverSettings.phone.connect.hint") }
+                public static var needsAccess: String { L10n.tr("serverSettings.phone.connect.needsAccess") }
+                public static var title: String { L10n.tr("serverSettings.phone.connect.title") }
+            }
+
+            public enum Devices {
+                public static var disconnect: String { L10n.tr("serverSettings.phone.devices.disconnect") }
+                public static var disconnectMessage: String { L10n.tr("serverSettings.phone.devices.disconnectMessage") }
+                public static func disconnectTitle(name: String) -> String { L10n.tr("serverSettings.phone.devices.disconnectTitle", name) }
+                public static var empty: String { L10n.tr("serverSettings.phone.devices.empty") }
+                public static var loadFailed: String { L10n.tr("serverSettings.phone.devices.loadFailed") }
+                public static var title: String { L10n.tr("serverSettings.phone.devices.title") }
+            }
+
+            public enum Fingerprint {
+                public static var hint: String { L10n.tr("serverSettings.phone.fingerprint.hint") }
+                public static var title: String { L10n.tr("serverSettings.phone.fingerprint.title") }
+            }
+
+            public enum Mode {
+                public static var lan: String { L10n.tr("serverSettings.phone.mode.lan") }
+                public static var off: String { L10n.tr("serverSettings.phone.mode.off") }
+                public static var tailscale: String { L10n.tr("serverSettings.phone.mode.tailscale") }
+            }
+
+            public enum Pair {
+                public static var codeLabel: String { L10n.tr("serverSettings.phone.pair.codeLabel") }
+                public static var expired: String { L10n.tr("serverSettings.phone.pair.expired") }
+                public static func expires(minutes: String) -> String { L10n.tr("serverSettings.phone.pair.expires", minutes) }
+                public static func hosts(hosts: String) -> String { L10n.tr("serverSettings.phone.pair.hosts", hosts) }
+                public static var invalid: String { L10n.tr("serverSettings.phone.pair.invalid") }
+                public static var new: String { L10n.tr("serverSettings.phone.pair.new") }
+                public static var notListening: String { L10n.tr("serverSettings.phone.pair.notListening") }
+                public static var steps: String { L10n.tr("serverSettings.phone.pair.steps") }
+                public static var title: String { L10n.tr("serverSettings.phone.pair.title") }
+                public static var updateApp: String { L10n.tr("serverSettings.phone.pair.updateApp") }
+            }
+
+            public enum Risk {
+                public static var lan: String { L10n.tr("serverSettings.phone.risk.lan") }
+                public static var off: String { L10n.tr("serverSettings.phone.risk.off") }
+                public static var tailscale: String { L10n.tr("serverSettings.phone.risk.tailscale") }
+            }
         }
 
         public enum ScreenIdle {
@@ -3864,38 +4317,6 @@ public enum L10n {
         }
     }
 
-    public enum Tour {
-        public static func counter(step: String, total: String) -> String { L10n.tr("tour.counter", step, total) }
-        public static var finish: String { L10n.tr("tour.finish") }
-        public static var hintAria: String { L10n.tr("tour.hintAria") }
-        public static var skip: String { L10n.tr("tour.skip") }
-
-        public enum Agents {
-            public static var text: String { L10n.tr("tour.agents.text") }
-            public static var title: String { L10n.tr("tour.agents.title") }
-        }
-
-        public enum Approvals {
-            public static var text: String { L10n.tr("tour.approvals.text") }
-            public static var title: String { L10n.tr("tour.approvals.title") }
-        }
-
-        public enum Composer {
-            public static var text: String { L10n.tr("tour.composer.text") }
-            public static var title: String { L10n.tr("tour.composer.title") }
-        }
-
-        public enum Modes {
-            public static var text: String { L10n.tr("tour.modes.text") }
-            public static var title: String { L10n.tr("tour.modes.title") }
-        }
-
-        public enum QuickOpen {
-            public static var text: String { L10n.tr("tour.quickOpen.text") }
-            public static var title: String { L10n.tr("tour.quickOpen.title") }
-        }
-    }
-
     public enum Updates {
         public static var available: String { L10n.tr("updates.available") }
         public static var badgeCurrent: String { L10n.tr("updates.badgeCurrent") }
@@ -4021,6 +4442,16 @@ public enum L10n {
             public static var read: String { L10n.tr("viewer.mode.read") }
             public static var split: String { L10n.tr("viewer.mode.split") }
         }
+    }
+
+    public enum WhatsNew {
+        public static var allChanges: String { L10n.tr("whatsNew.allChanges") }
+        public static var `continue`: String { L10n.tr("whatsNew.continue") }
+        public static var earlier: String { L10n.tr("whatsNew.earlier") }
+        public static var empty: String { L10n.tr("whatsNew.empty") }
+        public static var language: String { L10n.tr("whatsNew.language") }
+        public static func olderVersion(version: String) -> String { L10n.tr("whatsNew.olderVersion", version) }
+        public static func title(version: String) -> String { L10n.tr("whatsNew.title", version) }
     }
 
     public enum Workbench {

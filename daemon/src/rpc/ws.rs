@@ -11,6 +11,7 @@ use super::browser;
 use super::tunnel;
 use super::{App, Peer, preview, serve};
 use crate::files::{EntryKind, FsError};
+use crate::phone::{ATTEMPT_WINDOW_MS, ConnSlot, PhoneLimits, source_key};
 use crate::store::Device;
 use axum::Router;
 use axum::body::Body;
@@ -41,7 +42,19 @@ pub fn router(app: Arc<App>) -> Router {
 /// The router for a daemon that listens on `listen`. `allowed_hosts` are extra `Host` names from the
 /// config, honoured on loopback listeners only (see [`HostGuard`]).
 pub fn router_listening(app: Arc<App>, listen: IpAddr, allowed_hosts: Vec<String>) -> Router {
-    Router::new()
+    build_router(app, listen, allowed_hosts, None)
+}
+
+/// The router of a phone listener (see `phone.rs`): the same routes, on a non-loopback address, where the `Host`
+/// is not checked (the device token and the refused `Origin` protect it). The tries of a client source are counted on
+/// every route (a wrong token is a failed try; an upgrade of `/v1/rpc` without a token, the only way to pair, also
+/// holds one of a few sockets); over a limit it gets 429.
+pub fn router_phone(app: Arc<App>, listen: IpAddr, limits: PhoneLimits) -> Router {
+    build_router(app, listen, Vec::new(), Some(limits))
+}
+
+fn build_router(app: Arc<App>, listen: IpAddr, allowed_hosts: Vec<String>, limits: Option<PhoneLimits>) -> Router {
+    let router = Router::new()
         .route("/v1/health", get(|| async { "ok" }))
         .route("/v1/rpc", get(rpc))
         .route("/v1/files/raw", get(files_raw))
@@ -50,11 +63,79 @@ pub fn router_listening(app: Arc<App>, listen: IpAddr, allowed_hosts: Vec<String
         .route("/v1/browser/cdp", get(browser::cdp_browser))
         .route("/v1/browser/cdp/page/{target_id}", get(browser::cdp_page))
         .route("/v1/proxy/{*rest}", any(preview_proxy))
-        .layer(axum::middleware::from_fn_with_state(
-            HostGuard::new(listen, allowed_hosts),
-            check_host,
-        ))
-        .with_state(app)
+        .with_state(app.clone());
+    // Layers added last run first: the host check (which records the client address) comes before the limit.
+    let router = match limits {
+        Some(limits) => router.layer(axum::middleware::from_fn_with_state(
+            PhoneGuard { app, limits },
+            limit_anonymous,
+        )),
+        None => router,
+    };
+    router.layer(axum::middleware::from_fn_with_state(
+        HostGuard::new(listen, allowed_hosts),
+        check_host,
+    ))
+}
+
+/// What the limit of a phone listener needs: the app (to tell who has a device token) and the shared limits.
+#[derive(Clone)]
+struct PhoneGuard {
+    app: Arc<App>,
+    limits: PhoneLimits,
+}
+
+/// An anonymous WebSocket's place among the few a source may hold. Kept for the life of the socket.
+#[derive(Clone)]
+struct AnonymousSlot(#[allow(dead_code)] Arc<ConnSlot>);
+
+fn too_many(message: &'static str) -> Response {
+    Response::builder()
+        .status(StatusCode::TOO_MANY_REQUESTS)
+        .header(header::RETRY_AFTER, (ATTEMPT_WINDOW_MS / 1000).to_string())
+        .body(Body::from(message))
+        .unwrap_or_else(|_| StatusCode::TOO_MANY_REQUESTS.into_response())
+}
+
+/// On a phone listener the tries of each source (an IPv4 address, or an IPv6 /64) are counted, on every route but
+/// `/v1/health`, by the one check of the device token:
+/// - an anonymous upgrade of `/v1/rpc` (no token, or one of another scheme: whatever the `Authorization` header says)
+///   is a try, and holds one of the few anonymous slots of its source until the socket closes;
+/// - a token that no device has (401) is a failed try on any route, refused as 401 by the route itself;
+/// - a valid token is a paired device's: never a try, never held back.
+///
+/// Over the tries of a source: 429.
+async fn limit_anonymous(State(guard): State<PhoneGuard>, mut req: Request, next: Next) -> Response {
+    let path = req.uri().path();
+    if path == "/v1/health" {
+        return next.run(req).await;
+    }
+    let is_rpc = path == "/v1/rpc";
+    let source = req
+        .extensions()
+        .get::<ClientAddr>()
+        .map_or("unknown".to_string(), |c| c.0.clone());
+    let now = crate::store::now_ms();
+    match device_for(&guard.app, req.headers()) {
+        Ok(Some(_)) => {}
+        Ok(None) if is_rpc => {
+            if !guard.limits.attempts.attempt(&source, now) {
+                return too_many("too many pairing attempts, try again in a few minutes");
+            }
+            let Some(slot) = guard.limits.anonymous.acquire(&source) else {
+                return too_many("too many open pairing connections");
+            };
+            req.extensions_mut().insert(AnonymousSlot(Arc::new(slot)));
+        }
+        Err((status, _)) if status == StatusCode::UNAUTHORIZED => {
+            if !guard.limits.attempts.attempt(&source, now) {
+                return too_many("too many failed attempts, try again in a few minutes");
+            }
+        }
+        // No token on another route, or a failure of the device lookup itself: the route refuses or reports it.
+        Ok(None) | Err(_) => {}
+    }
+    next.run(req).await
 }
 
 /// DNS rebinding defence for a loopback listener: a web page on another name is pointed at the daemon
@@ -120,7 +201,7 @@ async fn check_host(State(guard): State<HostGuard>, mut req: Request, next: Next
     let addr = req
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
-        .map_or_else(|| "unknown".to_string(), |c| c.0.ip().to_string());
+        .map_or_else(|| "unknown".to_string(), |c| source_key(c.0.ip()));
     req.extensions_mut().insert(ClientAddr(addr));
     next.run(req).await
 }
@@ -184,6 +265,7 @@ pub const ANONYMOUS_MESSAGE_LIMIT: usize = 64 << 10;
 async fn rpc(
     State(app): State<Arc<App>>,
     Extension(client): Extension<ClientAddr>,
+    slot: Option<Extension<AnonymousSlot>>,
     headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
@@ -203,7 +285,7 @@ async fn rpc(
     };
     ws.max_message_size(limit)
         .max_frame_size(limit)
-        .on_upgrade(move |socket| handle(app, peer, socket))
+        .on_upgrade(move |socket| handle(app, peer, socket, slot.map(|Extension(slot)| slot)))
 }
 
 #[derive(Deserialize)]
@@ -221,9 +303,11 @@ async fn files_raw(
     headers: HeaderMap,
     Query(query): Query<RawQuery>,
 ) -> Response {
-    if let Err(e) = require_device(&app, &headers) {
-        return e.into_response();
-    }
+    let device = match require_device(&app, &headers) {
+        Ok(device) => device,
+        Err(e) => return e.into_response(),
+    };
+    let cancel = app.device_cancel(&device.id);
 
     let files = app.files.clone();
     let entry = match tokio::task::spawn_blocking(move || files.stat(&query.path)).await {
@@ -279,7 +363,11 @@ async fn files_raw(
         if let Err(e) = file.seek(SeekFrom::Start(start)).await {
             return raw_error(io_error(e, entry.path.clone()));
         }
-        Body::from_stream(ReaderStream::with_capacity(file.take(len), 64 * 1024))
+        // The stream stops with an error when the device is revoked.
+        abort_on_revoke(
+            Body::from_stream(ReaderStream::with_capacity(file.take(len), 64 * 1024)),
+            cancel,
+        )
     };
     builder
         .body(body)
@@ -311,17 +399,25 @@ async fn tunnel_upgrade(
     let Some(slot) = app.tunnels.acquire(&device.id, tunnel::tunnel_limit()) else {
         return (StatusCode::TOO_MANY_REQUESTS, "too many tunnels").into_response();
     };
+    let cancel = app.device_cancel(&device.id);
     ws.max_message_size(tunnel::MAX_MESSAGE_SIZE)
-        .on_upgrade(move |socket| tunnel::run(socket, port, slot))
+        .on_upgrade(move |socket| async move {
+            // Revoking the device ends the tunnel (the socket is dropped with the task).
+            tokio::select! {
+                () = cancel.cancelled() => {}
+                () = tunnel::run(socket, port, slot) => {}
+            }
+        })
 }
 
 /// `/v1/proxy/<port>/<path>`: forwards to `127.0.0.1:<port>` (see rpc/preview.rs). Same checks as
 /// the file routes: a paired device, and no browser origin.
 async fn preview_proxy(State(app): State<Arc<App>>, request: Request) -> Response {
     let (parts, body) = request.into_parts();
-    if let Err(e) = require_device(&app, &parts.headers) {
-        return e.into_response();
-    }
+    let device = match require_device(&app, &parts.headers) {
+        Ok(device) => device,
+        Err(e) => return e.into_response(),
+    };
     let Some(rest) = parts.uri.path().strip_prefix("/v1/proxy/") else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -346,7 +442,36 @@ async fn preview_proxy(State(app): State<Arc<App>>, request: Request) -> Respons
         Some(query) => format!("/{path}?{query}"),
         None => format!("/{path}"),
     };
-    preview::forward(port, parts.method, &path_and_query, &parts.headers, body).await
+    let cancel = app.device_cancel(&device.id);
+    let response = tokio::select! {
+        biased;
+        () = cancel.cancelled() => return (StatusCode::UNAUTHORIZED, "device revoked").into_response(),
+        response = preview::forward(port, parts.method, &path_and_query, &parts.headers, body) => response,
+    };
+    // A response that is still streaming stops with an error when the device is revoked.
+    response.map(|body| abort_on_revoke(body, cancel))
+}
+
+/// The body, ending with an error as soon as `cancel` is cancelled (the connection then breaks instead of looking
+/// complete).
+pub(super) fn abort_on_revoke(body: Body, cancel: tokio_util::sync::CancellationToken) -> Body {
+    let inner = body.into_data_stream().boxed();
+    Body::from_stream(futures_util::stream::unfold(
+        (inner, cancel, false),
+        |(mut inner, cancel, done)| async move {
+            if done {
+                return None;
+            }
+            tokio::select! {
+                biased;
+                () = cancel.cancelled() => {
+                    let error = io::Error::new(ErrorKind::ConnectionAborted, "the device was revoked");
+                    Some((Err(error), (inner, cancel, true)))
+                }
+                item = inner.next() => item.map(|item| (item.map_err(io::Error::other), (inner, cancel, false))),
+            }
+        },
+    ))
 }
 
 fn raw_error(e: FsError) -> Response {
@@ -443,7 +568,22 @@ fn percent_encode(s: &str) -> String {
     out
 }
 
-async fn handle(app: Arc<App>, peer: Peer, socket: WebSocket) {
+/// Whether a message is a `pair.redeem` request: its `method` is that name. The text anywhere else in a message (a
+/// param, say) does not count.
+fn asks_to_pair(text: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .and_then(|v| v.get("method").and_then(|m| m.as_str()).map(|m| m == "pair.redeem"))
+        .unwrap_or(false)
+}
+
+async fn handle(app: Arc<App>, peer: Peer, socket: WebSocket, anonymous_slot: Option<AnonymousSlot>) {
+    // An anonymous socket on a phone listener may only pair: it closes when no `pair.redeem` comes in time, and a while
+    // after the one that did (the app reconnects with its token). The slot it holds is freed when it closes.
+    let _slot = anonymous_slot;
+    let anonymous = matches!(peer, Peer::Anonymous(_));
+    let redeem_seen = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let seen = redeem_seen.clone();
     let (mut sink, mut stream) = socket.split();
     let (in_tx, in_rx) = mpsc::channel::<String>(64);
     let (out_tx, mut out_rx) = mpsc::channel::<String>(256);
@@ -463,12 +603,28 @@ async fn handle(app: Arc<App>, peer: Peer, socket: WebSocket) {
                 // Pings are answered by the library; binary is not used.
                 _ => continue,
             };
+            if anonymous && asks_to_pair(&text) {
+                seen.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
             if in_tx.send(text).await.is_err() {
                 break;
             }
         }
     });
-    serve(app, peer, in_rx, out_tx).await;
+    let idle = async {
+        if !(anonymous && _slot.is_some()) {
+            return std::future::pending::<()>().await;
+        }
+        tokio::time::sleep(crate::phone::ANONYMOUS_IDLE).await;
+        if !redeem_seen.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        tokio::time::sleep(crate::phone::ANONYMOUS_AFTER_REDEEM).await;
+    };
+    tokio::select! {
+        () = serve(app, peer, in_rx, out_tx) => {}
+        () = idle => {}
+    }
     reader.abort();
     let _ = writer.await;
 }
@@ -494,6 +650,42 @@ mod tests {
         store.device_add("test", TOKEN).unwrap();
         let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
         App::new_with_files(sup, dir.join("agents"), FileService::new(dir.to_path_buf(), None))
+    }
+
+    #[tokio::test]
+    async fn a_phone_router_does_not_check_the_host_but_still_needs_the_token() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let app = served(dir.path());
+        let phone = |host: &str, auth: Option<&str>| {
+            let mut req = Request::builder()
+                .uri("/v1/files/raw?path=/nothing")
+                .header(header::HOST, host.to_string());
+            if let Some(auth) = auth {
+                req = req.header(header::AUTHORIZATION, auth.to_string());
+            }
+            let router = router_phone(app.clone(), "192.168.1.5".parse().unwrap(), PhoneLimits::default());
+            async move { router.oneshot(req.body(Body::empty()).unwrap()).await.unwrap().status() }
+        };
+        assert_eq!(phone("mac.local:7879", None).await, StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            phone("203.0.113.9:7879", Some("Bearer nope")).await,
+            StatusCode::UNAUTHORIZED
+        );
+        // With the token the request gets past the checks (the path itself is missing).
+        assert_eq!(
+            phone("mac.local:7879", Some(&format!("Bearer {TOKEN}"))).await,
+            StatusCode::NOT_FOUND
+        );
+        // The loopback router keeps its Host check.
+        let local = Request::builder()
+            .uri("/v1/health")
+            .header(header::HOST, "evil.test")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            router(app.clone()).oneshot(local).await.unwrap().status(),
+            StatusCode::MISDIRECTED_REQUEST
+        );
     }
 
     async fn send(app: &Arc<App>, method: Method, uri: &str, headers: &[(&str, &str)]) -> Response {

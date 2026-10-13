@@ -414,7 +414,7 @@ final class BrowserModel {
         switch server.config.endpoint {
         case .local:
             return URL(string: "http://127.0.0.1:\(port)/")
-        case .webSocket, .ssh:
+        case .webSocket, .ssh, .direct:
             // SSH servers are reached through a local tunnel to the daemon; previews go through its proxy too.
             return PreviewURL.previewURL(port: port)
         }

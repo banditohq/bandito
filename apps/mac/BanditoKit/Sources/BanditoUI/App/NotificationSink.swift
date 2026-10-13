@@ -1,3 +1,4 @@
+import BanditoKit
 import BanditoL10n
 import Foundation
 import UserNotifications
@@ -11,8 +12,8 @@ public final class SystemNotificationSink: NSObject, NotificationService.Sink, U
 
     private let center = UNUserNotificationCenter.current()
 
-    /// Registers the categories. Call once at launch. The system's permission question is `requestPermission`: a
-    /// person who has just opened the app for the first time is asked after the introduction, not on its first screen.
+    /// Registers the categories. Call once at launch. The system's permission question is `requestPermission`: it is
+    /// put after the person said yes to "Want to know when an agent needs you?", at the first approval or finished turn.
     public func start() {
         center.delegate = self
         // Allow needs an unlocked device (the system asks for authentication); Deny is destructive.
@@ -42,6 +43,11 @@ public final class SystemNotificationSink: NSObject, NotificationService.Sink, U
     /// Asks the system for permission to show notifications. Nothing is shown when it was answered before.
     public func requestPermission() {
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    /// Whether the system has not been asked about notifications yet (so the question can still be put).
+    public func isUndetermined() async -> Bool {
+        await center.notificationSettings().authorizationStatus == .notDetermined
     }
 
     public func post(_ content: NotificationContent) {

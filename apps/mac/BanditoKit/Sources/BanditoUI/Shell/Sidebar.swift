@@ -57,7 +57,6 @@ private struct SidebarTopRow: View {
             .banditoButton(.icon(size: 30, label: L10n.Palette.search))
             .focusable(false)
             .help(L10n.Sidebar.search)
-            .tourAnchor(.quickOpen)
 
             Button {
                 router.sheet = .newAgent

@@ -21,6 +21,10 @@ targets:
       # Installs the server-side script into the app bundle (SSHInstaller reads it as install.sh).
       - path: ../../scripts/install.sh
         buildPhase: resources
+      # The "What's new" notes (release-notes/<version>.json), read at run time with no network; see ReleaseNotesLibrary.
+      - path: ../../release-notes
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: BanditoKit
         product: BanditoKit
