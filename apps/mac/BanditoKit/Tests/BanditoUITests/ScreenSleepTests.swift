@@ -1,7 +1,10 @@
 #if os(macOS)
 import BanditoKit
+import AppKit
+import BanditoDesign
 import BanditoL10n
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import BanditoUI
@@ -115,6 +118,40 @@ import Testing
         overview.markAsleep("a")
         #expect(overview.state(of: "a") == .asleep)
         #expect(overview.state(of: "b") == .unknown)
+    }
+
+    /// The toolbar as a picture, in a view nobody sees (no window). `SCREEN_SNAPSHOT_DIR` keeps the PNG.
+    private func toolbarPicture(model: ScreenModel, name: String) -> Data? {
+        let suite = "screen-toolbar-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suite) }
+        _ = BanditoFont.registerBundledFonts()
+        let view = ScreenToolbar(model: model, title: "Общий сервер")
+            .environment(Keymap(defaults: defaults))
+            .environment(\.colorScheme, .dark)
+            .frame(width: 900, height: 52)
+        let host = NSHostingView(rootView: view)
+        host.frame = CGRect(x: 0, y: 0, width: 900, height: 52)
+        host.appearance = NSAppearance(named: .darkAqua)
+        host.layoutSubtreeIfNeeded()
+        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return nil }
+        host.cacheDisplay(in: host.bounds, to: rep)
+        let png = rep.representation(using: .png, properties: [:])
+        if let dir = ProcessInfo.processInfo.environment["SCREEN_SNAPSHOT_DIR"], let png {
+            try? png.write(to: URL(fileURLWithPath: dir).appending(path: "\(name).png"))
+        }
+        return png
+    }
+
+    @Test(.language("ru")) func theMoonButtonIsOnTheToolbarOnlyWhileTheScreenRuns() async {
+        let (server, _, running) = await world(screen: DemoScreen(running: true))
+        let (server2, _, asleep) = await world(screen: DemoScreen(running: false))
+        let with = toolbarPicture(model: running, name: "screen-toolbar-running-ru")
+        let without = toolbarPicture(model: asleep, name: "screen-toolbar-asleep-ru")
+        #expect(with != nil && without != nil)
+        #expect(with != without, "the running screen's toolbar has one more button")
+        await server.disconnect()
+        await server2.disconnect()
     }
 }
 #endif

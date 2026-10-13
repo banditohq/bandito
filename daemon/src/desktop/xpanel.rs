@@ -85,20 +85,31 @@ pub struct Params {
 }
 
 /// Starts the desktop thread. A failure inside only logs: the screen works without its desktop.
-pub fn spawn(params: Params) -> std::io::Result<()> {
+pub fn spawn(params: Params) -> std::io::Result<std::thread::JoinHandle<()>> {
     std::thread::Builder::new()
         .name("screen-desktop".into())
         .spawn(move || {
-            if let Err(e) = run(&params) {
-                // Stopping the screen takes the X server away under the thread: not a problem to report.
-                if params.stop.load(Ordering::Relaxed) {
+            let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(&params)));
+            let panicked = caught.is_err();
+            let outcome = caught.unwrap_or_else(|panic| {
+                let what = panic
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_string())
+                    .or_else(|| panic.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown panic".to_string());
+                Err(format!("the dock thread panicked: {what}").into())
+            });
+            if let Err(e) = outcome {
+                // Stopping the screen takes the X server away under the thread: not a problem to report. A panic is.
+                if panicked {
+                    tracing::error!("the screen has no dock: {e}");
+                } else if params.stop.load(Ordering::Relaxed) {
                     tracing::debug!("the screen's desktop ended with its screen: {e}");
                 } else {
                     tracing::warn!("the screen's desktop stopped: {e}");
                 }
             }
-        })?;
-    Ok(())
+        })
 }
 
 type Fail = Box<dyn std::error::Error + Send + Sync>;
@@ -465,7 +476,7 @@ impl Dock<'_> {
     }
 
     fn start(&self, argv: &[String]) {
-        spawn_detached(argv, &self.params.env, &self.params.launched);
+        spawn_detached(argv, &self.params.env, &self.params.launched, &self.params.stop);
     }
 
     /// Reads the window list and the active window from the window manager.
@@ -608,8 +619,15 @@ fn wait_readable(fd: i32, timeout_ms: i32) {
 }
 
 /// Starts a program on the screen in a group of its own, with no stdio, and remembers the group so that stopping
-/// the screen stops the program.
-pub fn spawn_detached(argv: &[String], env: &[(String, String)], launched: &Arc<Mutex<Vec<i32>>>) {
+/// the screen stops the program. Nothing starts once `stop` is set, and the check is made while the list is locked,
+/// the same lock `stop_launched` reads it under. The group stays in the list while any process of it lives, even
+/// after the first one has exited (a browser that detaches), so stopping the screen still signals it.
+pub fn spawn_detached(
+    argv: &[String],
+    env: &[(String, String)],
+    launched: &Arc<Mutex<Vec<i32>>>,
+    stop: &Arc<AtomicBool>,
+) {
     let Some(program) = argv.first() else { return };
     let mut command = Command::new(program);
     command
@@ -619,20 +637,92 @@ pub fn spawn_detached(argv: &[String], env: &[(String, String)], launched: &Arc<
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .process_group(0);
+    let Ok(mut list) = launched.lock() else { return };
+    if stop.load(Ordering::SeqCst) {
+        return;
+    }
     match command.spawn() {
         Ok(mut child) => {
             let pgid = child.id() as i32;
-            if let Ok(mut list) = launched.lock() {
-                list.push(pgid);
-            }
+            list.push(pgid);
+            drop(list);
             let launched = Arc::clone(launched);
+            let stop = Arc::clone(stop);
             std::thread::spawn(move || {
                 let _ = child.wait();
+                while crate::screen::group_alive(pgid) && !stop.load(Ordering::Relaxed) {
+                    std::thread::sleep(Duration::from_millis(200));
+                }
                 if let Ok(mut list) = launched.lock() {
                     list.retain(|&p| p != pgid);
                 }
             });
         }
         Err(e) => tracing::warn!("the dock could not start {program}: {e}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn script(dir: &std::path::Path, body: &str) -> String {
+        let path = dir.join("prog.sh");
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path.display().to_string()
+    }
+
+    fn state() -> (Arc<Mutex<Vec<i32>>>, Arc<AtomicBool>) {
+        (Arc::new(Mutex::new(Vec::new())), Arc::new(AtomicBool::new(false)))
+    }
+
+    fn eventually(mut ready: impl FnMut() -> bool) -> bool {
+        for _ in 0..100 {
+            if ready() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        ready()
+    }
+
+    #[test]
+    fn nothing_starts_after_the_screen_is_stopping() {
+        let tmp = tempfile::tempdir().unwrap();
+        let marker = tmp.path().join("ran");
+        let program = script(tmp.path(), &format!("touch '{}'", marker.display()));
+        let (launched, stop) = state();
+        stop.store(true, Ordering::SeqCst);
+        spawn_detached(&[program], &[], &launched, &stop);
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!marker.exists(), "a program was started on a stopping screen");
+        assert!(launched.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_program_is_listed_while_it_runs_and_forgotten_when_its_group_is_gone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let program = script(tmp.path(), "exit 0");
+        let (launched, stop) = state();
+        spawn_detached(&[program], &[], &launched, &stop);
+        assert!(eventually(|| launched.lock().unwrap().is_empty()));
+    }
+
+    #[test]
+    fn a_group_stays_listed_while_a_detached_member_lives() {
+        let tmp = tempfile::tempdir().unwrap();
+        // The leader exits at once and leaves a member in the same group, as a browser that detaches does.
+        let program = script(tmp.path(), "sleep 30 &\nexit 0");
+        let (launched, stop) = state();
+        spawn_detached(&[program], &[], &launched, &stop);
+        std::thread::sleep(Duration::from_millis(800));
+        let groups = launched.lock().unwrap().clone();
+        assert_eq!(groups.len(), 1, "the group left the list while its member runs");
+        // Stopping the screen signals it, and then it leaves the list.
+        // SAFETY: killpg only sends a signal to the group this test made.
+        unsafe { libc::killpg(groups[0], libc::SIGTERM) };
+        assert!(eventually(|| launched.lock().unwrap().is_empty()));
     }
 }

@@ -88,7 +88,7 @@ private struct ScreenMainArea: View {
 
 // MARK: Toolbar
 
-private struct ScreenToolbar: View {
+struct ScreenToolbar: View {
     @Bindable var model: ScreenModel
     let title: String
     @Environment(Keymap.self) private var keymap
@@ -130,6 +130,26 @@ private struct ScreenToolbar: View {
             }
             .banditoButton(.icon(size: 30, label: L10n.Screen.fullscreen))
             .help(L10n.Screen.fullscreen)
+
+            if model.status?.running == true {
+                Button {
+                    // Somebody holds the controls: ask first. A screen nobody holds goes to sleep at once.
+                    if let confirmation = model.sleepConfirmation {
+                        askingToSleep = confirmation
+                    } else {
+                        Task { await model.sleep() }
+                    }
+                } label: {
+                    if model.isSleeping {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "moon.zzz")
+                    }
+                }
+                .banditoButton(.icon(size: 30, label: L10n.Screen.sleep))
+                .disabled(!model.canSleep)
+                .help(L10n.Screen.sleep)
+            }
 
             if holder == .user {
                 Button(L10n.Browser.bannerGive) {

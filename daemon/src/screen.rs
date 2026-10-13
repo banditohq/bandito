@@ -230,8 +230,10 @@ struct Session {
     last_agent_ms: i64,
     xvfb: TrackedChild,
     openbox: Option<TrackedChild>,
-    /// The screen's own D-Bus session bus (see `spawn_session_bus`).
-    bus: Option<TrackedChild>,
+    /// The screen's own D-Bus session bus (see `spawn_session_bus`), watched like x11vnc, with its address.
+    bus: Option<(VncTask, String)>,
+    /// The thread that draws the dock; joined at stop, before the programs it started are stopped.
+    desktop: Option<std::thread::JoinHandle<()>>,
     vnc: VncTask,
     /// Process group ids of programs started with `Launch` (or from the dock) that are still running.
     launched: Arc<StdMutex<Vec<i32>>>,
@@ -933,7 +935,6 @@ async fn start_processes(
     if let Some((_, address)) = &bus {
         env.push(("DBUS_SESSION_BUS_ADDRESS".to_string(), address.clone()));
     }
-    let bus = bus.map(|(child, _)| child);
     // The desktop's files. If they cannot be written the screen still works, with openbox's own look.
     let prepared =
         match crate::desktop::theme::prepare(&dir.join(DESKTOP_DIR), path, Path::new("/usr/share/icons"), height) {
@@ -947,6 +948,7 @@ async fn start_processes(
             }
         };
     let openbox = spawn_openbox(&env, prepared.as_ref().map(|p| p.rc_file.as_path()));
+    let mut desktop = None;
     if let Some(prepared) = &prepared {
         let params = crate::desktop::xpanel::Params {
             display,
@@ -959,8 +961,9 @@ async fn start_processes(
             holder: Arc::clone(&holder),
             stop: Arc::clone(&desktop_stop),
         };
-        if let Err(e) = crate::desktop::xpanel::spawn(params) {
-            tracing::warn!("the screen's desktop thread did not start: {e}");
+        match crate::desktop::xpanel::spawn(params) {
+            Ok(handle) => desktop = Some(handle),
+            Err(e) => tracing::warn!("the screen's desktop thread did not start: {e}"),
         }
     }
     let vnc = match start_vnc(dir, display, xauth).await {
@@ -971,8 +974,8 @@ async fn start_processes(
             if let Some(child) = openbox {
                 terminate_child(child).await;
             }
-            if let Some(child) = bus {
-                terminate_child(child).await;
+            if let Some((task, address)) = bus {
+                stop_bus(task, &address).await;
             }
             return Err(e);
         }
@@ -990,6 +993,7 @@ async fn start_processes(
         xvfb,
         openbox,
         bus,
+        desktop,
         vnc: vnc.task,
         launched,
         env,
@@ -1107,11 +1111,11 @@ async fn wait_for_socket(child: &mut TrackedChild, display: u32) -> Result<(), S
 #[cfg(target_os = "linux")]
 const MAX_SOCKET_PATH: usize = 100;
 
-/// Starts `dbus-daemon --session` on a socket inside the screen's desktop folder and returns it with its address.
-/// `None` when `dbus-daemon` is not installed, the path is too long for a socket, or the bus does not come up: the
-/// programs then use the server's session bus, as they would without Bandito.
+/// Starts `dbus-daemon --session` on a socket inside the screen's desktop folder and returns its watcher with its
+/// address. `None` when `dbus-daemon` is not installed, the path is too long for a socket, or the bus does not come
+/// up: the programs then use the server's session bus, as they would without Bandito.
 #[cfg(target_os = "linux")]
-async fn spawn_session_bus(dir: &Path, path: &std::ffi::OsStr) -> Option<(TrackedChild, String)> {
+async fn spawn_session_bus(dir: &Path, path: &std::ffi::OsStr) -> Option<(VncTask, String)> {
     crate::setup::which("dbus-daemon", path)?;
     let socket = dir.join("bus");
     if socket.as_os_str().len() > MAX_SOCKET_PATH {
@@ -1123,21 +1127,147 @@ async fn spawn_session_bus(dir: &Path, path: &std::ffi::OsStr) -> Option<(Tracke
     }
     let _ = std::fs::remove_file(&socket);
     let address = format!("unix:path={}", socket.display());
-    let argv = argv![
-        "dbus-daemon",
-        "--session",
-        "--nofork",
-        "--nopidfile",
-        format!("--address={address}")
-    ];
+    let argv = bus_argv(&address);
     let child = spawn_group(&argv, &[], "dbus-daemon").ok()?;
     if wait_until(START_TIMEOUT, || socket.exists()).await {
-        Some((child, address))
+        Some((spawn_bus_watcher(socket, argv, child), address))
     } else {
         tracing::warn!("the screen's session bus did not come up");
         terminate_child(child).await;
         None
     }
+}
+
+#[cfg(target_os = "linux")]
+fn bus_argv(address: &str) -> Vec<String> {
+    argv![
+        "dbus-daemon",
+        "--session",
+        "--nofork",
+        "--nopidfile",
+        format!("--address={address}")
+    ]
+}
+
+/// Owns the screen's bus like x11vnc is owned: restarts it once if it exits on its own (on the same socket, so
+/// programs started later find it), and says so in the log when it is gone for good. Programs that were connected
+/// to the first bus lose it; the screen goes on.
+#[cfg(target_os = "linux")]
+fn spawn_bus_watcher(socket: PathBuf, argv: Vec<String>, mut child: TrackedChild) -> VncTask {
+    let pgid = Arc::new(AtomicI32::new(child.id().map_or(0, |p| p as i32)));
+    let stopping = Arc::new(AtomicBool::new(false));
+    let (watch_pgid, watch_stopping) = (Arc::clone(&pgid), Arc::clone(&stopping));
+    let handle = tokio::spawn(async move {
+        let mut restarted = false;
+        loop {
+            let _ = child.wait().await;
+            child.release();
+            watch_pgid.store(0, Ordering::SeqCst);
+            if watch_stopping.load(Ordering::SeqCst) {
+                return;
+            }
+            if restarted {
+                tracing::error!(
+                    "the screen's session bus exited again; programs started on this screen now have no bus until the screen is started again"
+                );
+                return;
+            }
+            restarted = true;
+            tracing::warn!("the screen's session bus exited; restarting it once");
+            let _ = std::fs::remove_file(&socket);
+            match spawn_group(&argv, &[], "dbus-daemon") {
+                Ok(next) => {
+                    watch_pgid.store(next.id().map_or(0, |p| p as i32), Ordering::SeqCst);
+                    child = next;
+                }
+                Err(e) => {
+                    tracing::error!("cannot restart the screen's session bus: {e}");
+                    return;
+                }
+            }
+        }
+    });
+    VncTask { pgid, stopping, handle }
+}
+
+/// Stops the bus, then the services it started that left its process group (`setsid`): those are found by the
+/// bus address in their environment, and only among this user's processes.
+#[cfg(target_os = "linux")]
+async fn stop_bus(task: VncTask, address: &str) {
+    stop_vnc(task).await;
+    let pids = processes_using_bus(address);
+    for &pid in &pids {
+        // SAFETY: kill only sends a signal; a process that is gone yields ESRCH, which is ignored.
+        let _ = unsafe { libc::kill(pid, libc::SIGTERM) };
+    }
+    let deadline = Instant::now() + GRACE;
+    while Instant::now() < deadline && pids.iter().any(|&p| process_alive(p)) {
+        tokio::time::sleep(POLL).await;
+    }
+    for pid in pids.into_iter().filter(|&p| process_alive(p)) {
+        // SAFETY: as above.
+        let _ = unsafe { libc::kill(pid, libc::SIGKILL) };
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn process_alive(pid: i32) -> bool {
+    // SAFETY: signal 0 sends nothing; it only asks whether the process exists. A zombie still answers, which is
+    // fine: its parent reaps it.
+    pid > 0 && unsafe { libc::kill(pid, 0) } == 0 && !is_zombie(pid)
+}
+
+#[cfg(target_os = "linux")]
+fn is_zombie(pid: i32) -> bool {
+    std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()
+        .and_then(|stat| {
+            stat.rsplit_once(')')
+                .map(|(_, rest)| rest.trim_start().starts_with('Z'))
+        })
+        .unwrap_or(false)
+}
+
+/// Whether a process environment (`/proc/<pid>/environ`: `NAME=value` entries separated by NUL) points at the bus
+/// `address`, as the bus's clients do (`DBUS_SESSION_BUS_ADDRESS`) and the services it starts do
+/// (`DBUS_STARTER_ADDRESS`).
+#[cfg(any(target_os = "linux", test))]
+pub fn environ_names_bus(environ: &[u8], address: &str) -> bool {
+    let session = format!("DBUS_SESSION_BUS_ADDRESS={address}");
+    let starter = format!("DBUS_STARTER_ADDRESS={address}");
+    environ
+        .split(|&b| b == 0)
+        .any(|entry| entry == session.as_bytes() || entry == starter.as_bytes())
+}
+
+/// This user's processes (not this daemon) whose environment names the bus `address`.
+#[cfg(target_os = "linux")]
+fn processes_using_bus(address: &str) -> Vec<i32> {
+    use std::os::unix::fs::MetadataExt;
+    // SAFETY: getuid cannot fail.
+    let uid = unsafe { libc::getuid() };
+    let me = std::process::id() as i32;
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|entry| {
+            let pid: i32 = entry.file_name().to_str()?.parse().ok()?;
+            if pid == me || entry.metadata().ok()?.uid() != uid {
+                return None;
+            }
+            let environ = std::fs::read(entry.path().join("environ")).ok()?;
+            environ_names_bus(&environ, address).then_some(pid)
+        })
+        .collect()
+}
+
+/// Whether anything is left in the process group `pgid`.
+#[cfg(target_os = "linux")]
+pub fn group_alive(pgid: i32) -> bool {
+    // SAFETY: signal 0 sends nothing; it only asks whether the group has a process we may signal.
+    pgid > 0 && unsafe { libc::killpg(pgid, 0) } == 0
 }
 
 /// openbox is optional: without it the screen works, but windows have no frames. With `rc` it starts with the
@@ -1300,9 +1430,15 @@ fn launch_program(session: &Session, command: &str) -> Result<(), ScreenError> {
     let pgid = child.id().map_or(0, |p| p as i32);
     lock_std(&session.launched).push(pgid);
     let launched = Arc::clone(&session.launched);
+    let stop = Arc::clone(&session.desktop_stop);
     tokio::spawn(async move {
         let _ = child.wait().await;
         child.release();
+        // The program may have left behind members of its group (a browser that detaches): the group stays in the
+        // list while any of them lives, so stopping the screen still signals it.
+        while group_alive(pgid) && !stop.load(Ordering::Relaxed) {
+            tokio::time::sleep(POLL * 4).await;
+        }
         lock_std(&launched).retain(|&p| p != pgid);
     });
     Ok(())
@@ -1316,6 +1452,7 @@ async fn shutdown_session(session: Session) {
         xvfb,
         openbox,
         bus,
+        desktop,
         vnc,
         launched,
         xauth,
@@ -1328,9 +1465,17 @@ async fn shutdown_session(session: Session) {
         terminate_child(child).await;
     }
     terminate_child(xvfb).await;
+    // The dock's thread may be starting a program right now: it ends first (it checks the stop flag at every turn
+    // and the X connection is gone), so nothing is started after the programs are signalled.
+    if let Some(handle) = desktop {
+        let joined = tokio::task::spawn_blocking(move || handle.join());
+        if tokio::time::timeout(GRACE + GRACE, joined).await.is_err() {
+            tracing::warn!("the screen's dock thread did not end in time");
+        }
+    }
     stop_launched(&launched).await;
-    if let Some(child) = bus {
-        terminate_child(child).await;
+    if let Some((task, address)) = bus {
+        stop_bus(task, &address).await;
     }
     let _ = std::fs::remove_file(&xauth);
 }
@@ -1824,6 +1969,89 @@ mod tests {
             std::fs::write(&path, script).unwrap();
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
+    }
+
+    #[test]
+    fn a_process_environment_names_the_bus_it_uses() {
+        let address = "unix:path=/h/screens/shared/desktop/bus";
+        let env = b"HOME=/h\0DBUS_SESSION_BUS_ADDRESS=unix:path=/h/screens/shared/desktop/bus\0LANG=C\0";
+        assert!(environ_names_bus(env, address));
+        let started = b"DBUS_STARTER_ADDRESS=unix:path=/h/screens/shared/desktop/bus\0";
+        assert!(environ_names_bus(started, address));
+        // Another screen's bus, a prefix of the address, and an empty environment do not match.
+        assert!(!environ_names_bus(
+            b"DBUS_SESSION_BUS_ADDRESS=unix:path=/h/screens/other/desktop/bus\0",
+            address
+        ));
+        assert!(!environ_names_bus(
+            b"DBUS_SESSION_BUS_ADDRESS=unix:path=/h/screens/shared/desktop/bus2\0",
+            address
+        ));
+        assert!(!environ_names_bus(b"", address));
+    }
+
+    /// A service the bus started with `setsid` is in no group of the bus, so stopping the screen finds it by the
+    /// bus address in its environment, and leaves processes of other buses alone.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn stopping_the_bus_ends_services_that_left_its_group() {
+        let tmp = tempfile::tempdir().unwrap();
+        let address = format!("unix:path={}/bus", tmp.path().display());
+        let other = format!("unix:path={}/other-bus", tmp.path().display());
+        let service = |address: &str| {
+            std::process::Command::new("setsid")
+                .args(["env", &format!("DBUS_SESSION_BUS_ADDRESS={address}"), "sleep", "60"])
+                .spawn()
+                .unwrap()
+        };
+        let mut ours = service(&address);
+        let mut theirs = service(&other);
+        // `setsid` forks when it leads a group already, so wait until the sleeps carry their environment.
+        let mut pids = Vec::new();
+        for _ in 0..100 {
+            pids = processes_using_bus(&address);
+            if !pids.is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(pids.len(), 1, "{pids:?}");
+        assert_eq!(processes_using_bus(&other).len(), 1);
+
+        let sleep = argv!["sleep", "60"];
+        let bus = spawn_group(&sleep, &[], "sleep").unwrap();
+        let task = spawn_bus_watcher(tmp.path().join("bus"), argv!["true"], bus);
+        stop_bus(task, &address).await;
+        assert!(!process_alive(pids[0]), "the service outlived its bus");
+        assert_eq!(
+            processes_using_bus(&other).len(),
+            1,
+            "another bus's service was touched"
+        );
+        let _ = ours.wait();
+        let _ = theirs.kill();
+        let _ = theirs.wait();
+    }
+
+    /// A bus that dies is started again once, on the same socket; a second death is only logged.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_bus_that_dies_is_restarted_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let quick = argv!["true"];
+        let first = spawn_group(&quick, &[], "true").unwrap();
+        let task = spawn_bus_watcher(tmp.path().join("bus"), argv!["sleep", "60"], first);
+        let mut restarted = 0;
+        for _ in 0..100 {
+            restarted = task.pgid.load(Ordering::SeqCst);
+            if restarted > 0 && group_alive(restarted) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(restarted > 0 && group_alive(restarted), "the bus was not started again");
+        stop_vnc(task).await;
+        assert!(!group_alive(restarted));
     }
 
     /// Putting a screen to sleep that is not running is fine and says so; a bad workspace name is refused.

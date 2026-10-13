@@ -315,6 +315,7 @@ pub fn browser_wrapper() -> String {
      here=$(cd \"$(dirname \"$0\")\" && pwd)\n\
      old=$IFS\n\
      IFS=:\n\
+     set -f\n\
      for dir in $PATH; do\n\
      \x20 [ -n \"$dir\" ] || continue\n\
      \x20 [ \"$dir/$me\" -ef \"$here/$me\" ] && continue\n\
@@ -636,6 +637,26 @@ mod tests {
         let args = std::fs::read_to_string(&record).unwrap();
         assert!(args.contains("--password-store=basic"), "{args}");
         assert!(args.contains("https://example.com"), "{args}");
+    }
+
+    #[test]
+    fn the_browser_wrapper_takes_path_entries_literally() {
+        let tmp = tempfile::tempdir().unwrap();
+        let wrapper_dir = tmp.path().join("own");
+        let real_dir = tmp.path().join("real");
+        std::fs::create_dir_all(&wrapper_dir).unwrap();
+        std::fs::create_dir_all(&real_dir).unwrap();
+        write_file(&wrapper_dir.join("chromium"), browser_wrapper().as_bytes(), 0o700).unwrap();
+        let real = real_dir.join("chromium");
+        std::fs::write(&real, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&real, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // `re*` would match the folder `real` if the shell expanded it; a PATH entry is a name, not a pattern.
+        let path = format!("{}:{}/re*:/usr/bin:/bin", wrapper_dir.display(), tmp.path().display());
+        let status = std::process::Command::new(wrapper_dir.join("chromium"))
+            .env("PATH", path)
+            .status()
+            .unwrap();
+        assert_eq!(status.code(), Some(127), "the wrapper expanded a glob in PATH");
     }
 
     #[test]
