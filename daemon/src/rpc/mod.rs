@@ -5204,16 +5204,32 @@ mod folder_and_device_tests {
         for i in 0..MAX_DEVICES {
             store.device_add(&format!("d{i}"), &format!("tok-{i}")).unwrap();
         }
-        let err = dispatch(&app, &Peer::Local, "devices.issue", json!({ "name": "P", "platform": "ios" }))
-            .await
-            .unwrap_err();
+        let err = dispatch(
+            &app,
+            &Peer::Local,
+            "devices.issue",
+            json!({ "name": "P", "platform": "ios" }),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(err.code, SERVER_ERROR);
         assert!(err.message.contains("50 devices"), "{}", err.message);
         assert_eq!(store.device_list().unwrap().len(), MAX_DEVICES);
         // Removing one makes room again.
         let first = store.device_list().unwrap()[0].id.clone();
-        dispatch(&app, &Peer::Local, "devices.revoke", json!({ "id": first })).await.unwrap();
-        assert!(dispatch(&app, &Peer::Local, "devices.issue", json!({ "name": "P", "platform": "ios" })).await.is_ok());
+        dispatch(&app, &Peer::Local, "devices.revoke", json!({ "id": first }))
+            .await
+            .unwrap();
+        assert!(
+            dispatch(
+                &app,
+                &Peer::Local,
+                "devices.issue",
+                json!({ "name": "P", "platform": "ios" })
+            )
+            .await
+            .is_ok()
+        );
     }
 
     #[tokio::test]
