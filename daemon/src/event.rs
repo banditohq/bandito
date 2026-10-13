@@ -379,7 +379,10 @@ impl EventBody {
     pub fn is_persisted(&self) -> bool {
         !matches!(
             self,
-            EventBody::MessageDelta { .. } | EventBody::TelegramChanged | EventBody::RelayChanged | EventBody::ServerSettingsChanged { .. }
+            EventBody::MessageDelta { .. }
+                | EventBody::TelegramChanged
+                | EventBody::RelayChanged
+                | EventBody::ServerSettingsChanged { .. }
         )
     }
 

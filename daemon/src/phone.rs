@@ -363,7 +363,11 @@ pub fn pair_link_with_relay(
     if let Some(relay) = relay {
         link.push_str("&relay=");
         // The slash between host and id stays readable; each part is encoded on its own.
-        link.push_str(&format!("{}/{}", percent_encode(&relay.host), percent_encode(&relay.sid)));
+        link.push_str(&format!(
+            "{}/{}",
+            percent_encode(&relay.host),
+            percent_encode(&relay.sid)
+        ));
         link.push_str("&nk=");
         link.push_str(&percent_encode(&relay.nk));
     }
@@ -2365,6 +2369,35 @@ mod tests {
             vec!["100.64.0.9:7879", "100.101.102.103:7879", "[fd7a:115c:a1e0::5]:7879"]
         );
         assert!(pair_hosts(PhoneMode::Off, 7879, &ifaces, &reported).is_empty());
+    }
+
+    #[test]
+    fn the_link_names_the_relay_and_its_key_and_may_have_no_host_or_fingerprint() {
+        let relay = RelayLink {
+            host: "relay.bandito.dev".into(),
+            sid: "abcdefghijklmnopqrstuvwxyz".into(),
+            nk: "A-_9".into(),
+        };
+        let hosts = vec!["10.0.0.2:7879".to_string()];
+        let fp = "ab".repeat(32);
+        let both = pair_link_with_relay("c-o-d-e", Some(&fp), "Mac", &hosts, Some(&relay));
+        assert_eq!(
+            both,
+            format!(
+                "bandito://pair?v=1&code=c-o-d-e&fp={fp}&name=Mac&host=10.0.0.2:7879&relay=relay.bandito.dev/abcdefghijklmnopqrstuvwxyz&nk=A-_9"
+            )
+        );
+        let only = pair_link_with_relay("c", None, "Mac", &[], Some(&relay));
+        assert_eq!(
+            only,
+            "bandito://pair?v=1&code=c&name=Mac&relay=relay.bandito.dev/abcdefghijklmnopqrstuvwxyz&nk=A-_9"
+        );
+        // Without the relay the link is the old one, byte for byte.
+        assert_eq!(
+            pair_link_with_relay("c", Some(&fp), "Mac", &hosts, None),
+            pair_link("c", &fp, "Mac", &hosts)
+        );
+        assert_eq!(relay.param(), "relay.bandito.dev/abcdefghijklmnopqrstuvwxyz");
     }
 
     #[test]

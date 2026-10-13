@@ -21,11 +21,7 @@ fn failure(e: RelayError) -> RpcError {
 pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
     match method {
         "relay.enable" => {
-            let EnableParams {
-                relay_url,
-                sid,
-                secret,
-            } = params(p)?;
+            let EnableParams { relay_url, sid, secret } = params(p)?;
             let config = Config::validated(&relay_url, &sid, &secret).map_err(|m| RpcError::new(INVALID_PARAMS, m))?;
             ok(app.relay.enable(config).await.map_err(failure)?.to_json())
         }

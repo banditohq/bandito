@@ -66,8 +66,17 @@ const FIRST_MESSAGE_LIMIT: usize = 4096;
 const STREAM_BACKLOG: usize = 256;
 /// The close code of a connection that another connection of the same server replaced.
 const CLOSE_REPLACED: u16 = 4001;
+/// The relay saw no message for 60 s.
+const CLOSE_SILENCE: u16 = 4002;
+/// The registration of this server was deleted at the relay.
+const CLOSE_DELETED: u16 = 4003;
 /// The close code of a connection the relay refuses for a limit (traffic over the plan).
 const CLOSE_LIMIT: u16 = 4008;
+/// A message of ours was over the relay's 1 MiB limit.
+const CLOSE_TOO_BIG: u16 = 4009;
+/// Keepalive messages are text: a Worker cannot see WebSocket ping frames.
+const PING: &str = "ping";
+const PONG: &str = "pong";
 /// The length of the server's relay id (base32) and of its secret (base64url of 32 bytes).
 pub const SID_LEN: usize = 26;
 pub const SECRET_LEN: usize = 43;
@@ -144,7 +153,8 @@ struct Target {
 /// `https://host[:port][/]` or `wss://host[:port][/]` (and `http`, `ws` when `allow_plain`, for tests). No user info,
 /// path, query or fragment: the relay's routes are fixed (`/v1/server/<sid>`).
 fn parse_url(url: &str, allow_plain: bool) -> Result<Target, String> {
-    let bad = || "relay_url must be an https:// or wss:// address of a host, like https://relay.bandito.dev".to_string();
+    let bad =
+        || "relay_url must be an https:// or wss:// address of a host, like https://relay.bandito.dev".to_string();
     let (scheme, rest) = url.split_once("://").ok_or_else(bad)?;
     let scheme = scheme.to_ascii_lowercase();
     let tls = match scheme.as_str() {
@@ -240,7 +250,9 @@ impl NoiseKeys {
     }
 
     fn generate() -> Result<Self> {
-        let pair = noise_builder()?.generate_keypair().map_err(|e| anyhow!("noise key: {e}"))?;
+        let pair = noise_builder()?
+            .generate_keypair()
+            .map_err(|e| anyhow!("noise key: {e}"))?;
         let public: [u8; 32] = pair
             .public
             .try_into()
@@ -379,10 +391,7 @@ struct Reassembler {
 
 impl Reassembler {
     fn new(limit: usize) -> Self {
-        Self {
-            buf: Vec::new(),
-            limit,
-        }
+        Self { buf: Vec::new(), limit }
     }
 
     /// Takes one decrypted transport message: `Ok(Some(frame))` when it was the last chunk.
@@ -420,8 +429,10 @@ pub struct Timing {
     pub backoff_max: Duration,
     /// The wait after close 4001 (another connection of this server replaced this one).
     pub replaced_wait: Duration,
-    /// The wait after close 4008 (a limit of the relay).
-    pub limit_wait: Duration,
+    /// The wait after close 4008 (a limit of the relay). None: until the next full hour, when the relay counts again.
+    pub limit_wait: Option<Duration>,
+    /// The longest wait when the relay does not accept the secret (HTTP 401): it will not get better by itself.
+    pub auth_backoff_max: Duration,
     /// Time to connect, with TLS and the WebSocket upgrade.
     pub connect: Duration,
     /// A connection that lived this long starts the backoff again.
@@ -436,7 +447,8 @@ impl Default for Timing {
             backoff_min: Duration::from_secs(1),
             backoff_max: Duration::from_secs(60),
             replaced_wait: Duration::from_secs(30),
-            limit_wait: Duration::from_secs(60),
+            limit_wait: None,
+            auth_backoff_max: Duration::from_secs(600),
             connect: Duration::from_secs(15),
             stable: Duration::from_secs(30),
         }
@@ -447,10 +459,14 @@ impl Timing {
     /// The wait before connection number `attempt` (0 is the first retry): doubling from the minimum to the maximum,
     /// with 20 % of jitter either way so that servers do not come back together.
     fn backoff(&self, attempt: u32) -> Duration {
+        self.backoff_to(attempt, self.backoff_max)
+    }
+
+    fn backoff_to(&self, attempt: u32, cap: Duration) -> Duration {
         let doubled = self
             .backoff_min
             .saturating_mul(1u32.checked_shl(attempt.min(16)).unwrap_or(u32::MAX));
-        let base = doubled.min(self.backoff_max);
+        let base = doubled.min(cap);
         let jitter = 0.8 + f64::from(rand::random::<u32>()) / f64::from(u32::MAX) * 0.4;
         base.mul_f64(jitter)
     }
@@ -477,6 +493,10 @@ enum Outcome {
     Replaced,
     /// The relay closed with another code.
     Closed(u16, String),
+    /// Close 4003: the registration was deleted at the relay.
+    Deleted,
+    /// The relay does not accept the secret (HTTP 401 or 403 at the upgrade).
+    Unauthorized(String),
     /// The connection failed or was lost.
     Failed(String),
 }
@@ -625,7 +645,10 @@ impl Relay {
     /// and connects. The same settings again change nothing.
     pub async fn enable(self: &Arc<Self>, config: Config) -> Result<Status, RelayError> {
         let mut life = self.lifecycle.lock().await;
-        if life.as_ref().is_some_and(|r| r.config == config && !r.task.is_finished()) {
+        if life
+            .as_ref()
+            .is_some_and(|r| r.config == config && !r.task.is_finished())
+        {
             return Ok(self.status());
         }
         self.keys()?;
@@ -719,12 +742,46 @@ impl Relay {
                     self.set_error("replaced by another connection of this server (relay close 4001)".into());
                     timing.replaced_wait
                 }
+                Outcome::Deleted => {
+                    // Nothing to reconnect to: forget the registration, like `relay.disable`, and say why.
+                    let _ = std::fs::remove_file(self.home.join(RELAY_FILE));
+                    self.change(|inner| {
+                        inner.config = None;
+                        inner.connected = false;
+                        inner.last_error = Some("the registration was deleted at the relay".into());
+                    });
+                    return;
+                }
+                Outcome::Unauthorized(why) => {
+                    self.set_error(why);
+                    attempt += 1;
+                    timing.backoff_to(attempt - 1, timing.auth_backoff_max)
+                }
                 Outcome::Closed(CLOSE_LIMIT, reason) => {
                     self.set_error(format!("the relay refused the connection (limit): {reason}"));
-                    timing.limit_wait
+                    timing.limit_wait.unwrap_or_else(until_next_hour)
+                }
+                Outcome::Closed(CLOSE_SILENCE, _) => {
+                    self.set_error("the relay saw no message from this server for 60 s (relay close 4002)".into());
+                    attempt = Self::next_attempt(&timing, started, attempt);
+                    timing.backoff(attempt.saturating_sub(1))
+                }
+                Outcome::Closed(CLOSE_TOO_BIG, reason) => {
+                    tracing::error!("relay: a message of ours was over the relay's size limit: {reason}");
+                    self.set_error(
+                        format!("the relay closed the connection (4009, message too large) {reason}")
+                            .trim()
+                            .to_string(),
+                    );
+                    attempt = Self::next_attempt(&timing, started, attempt);
+                    timing.backoff(attempt.saturating_sub(1))
                 }
                 Outcome::Closed(code, reason) => {
-                    self.set_error(format!("the relay closed the connection ({code}) {reason}").trim().to_string());
+                    self.set_error(
+                        format!("the relay closed the connection ({code}) {reason}")
+                            .trim()
+                            .to_string(),
+                    );
                     attempt = Self::next_attempt(&timing, started, attempt);
                     timing.backoff(attempt.saturating_sub(1))
                 }
@@ -742,7 +799,11 @@ impl Relay {
 
     /// The number of the next retry: it starts over after a connection that lived long enough.
     fn next_attempt(timing: &Timing, started: Instant, attempt: u32) -> u32 {
-        if started.elapsed() >= timing.stable { 1 } else { attempt + 1 }
+        if started.elapsed() >= timing.stable {
+            1
+        } else {
+            attempt + 1
+        }
     }
 
     /// The rustls client config with the system's root certificates, read once.
@@ -779,10 +840,11 @@ impl Relay {
         };
         let timing = self.timing();
         let ws_scheme = if target.tls { "wss" } else { "ws" };
-        let mut request = match format!("{ws_scheme}://{}/v1/server/{}", target.authority, config.sid).into_client_request() {
-            Ok(request) => request,
-            Err(e) => return Outcome::Failed(format!("bad relay address: {e}")),
-        };
+        let mut request =
+            match format!("{ws_scheme}://{}/v1/server/{}", target.authority, config.sid).into_client_request() {
+                Ok(request) => request,
+                Err(e) => return Outcome::Failed(format!("bad relay address: {e}")),
+            };
         match HeaderValue::from_str(&format!("Bearer {}", config.secret)) {
             Ok(mut value) => {
                 value.set_sensitive(true);
@@ -852,10 +914,15 @@ impl Relay {
             Some(Err(_)) => Outcome::Failed("timed out in the WebSocket upgrade with the relay".into()),
             Some(Ok(Err(tokio_tungstenite::tungstenite::Error::Http(response)))) => {
                 let status = response.status().as_u16();
-                Outcome::Failed(match status {
+                let why = match status {
                     401 | 403 => format!("the relay does not accept this server's credentials (HTTP {status})"),
                     _ => format!("the relay answered HTTP {status}"),
-                })
+                };
+                if matches!(status, 401 | 403) {
+                    Outcome::Unauthorized(why)
+                } else {
+                    Outcome::Failed(why)
+                }
             }
             Some(Ok(Err(e))) => Outcome::Failed(format!("relay WebSocket: {e}")),
             Some(Ok(Ok((ws, _)))) => self.drive(ws, cancel).await,
@@ -895,7 +962,7 @@ impl Relay {
                     if last_rx.elapsed() >= timing.silence {
                         break Outcome::Failed("the relay went silent".into());
                     }
-                    let _ = out.try_send(Message::Ping(Vec::new().into()));
+                    let _ = out.try_send(Message::text(PING));
                 }
                 next = source.next() => {
                     last_rx = Instant::now();
@@ -903,8 +970,11 @@ impl Relay {
                         None => break Outcome::Failed("the relay closed the connection".into()),
                         Some(Err(e)) => break Outcome::Failed(format!("connection to the relay lost: {e}")),
                         Some(Ok(Message::Binary(bytes))) => self.on_frame(&bytes, &out, &streams, &session),
-                        Some(Ok(Message::Ping(payload))) => {
-                            let _ = out.try_send(Message::Pong(payload));
+                        // Keepalive is text (a Worker cannot see ping frames): answer `ping` with `pong`.
+                        Some(Ok(Message::Text(text))) => {
+                            if text.as_str() == PING {
+                                let _ = out.try_send(Message::text(PONG));
+                            }
                         }
                         Some(Ok(Message::Close(frame))) => {
                             let (code, reason) = frame
@@ -912,6 +982,8 @@ impl Relay {
                                 .unwrap_or((1005, String::new()));
                             break if code == CLOSE_REPLACED {
                                 Outcome::Replaced
+                            } else if code == CLOSE_DELETED {
+                                Outcome::Deleted
                             } else {
                                 Outcome::Closed(code, reason)
                             };
@@ -925,10 +997,12 @@ impl Relay {
         session.cancel();
         if matches!(outcome, Outcome::Cancelled) {
             let _ = out
-                .send(Message::Close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
-                    code: CloseCode::Normal,
-                    reason: "relay mode off".into(),
-                })))
+                .send(Message::Close(Some(
+                    tokio_tungstenite::tungstenite::protocol::CloseFrame {
+                        code: CloseCode::Normal,
+                        reason: "relay mode off".into(),
+                    },
+                )))
                 .await;
         }
         drop(out);
@@ -940,7 +1014,13 @@ impl Relay {
     }
 
     /// One binary message of the relay: `[u32 BE stream id][u8 kind][payload]`.
-    fn on_frame(self: &Arc<Self>, bytes: &[u8], out: &mpsc::Sender<Message>, streams: &Streams, session: &CancellationToken) {
+    fn on_frame(
+        self: &Arc<Self>,
+        bytes: &[u8],
+        out: &mpsc::Sender<Message>,
+        streams: &Streams,
+        session: &CancellationToken,
+    ) {
         let Some((head, payload)) = bytes.split_at_checked(5) else {
             return;
         };
@@ -1033,6 +1113,18 @@ impl Relay {
             }
         });
     }
+}
+
+/// The time to the next full hour (UTC), when the relay counts its limits again.
+fn until_next_hour() -> Duration {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    next_hour_after(secs)
+}
+
+fn next_hour_after(unix_secs: u64) -> Duration {
+    Duration::from_secs(3600 - unix_secs % 3600 + 1)
 }
 
 /// Waits for `fut`, or gives up with `None` when `cancel` fires first.
@@ -1155,7 +1247,9 @@ impl Stream {
             let id = self.id;
             tokio::spawn(async move {
                 while let Some(text) = rpc_in.recv().await {
-                    let Ok(chunks) = secure.seal(text.as_bytes()) else { return };
+                    let Ok(chunks) = secure.seal(text.as_bytes()) else {
+                        return;
+                    };
                     for cipher in chunks {
                         if out.send(frame(id, KIND_DATA, &cipher)).await.is_err() {
                             return;
@@ -1189,10 +1283,7 @@ impl Stream {
     }
 
     /// The Noise handshake, the first message and the checks of who the phone is.
-    async fn open_session(
-        &mut self,
-        limits: &PhoneLimits,
-    ) -> Result<(Secure, Peer, Option<ConnSlot>), String> {
+    async fn open_session(&mut self, limits: &PhoneLimits) -> Result<(Secure, Peer, Option<ConnSlot>), String> {
         let now = crate::store::now_ms();
         let keys = self.relay.keys().map_err(|e| format!("{e:#}"))?;
         let (secure, remote) = match self.handshake(&keys).await {
@@ -1273,9 +1364,7 @@ impl Stream {
             .get_remote_static()
             .and_then(|k| <[u8; 32]>::try_from(k).ok())
             .ok_or_else(|| "handshake: no static key".to_string())?;
-        let state = responder
-            .into_transport_mode()
-            .map_err(|e| format!("handshake: {e}"))?;
+        let state = responder.into_transport_mode().map_err(|e| format!("handshake: {e}"))?;
         self.send_data(&buf[..n]).await?;
         Ok((
             Secure {
@@ -1361,7 +1450,8 @@ mod tests {
             backoff_min: Duration::from_millis(20),
             backoff_max: Duration::from_millis(100),
             replaced_wait: Duration::from_millis(500),
-            limit_wait: Duration::from_millis(500),
+            limit_wait: Some(Duration::from_millis(500)),
+            auth_backoff_max: Duration::from_millis(800),
             connect: Duration::from_secs(2),
             stable: Duration::from_secs(60),
         }
@@ -1441,20 +1531,31 @@ mod tests {
         conns: mpsc::UnboundedReceiver<Conn>,
         /// New connections are accepted and then never read: the relay "goes silent".
         mute: Arc<AtomicBool>,
+        /// When not 0, the upgrade is refused with this HTTP status.
+        reject: Arc<std::sync::atomic::AtomicU16>,
+        /// When each upgrade was tried, refused ones included.
+        tries: Arc<Mutex<Vec<Instant>>>,
     }
 
     impl FakeRelay {
+        #[allow(clippy::result_large_err)] // the header callback's error type is the library's
         async fn start() -> Self {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let addr = listener.local_addr().unwrap();
             let (conns_tx, conns) = mpsc::unbounded_channel();
             let mute = Arc::new(AtomicBool::new(false));
             let muted = mute.clone();
+            let reject = Arc::new(std::sync::atomic::AtomicU16::new(0));
+            let rejecting = reject.clone();
+            let tries = Arc::new(Mutex::new(Vec::new()));
+            let tried = tries.clone();
             tokio::spawn(async move {
                 loop {
                     let Ok((tcp, _)) = listener.accept().await else { return };
                     let conns_tx = conns_tx.clone();
                     let muted = muted.clone();
+                    let rejecting = rejecting.clone();
+                    let tried = tried.clone();
                     tokio::spawn(async move {
                         let seen = Arc::new(Mutex::new((String::new(), None::<String>)));
                         let capture = seen.clone();
@@ -1468,7 +1569,14 @@ mod tests {
                                     .and_then(|v| v.to_str().ok())
                                     .map(str::to_string);
                                 *capture.lock().unwrap() = (req.uri().path().to_string(), auth);
-                                Ok(resp)
+                                tried.lock().unwrap().push(Instant::now());
+                                match rejecting.load(Ordering::Relaxed) {
+                                    0 => Ok(resp),
+                                    status => Err(tokio_tungstenite::tungstenite::http::Response::builder()
+                                        .status(status)
+                                        .body(None)
+                                        .unwrap()),
+                                }
                             },
                         )
                         .await;
@@ -1505,7 +1613,13 @@ mod tests {
                     });
                 }
             });
-            Self { addr, conns, mute }
+            Self {
+                addr,
+                conns,
+                mute,
+                reject,
+                tries,
+            }
         }
 
         fn url(&self) -> String {
@@ -1668,7 +1782,9 @@ mod tests {
         }
 
         fn nk(&self) -> Vec<u8> {
-            URL_SAFE_NO_PAD.decode(self.app.relay.keys().unwrap().public_b64()).unwrap()
+            URL_SAFE_NO_PAD
+                .decode(self.app.relay.keys().unwrap().public_b64())
+                .unwrap()
         }
 
         async fn owner(&self, method: &str, params: Value) -> Result<Value, crate::rpc::RpcError> {
@@ -1738,7 +1854,10 @@ mod tests {
         let info = phone.call(&mut conn, "daemon.info", json!({})).await.unwrap();
         assert_eq!(info["version"], crate::rpc::VERSION);
         let devices = phone.call(&mut conn, "devices.list", json!({})).await.unwrap();
-        assert_eq!(devices[0]["current"], true, "the stream is the device, not the owner's CLI");
+        assert_eq!(
+            devices[0]["current"], true,
+            "the stream is the device, not the owner's CLI"
+        );
         // The device's rights are the device's: an agent-only call is refused as on a direct socket.
         let err = phone.call(&mut conn, "crew.list", json!({})).await;
         assert!(err.is_ok() || err.is_err()); // crew.list is an agent tool for agents only; either way it answers
@@ -1817,8 +1936,14 @@ mod tests {
         assert_eq!(status["connected"], false);
         assert!(conn.closed(WAIT).await, "the daemon closes its socket to the relay");
         assert!(!rig.dir.path().join(RELAY_FILE).exists());
-        assert!(rig.dir.path().join(NOISE_KEY_FILE).exists(), "phones pin the key: it stays");
-        assert!(rig.relay.next_conn(Duration::from_millis(400)).await.is_none(), "no reconnect");
+        assert!(
+            rig.dir.path().join(NOISE_KEY_FILE).exists(),
+            "phones pin the key: it stays"
+        );
+        assert!(
+            rig.relay.next_conn(Duration::from_millis(400)).await.is_none(),
+            "no reconnect"
+        );
         assert_eq!(rig.owner("relay.status", json!({})).await.unwrap()["sid"], Value::Null);
         // Disabling again is not an error.
         assert!(rig.owner("relay.disable", json!({})).await.is_ok());
@@ -1834,7 +1959,10 @@ mod tests {
 
         // Phone to daemon: 300 KB in one request.
         let pad = "A".repeat(300_000);
-        let info = phone.call(&mut conn, "daemon.info", json!({ "pad": pad })).await.unwrap();
+        let info = phone
+            .call(&mut conn, "daemon.info", json!({ "pad": pad }))
+            .await
+            .unwrap();
         assert_eq!(info["version"], crate::rpc::VERSION);
 
         // Daemon to phone: a 300 KB file comes back in one reply, in several ciphertext frames.
@@ -1842,7 +1970,8 @@ mod tests {
         std::fs::write(&file, "x".repeat(300_000)).unwrap();
         phone.send(
             &conn,
-            &json!({"jsonrpc":"2.0","id":9,"method":"fs.read","params":{"path": file.display().to_string()}}).to_string(),
+            &json!({"jsonrpc":"2.0","id":9,"method":"fs.read","params":{"path": file.display().to_string()}})
+                .to_string(),
         );
         let mut frames = 0;
         let mut joined = Reassembler::new(64 << 20);
@@ -1857,7 +1986,10 @@ mod tests {
                 break m;
             }
         };
-        assert!(frames >= 5, "300 KB cannot fit fewer than 5 frames of 64 KiB, got {frames}");
+        assert!(
+            frames >= 5,
+            "300 KB cannot fit fewer than 5 frames of 64 KiB, got {frames}"
+        );
         let v: Value = serde_json::from_slice(&reply).unwrap();
         assert_eq!(v["id"], 9);
         assert!(v["result"].to_string().len() > 300_000);
@@ -1903,7 +2035,11 @@ mod tests {
             assert_eq!(sealed.len(), len.div_ceil(CHUNK).max(1), "len {len}");
             assert!(sealed.iter().all(|c| c.len() <= NOISE_MAX), "len {len}");
             if len > CHUNK {
-                assert_eq!(sealed[0].len(), NOISE_MAX, "a full chunk is exactly 65535 bytes of ciphertext");
+                assert_eq!(
+                    sealed[0].len(),
+                    NOISE_MAX,
+                    "a full chunk is exactly 65535 bytes of ciphertext"
+                );
             }
             let mut joined = Reassembler::new(1 << 20);
             let mut out = None;
@@ -1935,7 +2071,11 @@ mod tests {
         // The same ciphertext twice: the Noise nonce has moved on.
         let cipher = phone
             .secure
-            .seal(json!({"jsonrpc":"2.0","id":7,"method":"daemon.info","params":{}}).to_string().as_bytes())
+            .seal(
+                json!({"jsonrpc":"2.0","id":7,"method":"daemon.info","params":{}})
+                    .to_string()
+                    .as_bytes(),
+            )
             .unwrap()
             .remove(0);
         conn.send_frame(2, KIND_DATA, &cipher);
@@ -1983,7 +2123,11 @@ mod tests {
             .unwrap();
         other.send(&conn, r#"{"pair":true}"#);
         let err = other
-            .call(&mut conn, "pair.redeem", json!({"code": "no-such-code", "device_name": "x"}))
+            .call(
+                &mut conn,
+                "pair.redeem",
+                json!({"code": "no-such-code", "device_name": "x"}),
+            )
             .await
             .unwrap_err();
         assert_eq!(err["code"], crate::rpc::UNAUTHORIZED, "a bad code, not a limit");
@@ -1997,7 +2141,9 @@ mod tests {
         let token = rig.pair(&mut conn, 1, &key, "203.0.113.7").await;
         let ip = "203.0.113.88";
         for i in 0..crate::phone::ATTEMPT_MAX {
-            let phone = Phone::connect(&mut conn, 20 + i as u32, ip, &key, &rig.nk()).await.unwrap();
+            let phone = Phone::connect(&mut conn, 20 + i as u32, ip, &key, &rig.nk())
+                .await
+                .unwrap();
             phone.send(&conn, r#"{"auth":"bdt_wrong"}"#);
             assert_eq!(phone.recv(&mut conn).await.unwrap(), r#"{"error":"unauthorized"}"#);
         }
@@ -2014,14 +2160,20 @@ mod tests {
     async fn an_anonymous_stream_that_never_redeems_is_closed() {
         let mut rig = Rig::new().await;
         let mut conn = rig.enable().await;
-        let phone = Phone::connect(&mut conn, 3, "203.0.113.9", &new_key(), &rig.nk()).await.unwrap();
+        let phone = Phone::connect(&mut conn, 3, "203.0.113.9", &new_key(), &rig.nk())
+            .await
+            .unwrap();
         phone.send(&conn, r#"{"pair":true}"#);
         assert_eq!(phone.recv(&mut conn).await.unwrap_err(), "closed");
         // And one that sends nothing after the handshake.
-        let silent = Phone::connect(&mut conn, 4, "203.0.113.9", &new_key(), &rig.nk()).await.unwrap();
+        let silent = Phone::connect(&mut conn, 4, "203.0.113.9", &new_key(), &rig.nk())
+            .await
+            .unwrap();
         assert_eq!(silent.recv(&mut conn).await.unwrap_err(), "closed");
         // Anonymous streams may only pair.
-        let anon = Phone::connect(&mut conn, 6, "203.0.113.10", &new_key(), &rig.nk()).await.unwrap();
+        let anon = Phone::connect(&mut conn, 6, "203.0.113.10", &new_key(), &rig.nk())
+            .await
+            .unwrap();
         anon.send(&conn, r#"{"pair":true}"#);
         let err = anon.call(&mut conn, "daemon.info", json!({})).await.unwrap_err();
         assert_eq!(err["code"], crate::rpc::UNAUTHORIZED);
@@ -2038,7 +2190,10 @@ mod tests {
         let status = rig.app.relay.status();
         assert!(!status.connected);
         assert!(status.enabled);
-        assert!(status.last_error.as_deref().unwrap_or("").contains("4001"), "{status:?}");
+        assert!(
+            status.last_error.as_deref().unwrap_or("").contains("4001"),
+            "{status:?}"
+        );
         let again = rig.relay.next_conn(WAIT).await.expect("it comes back");
         assert!(again.at.duration_since(closed_at) >= Duration::from_millis(450));
         // Back online: the error is cleared.
@@ -2089,7 +2244,10 @@ mod tests {
         assert!((45..=140).contains(&gaps[0]), "{gaps:?}");
         assert!(gaps[1] > gaps[0], "{gaps:?}");
         assert!(gaps[2] >= 180, "{gaps:?}");
-        assert!((180..=450).contains(&gaps[3]), "the wait stops growing at the cap: {gaps:?}");
+        assert!(
+            (180..=450).contains(&gaps[3]),
+            "the wait stops growing at the cap: {gaps:?}"
+        );
         let err = rig.app.relay.status().last_error.unwrap_or_default();
         assert!(err.contains("1013"), "{err}");
     }
@@ -2101,12 +2259,22 @@ mod tests {
         rig.connected().await;
         let mut ping = false;
         while let Some(m) = conn.recv(Duration::from_millis(600)).await {
-            if matches!(m, Message::Ping(_)) {
+            if matches!(&m, Message::Text(t) if t.as_str() == "ping") {
                 ping = true;
                 break;
             }
         }
-        assert!(ping, "a ping every `ping` while connected");
+        assert!(ping, "a text `ping` every `ping` while connected");
+        // The relay's own `ping` is answered with the text `pong`.
+        conn.to_daemon.send(Message::text("ping")).unwrap();
+        let mut ponged = false;
+        while let Some(m) = conn.recv(Duration::from_millis(600)).await {
+            if matches!(&m, Message::Text(t) if t.as_str() == "pong") {
+                ponged = true;
+                break;
+            }
+        }
+        assert!(ponged);
         drop(conn);
 
         // A relay that accepts the socket and then says nothing, not even a pong, is given up after `silence`.
@@ -2120,6 +2288,84 @@ mod tests {
             assert!(Instant::now() < deadline, "{:?}", rig.app.relay.status());
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
+    }
+
+    #[tokio::test]
+    async fn a_deleted_registration_switches_relay_mode_off_for_good() {
+        let mut rig = Rig::new().await;
+        let conn = rig.enable().await;
+        rig.connected().await;
+        conn.close_with(CLOSE_DELETED, "registration deleted");
+        let deadline = Instant::now() + WAIT;
+        while rig.app.relay.status().enabled {
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let status = rig.app.relay.status();
+        assert!(!status.connected);
+        assert!(status.last_error.unwrap().contains("deleted"));
+        assert!(
+            !rig.dir.path().join(RELAY_FILE).exists(),
+            "the dead registration is forgotten"
+        );
+        assert!(
+            rig.relay.next_conn(Duration::from_millis(400)).await.is_none(),
+            "no reconnect"
+        );
+        // The owner can enable it again with a new registration.
+        assert!(rig.app.relay.enable(rig.config()).await.is_ok());
+        assert!(rig.relay.next_conn(WAIT).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn silence_and_oversize_closes_reconnect_with_the_backoff() {
+        let mut rig = Rig::new().await;
+        let conn = rig.enable().await;
+        conn.close_with(CLOSE_SILENCE, "silence");
+        let conn = rig.relay.next_conn(WAIT).await.expect("4002: reconnects");
+        rig.connected().await;
+        conn.close_with(CLOSE_TOO_BIG, "too big");
+        let conn = rig.relay.next_conn(WAIT).await.expect("4009: reconnects");
+        rig.connected().await;
+        drop(conn);
+    }
+
+    #[tokio::test]
+    async fn the_limit_close_waits_for_the_next_hour_and_a_bad_secret_backs_off_far() {
+        // The default wait of 4008 is the time to the next full hour.
+        assert_eq!(next_hour_after(0), Duration::from_secs(3601));
+        assert_eq!(next_hour_after(3599), Duration::from_secs(2));
+        assert_eq!(next_hour_after(7200 + 1800), Duration::from_secs(1801));
+        assert!(Timing::default().limit_wait.is_none());
+        assert_eq!(Timing::default().auth_backoff_max, Duration::from_secs(600));
+
+        let mut rig = Rig::new().await;
+        rig.relay.reject.store(401, Ordering::Relaxed);
+        rig.app.relay.set_timing(Timing {
+            backoff_min: Duration::from_millis(50),
+            backoff_max: Duration::from_millis(100),
+            auth_backoff_max: Duration::from_millis(1600),
+            ..fast()
+        });
+        rig.app.relay.enable(rig.config()).await.unwrap();
+        let deadline = Instant::now() + WAIT;
+        while rig.relay.tries.lock().unwrap().len() < 5 {
+            assert!(Instant::now() < deadline, "it keeps trying");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let times = rig.relay.tries.lock().unwrap().clone();
+        let gaps: Vec<u128> = times.windows(2).map(|w| (w[1] - w[0]).as_millis()).collect();
+        assert!(
+            gaps[2] > 140,
+            "a refused secret waits longer than the normal cap of 100 ms: {gaps:?}"
+        );
+        let status = rig.app.relay.status();
+        assert!(status.enabled && !status.connected);
+        assert!(status.last_error.unwrap().contains("credentials"));
+        // Once the relay accepts it again, the daemon is connected.
+        rig.relay.reject.store(0, Ordering::Relaxed);
+        let _conn = rig.relay.next_conn(WAIT).await.expect("connects");
+        rig.connected().await;
     }
 
     #[tokio::test]
@@ -2144,7 +2390,10 @@ mod tests {
         let conn = rig.enable().await;
         drop(conn);
         rig.app.relay.shutdown().await;
-        assert!(rig.dir.path().join(RELAY_FILE).exists(), "stopping the daemon keeps the registration");
+        assert!(
+            rig.dir.path().join(RELAY_FILE).exists(),
+            "stopping the daemon keeps the registration"
+        );
 
         let again = app_in(rig.dir.path());
         assert!(!again.relay.status().enabled);
@@ -2155,7 +2404,10 @@ mod tests {
         let conn = rig.relay.next_conn(WAIT).await.expect("it connects on start");
         assert_eq!(conn.path, format!("/v1/server/{SID}"));
         // The Noise key is the one the first start made.
-        assert_eq!(again.relay.keys().unwrap().public_b64(), URL_SAFE_NO_PAD.encode(rig.nk()));
+        assert_eq!(
+            again.relay.keys().unwrap().public_b64(),
+            URL_SAFE_NO_PAD.encode(rig.nk())
+        );
     }
 
     #[tokio::test]
@@ -2172,7 +2424,10 @@ mod tests {
         let config = Config::checked("ws://127.0.0.1:9", SID, &secret(), true).unwrap();
         let err = app.relay.enable(config).await.unwrap_err().to_string();
         assert!(err.contains(NOISE_KEY_FILE), "{err}");
-        assert_eq!(std::fs::read_to_string(dir.path().join(NOISE_KEY_FILE)).unwrap(), "garbage");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join(NOISE_KEY_FILE)).unwrap(),
+            "garbage"
+        );
         assert!(!app.relay.status().enabled);
 
         // A key file whose halves do not belong together is damaged too.
@@ -2192,7 +2447,10 @@ mod tests {
         let mut rig = Rig::new().await;
         let _conn = rig.enable().await;
         for name in [NOISE_KEY_FILE, RELAY_FILE] {
-            let mode = std::fs::metadata(rig.dir.path().join(name)).unwrap().permissions().mode();
+            let mode = std::fs::metadata(rig.dir.path().join(name))
+                .unwrap()
+                .permissions()
+                .mode();
             assert_eq!(mode & 0o777, 0o600, "{name}");
         }
         let first = rig.app.relay.keys().unwrap().public_b64();
@@ -2222,8 +2480,16 @@ mod tests {
             ("https://relay.bandito.dev:0", SID, secret.as_str()),
             ("https://relay bandito.dev", SID, secret.as_str()),
             ("https://relay.bandito.dev", "short", secret.as_str()),
-            ("https://relay.bandito.dev", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", secret.as_str()),
-            ("https://relay.bandito.dev", "abcdefghijklmnopqrstuvwxy1", secret.as_str()),
+            (
+                "https://relay.bandito.dev",
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                secret.as_str(),
+            ),
+            (
+                "https://relay.bandito.dev",
+                "abcdefghijklmnopqrstuvwxy1",
+                secret.as_str(),
+            ),
             ("https://relay.bandito.dev", SID, "tooshort"),
             ("https://relay.bandito.dev", SID, &"!".repeat(43)),
         ];
@@ -2234,10 +2500,16 @@ mod tests {
                 .unwrap_err();
             assert_eq!(err.code, crate::rpc::INVALID_PARAMS, "{url} {sid} {secret}");
         }
-        let err = rig.owner("relay.enable", json!({"relay_url": "https://x.dev"})).await.unwrap_err();
+        let err = rig
+            .owner("relay.enable", json!({"relay_url": "https://x.dev"}))
+            .await
+            .unwrap_err();
         assert_eq!(err.code, crate::rpc::INVALID_PARAMS);
         assert!(!rig.dir.path().join(RELAY_FILE).exists(), "nothing was saved");
-        assert!(!rig.dir.path().join(NOISE_KEY_FILE).exists(), "no key was made for a refused call");
+        assert!(
+            !rig.dir.path().join(NOISE_KEY_FILE).exists(),
+            "no key was made for a refused call"
+        );
 
         let ok = Config::validated("https://Relay.Bandito.dev/", SID, &secret).unwrap();
         assert_eq!(ok.relay_url, "https://relay.bandito.dev");
@@ -2258,7 +2530,10 @@ mod tests {
         // Enabling the same settings again is no change and no event.
         let before = kinds.len();
         rig.app.relay.enable(rig.config()).await.unwrap();
-        assert!(timeout(Duration::from_millis(200), events.recv()).await.is_err(), "{before}");
+        assert!(
+            timeout(Duration::from_millis(200), events.recv()).await.is_err(),
+            "{before}"
+        );
     }
 
     #[tokio::test]
@@ -2275,7 +2550,9 @@ mod tests {
         assert!(crate::rpc::features().contains(&"relay"));
         // A paired device is an owner peer.
         let device = rig.app.sup.hub().store.device_add("Mac", "bdt_mac").unwrap();
-        let status = dispatch(&rig.app, &Peer::Device(device), "relay.status", json!({})).await.unwrap();
+        let status = dispatch(&rig.app, &Peer::Device(device), "relay.status", json!({}))
+            .await
+            .unwrap();
         assert_eq!(status["enabled"], false);
     }
 
@@ -2287,25 +2564,54 @@ mod tests {
             .unwrap()
             .to_string();
         let anon = Peer::Anonymous("203.0.113.5".into());
-        for key in ["short", &URL_SAFE_NO_PAD.encode([1u8; 31]), &URL_SAFE_NO_PAD.encode([1u8; 33]), "!!!"] {
-            let err = dispatch(&rig.app, &anon, "pair.redeem", json!({"code": code, "device_name": "p", "noise_key": key}))
-                .await
-                .unwrap_err();
+        for key in [
+            "short",
+            &URL_SAFE_NO_PAD.encode([1u8; 31]),
+            &URL_SAFE_NO_PAD.encode([1u8; 33]),
+            "!!!",
+        ] {
+            let err = dispatch(
+                &rig.app,
+                &anon,
+                "pair.redeem",
+                json!({"code": code, "device_name": "p", "noise_key": key}),
+            )
+            .await
+            .unwrap_err();
             assert_eq!(err.code, crate::rpc::INVALID_PARAMS, "{key}");
         }
         // The code is still good, and the key (if any) is kept.
         let key = URL_SAFE_NO_PAD.encode([9u8; 32]);
-        let done = dispatch(&rig.app, &anon, "pair.redeem", json!({"code": code, "device_name": "p", "noise_key": key}))
-            .await
-            .unwrap();
+        let done = dispatch(
+            &rig.app,
+            &anon,
+            "pair.redeem",
+            json!({"code": code, "device_name": "p", "noise_key": key}),
+        )
+        .await
+        .unwrap();
         let id = done["device"]["id"].as_str().unwrap();
-        assert_eq!(rig.app.sup.hub().store.device_noise_key(id).unwrap().as_deref(), Some(key.as_str()));
-        assert!(done["device"].get("noise_key").is_none(), "the list of devices does not carry the key");
+        assert_eq!(
+            rig.app.sup.hub().store.device_noise_key(id).unwrap().as_deref(),
+            Some(key.as_str())
+        );
+        assert!(
+            done["device"].get("noise_key").is_none(),
+            "the list of devices does not carry the key"
+        );
         // Without a key: a device of the direct modes, as before.
-        let code = rig.owner("pair.create", json!({})).await.unwrap()["code"].as_str().unwrap().to_string();
-        let done = dispatch(&rig.app, &anon, "pair.redeem", json!({"code": code, "device_name": "p"}))
-            .await
-            .unwrap();
+        let code = rig.owner("pair.create", json!({})).await.unwrap()["code"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let done = dispatch(
+            &rig.app,
+            &anon,
+            "pair.redeem",
+            json!({"code": code, "device_name": "p"}),
+        )
+        .await
+        .unwrap();
         let id = done["device"]["id"].as_str().unwrap();
         assert_eq!(rig.app.sup.hub().store.device_noise_key(id).unwrap(), None);
         let err = dispatch(&rig.app, &anon, "pair.redeem", json!({"code": "x", "device_name": "p"}))
@@ -2322,7 +2628,10 @@ mod tests {
         assert_eq!(created["noise_key"], Value::Null);
         assert_eq!(created["link"], Value::Null, "no phone listener and no relay: no link");
         assert!(rig.app.relay.link_info().is_none());
-        assert!(!rig.dir.path().join(NOISE_KEY_FILE).exists(), "pair.create does not make the key while the relay is off");
+        assert!(
+            !rig.dir.path().join(NOISE_KEY_FILE).exists(),
+            "pair.create does not make the key while the relay is off"
+        );
     }
 
     #[test]
@@ -2341,7 +2650,15 @@ mod tests {
     #[test]
     fn the_backoff_doubles_to_the_cap_with_a_little_jitter() {
         let t = Timing::default();
-        for (attempt, base) in [(0, 1.0), (1, 2.0), (2, 4.0), (5, 32.0), (6, 60.0), (30, 60.0), (u32::MAX, 60.0)] {
+        for (attempt, base) in [
+            (0, 1.0),
+            (1, 2.0),
+            (2, 4.0),
+            (5, 32.0),
+            (6, 60.0),
+            (30, 60.0),
+            (u32::MAX, 60.0),
+        ] {
             for _ in 0..50 {
                 let s = t.backoff(attempt).as_secs_f64();
                 assert!(s >= base * 0.79 && s <= base * 1.21, "attempt {attempt}: {s}");
