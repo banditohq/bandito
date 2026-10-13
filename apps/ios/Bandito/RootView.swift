@@ -39,16 +39,16 @@ struct RootView: View {
         let showsOnboarding = onboarding.shows(hasServers: !servers.isEmpty)
         ZStack {
             TabView(selection: $tab) {
-                CrewScreen(servers: servers, onConnect: openConnect, focus: crewFocus)
+                CrewScreen(servers: servers, settings: settings, onConnect: openConnect, focus: crewFocus)
                     .id(dynamicTypeSize)
                     .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
                     .tag(AppTab.crew)
-                InboxScreen(servers: servers, settings: settings, focus: $inboxFocus)
+                InboxScreen(servers: servers, settings: settings, focus: $inboxFocus, openChat: openChat)
                     .id(dynamicTypeSize)
                     .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
                     .badge(InboxRules.badge(of: servers))
                     .tag(AppTab.inbox)
-                ActivityScreen(servers: servers)
+                ActivityScreen(servers: servers, settings: settings)
                     .id(dynamicTypeSize)
                     .badge(ActivityFacts.unreadCount(servers: servers))
                     .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
@@ -110,6 +110,7 @@ struct RootView: View {
         // The notifications and the widgets follow the servers as they come and go.
         .onChange(of: session.current.map(\.id), initial: true) { _, _ in
             notifications.attach(session.current)
+            ChatOutbox.shared.attach(session.current)
         }
         // Accents are the brand's signal orange (a link, a menu's chevron); the tab bar itself stays cream on warm dark.
         .tint(Color.Bandito.signal)
@@ -142,6 +143,12 @@ struct RootView: View {
         }
     }
 
+    /// Opens an agent's chat in the Crew (the Inbox sheet's button).
+    private func openChat(serverID: UUID, agentID: String) {
+        tab = .crew
+        crewFocus = CrewFocus(serverID: serverID, agentID: agentID, request: UUID())
+    }
+
     /// Opens the connect sheet on the camera (the Crew's and Settings' "Connect a server").
     private func openConnect() {
         connect = ConnectRequest(mode: .scanCode)
@@ -160,8 +167,11 @@ struct RootView: View {
     private func open(_ route: IOSNotifications.Route?) {
         guard let route else { return }
         switch route {
-        case .agent:
+        case .agent(let agentID):
             tab = .crew
+            if let server = session.current.first(where: { $0.agents.contains { $0.id == agentID } }) {
+                crewFocus = CrewFocus(serverID: server.id, agentID: agentID, request: UUID())
+            }
         case .approval(let approvalID, _):
             inboxFocus = IOSNotifications.inboxItemID(approvalID: approvalID)
             tab = .inbox

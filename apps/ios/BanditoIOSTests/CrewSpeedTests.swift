@@ -49,7 +49,7 @@ import UIKit
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
         let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
-        window.rootViewController = UIHostingController(rootView: CrewScreen(servers: [server], onConnect: {}))
+        window.rootViewController = UIHostingController(rootView: CrewScreen(servers: [server], settings: IOSSettings(), onConnect: {}))
         window.makeKeyAndVisible()
         window.layoutIfNeeded()
         // The screen is built and at rest before the stream starts counting.

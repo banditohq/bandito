@@ -106,10 +106,10 @@ final class IOSNotifications {
         updateBadge()
     }
 
-    /// Whether the person is looking at this agent's chat now. There is no chat screen yet, so this is false: the
-    /// extension point for the chat (its notifications are not shown while it is open).
+    /// Whether the person is looking at this agent's chat now (the chat is open on the screen): its notifications are
+    /// not shown, the reply is in front of them.
     func isViewingAgent(server: ServerModel, agent: String) -> Bool {
-        false
+        ChatPresence.shared.isViewing(serverID: server.id, agentID: agent)
     }
 
     /// The badge of the app icon: the number of things waiting in the Inbox.
