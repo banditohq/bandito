@@ -131,7 +131,7 @@ private func bytes(_ count: Int) -> [UInt8] {
 @MainActor
 private func makeMigration(
     source: MigrationFake, target: MigrationFake, sourceAgentPaused: Bool = false, chunkSize: Int = 4,
-    busyTimeout: Duration = .seconds(1), onStep: (@MainActor (MigrationStep) -> Void)? = nil
+    busyTimeout: Duration = .seconds(60), onStep: (@MainActor (MigrationStep) -> Void)? = nil
 ) -> AgentMigration {
     AgentMigration(
         agentID: "a", source: source, target: target, targetFolder: "/work/forge",

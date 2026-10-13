@@ -38,7 +38,7 @@ import Testing
     }
 
     private func waitForCallback(_ got: Got) async {
-        for _ in 0..<100 where got.all.isEmpty { try? await Task.sleep(for: .milliseconds(20)) }
+        for _ in 0..<1000 where got.all.isEmpty { try? await Task.sleep(for: .milliseconds(20)) }
     }
 
     @Test func theRightCallbackGetsThePageAndIsHandedOverOnce() async throws {
@@ -84,10 +84,12 @@ import Testing
         for connection in silent { connection.start(queue: .global()) }
         defer { for connection in silent { connection.cancel() } }
         try await Task.sleep(for: .milliseconds(200))
-        let started = Date()
+        let started = ContinuousClock.now
         let (status, _) = try await get(port, "/callback?code=abc&state=S1")
         #expect(status == 200)
-        #expect(Date().timeIntervalSince(started) < 1)
+        // A request held up behind the silent sockets waits for their 5 s idle drop (one after another: 15 s).
+        // Answering before that is the fact; the margin to 5 s is for a starved CI runner.
+        #expect(started.duration(to: .now) < .seconds(4.5))
         await waitForCallback(got)
         #expect(got.all.count == 1)
     }

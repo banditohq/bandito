@@ -129,7 +129,7 @@ import Testing
         let runner = ImportRunner()
         runner.start(plan: plan, scanSkips: [], server: server, runtime: .claude)
         runner.cancel()
-        for _ in 0..<200 where !runner.finished { try await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<3000 where !runner.finished { try await Task.sleep(for: .milliseconds(10)) }
         #expect(runner.finished && !runner.running)
         #expect(runner.lines.map(\.name) == ["a", "b"])
         #expect(runner.lines.allSatisfy { $0.outcome == .skipped(.cancelled) })

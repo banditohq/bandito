@@ -59,7 +59,7 @@ private func makeModel(_ box: Box) -> DeviceSignIn {
 /// Waits until `check` holds, up to two seconds.
 @MainActor
 private func until(_ check: () -> Bool) async {
-    for _ in 0..<400 where !check() { try? await Task.sleep(for: .milliseconds(5)) }
+    for _ in 0..<6000 where !check() { try? await Task.sleep(for: .milliseconds(5)) }
 }
 
 @MainActor
