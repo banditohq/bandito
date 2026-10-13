@@ -80,6 +80,10 @@ public enum L10n {
             public static func lastSeen(when: String) -> String { L10n.tr("account.device.lastSeen", when) }
         }
 
+        public enum Devices {
+            public static var connectPhone: String { L10n.tr("account.devices.connectPhone") }
+        }
+
         public enum Links {
             public static var help: String { L10n.tr("account.links.help") }
             public static var settings: String { L10n.tr("account.links.settings") }
@@ -864,6 +868,10 @@ public enum L10n {
             public static var io: String { L10n.tr("failure.reason.io") }
             public static var notEmpty: String { L10n.tr("failure.reason.notEmpty") }
             public static var notFound: String { L10n.tr("failure.reason.notFound") }
+            public static var relayBusy: String { L10n.tr("failure.reason.relayBusy") }
+            public static var relayKeyMismatch: String { L10n.tr("failure.reason.relayKeyMismatch") }
+            public static var relayLimit: String { L10n.tr("failure.reason.relayLimit") }
+            public static var relayOffline: String { L10n.tr("failure.reason.relayOffline") }
             public static var tooLarge: String { L10n.tr("failure.reason.tooLarge") }
             public static var unsupported: String { L10n.tr("failure.reason.unsupported") }
         }
@@ -1453,7 +1461,9 @@ public enum L10n {
             public enum Confirm {
                 public static var action: String { L10n.tr("ios.connect.confirm.action") }
                 public static func body(address: String) -> String { L10n.tr("ios.connect.confirm.body", address) }
+                public static var bodyCloud: String { L10n.tr("ios.connect.confirm.bodyCloud") }
                 public static func bodyScan(address: String) -> String { L10n.tr("ios.connect.confirm.bodyScan", address) }
+                public static var bodyScanCloud: String { L10n.tr("ios.connect.confirm.bodyScanCloud") }
                 public static func title(name: String) -> String { L10n.tr("ios.connect.confirm.title", name) }
             }
 
@@ -1461,18 +1471,24 @@ public enum L10n {
                 public static var action: String { L10n.tr("ios.connect.done.action") }
                 public static var nameLabel: String { L10n.tr("ios.connect.done.nameLabel") }
                 public static var title: String { L10n.tr("ios.connect.done.title") }
+                public static var viaCloud: String { L10n.tr("ios.connect.done.viaCloud") }
+                public static var viaNetwork: String { L10n.tr("ios.connect.done.viaNetwork") }
             }
 
             public enum Error {
                 public static var badAddress: String { L10n.tr("ios.connect.error.badAddress") }
                 public static var badCode: String { L10n.tr("ios.connect.error.badCode") }
                 public static var badFingerprint: String { L10n.tr("ios.connect.error.badFingerprint") }
+                public static var cloudKey: String { L10n.tr("ios.connect.error.cloudKey") }
+                public static var cloudLimit: String { L10n.tr("ios.connect.error.cloudLimit") }
+                public static var cloudUnreachable: String { L10n.tr("ios.connect.error.cloudUnreachable") }
                 public static var codeRejected: String { L10n.tr("ios.connect.error.codeRejected") }
                 public static var generic: String { L10n.tr("ios.connect.error.generic") }
                 public static var mismatch: String { L10n.tr("ios.connect.error.mismatch") }
                 public static var mismatchTitle: String { L10n.tr("ios.connect.error.mismatchTitle") }
                 public static var noAddress: String { L10n.tr("ios.connect.error.noAddress") }
                 public static var notALink: String { L10n.tr("ios.connect.error.notALink") }
+                public static var offline: String { L10n.tr("ios.connect.error.offline") }
                 public static var saveKey: String { L10n.tr("ios.connect.error.saveKey") }
                 public static var tooMany: String { L10n.tr("ios.connect.error.tooMany") }
                 public static var tryAgain: String { L10n.tr("ios.connect.error.tryAgain") }
@@ -1708,6 +1724,7 @@ public enum L10n {
                 public static var renameTitle: String { L10n.tr("ios.settings.servers.renameTitle") }
 
                 public enum Via {
+                    public static var cloud: String { L10n.tr("ios.settings.servers.via.cloud") }
                     public static var lan: String { L10n.tr("ios.settings.servers.via.lan") }
                     public static var tailscale: String { L10n.tr("ios.settings.servers.via.tailscale") }
                 }
@@ -2819,6 +2836,28 @@ public enum L10n {
         }
     }
 
+    public enum PhoneWizard {
+        public static var install: String { L10n.tr("phoneWizard.install") }
+        public static var noServer: String { L10n.tr("phoneWizard.noServer") }
+        public static var preparing: String { L10n.tr("phoneWizard.preparing") }
+        public static var retry: String { L10n.tr("phoneWizard.retry") }
+        public static var signIn: String { L10n.tr("phoneWizard.signIn") }
+        public static var title: String { L10n.tr("phoneWizard.title") }
+        public static var via: String { L10n.tr("phoneWizard.via") }
+        public static var waiting: String { L10n.tr("phoneWizard.waiting") }
+
+        public enum Done {
+            public static var action: String { L10n.tr("phoneWizard.done.action") }
+            public static func body(device: String, server: String) -> String { L10n.tr("phoneWizard.done.body", device, server) }
+            public static var title: String { L10n.tr("phoneWizard.done.title") }
+        }
+
+        public enum Pick {
+            public static var hint: String { L10n.tr("phoneWizard.pick.hint") }
+            public static var title: String { L10n.tr("phoneWizard.pick.title") }
+        }
+    }
+
     public enum Ports {
         public static var allInterfaces: String { L10n.tr("ports.allInterfaces") }
         public static var columnAddress: String { L10n.tr("ports.columnAddress") }
@@ -3490,6 +3529,22 @@ public enum L10n {
                 public static var title: String { L10n.tr("serverSettings.phone.access.title") }
             }
 
+            public enum Cloud {
+                public static var badge: String { L10n.tr("serverSettings.phone.cloud.badge") }
+                public static var connected: String { L10n.tr("serverSettings.phone.cloud.connected") }
+                public static var connecting: String { L10n.tr("serverSettings.phone.cloud.connecting") }
+                public static var disabling: String { L10n.tr("serverSettings.phone.cloud.disabling") }
+                public static var enabling: String { L10n.tr("serverSettings.phone.cloud.enabling") }
+                public static var hint: String { L10n.tr("serverSettings.phone.cloud.hint") }
+                public static var signIn: String { L10n.tr("serverSettings.phone.cloud.signIn") }
+                public static var signInAction: String { L10n.tr("serverSettings.phone.cloud.signInAction") }
+                public static var title: String { L10n.tr("serverSettings.phone.cloud.title") }
+                public static var tooMany: String { L10n.tr("serverSettings.phone.cloud.tooMany") }
+                public static var unsupported: String { L10n.tr("serverSettings.phone.cloud.unsupported") }
+                public static var waiting: String { L10n.tr("serverSettings.phone.cloud.waiting") }
+                public static func waitingReason(reason: String) -> String { L10n.tr("serverSettings.phone.cloud.waitingReason", reason) }
+            }
+
             public enum Connect {
                 public static var hint: String { L10n.tr("serverSettings.phone.connect.hint") }
                 public static var needsAccess: String { L10n.tr("serverSettings.phone.connect.needsAccess") }
@@ -3503,6 +3558,10 @@ public enum L10n {
                 public static var empty: String { L10n.tr("serverSettings.phone.devices.empty") }
                 public static var loadFailed: String { L10n.tr("serverSettings.phone.devices.loadFailed") }
                 public static var title: String { L10n.tr("serverSettings.phone.devices.title") }
+            }
+
+            public enum Direct {
+                public static var title: String { L10n.tr("serverSettings.phone.direct.title") }
             }
 
             public enum Fingerprint {
@@ -3533,6 +3592,21 @@ public enum L10n {
                 public static var lan: String { L10n.tr("serverSettings.phone.risk.lan") }
                 public static var off: String { L10n.tr("serverSettings.phone.risk.off") }
                 public static var tailscale: String { L10n.tr("serverSettings.phone.risk.tailscale") }
+            }
+
+            public enum Tailscale {
+                public static var body: String { L10n.tr("serverSettings.phone.tailscale.body") }
+                public static var copied: String { L10n.tr("serverSettings.phone.tailscale.copied") }
+                public static var copy: String { L10n.tr("serverSettings.phone.tailscale.copy") }
+                public static var download: String { L10n.tr("serverSettings.phone.tailscale.download") }
+                public static var installLinux: String { L10n.tr("serverSettings.phone.tailscale.installLinux") }
+                public static var installMac: String { L10n.tr("serverSettings.phone.tailscale.installMac") }
+                public static var login: String { L10n.tr("serverSettings.phone.tailscale.login") }
+                public static var orCloud: String { L10n.tr("serverSettings.phone.tailscale.orCloud") }
+                public static var recheck: String { L10n.tr("serverSettings.phone.tailscale.recheck") }
+                public static var step1: String { L10n.tr("serverSettings.phone.tailscale.step1") }
+                public static var step2: String { L10n.tr("serverSettings.phone.tailscale.step2") }
+                public static var title: String { L10n.tr("serverSettings.phone.tailscale.title") }
             }
         }
 

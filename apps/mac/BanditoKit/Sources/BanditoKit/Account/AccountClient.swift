@@ -297,6 +297,32 @@ public actor AccountClient {
         return id
     }
 
+    // MARK: relay registrations (docs/RELAY.md, platform docs/API.md "Relay")
+
+    /// Registers a server for Bandito Relay (`POST /relay/servers`). The secret comes back once; it goes to the daemon
+    /// (`relay.enable`) and is kept nowhere else. Needs an approved device session.
+    public func registerRelayServer(name: String) async throws -> RelayRegistration {
+        struct Body: Encodable { var name: String }
+        let reply = try await send("POST", "/relay/servers", body: Body(name: String(name.prefix(100))), authenticated: true)
+        return try decodeOK(RelayRegistration.self, reply)
+    }
+
+    /// The account's registered servers (`GET /relay/servers`), oldest first.
+    public func relayServers() async throws -> [RelayServerEntry] {
+        struct Wire: Decodable { var servers: [RelayServerEntry] }
+        return try decodeOK(Wire.self, try await send("GET", "/relay/servers", authenticated: true)).servers
+    }
+
+    /// Removes a registration (`DELETE /relay/servers/:sid`). One the server does not know counts as removed.
+    public func deleteRelayServer(sid: String) async throws {
+        guard RelayRoute.isSID(sid) else { throw AccountError.invalidIdentifier }
+        do {
+            try checkOK(try await send("DELETE", "/relay/servers/\(sid)", authenticated: true))
+        } catch AccountError.api(code: "not_found", status: _) {
+            return
+        }
+    }
+
     // MARK: internals
 
     private func signedDevice() async throws -> DeviceBlock {

@@ -11,10 +11,15 @@ struct ServerPhoneSection: View {
     let model: ServerSettingsModel
     /// Devices to show without asking the server (the layout audit); nil on a live page.
     let previewDevices: [Device]?
+    /// The cloud state to show without a controller (the layout audit); nil on a live page.
+    let previewCloud: CloudAccessRules.Status?
     @State private var devices: [Device]
     @State private var devicesFailed = false
     @State private var disconnecting: Device?
     @State private var pairing = false
+    @State private var cloud: RelayController?
+    @Environment(AccountHub.self) private var hub
+    @Environment(Router.self) private var router
 
     var body: some View {
         SettingsGroup(title: L10n.ServerSettings.Phone.title) {
@@ -25,6 +30,13 @@ struct ServerPhoneSection: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(16)
             } else if let settings = model.snapshot?.settings {
+                if server.supportsRelay {
+                    CloudAccessBlock(cloud: cloud, preview: previewCloud, onSignIn: signIn)
+                    Divider().padding(.horizontal, 16)
+                    SectionLabel(L10n.ServerSettings.Phone.Direct.title)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                }
                 accessRows(settings)
                 Divider().padding(.horizontal, 16)
                 connectRow(settings)
@@ -34,6 +46,9 @@ struct ServerPhoneSection: View {
         }
         .task(id: DevicesKey(connected: server.info != nil, revision: server.settingsRevision)) {
             await reloadDevices()
+        }
+        .task(id: RelayKey(connected: server.info != nil, revision: server.relayRevision)) {
+            await refreshCloud()
         }
         .banditoSheet(isPresented: $pairing) {
             PhonePairSheet(server: server)
@@ -57,16 +72,44 @@ struct ServerPhoneSection: View {
         }
     }
 
-    init(server: ServerModel, model: ServerSettingsModel, previewDevices: [Device]? = nil) {
+    init(
+        server: ServerModel, model: ServerSettingsModel, previewDevices: [Device]? = nil,
+        previewCloud: CloudAccessRules.Status? = nil
+    ) {
         self.server = server
         self.model = model
         self.previewDevices = previewDevices
+        self.previewCloud = previewCloud
         _devices = State(initialValue: previewDevices ?? [])
     }
 
     private struct DevicesKey: Hashable {
         let connected: Bool
         let revision: Int
+    }
+
+    private struct RelayKey: Hashable {
+        let connected: Bool
+        let revision: Int
+    }
+
+
+    private func refreshCloud() async {
+        guard previewDevices == nil, server.info != nil, server.supportsRelay else { return }
+        if cloud == nil {
+            let hub = hub
+            cloud = RelayController(
+                host: server,
+                registrar: { [hub] in
+                    guard await hub.signedIn else { return nil }
+                    return try await hub.prepare()
+                })
+        }
+        await cloud?.refresh()
+    }
+
+    private func signIn() {
+        SettingsHandoff.openMainWindow(router: router) { $0.sheet = .account }
     }
 
     // MARK: Access
@@ -122,7 +165,13 @@ struct ServerPhoneSection: View {
         case .notListening:
             note(L10n.ServerSettings.Phone.notListening, color: Color.Bandito.text3)
         case .failed(let reason):
-            note(L10n.ServerSettings.Phone.error(reason: reason), color: Color.Bandito.danger)
+            if CloudAccessRules.showsTailscaleHelper(mode: settings.phoneAccess, status: model.snapshot?.phone) {
+                TailscaleHelper(
+                    os: server.info?.os, onRecheck: { Task { await model.recheckPhoneAccess() } },
+                    onUseCloud: server.supportsRelay && cloud != nil ? { Task { await cloud?.enable() } } : nil)
+            } else {
+                note(L10n.ServerSettings.Phone.error(reason: reason), color: Color.Bandito.danger)
+            }
         }
     }
 
@@ -140,7 +189,8 @@ struct ServerPhoneSection: View {
     // MARK: Connect
 
     private func connectRow(_ settings: ServerSettingValues) -> some View {
-        let can = PhoneAccessRules.canConnect(mode: settings.phoneAccess, status: model.snapshot?.phone)
+        let can = PhoneAccessRules.canConnect(
+            mode: settings.phoneAccess, status: model.snapshot?.phone, cloudConnected: cloud?.isConnected == true)
         return SettingsRow(
             title: L10n.ServerSettings.Phone.Connect.title,
             hint: settings.phoneAccess == .off

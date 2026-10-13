@@ -58,11 +58,11 @@ import Testing
         let ok = PairCode(code: Self.code, expiresInMs: 600_000, link: Self.link, hosts: ["x"], fingerprint: Self.fp)
         #expect(
             PhoneAccessRules.pairState(for: ok)
-                == .ready(link: Self.link, code: Self.code, hosts: ["100.64.0.1:7879", "192.168.1.5:7879"], expiresInMinutes: 10))
+                == .ready(link: Self.link, code: Self.code, hosts: ["100.64.0.1:7879", "192.168.1.5:7879"], expiresInMinutes: 10, viaCloud: false))
         // The hosts shown are the ones in the link that is drawn, not a separate field that could differ.
         let other = PairCode(code: Self.code, expiresInMs: 90_000, link: Self.link, hosts: ["9.9.9.9:1"])
         #expect(PhoneAccessRules.pairState(for: other)
-            == .ready(link: Self.link, code: Self.code, hosts: ["100.64.0.1:7879", "192.168.1.5:7879"], expiresInMinutes: 1))
+            == .ready(link: Self.link, code: Self.code, hosts: ["100.64.0.1:7879", "192.168.1.5:7879"], expiresInMinutes: 1, viaCloud: false))
         #expect(PhoneAccessRules.pairState(for: PairCode(code: "a", expiresInMs: 1)) == .notListening)
         #expect(PhoneAccessRules.pairState(for: PairCode(code: "a", expiresInMs: 1, link: "")) == .notListening)
         let v2 = Self.link.replacingOccurrences(of: "v=1", with: "v=2")

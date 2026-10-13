@@ -62,6 +62,10 @@ public enum UserFacingError {
         case "clone_failed": L10n.Failure.Reason.cloneFailed
         case "decode_failed": L10n.Failure.Reason.decodeFailed
         case "fingerprint_mismatch": L10n.Failure.Reason.fingerprintMismatch
+        case RelayFailure.offline: L10n.Failure.Reason.relayOffline
+        case RelayFailure.limit: L10n.Failure.Reason.relayLimit
+        case RelayFailure.busy: L10n.Failure.Reason.relayBusy
+        case RelayFailure.keyMismatch: L10n.Failure.Reason.relayKeyMismatch
         default: nil
         }
     }

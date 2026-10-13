@@ -727,6 +727,8 @@ public final class ServerModel: Identifiable {
     /// Counts the `server.settings_changed` events this model applied. The server's settings page reads the settings
     /// again on each change of this number.
     public internal(set) var settingsRevision = 0
+    /// Counts the `relay.changed` events this model applied; screens that show the relay read `relay.status` again.
+    public internal(set) var relayRevision = 0
     /// Whether the daemon knows the Telegram RPCs. `unknown` until `checkTelegramSupport()` has answered; the Settings
     /// window shows the Telegram section only for `supported`.
     public internal(set) var telegramSupport = TelegramSupport.unknown
@@ -740,6 +742,10 @@ public final class ServerModel: Identifiable {
         }
         if case .serverSettingsChanged = e.body {
             settingsRevision &+= 1
+            return
+        }
+        if case .relayChanged = e.body {
+            relayRevision &+= 1
             return
         }
         if case .usageLimits(let runtime, let windows) = e.body {

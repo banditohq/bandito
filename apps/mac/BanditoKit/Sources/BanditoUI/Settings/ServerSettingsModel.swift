@@ -57,6 +57,14 @@ final class ServerSettingsModel {
         }
     }
 
+    /// Sends the phone access mode again so the daemon looks at its addresses now (a Tailscale that was just installed
+    /// and signed in), instead of at its next round, then reads the settings.
+    func recheckPhoneAccess() async {
+        guard let mode = snapshot?.settings.phoneAccess, mode != .off else { return await load() }
+        _ = try? await server.updateServerSettings(ServerSettingsPatch(phoneAccess: mode))
+        await load()
+    }
+
     /// Reads the host numbers of the server. Call only when the server has the `host` feature.
     func loadStats() async {
         do {

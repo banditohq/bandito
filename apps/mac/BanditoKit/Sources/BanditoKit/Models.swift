@@ -504,6 +504,8 @@ public enum EventBody: Sendable, Hashable {
     case reaction(seq: Int64, emoji: String?, by: ReactionBy)
     /// The Telegram bot or its linked chats changed (`telegram.changed`, no data). Read `telegram.status` again.
     case telegramChanged
+    /// The relay's status changed (`relay.changed`, no data). Read `relay.status` again.
+    case relayChanged
     /// The owner changed the server's settings (`server.settings_changed`); `keys` are the names that changed. Read
     /// `server.settings_get` again. Broadcast only, never stored.
     case serverSettingsChanged(keys: [String])
@@ -682,6 +684,7 @@ extension Event: Decodable {
                 body = .unknown(kind: kind)
             }
         case "telegram.changed": body = .telegramChanged
+        case "relay.changed": body = .relayChanged
         case "server.settings_changed": body = .serverSettingsChanged(keys: try p(SettingsChangedP.self).keys)
         default: body = .unknown(kind: kind)
         }

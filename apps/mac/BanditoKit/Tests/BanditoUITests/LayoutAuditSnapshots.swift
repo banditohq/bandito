@@ -194,7 +194,7 @@ extension ScreenWorkSuites {
                 hosts: ["100.101.102.103:7879", "[fd7a:115c:a1e0:ab12:4843:cd96:6265:4dc6]:7879", "192.168.100.250:65535"]),
             code: "otter-lava-mint-orbit-crane-fig",
             hosts: ["100.101.102.103:7879", "[fd7a:115c:a1e0:ab12:4843:cd96:6265:4dc6]:7879", "192.168.100.250:65535"],
-            expiresInMinutes: 10)
+            expiresInMinutes: 10, viaCloud: false)
 
         /// A server reached over ssh with a key file, that answers the features of the settings page (never connected).
         static func sshServerForAudit() -> ServerModel {

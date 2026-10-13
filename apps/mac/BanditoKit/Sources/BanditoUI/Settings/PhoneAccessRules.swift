@@ -68,15 +68,17 @@ enum PhoneAccessRules {
     }
 
     /// Whether "Connect iPhone" can make a link now: access is on and the listener is up.
-    static func canConnect(mode: PhoneAccessMode, status: PhoneAccessStatus?) -> Bool {
+    static func canConnect(mode: PhoneAccessMode, status: PhoneAccessStatus?, cloudConnected: Bool = false) -> Bool {
+        if cloudConnected { return true }
         guard mode != .off, let status else { return false }
         return !status.listening.isEmpty
     }
 
     /// What the pairing sheet shows for a `pair.create` reply.
     enum PairState: Equatable {
-        /// The link passed the check: draw its QR code, the code, and the addresses.
-        case ready(link: String, code: String, hosts: [String], expiresInMinutes: Int)
+        /// The link passed the check: draw its QR code, the code, and the addresses. `viaCloud` is a link that names
+        /// Bandito Relay (`hosts` may be empty then).
+        case ready(link: String, code: String, hosts: [String], expiresInMinutes: Int, viaCloud: Bool)
         /// The code ran out of time: nothing of it stays on the screen.
         case expired
         /// The daemon gave no link: phone access is off or not listening.
@@ -98,7 +100,7 @@ enum PhoneAccessRules {
             let parsed = try PhonePairLink.parse(link)
             return .ready(
                 link: link, code: reply.code, hosts: parsed.hosts,
-                expiresInMinutes: max(1, Int(reply.expiresInMs / 60_000)))
+                expiresInMinutes: max(1, Int(reply.expiresInMs / 60_000)), viaCloud: parsed.relay != nil)
         } catch PhonePairLink.Problem.unsupportedVersion {
             return .updateApp
         } catch {
