@@ -573,7 +573,7 @@ mod tests {
 
         let err = dispatch(
             &app,
-            &Peer::Anonymous(String::new()),
+            &Peer::Anonymous(String::new(), None),
             "fs.list",
             json!({ "path": root }),
         )

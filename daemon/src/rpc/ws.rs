@@ -274,13 +274,13 @@ async fn rpc(
     }
     let peer = match device_for(&app, &headers) {
         Ok(Some(device)) => Peer::Device(device),
-        Ok(None) => Peer::Anonymous(client.0),
+        Ok(None) => Peer::Anonymous(client.0, None),
         Err(e) => return e.into_response(),
     };
     // The peer is fixed for the whole connection: a socket that was anonymous stays anonymous after `pair.redeem`,
     // and the app reconnects with its token. So the big limit is only ever for a paired device.
     let limit = match peer {
-        Peer::Anonymous(_) => ANONYMOUS_MESSAGE_LIMIT,
+        Peer::Anonymous(..) => ANONYMOUS_MESSAGE_LIMIT,
         _ => RPC_MESSAGE_LIMIT,
     };
     ws.max_message_size(limit)
@@ -581,7 +581,7 @@ async fn handle(app: Arc<App>, peer: Peer, socket: WebSocket, anonymous_slot: Op
     // An anonymous socket on a phone listener may only pair: it closes when no `pair.redeem` comes in time, and a while
     // after the one that did (the app reconnects with its token). The slot it holds is freed when it closes.
     let _slot = anonymous_slot;
-    let anonymous = matches!(peer, Peer::Anonymous(_));
+    let anonymous = matches!(peer, Peer::Anonymous(..));
     let redeem_seen = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let seen = redeem_seen.clone();
     let (mut sink, mut stream) = socket.split();

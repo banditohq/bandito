@@ -24,7 +24,7 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -39,6 +39,7 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_util::sync::CancellationToken;
+use zeroize::Zeroize;
 
 /// The Noise pattern of a phone session.
 pub const NOISE_PATTERN: &str = "Noise_IK_25519_ChaChaPoly_SHA256";
@@ -237,6 +238,12 @@ pub struct NoiseKeys {
     public: [u8; 32],
 }
 
+impl Drop for NoiseKeys {
+    fn drop(&mut self) {
+        self.wipe();
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct KeyFile {
     private: String,
@@ -247,6 +254,11 @@ impl NoiseKeys {
     /// The public key, base64url without padding: `nk`.
     pub fn public_b64(&self) -> String {
         URL_SAFE_NO_PAD.encode(self.public)
+    }
+
+    /// Overwrites the private key with zeros. Done when the keys are dropped.
+    fn wipe(&mut self) {
+        self.private.as_mut_slice().zeroize();
     }
 
     fn generate() -> Result<Self> {
@@ -267,12 +279,15 @@ impl NoiseKeys {
     fn load_or_create(home: &Path) -> Result<Self> {
         let path = home.join(NOISE_KEY_FILE);
         match std::fs::read_to_string(&path) {
-            Ok(text) => Self::parse(&text).with_context(|| {
-                format!(
-                    "{} is damaged; phones pin its key, so it is not replaced by itself (delete it and pair the phones again)",
-                    path.display()
-                )
-            }),
+            Ok(text) => {
+                keep_private(&path)?;
+                Self::parse(&text).with_context(|| {
+                    format!(
+                        "{} is damaged; phones pin its key, so it is not replaced by itself (delete it and pair the phones again)",
+                        path.display()
+                    )
+                })
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 let keys = Self::generate()?;
                 let file = KeyFile {
@@ -328,6 +343,44 @@ impl NoiseKeys {
             .map_err(|_| anyhow!("the private key does not match the public key"))?;
         Ok(())
     }
+}
+
+/// The rustls client config for the relay: the system's root certificates, or the bundled Mozilla roots when the system
+/// gives none (a machine without a usable trust store must still reach the relay).
+fn client_config(system: Vec<rustls::pki_types::CertificateDer<'static>>) -> Result<Arc<rustls::ClientConfig>, String> {
+    let mut roots = rustls::RootCertStore::empty();
+    let (added, _) = roots.add_parsable_certificates(system);
+    if added == 0 {
+        tracing::warn!("relay: no system root certificates; using the bundled ones");
+        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    }
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .map_err(|e| e.to_string())?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    Ok(Arc::new(config))
+}
+
+/// A key file that others can read or write (or that has an execute bit) is made private again, with a warning: the key
+/// is the daemon's identity for the phones.
+fn keep_private(path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = std::fs::metadata(path)
+        .with_context(|| format!("read {}", path.display()))?
+        .permissions()
+        .mode();
+    if mode & 0o777 & !0o600 != 0 {
+        tracing::warn!(
+            "relay: {} had mode {:o}; made private (0600)",
+            path.display(),
+            mode & 0o777
+        );
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+            .with_context(|| format!("make {} private", path.display()))?;
+    }
+    Ok(())
 }
 
 fn noise_builder<'a>() -> Result<snow::Builder<'a>> {
@@ -482,6 +535,8 @@ struct Running {
     cancel: CancellationToken,
     task: JoinHandle<()>,
     config: Config,
+    /// Tells this connection's task from the one of an older or newer switch.
+    generation: u64,
 }
 
 /// What a connection ended with.
@@ -501,11 +556,16 @@ enum Outcome {
     Failed(String),
 }
 
-/// One live stream of a relay connection, as the connection sees it.
+/// One live stream of a relay connection, as the connection sees it. `serial` tells this stream from an older one that had
+/// the same id (the relay reuses ids), so that the older one's end does not take the newer one out of the map.
 struct StreamHandle {
     frames: mpsc::Sender<Vec<u8>>,
     cancel: CancellationToken,
+    serial: u64,
 }
+
+/// The serials of the streams of all connections.
+static STREAM_SERIAL: AtomicU64 = AtomicU64::new(0);
 
 type Streams = Arc<Mutex<HashMap<u32, StreamHandle>>>;
 
@@ -523,6 +583,8 @@ pub struct Relay {
     inner: Mutex<Inner>,
     /// Serializes enable, disable and shutdown; holds the running connection.
     lifecycle: tokio::sync::Mutex<Option<Running>>,
+    /// The generation the next connection gets.
+    generation: AtomicU64,
     keys: Mutex<Option<Arc<NoiseKeys>>>,
     timing: Mutex<Timing>,
     allow_plain: AtomicBool,
@@ -541,6 +603,7 @@ impl Relay {
                 last_error: None,
             }),
             lifecycle: tokio::sync::Mutex::new(None),
+            generation: AtomicU64::new(0),
             keys: Mutex::new(None),
             timing: Mutex::new(Timing::default()),
             allow_plain: AtomicBool::new(false),
@@ -700,8 +763,14 @@ impl Relay {
             inner.last_error = None;
         });
         let cancel = CancellationToken::new();
-        let task = tokio::spawn(self.clone().run(config.clone(), cancel.clone()));
-        *life = Some(Running { cancel, task, config });
+        let generation = self.generation.fetch_add(1, Ordering::Relaxed);
+        let task = tokio::spawn(self.clone().run(config.clone(), cancel.clone(), generation));
+        *life = Some(Running {
+            cancel,
+            task,
+            config,
+            generation,
+        });
     }
 
     /// Applies `f` to the state and tells the apps (`relay.changed`) when the status differs afterwards.
@@ -729,7 +798,7 @@ impl Relay {
     }
 
     /// Connects, serves, and connects again until `cancel`.
-    async fn run(self: Arc<Self>, config: Config, cancel: CancellationToken) {
+    async fn run(self: Arc<Self>, config: Config, cancel: CancellationToken, generation: u64) {
         let mut attempt = 0u32;
         loop {
             let timing = self.timing();
@@ -743,13 +812,22 @@ impl Relay {
                     timing.replaced_wait
                 }
                 Outcome::Deleted => {
-                    // Nothing to reconnect to: forget the registration, like `relay.disable`, and say why.
-                    let _ = std::fs::remove_file(self.home.join(RELAY_FILE));
-                    self.change(|inner| {
-                        inner.config = None;
-                        inner.connected = false;
-                        inner.last_error = Some("the registration was deleted at the relay".into());
-                    });
+                    // Nothing to reconnect to: forget the registration, like `relay.disable`, and say why. Under the lifecycle
+                    // lock, as enable and disable are: a switch that is under way (its cancel is set) or a newer connection
+                    // wins, and the settings it wrote are not removed.
+                    if cancel.is_cancelled() {
+                        return;
+                    }
+                    let mut life = self.lifecycle.lock().await;
+                    if life.as_ref().is_some_and(|r| r.generation == generation) {
+                        *life = None;
+                        let _ = std::fs::remove_file(self.home.join(RELAY_FILE));
+                        self.change(|inner| {
+                            inner.config = None;
+                            inner.connected = false;
+                            inner.last_error = Some("the registration was deleted at the relay".into());
+                        });
+                    }
                     return;
                 }
                 Outcome::Unauthorized(why) => {
@@ -806,27 +884,13 @@ impl Relay {
         }
     }
 
-    /// The rustls client config with the system's root certificates, read once.
+    /// The rustls client config of the relay, read once.
     async fn tls_config(&self) -> Result<Arc<rustls::ClientConfig>, String> {
         self.tls
             .get_or_try_init(|| async {
-                tokio::task::spawn_blocking(|| {
-                    let loaded = rustls_native_certs::load_native_certs();
-                    let mut roots = rustls::RootCertStore::empty();
-                    let (added, _) = roots.add_parsable_certificates(loaded.certs);
-                    if added == 0 {
-                        return Err("no system root certificates to check the relay with".to_string());
-                    }
-                    let provider = Arc::new(rustls::crypto::ring::default_provider());
-                    let config = rustls::ClientConfig::builder_with_provider(provider)
-                        .with_protocol_versions(&[&rustls::version::TLS13])
-                        .map_err(|e| e.to_string())?
-                        .with_root_certificates(roots)
-                        .with_no_client_auth();
-                    Ok(Arc::new(config))
-                })
-                .await
-                .map_err(|e| e.to_string())?
+                tokio::task::spawn_blocking(|| client_config(rustls_native_certs::load_native_certs().certs))
+                    .await
+                    .map_err(|e| e.to_string())?
             })
             .await
             .cloned()
@@ -1026,6 +1090,15 @@ impl Relay {
         };
         let id = u32::from_be_bytes([head[0], head[1], head[2], head[3]]);
         match head[4] {
+            KIND_DATA if payload.len() > NOISE_MAX => {
+                // A Noise message is at most NOISE_MAX bytes: a bigger frame is not one of ours. The stream ends here and
+                // the frame is never queued; the relay is told, as the end of the stream would tell it anyway.
+                let handle = streams.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
+                if let Some(handle) = handle {
+                    handle.cancel.cancel();
+                    let _ = out.try_send(frame(id, KIND_CLOSE, &[]));
+                }
+            }
             KIND_DATA => {
                 let map = streams.lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(handle) = map.get(&id)
@@ -1065,16 +1138,17 @@ impl Relay {
         if info.v != 1 {
             return refuse();
         }
-        // The address the relay saw. One that does not parse shares the source "unknown" with others like it.
-        let source = info
-            .ip
-            .parse::<IpAddr>()
-            .map_or_else(|_| "unknown".to_string(), source_key);
+        // The address the relay saw: the limits count the phone by it, so one that does not parse is refused.
+        let Ok(ip) = info.ip.parse::<IpAddr>() else {
+            return refuse();
+        };
+        let source = source_key(ip);
         let Some(slot) = app.phone.limits().connections.acquire(&source) else {
             return refuse();
         };
         let (frames, rx) = mpsc::channel(STREAM_BACKLOG);
         let cancel = session.child_token();
+        let serial = STREAM_SERIAL.fetch_add(1, Ordering::Relaxed);
         {
             let mut map = streams.lock().unwrap_or_else(|e| e.into_inner());
             if map.len() >= MAX_STREAMS || map.contains_key(&id) {
@@ -1086,6 +1160,7 @@ impl Relay {
                 StreamHandle {
                     frames,
                     cancel: cancel.clone(),
+                    serial,
                 },
             );
         }
@@ -1106,8 +1181,17 @@ impl Relay {
                 tracing::debug!(stream = id, "relay stream ended: {why}");
             }
             cancel.cancel();
-            // A close from the relay already took the stream out of the map; otherwise we tell the relay.
-            let ours = streams.lock().unwrap_or_else(|e| e.into_inner()).remove(&id).is_some();
+            // A close from the relay already took the stream out of the map; otherwise we tell the relay. Only our own
+            // entry is taken out: a newer stream with the same id may be there by now.
+            let ours = {
+                let mut map = streams.lock().unwrap_or_else(|e| e.into_inner());
+                if map.get(&id).is_some_and(|handle| handle.serial == serial) {
+                    map.remove(&id);
+                    true
+                } else {
+                    false
+                }
+            };
             if ours {
                 let _ = timeout(Duration::from_secs(1), out.send(frame(id, KIND_CLOSE, &[]))).await;
             }
@@ -1201,7 +1285,7 @@ impl Stream {
         };
         let (secure, peer, anonymous_slot) = prepared?;
         let secure = Arc::new(secure);
-        let anonymous = matches!(peer, Peer::Anonymous(_));
+        let anonymous = matches!(peer, Peer::Anonymous(..));
         let limit = if anonymous {
             ANONYMOUS_MESSAGE_LIMIT
         } else {
@@ -1326,7 +1410,12 @@ impl Stream {
                 self.refuse(&secure, "rate_limited").await;
                 return Err("too many open pairing streams".into());
             };
-            return Ok((secure, Peer::Anonymous(self.source.clone()), Some(slot)));
+            let session_key = URL_SAFE_NO_PAD.encode(remote);
+            return Ok((
+                secure,
+                Peer::Anonymous(self.source.clone(), Some(session_key)),
+                Some(slot),
+            ));
         }
         self.refuse(&secure, "bad_request").await;
         Err("the first message asks for nothing".into())
@@ -1391,7 +1480,7 @@ impl Stream {
                 "rate_limited"
             }
         };
-        let device = match store.device_auth(token) {
+        let mut device = match store.device_find(token) {
             Ok(Some(device)) => device,
             Ok(None) => return Err(fail("unauthorized")),
             Err(e) => {
@@ -1408,9 +1497,18 @@ impl Stream {
         };
         let theirs = URL_SAFE_NO_PAD.encode(remote);
         match paired {
-            Some(key) if constant_time_eq(key.as_bytes(), theirs.as_bytes()) => Ok(device),
-            _ => Err(fail("unauthorized")),
+            Some(key) if constant_time_eq(key.as_bytes(), theirs.as_bytes()) => {}
+            _ => return Err(fail("unauthorized")),
         }
+        // Only now, with the key checked, the device counts as seen.
+        match store.device_touch(&device.id) {
+            Ok(seen) => device.last_seen_at = Some(seen),
+            Err(e) => {
+                tracing::error!("relay device seen: {e:#}");
+                return Err("server_error");
+            }
+        }
+        Ok(device)
     }
 
     /// Tells the phone why it is refused (`{"error": reason}`), best effort. The stream ends right after.
@@ -2540,7 +2638,10 @@ mod tests {
     async fn only_the_owner_may_use_relay_methods() {
         let rig = Rig::new().await;
         for method in ["relay.enable", "relay.disable", "relay.status"] {
-            for peer in [Peer::Agent("agent-a".into()), Peer::Anonymous("203.0.113.1".into())] {
+            for peer in [
+                Peer::Agent("agent-a".into()),
+                Peer::Anonymous("203.0.113.1".into(), None),
+            ] {
                 assert!(!crate::rpc::allowed(&peer, method), "{peer:?} {method}");
                 let err = dispatch(&rig.app, &peer, method, json!({})).await.unwrap_err();
                 assert_eq!(err.code, crate::rpc::UNAUTHORIZED, "{peer:?} {method}");
@@ -2563,7 +2664,7 @@ mod tests {
             .as_str()
             .unwrap()
             .to_string();
-        let anon = Peer::Anonymous("203.0.113.5".into());
+        let anon = Peer::Anonymous("203.0.113.5".into(), None);
         for key in [
             "short",
             &URL_SAFE_NO_PAD.encode([1u8; 31]),
@@ -2666,5 +2767,233 @@ mod tests {
         }
         assert_eq!(t.ping, Duration::from_secs(25));
         assert_eq!(t.replaced_wait, Duration::from_secs(30));
+    }
+
+    // ----- review fixes: pairing key, frame limits, stream identity, device auth, lifecycle, key file ------------
+
+    fn wire(message: Message) -> Vec<u8> {
+        match message {
+            Message::Binary(bytes) => bytes.to_vec(),
+            other => panic!("not a relay frame: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_relay_phone_pairs_with_the_key_it_proved_in_the_handshake() {
+        let mut rig = Rig::new().await;
+        let mut conn = rig.enable().await;
+        rig.connected().await;
+        let key = new_key();
+        let code = rig.owner("pair.create", json!({})).await.unwrap()["code"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let phone = Phone::connect(&mut conn, 1, "203.0.113.7", &key, &rig.nk())
+            .await
+            .unwrap();
+        phone.send(&conn, r#"{"pair":true}"#);
+        // No `noise_key` parameter: the key of the handshake is the phone's key.
+        let done = phone
+            .call(
+                &mut conn,
+                "pair.redeem",
+                json!({"code": code, "device_name": "Test phone"}),
+            )
+            .await
+            .unwrap();
+        let id = done["device"]["id"].as_str().unwrap();
+        assert_eq!(
+            rig.app.sup.hub().store.device_noise_key(id).unwrap().as_deref(),
+            Some(URL_SAFE_NO_PAD.encode(&key.public).as_str())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_relay_phone_cannot_pair_with_a_key_other_than_its_handshake() {
+        let mut rig = Rig::new().await;
+        let mut conn = rig.enable().await;
+        rig.connected().await;
+        let key = new_key();
+        let other = new_key();
+        let code = rig.owner("pair.create", json!({})).await.unwrap()["code"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let phone = Phone::connect(&mut conn, 1, "203.0.113.7", &key, &rig.nk())
+            .await
+            .unwrap();
+        phone.send(&conn, r#"{"pair":true}"#);
+        let err = phone
+            .call(
+                &mut conn,
+                "pair.redeem",
+                json!({"code": code, "device_name": "p", "noise_key": URL_SAFE_NO_PAD.encode(&other.public)}),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err["code"], crate::rpc::INVALID_PARAMS);
+        assert_eq!(err["message"], "noise_key does not match the session");
+        // The code was not taken: the phone pairs with the key of its session.
+        let done = phone
+            .call(&mut conn, "pair.redeem", json!({"code": code, "device_name": "p"}))
+            .await
+            .unwrap();
+        let id = done["device"]["id"].as_str().unwrap();
+        assert_eq!(
+            rig.app.sup.hub().store.device_noise_key(id).unwrap().as_deref(),
+            Some(URL_SAFE_NO_PAD.encode(&key.public).as_str())
+        );
+    }
+
+    #[test]
+    fn the_relay_trusts_the_bundled_roots_when_the_system_has_none() {
+        // Without system certificates the client still has roots to check the relay with.
+        assert!(client_config(Vec::new()).is_ok());
+    }
+
+    #[tokio::test]
+    async fn an_oversize_data_frame_closes_its_stream_and_is_not_queued() {
+        let dir = TempDir::new().unwrap();
+        let relay = Arc::new(Relay::new(dir.path().to_path_buf(), Weak::new()));
+        let (frames, mut queued) = mpsc::channel(STREAM_BACKLOG);
+        let cancel = CancellationToken::new();
+        let streams: Streams = Arc::default();
+        streams.lock().unwrap().insert(
+            9,
+            StreamHandle {
+                frames,
+                cancel: cancel.clone(),
+                serial: 0,
+            },
+        );
+        let (out, mut out_rx) = mpsc::channel(16);
+        let session = CancellationToken::new();
+        let oversize = wire(frame(9, KIND_DATA, &vec![0u8; NOISE_MAX + 1]));
+        relay.on_frame(&oversize, &out, &streams, &session);
+        assert!(queued.try_recv().is_err(), "the oversize frame was queued");
+        assert!(cancel.is_cancelled(), "the stream goes on");
+        assert!(!streams.lock().unwrap().contains_key(&9));
+        let close = wire(out_rx.try_recv().expect("the relay is told the stream is closed"));
+        assert_eq!(
+            (close[..4].to_vec(), close[4]),
+            (9u32.to_be_bytes().to_vec(), KIND_CLOSE)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_stream_opened_without_a_usable_address_is_refused() {
+        let mut rig = Rig::new().await;
+        let mut conn = rig.enable().await;
+        conn.send_frame(
+            1,
+            KIND_OPEN,
+            json!({"ip": "not an address", "v": 1}).to_string().as_bytes(),
+        );
+        conn.send_frame(2, KIND_OPEN, json!({"v": 1}).to_string().as_bytes());
+        // Refused at once: not after the handshake timeout that a stream with a usable address would run into.
+        let started = Instant::now();
+        for id in [1, 2] {
+            let f = conn.next_frame().await.expect("a refusal");
+            assert_eq!((f.id, f.kind), (id, KIND_CLOSE));
+        }
+        assert!(
+            started.elapsed() < STREAM_STEP_TIMEOUT,
+            "the stream was opened and timed out"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_old_stream_ending_does_not_remove_a_new_stream_with_the_same_id() {
+        let rig = Rig::new().await;
+        let relay = rig.app.relay.clone();
+        let streams: Streams = Arc::default();
+        let (out, mut out_rx) = mpsc::channel(64);
+        let session = CancellationToken::new();
+        let open = wire(frame(3, KIND_OPEN, br#"{"ip":"203.0.113.1","v":1}"#));
+        relay.on_frame(&open, &out, &streams, &session);
+        relay.on_frame(&wire(frame(3, KIND_CLOSE, &[])), &out, &streams, &session);
+        // The same id is opened again before the old stream's task has run its end.
+        relay.on_frame(&open, &out, &streams, &session);
+        for _ in 0..50 {
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            streams.lock().unwrap().contains_key(&3),
+            "the old stream removed the new one"
+        );
+        while let Ok(message) = out_rx.try_recv() {
+            let bytes = wire(message);
+            assert!(bytes[4] != KIND_CLOSE, "the relay was told to close the new stream");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_phone_with_a_wrong_key_does_not_touch_its_device() {
+        let mut rig = Rig::new().await;
+        let mut conn = rig.enable().await;
+        rig.connected().await;
+        let key = new_key();
+        let token = rig.pair(&mut conn, 1, &key, "203.0.113.7").await;
+        let store = rig.app.sup.hub().store.clone();
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        let before = store.device_list().unwrap()[0].last_seen_at;
+
+        let thief = new_key();
+        let phone = rig.sign_in(&mut conn, 2, &thief, &token).await;
+        assert_eq!(phone.recv(&mut conn).await.unwrap(), r#"{"error":"unauthorized"}"#);
+        assert_eq!(
+            store.device_list().unwrap()[0].last_seen_at,
+            before,
+            "a refused key moved last_seen_at"
+        );
+
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        let phone = rig.sign_in(&mut conn, 3, &key, &token).await;
+        assert!(phone.call(&mut conn, "daemon.info", json!({})).await.is_ok());
+        assert_ne!(store.device_list().unwrap()[0].last_seen_at, before);
+    }
+
+    #[tokio::test]
+    async fn a_deleted_registration_removes_the_settings_under_the_lifecycle_lock() {
+        let mut rig = Rig::new().await;
+        let conn = rig.enable().await;
+        rig.connected().await;
+        let guard = rig.app.relay.lifecycle.lock().await;
+        conn.close_with(CLOSE_DELETED, "deleted");
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(
+            rig.dir.path().join(RELAY_FILE).exists(),
+            "the settings were removed while a switch was under way"
+        );
+        drop(guard);
+        let deadline = Instant::now() + WAIT;
+        while rig.dir.path().join(RELAY_FILE).exists() {
+            assert!(Instant::now() < deadline, "the settings were never removed");
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert!(!rig.app.relay.status().enabled);
+    }
+
+    #[test]
+    fn a_noise_key_file_that_is_too_open_is_made_private_again() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new().unwrap();
+        let first = NoiseKeys::load_or_create(dir.path()).unwrap();
+        let path = dir.path().join(NOISE_KEY_FILE);
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let again = NoiseKeys::load_or_create(dir.path()).unwrap();
+        assert_eq!(again.public_b64(), first.public_b64());
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[test]
+    fn the_private_key_is_wiped() {
+        let mut keys = NoiseKeys::generate().unwrap();
+        assert!(keys.private.iter().any(|&b| b != 0));
+        let public = keys.public;
+        keys.wipe();
+        assert!(keys.private.iter().all(|&b| b == 0));
+        assert_eq!(keys.public, public, "the public key stays");
     }
 }

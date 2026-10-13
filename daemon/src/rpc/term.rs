@@ -378,7 +378,7 @@ impl Stream {
 
 /// Only paired apps and the local socket may stream terminals.
 fn ensure_paired(peer: &Peer) -> Result<(), RpcError> {
-    if matches!(peer, Peer::Anonymous(_)) {
+    if matches!(peer, Peer::Anonymous(..)) {
         Err(RpcError::new(
             UNAUTHORIZED,
             "not paired: run `bandito pair` on the server",
@@ -691,7 +691,7 @@ mod tests {
     #[tokio::test]
     async fn anonymous_peer_cannot_use_terminals() {
         let (app, _guard) = test_app();
-        let mut c = connect(&app, Peer::Anonymous(String::new()));
+        let mut c = connect(&app, Peer::Anonymous(String::new(), None));
         for (method, params) in [
             ("term.attach", json!({ "id": "x" })),
             ("term.detach", json!({ "id": "x" })),

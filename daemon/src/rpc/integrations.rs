@@ -2974,7 +2974,7 @@ mod tests {
         async fn agents_and_strangers_cannot_sign_in_to_anything() {
             let app = app();
             for method in METHODS {
-                for peer in [Peer::Agent("a1".into()), Peer::Anonymous("1.2.3.4".into())] {
+                for peer in [Peer::Agent("a1".into()), Peer::Anonymous("1.2.3.4".into(), None)] {
                     let err = dispatch(&app, &peer, method, json!({})).await.unwrap_err();
                     assert_eq!(err.code, UNAUTHORIZED, "{method}");
                     assert!(!crate::rpc::allowed(&peer, method), "{method}");

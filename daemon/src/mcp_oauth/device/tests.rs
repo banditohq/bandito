@@ -656,7 +656,7 @@ fn the_daemon_advertises_the_code_sign_in_and_only_the_owner_may_use_it() {
         "integrations.device_cancel",
     ] {
         assert!(crate::rpc::allowed(&Peer::Local, method), "{method}");
-        for peer in [Peer::Agent("a1".into()), Peer::Anonymous("1.2.3.4".into())] {
+        for peer in [Peer::Agent("a1".into()), Peer::Anonymous("1.2.3.4".into(), None)] {
             assert!(!crate::rpc::allowed(&peer, method), "{method}");
         }
     }

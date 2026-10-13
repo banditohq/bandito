@@ -67,8 +67,10 @@ end-to-end encrypted session (Noise) through it, so the relay never sees command
   the daemon checks it like the `Authorization` header of a direct connection, and that the phone static key matches
   the device's `noise_key`. Then the stream carries exactly the JSON-RPC text frames of `/v1/rpc`.
 - **Pairing through the relay**: the link has `relay` and `nk`; the phone opens a stream, completes Noise IK (the
-  daemon is authenticated by `nk`; the phone's key is new), sends `{"pair": true}`, then `pair.redeem` with
-  `noise_key` = its static public key. The daemon's anonymous limits apply with source = the `ip` from `open`.
+  daemon is authenticated by `nk`; the phone's key is new), sends `{"pair": true}`, then `pair.redeem`. The phone's key
+  is the one the handshake proved: `noise_key` may be left out, and when given it must equal that key (else
+  INVALID_PARAMS «noise_key does not match the session»). The daemon's anonymous limits apply with source = the `ip`
+  from `open`; an `open` without a usable `ip` is refused.
 - v1 carries RPC only. Files, previews, tunnels and screens over the relay come later (stream kinds reserved).
 
 ## Pairing link

@@ -2117,7 +2117,10 @@ mod tests {
             .unwrap();
         assert_eq!(ts["hosts"], json!(["100.101.102.103:7900"]));
         // Agents and anonymous peers cannot ask for codes.
-        assert!(!rpc::allowed(&Peer::Anonymous("203.0.113.7".into()), "pair.create"));
+        assert!(!rpc::allowed(
+            &Peer::Anonymous("203.0.113.7".into(), None),
+            "pair.create"
+        ));
         assert!(!rpc::allowed(&Peer::Agent("a".into()), "pair.create"));
         w.app.phone.shutdown().await;
     }

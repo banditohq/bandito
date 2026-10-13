@@ -154,6 +154,26 @@ impl Store {
             .optional()?)
     }
 
+    /// The device with `sha256_hex(token)`, without touching it: the relay checks the phone's key before the device is seen.
+    pub fn device_find(&self, token: &str) -> Result<Option<Device>> {
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT id, name, created_at, last_seen_at FROM devices WHERE token_hash = ?1",
+                [sha256_hex(token)],
+                from_row,
+            )
+            .optional()?)
+    }
+
+    /// Sets the device's `last_seen_at` to now and returns it.
+    pub fn device_touch(&self, id: &str) -> Result<i64> {
+        let now = now_ms();
+        self.conn()
+            .execute("UPDATE devices SET last_seen_at = ?2 WHERE id = ?1", params![id, now])?;
+        Ok(now)
+    }
+
     /// The Noise static public key (base64url) the device paired with, if it gave one.
     pub fn device_noise_key(&self, id: &str) -> Result<Option<String>> {
         Ok(self

@@ -41,6 +41,8 @@ tokio-util = { version = "0.7", features = ["io"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.27.0", features = ["v7", "serde"] }
+webpki-roots = "1"
+zeroize = "1"
 
 [dev-dependencies]
 tempfile = "3.27.0"
