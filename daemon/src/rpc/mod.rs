@@ -258,10 +258,15 @@ impl App {
     /// The token that is cancelled when the device is revoked. A device that is already gone gets a cancelled token, so a
     /// connection that was authenticated just before the revoke ends at once too.
     pub fn device_cancel(&self, device_id: &str) -> tokio_util::sync::CancellationToken {
-        let gone = !self.sup.hub().store.device_exists(device_id).unwrap_or(true);
+        // The device is looked up under the lock: `devices.revoke` deletes the row before it takes the lock to cancel, so
+        // a connection either sees the device gone here or leaves a token in the map that the revoke then cancels.
         let mut map = self.device_cancels.lock().unwrap_or_else(|e| e.into_inner());
+        let gone = !self.sup.hub().store.device_exists(device_id).unwrap_or(true);
         if gone {
-            map.remove(device_id);
+            // Connections that came before the delete hold this one: they end too, whoever cancels first.
+            if let Some(earlier) = map.remove(device_id) {
+                earlier.cancel();
+            }
             let token = tokio_util::sync::CancellationToken::new();
             token.cancel();
             return token;

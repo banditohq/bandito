@@ -40,9 +40,11 @@ pub const ATTEMPT_WINDOW_MS: i64 = 10 * 60 * 1000;
 const MAX_SOURCES: usize = 4096;
 /// Open connections one phone listener keeps. More are closed at once.
 const MAX_CONNECTIONS: usize = 256;
-/// Open connections one source (an IPv4 address, or an IPv6 /64) may hold on the phone listeners together.
+/// Open connections one source (an IPv4 address, or an IPv6 /64) may hold on the phone listeners together. Above a
+/// paired phone's own need: its RPC, up to 64 tunnels (`tunnel_limit`), file and preview requests and DevTools are each
+/// a connection, and the slot is taken before the token is known. Anonymous sockets have their own, small limit.
 #[cfg(not(test))]
-pub const MAX_PER_SOURCE: usize = 32;
+pub const MAX_PER_SOURCE: usize = 128;
 #[cfg(test)]
 pub const MAX_PER_SOURCE: usize = 8;
 /// Anonymous WebSockets (the only way to pair) one source may hold at once.
@@ -1452,11 +1454,12 @@ mod tests {
             matches!(read, Ok(Ok(0)) | Ok(Err(_))),
             "the source is over its share: {read:?}"
         );
-        // When the idle ones time out, the source can connect again.
+        // When the idle ones time out, the source can connect again. Until the listener has seen them close, a new
+        // connection is still refused before its handshake: that is retried, not a failure.
         drop(held);
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
         loop {
-            if https(addr, &fp, "/v1/health", &[]).await.0 == 200 {
+            if tls_connect(addr, &fp).await.is_ok() {
                 break;
             }
             assert!(tokio::time::Instant::now() < deadline);
@@ -1508,6 +1511,24 @@ mod tests {
         })
         .await;
         finished.ok().map(|()| total)
+    }
+
+    #[tokio::test]
+    async fn a_connection_that_asks_for_its_cancel_token_between_the_revoke_and_its_cancel_gets_a_cancelled_one() {
+        let w = world();
+        let id = w.app.sup.hub().store.device_list().unwrap()[0].id.clone();
+        // A connection that came first holds a live token; the revoke's cancel ends it.
+        let early = w.app.device_cancel(&id);
+        assert!(!early.is_cancelled());
+        // The revoke has deleted the device but not yet cancelled: a connection now must not get a fresh live token.
+        assert!(w.app.sup.hub().store.device_revoke(&id).unwrap());
+        let late = w.app.device_cancel(&id);
+        assert!(
+            late.is_cancelled(),
+            "a token taken after the delete is cancelled at once"
+        );
+        w.app.cancel_device(&id);
+        assert!(early.is_cancelled());
     }
 
     #[tokio::test]
