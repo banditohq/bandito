@@ -332,7 +332,8 @@ struct ThreadView: View {
         server.supports("attachments")
     }
 
-    private var chatColumn: some View {
+    // Split in two statements: the type checker took 285 ms on one chain this long.
+    private var chatColumnBase: some View {
         VStack(spacing: 0) {
             ThreadHeader(
                 agent: agent,
@@ -442,6 +443,10 @@ struct ThreadView: View {
         }
         .frame(maxWidth: .infinity)
         .background(Color.Bandito.bg)
+    }
+
+    private var chatColumn: some View {
+        chatColumnBase
         .task(id: agent.id) {
             await loadHistory()
             // What is read now is the old history: a message that comes after it is new (see `ThreadArrival`).

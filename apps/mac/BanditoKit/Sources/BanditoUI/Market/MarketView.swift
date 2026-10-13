@@ -60,7 +60,8 @@ struct MarketView: View {
     /// What the header and the kept pages were handed last time (`MarketPassed`).
     @State private var passed = MarketPassedBoxes()
 
-    var body: some View {
+    // Split in two statements: the type checker took 300 ms on one chain this long.
+    private var withTasks: some View {
         Group {
             if app.currentServer == nil {
                 NoServerView(symbol: AppMode.market.systemImage)
@@ -93,6 +94,10 @@ struct MarketView: View {
         .task(id: toolsKey) {
             await loadOpenJournal()
         }
+    }
+
+    var body: some View {
+        withTasks
         .onChange(of: tab) { _, tab in
             search.text = ""
             panel = nil

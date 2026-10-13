@@ -196,10 +196,9 @@ struct Composer: View {
         }
     }
 
-    var body: some View {
-        let _ = PerfCounters.hit("Composer")
-        @Bindable var model = slash
-        @Bindable var mentionModel = mention
+    // The body is split in three statements so the type checker does not meet one chain of thirty modifiers
+    // (it took 4.6 s). Opaque types are transparent at run time: the view tree is the same.
+    private var composerStack: some View {
         VStack(spacing: 8) {
             if query != nil {
                 SlashMenuView(
@@ -305,6 +304,10 @@ struct Composer: View {
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: reply)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingForm?.formId)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingConnect?.requestId)
+    }
+
+    private var withHandlers: some View {
+        composerStack
         .onAppear { takeFocus(.agentOpened) }
         .onDisappear {
             dictation.cancel()
@@ -359,6 +362,13 @@ struct Composer: View {
         .onChange(of: mention.editing) { old, new in
             if old != nil, new == nil { Task { await keyedServiceClosed() } }
         }
+    }
+
+    var body: some View {
+        let _ = PerfCounters.hit("Composer")
+        @Bindable var model = slash
+        @Bindable var mentionModel = mention
+        withHandlers
         .banditoSheet(item: $mentionModel.editing, dismissOnOutsideClick: false) { template in
             if let server {
                 IntegrationEditor(
