@@ -14,7 +14,7 @@ Both parts are built by GitHub Actions. Nobody builds a release on a laptop.
 2. Nothing to do: `release-flow` tags the merge commit, builds the server into a draft release (`release.yml`),
    publishes it (latest) and starts `release-app`.
 3. **Approve** the `release-app` run: Actions → release-app → Review deployments → `stable`. The app is built, signed,
-   notarized and uploaded; then the run opens the appcast PR in `banditohq/platform` and merges it when its checks pass.
+   notarized and uploaded; then the run opens the appcast PR in `banditohq/platform`, which merges it itself when its ci passes (`appcast-merge.yml` there), and waits for that merge.
    A Telegram message says when it is done (`notify.yml`). Betas (`X.Y.Z-beta.N`) use the `beta` environment, no approval.
 
 `scripts/test_bump_version.sh` tests the version bump. The check "appcast == newest release with a zip" lives in
