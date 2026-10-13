@@ -298,3 +298,12 @@ Opens a sheet for a bug report. Describe what happened and what you expected, an
 2. Fill in What happened? (Что случилось?) and What did you expect? (Что вы ожидали?).
 3. Read the report. Edit it if something private is left; Reset the text (Вернуть исходный текст) brings the generated text back.
 4. Click Open on GitHub (Открыть на GitHub) and post the issue, or click Copy report (Скопировать отчёт) to send it another way.
+
+## A page does not load in Chrome on the server screen (ERR_TIMED_OUT)
+
+<!-- id: ts-screen-chrome-timeout; covers: -->
+Chrome on the server's screen shows This site can't be reached with ERR_TIMED_OUT for every site, while the same site opens with curl on the server. The network is not the cause: on a server with a keyring daemon but no keyring, Chrome waits for a password prompt that nobody sees.
+Где: Server screen → the dock or the menu → Browser (Браузер)
+1. Start Chrome from the dock or the menu of the screen. Bandito starts it without the system keyring, and the pages load.
+2. A Chrome you started yourself on the server (over SSH, for instance) needs the flag --password-store=basic, or a keyring that is unlocked.
+3. A screen that was running before the server's update keeps the old buttons: put it to sleep (the moon button) and start it again.

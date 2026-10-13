@@ -1505,6 +1505,33 @@ mod tests {
         manager.stop(DEFAULT_WORKSPACE).await;
     }
 
+    /// Real Chrome and the internet: a site opens. On a server whose desktop keyring waits for a password nobody can
+    /// type, Chrome without `--password-store=basic` shows `ERR_TIMED_OUT` for every page, even `127.0.0.1`.
+    /// Run with: `BANDITO_BROWSER_IT=1 BANDITO_BROWSER_NET=1 cargo test -- --ignored browser_it_website`.
+    #[tokio::test]
+    #[ignore = "starts a real Chrome and reaches example.com; BANDITO_BROWSER_IT=1 BANDITO_BROWSER_NET=1 cargo test -- --ignored browser_it_website"]
+    async fn browser_it_website_opens() {
+        if std::env::var("BANDITO_BROWSER_IT").as_deref() != Ok("1")
+            || std::env::var("BANDITO_BROWSER_NET").as_deref() != Ok("1")
+        {
+            return;
+        }
+        let home = tempfile::tempdir().unwrap();
+        let manager = BrowserManager::new(home.path().to_path_buf());
+        manager.start(DEFAULT_WORKSPACE).await.expect("start");
+        manager.agent_open("https://example.com", false).await.expect("open");
+        let mut text = String::new();
+        for _ in 0..50 {
+            text = manager.agent_snapshot().await.unwrap_or_default();
+            if text.contains("Example Domain") {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+        manager.stop(DEFAULT_WORKSPACE).await;
+        assert!(text.contains("Example Domain"), "the page did not load:\n{text}");
+    }
+
     /// Real Chrome: closing the last visible tab leaves the list empty and the browser running, and no tab opens in its
     /// place. Run with: `BANDITO_BROWSER_IT=1 cargo test -- --ignored browser_it_last_tab`.
     #[tokio::test]

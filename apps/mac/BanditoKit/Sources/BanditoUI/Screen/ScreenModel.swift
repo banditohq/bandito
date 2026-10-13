@@ -50,6 +50,8 @@ final class ScreenModel {
     let setup: SetupModel
     /// A `screen.start` call is in flight.
     private(set) var isStarting = false
+    /// The person asked for the screen to sleep and the `screen.stop` call has not returned yet.
+    private(set) var isSleeping = false
     /// The connection waited `ScreenStartRules.frameTimeout` for its first picture and got none.
     private(set) var frameTimedOut = false
     private var frameTimer: Task<Void, Never>?
@@ -127,7 +129,8 @@ final class ScreenModel {
             if errorText != nil { errorText = nil }
             if workplaceUnavailable { workplaceUnavailable = false }
             if fresh.running {
-                if connection == nil { await connect() }
+                // Not while it is being put to sleep: a poll must not connect to a screen that is going away.
+                if connection == nil, !isSleeping { await connect() }
                 capturePreview()
             } else {
                 disconnect()
@@ -360,14 +363,38 @@ final class ScreenModel {
         VNCKeys.sendCtrlAltDelete(connection)
     }
 
-    /// Stops the screen on the server (it wakes again on the next start).
+    /// The "Put the screen to sleep" button may be shown and pressed.
+    var canSleep: Bool {
+        ScreenSleepRules.isAvailable(running: status?.running == true, isStarting: isStarting, isSleeping: isSleeping)
+    }
+
+    /// Whether the button asks first (somebody holds the controls), and what it says.
+    var sleepConfirmation: ScreenSleepRules.Confirmation? {
+        ScreenSleepRules.confirmation(for: status)
+    }
+
+    /// Puts the screen to sleep now, as the idle time would: the server stops it and frees its memory. It wakes with
+    /// the next start. The card in the list says "Asleep" at once when the server has stopped it; a failure shows as
+    /// the screen's error and leaves the screen as it was. A second press while it works does nothing.
+    func sleep() async {
+        guard canSleep else { return }
+        isSleeping = true
+        defer { isSleeping = false }
+        await stop()
+        if status?.running == false {
+            ScreenOverviews.shared.overview(for: server).markAsleep(workspace)
+        }
+    }
+
+    /// Stops the screen on the server (it wakes again on the next start). After the call the screen is asleep even when
+    /// the status that follows cannot be read.
     func stop() async {
         disconnect()
         startError = nil
         missingComponents = []
         do {
             try await server.screenStop(workspace: wsParam)
-            status = try await server.screenStatus(workspace: wsParam)
+            status = (try? await server.screenStatus(workspace: wsParam)) ?? ScreenStatus(running: false)
         } catch {
             errorText = BrowserModel.describe(error)
         }

@@ -6,7 +6,7 @@ and give control back. The screen wakes on demand and sleeps when nobody uses it
 ## Server screen mode
 
 <!-- id: screen-mode; covers: mode:screen -->
-The main area shows the server's screen. The toolbar has the quality picker, the Ctrl+Alt+Del button, Full screen, and the control button.
+The main area shows the server's screen. The toolbar has the quality picker, the Ctrl+Alt+Del button, Full screen, the moon button that puts the screen to sleep, and the control button.
 Где: Mode bar → Server screen (Экран сервера), or Menu View → Server screen (Экран сервера)
 1. Press ⌘5 or click Server screen (Экран сервера) in the mode bar.
 2. If the screen is asleep, the page says The screen is asleep (Экран спит). Click Start screen (Запустить экран).
@@ -79,6 +79,28 @@ A line under the toolbar shows who holds the screen now. A pale line asks you to
 The screen wakes when someone uses it. After 30 minutes without anyone using it, neither you nor the agents, it sleeps again.
 Где: Server screen → hint line → The screen wakes on demand. After 30 minutes nobody uses it, neither you nor agents, and it sleeps again.
 1. To wake it, click Start screen (Запустить экран).
+2. To put it to sleep yourself, click the moon button in the toolbar. See Put the screen to sleep (Усыпить экран) below.
+
+## Put the screen to sleep (Усыпить экран)
+
+<!-- id: screen-put-to-sleep; covers: -->
+Stops the screen of this workplace now, instead of waiting for the idle time, and frees the server's memory. The programs open on it close. The screen starts again when you or an agent need it.
+Где: Server screen → toolbar → the moon button (help: Put the screen to sleep (Усыпить экран)); the question: An agent is working on the screen (Агент работает на экране) or You are holding the controls (Управление у вас) → Put to sleep (Усыпить)
+1. Click the moon button. If nobody holds the screen's controls, it goes to sleep at once: while it works the page says Putting the screen to sleep… (Усыпляем экран…).
+2. If an agent works on the screen, or you hold the controls yourself, a question comes first: An agent is working on the screen (Агент работает на экране) or You are holding the controls (Управление у вас), and the words The programs open on it will close. The screen starts again when you or an agent need it. Click Put to sleep (Усыпить) to go on, or Cancel (Отмена).
+3. When the server has stopped it, the page says The screen is asleep (Экран спит) and its card under Screens of workplaces (Экраны рабочих мест) says Asleep (Спит). Click Start screen (Запустить экран) to wake it.
+4. The button is only there while the screen runs. If the server cannot stop it, the page shows the error and the screen stays as it was.
+
+## The desktop of the screen (Рабочий стол экрана)
+
+<!-- id: screen-desktop; covers: -->
+The screen is a small desktop in the Bandito look, not a black window: a dark wallpaper with the raccoon and the wordmark, a dock at the bottom, and a menu. It is drawn by the server for each screen, from files in the screen's own folder, and needs nothing installed.
+Где: Server screen → the picture of the screen
+1. The dock at the bottom has the mark at the left (click it for the menu), then Browser, Terminal and Files. A button is there only if the server has such a program. Then come the open windows: click one to bring it up, click the active one to minimize it.
+2. At the right of the dock: who holds the controls (Agent or You, when somebody does) and the clock of the server.
+3. A right click on the wallpaper opens the same menu, with the list of windows and Show desktop. Alt+Tab switches windows, Alt+F4 closes one, double-clicking a title bar maximizes it.
+4. The browser that the dock and the menu start works on a server that has no keyring: it is started without the system keyring, which would otherwise keep every page from loading (ERR_TIMED_OUT). A Chrome started in another way, over SSH for instance, needs the flag --password-store=basic.
+5. A screen that was running before an update of the server keeps its old look until it is put to sleep and started again.
 
 ## Starting the screen (Starting the screen…)
 

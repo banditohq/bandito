@@ -134,6 +134,10 @@ Build only from these. Need something that is not here: add it to the system fir
 the filled mic in `signal` (cream-orange) with a 7 pt `signal` dot at its top right. The dot is static, no pulse: it
 shows a state, it is not a motion. The dot is hidden from VoiceOver; the button's label reads "Stop dictation".
 
+## The server screen's desktop
+
+The desktop the daemon draws on a server's screen (`daemon/src/desktop/`, see ARCHITECTURE.md#screen) wears the same system, from the same tokens, but it is drawn by the daemon, so its colors are copied into `desktop/paint.rs` and `desktop/theme.rs`: when a token changes, change them there too. Ground: `bg` with a lit center and a dot grid of `text` at 22% that fades out, never a flat black; the lockup in `text`, the site in `mono` `text3`. The dock is `surface1` with a hairline on top; its pills are `text` at 5% with an 8% hairline (hover 11% and 16%), radius 10; the window that is up has a `text` border at 34%, as a selected card does. Orange stays out of it (nobody is needed on a desktop); who holds the controls is a sage dot for an agent and a cream dot for the person. Windows and menus (openbox theme `Bandito`) use `surface1` and `surface2` frames, `text` and `text3` labels, Onest. The words on it are English (the server has no interface language); keep them to one word.
+
 ## Motion
 
 - Use `.banditoAnimation(_:value:)`, never `.animation(_:value:)`, and `.banditoRise` for list rows. They honour Reduce Motion and the app's Motion level (Full, Less at half duration, Off). An action that animates a change (a button, a drop) uses `withBanditoAnimation`, never `withAnimation`.

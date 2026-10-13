@@ -3097,7 +3097,13 @@ public enum L10n {
         public static var sendCAD: String { L10n.tr("screen.sendCAD") }
         public static var shared: String { L10n.tr("screen.shared") }
         public static var sharedSub: String { L10n.tr("screen.sharedSub") }
+        public static var sleep: String { L10n.tr("screen.sleep") }
+        public static var sleepAgentTitle: String { L10n.tr("screen.sleepAgentTitle") }
+        public static var sleepConfirm: String { L10n.tr("screen.sleepConfirm") }
         public static var sleepHint: String { L10n.tr("screen.sleepHint") }
+        public static var sleepMessage: String { L10n.tr("screen.sleepMessage") }
+        public static var sleepUserTitle: String { L10n.tr("screen.sleepUserTitle") }
+        public static var sleeping: String { L10n.tr("screen.sleeping") }
         public static var start: String { L10n.tr("screen.start") }
         public static var startFailed: String { L10n.tr("screen.startFailed") }
         public static var starting: String { L10n.tr("screen.starting") }

@@ -2164,7 +2164,13 @@
 "screen.sendCAD" = "Отправить Ctrl+Alt+Del";
 "screen.shared" = "Общее";
 "screen.sharedSub" = "Экран рабочего места";
+"screen.sleep" = "Усыпить экран";
+"screen.sleepAgentTitle" = "Агент работает на экране";
+"screen.sleepConfirm" = "Усыпить";
 "screen.sleepHint" = "Экран просыпается по запросу. Когда им 30 минут никто не пользуется — ни вы, ни агенты, — он засыпает и не тратит память сервера.";
+"screen.sleepMessage" = "Открытые на нём программы закроются. Экран запустится снова, когда он понадобится вам или агенту.";
+"screen.sleepUserTitle" = "Управление у вас";
+"screen.sleeping" = "Усыпляем экран…";
 "screen.start" = "Запустить экран";
 "screen.startFailed" = "Не удалось запустить экран";
 "screen.starting" = "Запускаем экран…";

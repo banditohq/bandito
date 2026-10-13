@@ -88,10 +88,12 @@ private struct ScreenMainArea: View {
 
 // MARK: Toolbar
 
-private struct ScreenToolbar: View {
+struct ScreenToolbar: View {
     @Bindable var model: ScreenModel
     let title: String
     @Environment(Keymap.self) private var keymap
+    /// Set while the "Put the screen to sleep" question is open.
+    @State private var askingToSleep: ScreenSleepRules.Confirmation?
 
     var body: some View {
         let holder = model.status?.controller ?? .none
@@ -129,6 +131,26 @@ private struct ScreenToolbar: View {
             .banditoButton(.icon(size: 30, label: L10n.Screen.fullscreen))
             .help(L10n.Screen.fullscreen)
 
+            if model.status?.running == true {
+                Button {
+                    // Somebody holds the controls: ask first. A screen nobody holds goes to sleep at once.
+                    if let confirmation = model.sleepConfirmation {
+                        askingToSleep = confirmation
+                    } else {
+                        Task { await model.sleep() }
+                    }
+                } label: {
+                    if model.isSleeping {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "moon.zzz")
+                    }
+                }
+                .banditoButton(.icon(size: 30, label: L10n.Screen.sleep))
+                .disabled(!model.canSleep)
+                .help(L10n.Screen.sleep)
+            }
+
             if holder == .user {
                 Button(L10n.Browser.bannerGive) {
                     Task { await model.giveBack() }
@@ -158,6 +180,19 @@ private struct ScreenToolbar: View {
         .background(Color(red: 0.07, green: 0.063, blue: 0.055))
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
+        }
+        .confirmationDialog(
+            askingToSleep?.title ?? L10n.Screen.sleep,
+            isPresented: Binding(get: { askingToSleep != nil }, set: { if !$0 { askingToSleep = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(L10n.Screen.sleepConfirm, role: .destructive) {
+                askingToSleep = nil
+                Task { await model.sleep() }
+            }
+            Button(L10n.Common.cancel, role: .cancel) {}
+        } message: {
+            Text(L10n.Screen.sleepMessage)
         }
     }
 }
@@ -223,7 +258,7 @@ private struct ScreenCanvas: View {
         case .installing:
             ScreenInstalling(setup: model.setup)
         case .connecting:
-            ScreenProgress(text: L10n.Screen.connecting)
+            ScreenProgress(text: model.isSleeping ? L10n.Screen.sleeping : L10n.Screen.connecting)
         case .noFrame:
             ScreenFailure(message: UserFacingMessage(text: L10n.Screen.noFrame, canRetry: true)) {
                 Task { await model.start() }

@@ -90,11 +90,11 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         }
         "screen.stop" => {
             let r: WorkspaceParams = params(p)?;
-            screens
+            let stopped = screens
                 .stop(&workspace_or_default(r.workspace)?)
                 .await
                 .map_err(screen_error)?;
-            ok(json!({}))
+            ok(json!({ "stopped": stopped }))
         }
         "screen.control" => {
             let r: ControlParams = params(p)?;
@@ -412,6 +412,52 @@ mod tests {
         .await
         .unwrap_err();
         assert_eq!(err.code, SCREEN_ERROR);
+    }
+
+    /// `screen.stop` is the app's "put the screen to sleep": it answers `{stopped}`, true when a screen was running.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn screen_stop_answers_whether_a_screen_was_running() {
+        let reply = dispatch(&app(), &Peer::Local, "screen.stop", json!({})).await.unwrap();
+        assert_eq!(reply, json!({"stopped": false}));
+        let reply = dispatch(&app(), &Peer::Local, "screen.stop", json!({"workspace": "box-1"}))
+            .await
+            .unwrap();
+        assert_eq!(reply, json!({"stopped": false}));
+        let err = dispatch(&app(), &Peer::Local, "screen.stop", json!({"workspace": "../etc"}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        let err = dispatch(&app(), &Peer::Local, "screen.stop", json!({"workspace": 5}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    #[tokio::test]
+    async fn screen_stop_says_unsupported_off_linux() {
+        let err = dispatch(&app(), &Peer::Local, "screen.stop", json!({}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, SCREEN_ERROR);
+        assert_eq!(err.data, Some(json!({"reason": "unsupported"})));
+    }
+
+    /// Only the person's devices and the CLI may put the screen to sleep: an agent is refused before the method runs.
+    #[test]
+    fn only_the_owner_may_put_the_screen_to_sleep() {
+        use super::super::allowed;
+        assert!(allowed(&Peer::Local, "screen.stop"));
+        let device = Peer::Device(crate::store::Device {
+            id: "dev".into(),
+            name: "phone".into(),
+            created_at: 0,
+            last_seen_at: None,
+        });
+        assert!(allowed(&device, "screen.stop"));
+        assert!(!allowed(&Peer::Agent("agent-a".into()), "screen.stop"));
+        assert!(!allowed(&Peer::Anonymous("x".into()), "screen.stop"));
     }
 
     #[tokio::test]

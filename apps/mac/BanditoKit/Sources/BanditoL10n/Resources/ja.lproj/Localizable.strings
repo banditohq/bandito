@@ -2164,7 +2164,13 @@
 "screen.sendCAD" = "Ctrl+Alt+Delete を送信";
 "screen.shared" = "共有";
 "screen.sharedSub" = "作業場所の画面";
+"screen.sleep" = "画面をスリープさせる";
+"screen.sleepAgentTitle" = "エージェントが画面で作業しています";
+"screen.sleepConfirm" = "スリープさせる";
 "screen.sleepHint" = "画面は必要なときに起動します。30 分間、あなたもエージェントも使わなかった場合はスリープし、サーバーのメモリを解放します。";
+"screen.sleepMessage" = "画面で開いているプログラムは閉じられます。あなたかエージェントが必要としたとき、画面は再び起動します。";
+"screen.sleepUserTitle" = "操作はあなたが持っています";
+"screen.sleeping" = "画面をスリープさせています…";
 "screen.start" = "画面を起動";
 "screen.startFailed" = "画面を起動できませんでした";
 "screen.starting" = "画面を起動しています…";
