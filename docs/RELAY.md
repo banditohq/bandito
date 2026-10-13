@@ -40,15 +40,22 @@ end-to-end encrypted session (Noise) through it, so the relay never sees command
 
 - Daemon: `GET wss://relay.bandito.dev/v1/server/<sid>` with `Authorization: Bearer <secret>`. One connection per sid;
   a new one replaces the old (the old gets close 4001). Binary frames: `[u32 BE stream_id][u8 kind][payload]`, kind
-  0 = data, 1 = open (payload: JSON `{"ip": "<client ip>", "v": 1}`), 2 = close. Ping every 25 s each way; 60 s silence
-  closes.
+  0 = data, 1 = open (payload: JSON `{"ip": "<client ip>", "v": 1}`), 2 = close. Keepalive is a **text** message
+  `ping` answered by the text `pong` (a Worker cannot see WebSocket ping frames): the relay answers `ping` itself and
+  sends `ping` to both sides every 25 s; both the daemon and the phone answer `pong` and send their own `ping` every
+  25 s; 60 s of silence closes with 4002.
+- Close codes: 4001 replaced by a newer server connection, 4002 silence timeout, 4003 registration deleted, 4004 the
+  server left (sent to phones), 4008 monthly traffic limit, 4009 message over 1 MiB. Before the upgrade: 401 bad
+  secret, 503 `{"error":"offline"}` (server not connected or unknown sid), 429 `{"error":"too_many_streams"}` or
+  `{"error":"rate"}`.
 - Phone: `GET wss://relay.bandito.dev/v1/client/<sid>` (no auth at the relay: the Noise session is the auth). If the
   server is not connected: HTTP 503 `{"error":"offline"}` before the upgrade. The relay gives the stream an id, sends
   `open` to the server, then forwards each binary message of the phone as `data`, and the server's `data` for that id
   to the phone; either side closing sends `close`.
 - Limits (relay): 16 open streams per sid, 1 MiB per message, 60 new client connections per minute per IP and per sid,
   monthly traffic per account 20 GB (counted per server in the Durable Object, summed per account in D1 hourly);
-  over → close 4008 with a reason the apps show.
+  over → close 4008 with a reason the apps show. The registration API needs an approved device of the account and allows 20
+  registrations an hour.
 
 ## Session protocol (phone ↔ daemon, inside a relay stream)
 
