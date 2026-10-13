@@ -60,7 +60,7 @@ targets:
       base:
         PRODUCT_NAME: Bandito
         PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.ios
-        MARKETING_VERSION: 0.1.14
+        MARKETING_VERSION: 0.1.15
         CURRENT_PROJECT_VERSION: 1
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: NO
@@ -68,8 +68,10 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: "17.0"
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
-        # Simulator builds only for now: no signing (the build script passes CODE_SIGNING_ALLOWED=NO as well).
+        # Signed for TestFlight with the team's Apple Distribution certificate (scripts/testflight.sh); the Simulator
+        # build script passes CODE_SIGNING_ALLOWED=NO.
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 74Q24ZMD7A
   # The home and lock screen widgets (docs/IOS_APP.md, phase 2). Reads the snapshot in the App Group, no network.
   BanditoWidgets:
     type: app-extension
@@ -99,7 +101,7 @@ targets:
       base:
         PRODUCT_NAME: BanditoWidgets
         PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.ios.widgets
-        MARKETING_VERSION: 0.1.14
+        MARKETING_VERSION: 0.1.15
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: NO
         IPHONEOS_DEPLOYMENT_TARGET: "17.0"
@@ -108,6 +110,7 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
         SKIP_INSTALL: YES
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 74Q24ZMD7A
   BanditoIOSTests:
     type: bundle.unit-test
     platform: iOS
