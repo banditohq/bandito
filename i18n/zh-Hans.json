@@ -295,6 +295,8 @@
   "settings.menuBar": "在菜单栏中显示",
   "settings.launchAtLogin": "登录时打开",
   "settings.launchAtLoginHint": "登录这台 Mac 时自动打开 Bandito。",
+  "settings.iphoneBeta.title": "iPhone 应用（测试版）",
+  "settings.iphoneBeta.hint": "在服务器设置中显示 iPhone 区块：允许手机访问，并提供用于连接的二维码。iPhone 版应用目前处于封闭测试中。",
   "settings.chatLinks.open": "聊天中的链接打开方式",
   "settings.chatLinks.openHint": "⌘-点击总是用另一种方式打开。",
   "settings.chatLinks.builtIn": "内置浏览器",

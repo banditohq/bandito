@@ -295,6 +295,8 @@
   "settings.menuBar": "메뉴 막대에 표시",
   "settings.launchAtLogin": "로그인 시 열기",
   "settings.launchAtLoginHint": "이 Mac에 로그인하면 Bandito가 자동으로 실행돼요.",
+  "settings.iphoneBeta.title": "iPhone 앱(베타)",
+  "settings.iphoneBeta.hint": "서버 설정에 iPhone 블록을 표시합니다. 휴대폰에서의 접근과 연결용 QR 코드가 포함됩니다. iPhone 앱은 현재 비공개 테스트 중입니다.",
   "settings.chatLinks.open": "채팅 링크를 여는 곳",
   "settings.chatLinks.openHint": "⌘-클릭은 항상 다른 쪽으로 엽니다.",
   "settings.chatLinks.builtIn": "내장 브라우저",

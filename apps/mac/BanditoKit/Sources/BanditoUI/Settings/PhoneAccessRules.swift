@@ -5,15 +5,26 @@ import Foundation
 /// The rules of the iPhone block on a server's settings page and of the pairing sheet: what each choice says, when a
 /// phone can be connected, and what the sheet shows for the daemon's `pair.create` reply. Views stay thin.
 enum PhoneAccessRules {
-    /// Whether the iPhone block shows on a server's settings page. The iPhone app is not public yet, and a switch that
-    /// opens the server to an app nobody can install only adds risk: the block stays hidden in release builds until the
-    /// app is out. Debug builds (QA) show it.
-    static var showsIPhoneBlock: Bool {
+    /// The UserDefaults key of the "iPhone app (beta)" switch in General. Off by default.
+    static let betaStorageKey = "iphoneBeta.enabled"
+
+    /// Whether this build is a debug build (QA), which always shows the iPhone block.
+    static var isDebugBuild: Bool {
         #if DEBUG
         true
         #else
         false
         #endif
+    }
+
+    /// Whether the iPhone block shows on a server's settings page. The iPhone app is in closed testing, and a switch that
+    /// opens the server to an app nobody can install only adds risk, so release builds hide the block until the beta
+    /// switch in General is on. A server whose phone access is already on (not Off) always shows it, so whoever turned
+    /// it on can turn it off again. Debug builds (QA) show it.
+    static func showsIPhoneBlock(
+        betaEnabled: Bool, serverMode: PhoneAccessMode?, debugBuild: Bool = PhoneAccessRules.isDebugBuild
+    ) -> Bool {
+        debugBuild || betaEnabled || (serverMode ?? .off) != .off
     }
 
     /// The three choices of the switch, in display order.

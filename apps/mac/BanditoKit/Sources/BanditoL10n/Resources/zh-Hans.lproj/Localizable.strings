@@ -2522,6 +2522,8 @@
 "settings.group.playback" = "播放";
 "settings.group.system" = "系统";
 "settings.group.versions" = "版本";
+"settings.iphoneBeta.hint" = "在服务器设置中显示 iPhone 区块：允许手机访问，并提供用于连接的二维码。iPhone 版应用目前处于封闭测试中。";
+"settings.iphoneBeta.title" = "iPhone 应用（测试版）";
 "settings.keysIntro" = "一切操作都与熟悉的 Mac 应用相同。点击快捷键即可更改。";
 "settings.language" = "语言";
 "settings.language.system" = "跟随系统";

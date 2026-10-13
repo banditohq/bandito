@@ -348,6 +348,8 @@
   "settings.menuBar": "Показывать в строке меню",
   "settings.launchAtLogin": "Запускать при входе в систему",
   "settings.launchAtLoginHint": "Bandito сам запустится, когда вы войдёте в систему на этом Mac.",
+  "settings.iphoneBeta.title": "iPhone-приложение (бета)",
+  "settings.iphoneBeta.hint": "Показывает блок iPhone в настройках сервера: доступ с телефона и QR-код для подключения. Приложение для iPhone пока в закрытом тестировании.",
   "settings.chatLinks.open": "Ссылки из чата открывать",
   "settings.chatLinks.openHint": "⌘-клик всегда открывает по-другому.",
   "settings.chatLinks.builtIn": "Во встроенном браузере",

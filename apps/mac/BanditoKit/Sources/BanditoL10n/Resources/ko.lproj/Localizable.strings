@@ -2522,6 +2522,8 @@
 "settings.group.playback" = "재생";
 "settings.group.system" = "시스템";
 "settings.group.versions" = "버전";
+"settings.iphoneBeta.hint" = "서버 설정에 iPhone 블록을 표시합니다. 휴대폰에서의 접근과 연결용 QR 코드가 포함됩니다. iPhone 앱은 현재 비공개 테스트 중입니다.";
+"settings.iphoneBeta.title" = "iPhone 앱(베타)";
 "settings.keysIntro" = "익숙한 Mac 앱과 똑같이 동작해요. 단축키를 클릭하면 바꿀 수 있어요.";
 "settings.language" = "언어";
 "settings.language.system" = "시스템";

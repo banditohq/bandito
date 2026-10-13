@@ -2522,6 +2522,8 @@
 "settings.group.playback" = "Воспроизведение";
 "settings.group.system" = "Система";
 "settings.group.versions" = "Версии";
+"settings.iphoneBeta.hint" = "Показывает блок iPhone в настройках сервера: доступ с телефона и QR-код для подключения. Приложение для iPhone пока в закрытом тестировании.";
+"settings.iphoneBeta.title" = "iPhone-приложение (бета)";
 "settings.keysIntro" = "Всё как в привычных приложениях Mac. Нажмите на сочетание, чтобы поменять.";
 "settings.language" = "Язык";
 "settings.language.system" = "Как в системе";
