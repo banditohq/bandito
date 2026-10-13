@@ -364,17 +364,25 @@ if [ "$do_finish" -eq 1 ]; then
         fi
     }
 
-    step "Sign Sparkle's nested code, inside out, then the app"
+    step "Sign all nested code, inside out, then the app"
     sparkle="$app/Contents/Frameworks/Sparkle.framework"
-    for item in \
-        "$sparkle/Versions/B/XPCServices/Installer.xpc" \
-        "$sparkle/Versions/B/XPCServices/Downloader.xpc" \
-        "$sparkle/Versions/B/Autoupdate" \
-        "$sparkle/Versions/B/Updater.app" \
-        "$sparkle"; do
+    for item in "$sparkle/Versions/B/XPCServices/Installer.xpc" "$sparkle/Versions/B/XPCServices/Downloader.xpc" \
+        "$sparkle/Versions/B/Autoupdate" "$sparkle/Versions/B/Updater.app"; do
         [ -e "$item" ] || { echo "error: expected Sparkle item missing: $item" >&2; exit 1; }
-        sign_item "$item"
     done
+    # Every Mach-O file and every nested bundle (framework, XPC service, app), the deepest first. The compiled apps
+    # were signed ad hoc (the assemble stage) or by Xcode: all of it is signed again with the release identity.
+    nested="$work/nested-code.txt"
+    {
+        while IFS= read -r -d '' file; do
+            case "$(file -b "$file")" in *Mach-O*) printf '%s\n' "$file" ;; esac
+        done < <(find "$app" -type f ! -path '*/_CodeSignature/*' -print0)
+        find "$app" -mindepth 1 -type d \( -name '*.framework' -o -name '*.xpc' -o -name '*.app' \) ! -path '*/_CodeSignature/*'
+    } | awk '{ n = gsub("/", "/"); printf "%d %s\n", n, $0 }' | sort -rn | cut -d' ' -f2- > "$nested"
+    while IFS= read -r item; do
+        sign_item "$item"
+    done < "$nested"
+    echo "signed $(wc -l < "$nested" | tr -d ' ') nested items"
     sign_item "$app"
     if codesign -d --entitlements :- "$app" 2>/dev/null | grep -q "get-task-allow"; then
         echo "error: the app still carries com.apple.security.get-task-allow; notarization would refuse it" >&2
