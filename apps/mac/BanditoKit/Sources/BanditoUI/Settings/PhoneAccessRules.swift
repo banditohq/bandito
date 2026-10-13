@@ -5,6 +5,17 @@ import Foundation
 /// The rules of the iPhone block on a server's settings page and of the pairing sheet: what each choice says, when a
 /// phone can be connected, and what the sheet shows for the daemon's `pair.create` reply. Views stay thin.
 enum PhoneAccessRules {
+    /// Whether the iPhone block shows on a server's settings page. The iPhone app is not public yet, and a switch that
+    /// opens the server to an app nobody can install only adds risk: the block stays hidden in release builds until the
+    /// app is out. Debug builds (QA) show it.
+    static var showsIPhoneBlock: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
     /// The three choices of the switch, in display order.
     static var options: [(PhoneAccessMode, String)] {
         [

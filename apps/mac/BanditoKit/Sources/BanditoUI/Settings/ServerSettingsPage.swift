@@ -37,7 +37,9 @@ struct ServerSettingsPage: View {
             notice
             ServerMainSection(server: server)
             ServerConnectionSection(server: server, onBack: onBack)
-            ServerPhoneSection(server: server, model: model, previewDevices: previewDevices)
+            if PhoneAccessRules.showsIPhoneBlock {
+                ServerPhoneSection(server: server, model: model, previewDevices: previewDevices)
+            }
             ServerAgentDefaultsSection(server: server, model: model)
             ServerMaintenanceSection(server: server, model: model)
             ServerInfoSection(server: server, model: model)

@@ -21,7 +21,7 @@ When an action is asked about, the agent stops and an approval card appears in i
 1. Read the agent name, the action, and the command or diff.
 2. Click Approve (Разрешить) to allow it, or Deny (Отклонить) to refuse it. A long command asks you to open Bandito and review it.
 3. Tick Always allow this here (Всегда разрешать здесь) to allow this exact command for this agent from now on. Other commands still ask.
-4. You can also answer from the menu bar, from a notification, or from the iPhone app.
+4. You can also answer from the menu bar, from a notification, or, once it is out, from the iPhone app.
 
 ## Agents that create agents
 
