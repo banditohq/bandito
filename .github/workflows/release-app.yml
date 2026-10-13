@@ -416,6 +416,15 @@ jobs:
           set -euo pipefail
           fail() { echo "::error::$*"; exit 1; }
           cd "$SIGNED_DIR"
+          # stapler and spctl ask Apple's servers: a lost connection is tried again (15, 30, 60 and 120 seconds apart).
+          retry() {
+            local n=1
+            until "$@"; do
+              [ "$n" -lt 5 ] || fail "giving up: $*"
+              sleep $((15 * 2 ** (n - 1)))
+              n=$((n + 1))
+            done
+          }
           get() { sed -n "s/^$1=//p" manifest.txt; }
           [ "$(get version)" = "$VERSION" ] || fail "manifest is for version $(get version), not $VERSION"
           [ "$(get commit)" = "$SHA" ] || fail "manifest is for commit $(get commit), not $SHA"
@@ -441,12 +450,17 @@ jobs:
           done < <(find "$app" -type f -print0)
           [ "$bad" -eq 0 ] || fail "$bad binaries are not universal"
           codesign --verify --deep --strict --verbose=2 "$app"
-          xcrun stapler validate "$app"
-          spctl_out="$(spctl -a -vv -t exec "$app" 2>&1 || true)"
-          echo "$spctl_out"
-          grep -Fq "source=Notarized Developer ID" <<< "$spctl_out" || fail "Gatekeeper does not accept the app as Notarized Developer ID"
+          retry xcrun stapler validate "$app"
+          spctl_ok=0
+          for try in 1 2 3 4 5; do
+            spctl_out="$(spctl -a -vv -t exec "$app" 2>&1 || true)"
+            echo "$spctl_out"
+            if grep -Fq "source=Notarized Developer ID" <<< "$spctl_out"; then spctl_ok=1; break; fi
+            sleep $((15 * try))
+          done
+          [ "$spctl_ok" -eq 1 ] || fail "Gatekeeper does not accept the app as Notarized Developer ID"
           codesign --verify --strict --verbose=2 "Bandito-$VERSION.dmg"
-          xcrun stapler validate "Bandito-$VERSION.dmg"
+          retry xcrun stapler validate "Bandito-$VERSION.dmg"
           rm -rf check
           echo "The signed files of $VERSION are good: universal, Developer ID, notarized and stapled." | tee -a "$GITHUB_STEP_SUMMARY"
 
