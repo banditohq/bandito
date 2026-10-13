@@ -639,6 +639,22 @@ mod tests {
         assert!(args.contains("https://example.com"), "{args}");
     }
 
+    /// A folder with only the tools the browser wrapper calls (basename, dirname), to stand in for /usr/bin:/bin: a
+    /// runner may have a real chromium there, which the wrapper would start.
+    fn wrapper_tools(tmp: &Path) -> String {
+        let tools = tmp.join("tools");
+        std::fs::create_dir_all(&tools).unwrap();
+        for tool in ["basename", "dirname"] {
+            let found = ["/usr/bin", "/bin"]
+                .iter()
+                .map(|dir| Path::new(dir).join(tool))
+                .find(|path| path.exists())
+                .unwrap_or_else(|| panic!("{tool} is not installed"));
+            std::os::unix::fs::symlink(found, tools.join(tool)).unwrap();
+        }
+        tools.display().to_string()
+    }
+
     #[test]
     fn the_browser_wrapper_takes_path_entries_literally() {
         let tmp = tempfile::tempdir().unwrap();
@@ -651,7 +667,12 @@ mod tests {
         std::fs::write(&real, "#!/bin/sh\nexit 0\n").unwrap();
         std::fs::set_permissions(&real, std::fs::Permissions::from_mode(0o755)).unwrap();
         // `re*` would match the folder `real` if the shell expanded it; a PATH entry is a name, not a pattern.
-        let path = format!("{}:{}/re*:/usr/bin:/bin", wrapper_dir.display(), tmp.path().display());
+        let path = format!(
+            "{}:{}/re*:{}",
+            wrapper_dir.display(),
+            tmp.path().display(),
+            wrapper_tools(tmp.path())
+        );
         let status = std::process::Command::new(wrapper_dir.join("chromium"))
             .env("PATH", path)
             .status()
@@ -667,7 +688,7 @@ mod tests {
         write_file(&wrapper_dir.join("chromium"), browser_wrapper().as_bytes(), 0o700).unwrap();
         // The wrapper's own folder twice, once spelled with a trailing slash.
         let own = format!("{}/", wrapper_dir.display());
-        let path = format!("{}:{}:/usr/bin:/bin", wrapper_dir.display(), own);
+        let path = format!("{}:{}:{}", wrapper_dir.display(), own, wrapper_tools(tmp.path()));
         let output = std::process::Command::new(wrapper_dir.join("chromium"))
             .env("PATH", path)
             .output()
