@@ -123,6 +123,12 @@ impl Config {
         Self::checked(relay_url, sid, secret, false)
     }
 
+    /// As [`Config::validated`], and a plain `ws://` / `http://` address of this machine's own loopback is accepted when
+    /// `allow_plain` (a test setup: see [`Relay::plain_allowed`]). Any other plain address is refused.
+    pub fn validated_with(relay_url: &str, sid: &str, secret: &str, allow_plain: bool) -> Result<Self, String> {
+        Self::checked(relay_url, sid, secret, allow_plain)
+    }
+
     fn checked(relay_url: &str, sid: &str, secret: &str, allow_plain: bool) -> Result<Self, String> {
         let target = parse_url(relay_url.trim(), allow_plain)?;
         if sid.len() != SID_LEN || !sid.bytes().all(|b| matches!(b, b'a'..=b'z' | b'2'..=b'7')) {
@@ -177,6 +183,10 @@ fn parse_url(url: &str, allow_plain: bool) -> Result<Target, String> {
         Some((host, port)) => (host, port.parse::<u16>().ok().filter(|p| *p != 0).ok_or_else(bad)?),
         None => (rest, if tls { 443 } else { 80 }),
     };
+    // A plain connection is for tests on this machine only: the secret and the stream ids would travel in the clear.
+    if !tls && !matches!(host.to_ascii_lowercase().as_str(), "127.0.0.1" | "localhost") {
+        return Err(bad());
+    }
     if host.is_empty() || host.starts_with(['.', '-']) || host.ends_with(['.', '-']) || host.contains("..") {
         return Err(bad());
     }
@@ -606,7 +616,7 @@ impl Relay {
             generation: AtomicU64::new(0),
             keys: Mutex::new(None),
             timing: Mutex::new(Timing::default()),
-            allow_plain: AtomicBool::new(false),
+            allow_plain: AtomicBool::new(std::env::var_os("BANDITO_RELAY_ALLOW_LOOPBACK_PLAIN").is_some()),
             tls: tokio::sync::OnceCell::new(),
         }
     }
@@ -631,8 +641,14 @@ impl Relay {
         *self.timing.lock().unwrap_or_else(|e| e.into_inner()) = timing;
     }
 
-    /// Tests connect to a local relay without TLS.
+    /// Whether a plain `ws://` relay on this machine's loopback may be used: set by the test setup (the environment
+    /// variable `BANDITO_RELAY_ALLOW_LOOPBACK_PLAIN`), never by a request.
+    pub fn plain_allowed(&self) -> bool {
+        self.allow_plain.load(Ordering::Relaxed)
+    }
+
     #[cfg(test)]
+    /// Tests connect to a local relay without TLS.
     pub fn allow_plain(&self) {
         self.allow_plain.store(true, Ordering::Relaxed);
     }
@@ -2733,6 +2749,18 @@ mod tests {
             !rig.dir.path().join(NOISE_KEY_FILE).exists(),
             "pair.create does not make the key while the relay is off"
         );
+    }
+
+    #[test]
+    fn a_plain_relay_is_only_ever_this_machines_loopback() {
+        let secret = secret();
+        assert!(Config::validated_with("ws://127.0.0.1:9", SID, &secret, true).is_ok());
+        assert!(Config::validated_with("http://localhost:9", SID, &secret, true).is_ok());
+        assert!(Config::validated_with("ws://relay.example.com", SID, &secret, true).is_err());
+        assert!(Config::validated_with("ws://10.0.0.5:9", SID, &secret, true).is_err());
+        // Without the setup flag even the loopback needs TLS, as before.
+        assert!(Config::validated_with("ws://127.0.0.1:9", SID, &secret, false).is_err());
+        assert!(Config::validated("wss://relay.bandito.dev", SID, &secret).is_ok());
     }
 
     #[test]
