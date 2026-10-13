@@ -114,3 +114,26 @@ sync key envelopes, `SyncPayload` in BanditoKit — shared by both apps).
   answers the Mac's request).
 - Revoking a device in the account removes it from the account; the Mac then also revokes its device rows on the
   servers it can reach (`devices.revoke`), so a lost phone loses access everywhere.
+
+**As built** (BanditoKit `Account/Access`, daemon `devices.issue` and `phone.info`, see docs/ARCHITECTURE.md):
+
+- The wire names are snake_case: `phone`, `access_requests`, `access_grants`, `device_id`, `server_id`, `noise_key`, `relay_host`.
+  A request also carries `public_key`: the asking device's X25519 key. It is inside the encrypted blob, so the account
+  server cannot swap it; the answering device checks it against `GET /me` when the account lists keys (`public_key` per
+  device is optional there) and refuses a request whose key disagrees. A blob without the new fields reads as before, and
+  fields a build does not know are kept when it writes the blob back.
+- The sealed message is `0x01 || sender_pub (32) || enc (32) || ct`, base64, HPKE auth mode (`DeviceTokenSeal`). The
+  requester opens it with its own key, for its own device id and server id; when `GET /me` lists device keys the sender
+  must be one of them.
+- A merge keeps the newest request and grant per device and server and drops entries older than 7 days. Removing an
+  answered request is done on a fresh copy of the blob (`SyncStore.update` reads, changes and writes again on a version
+  conflict), so a merge cannot bring it back. The answering device remembers on its own what it issued
+  (`AccessLedger`): a request that comes back is not answered twice, a grant that could not be written is written by the
+  next cycle without a second token, and the daemon's row id of every issue is kept for revocation.
+- The Mac runs the answering side every 30 seconds with its connected servers, and writes `phone` for the servers whose
+  daemon says it has a way in (`phone.info`: relay on, or a phone listener up). Removing a device from the account
+  revokes its rows by the ids the Mac kept, and by the device's name for rows another Mac issued; servers that are
+  offline are cleaned when they come back.
+- The iPhone runs the asking side (`AccessRequester`) while the app is in front: every 10 seconds while a server waits,
+  every minute otherwise. A token it receives goes to a `ServerAccessSink`; the connection itself is the relay and direct
+  transports' job.

@@ -112,6 +112,12 @@ public struct Me: Codable, Sendable, Equatable {
     public var user: AccountUser
     public var device: DeviceRef
     public var devices: [AccountDevice]
+
+    public init(user: AccountUser, device: DeviceRef, devices: [AccountDevice]) {
+        self.user = user
+        self.device = device
+        self.devices = devices
+    }
 }
 
 /// The sync-key envelope a pending device receives after approval.

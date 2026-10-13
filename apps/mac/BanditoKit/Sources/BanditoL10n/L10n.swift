@@ -1340,6 +1340,42 @@ public enum L10n {
 
     public enum Ios {
 
+        public enum Account {
+
+            public enum Approval {
+                public static var codeLabel: String { L10n.tr("ios.account.approval.codeLabel") }
+                public static var text: String { L10n.tr("ios.account.approval.text") }
+                public static var title: String { L10n.tr("ios.account.approval.title") }
+            }
+
+            public enum Recover {
+                public static var text: String { L10n.tr("ios.account.recover.text") }
+            }
+
+            public enum Sender {
+                public static var codeLabel: String { L10n.tr("ios.account.sender.codeLabel") }
+                public static var title: String { L10n.tr("ios.account.sender.title") }
+            }
+
+            public enum Servers {
+                public static var connected: String { L10n.tr("ios.account.servers.connected") }
+                public static var empty: String { L10n.tr("ios.account.servers.empty") }
+                public static var footer: String { L10n.tr("ios.account.servers.footer") }
+                public static var header: String { L10n.tr("ios.account.servers.header") }
+                public static var noAccess: String { L10n.tr("ios.account.servers.noAccess") }
+                public static var waiting: String { L10n.tr("ios.account.servers.waiting") }
+            }
+
+            public enum SignIn {
+                public static var text: String { L10n.tr("ios.account.signIn.text") }
+            }
+
+            public enum SignOut {
+                public static var message: String { L10n.tr("ios.account.signOut.message") }
+                public static var title: String { L10n.tr("ios.account.signOut.title") }
+            }
+        }
+
         public enum Activity {
             public static var emptyErrors: String { L10n.tr("ios.activity.emptyErrors") }
             public static var emptyMessage: String { L10n.tr("ios.activity.emptyMessage") }
@@ -1635,6 +1671,7 @@ public enum L10n {
 
             public enum Welcome {
                 public static var assembly: String { L10n.tr("ios.onboarding.welcome.assembly") }
+                public static var haveAccount: String { L10n.tr("ios.onboarding.welcome.haveAccount") }
                 public static var haveServer: String { L10n.tr("ios.onboarding.welcome.haveServer") }
                 public static var start: String { L10n.tr("ios.onboarding.welcome.start") }
                 public static var subtitle: String { L10n.tr("ios.onboarding.welcome.subtitle") }
@@ -1654,6 +1691,14 @@ public enum L10n {
                 public static var website: String { L10n.tr("ios.settings.about.website") }
             }
 
+            public enum Account {
+                public static var attention: String { L10n.tr("ios.settings.account.attention") }
+                public static var ready: String { L10n.tr("ios.settings.account.ready") }
+                public static var signIn: String { L10n.tr("ios.settings.account.signIn") }
+                public static var signInHint: String { L10n.tr("ios.settings.account.signInHint") }
+                public static var waiting: String { L10n.tr("ios.settings.account.waiting") }
+            }
+
             public enum Appearance {
                 public static var languageHint: String { L10n.tr("ios.settings.appearance.languageHint") }
                 public static var motionHint: String { L10n.tr("ios.settings.appearance.motionHint") }
@@ -1667,6 +1712,7 @@ public enum L10n {
 
             public enum Header {
                 public static var about: String { L10n.tr("ios.settings.header.about") }
+                public static var account: String { L10n.tr("ios.settings.header.account") }
                 public static var appearance: String { L10n.tr("ios.settings.header.appearance") }
                 public static var notifications: String { L10n.tr("ios.settings.header.notifications") }
                 public static var security: String { L10n.tr("ios.settings.header.security") }

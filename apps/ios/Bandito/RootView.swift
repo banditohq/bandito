@@ -24,6 +24,16 @@ struct RootView: View {
     @State private var tab = AppTab.crew
     #endif
     @State private var settings = IOSSettings()
+    /// The account of this iPhone: its servers follow it from the Mac (docs/RELAY.md, "One account on every device").
+    #if DEBUG
+    /// `-account-preview <stage>` shows the account screen with made-up data (the screenshots).
+    @State private var account = IOSAccount.previewFromLaunch() ?? IOSAccount.shared
+    @State private var showsAccount = IOSAccount.previewFromLaunch() != nil
+    #else
+    @State private var account = IOSAccount.shared
+    /// The account screen over the onboarding ("I have a Bandito account").
+    @State private var showsAccount = false
+    #endif
     @State private var appLock = AppLock()
     /// The approval item the Inbox opens (a notification's route), cleared by the Inbox once it is open.
     @State private var inboxFocus: String?
@@ -53,7 +63,9 @@ struct RootView: View {
                     .badge(ActivityFacts.unreadCount(servers: servers))
                     .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
                     .tag(AppTab.activity)
-                SettingsTab(settings: settings, session: session, biometrics: biometrics, onConnect: openConnect)
+                SettingsTab(
+                    settings: settings, session: session, account: account, biometrics: biometrics,
+                    onConnect: openConnect)
                     .id(dynamicTypeSize)
                     .tabItem { Label(L10n.Settings.title, systemImage: "gearshape") }
                     .tag(AppTab.settings)
@@ -63,7 +75,7 @@ struct RootView: View {
             if showsOnboarding {
                 OnboardingView(store: onboarding, motion: settings.motion, onConnect: { mode in
                     connect = ConnectRequest(mode: mode)
-                })
+                }, onHaveAccount: { showsAccount = true })
                     .id(dynamicTypeSize)
                     .transition(.opacity)
             }
@@ -78,6 +90,13 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             appLock.scenePhaseChanged(to: phase, enabled: settings.faceIDLock, timeout: settings.lockTimeout)
             notifications.appActiveChanged(phase == .active)
+            account.setActive(phase == .active)
+        }
+        // An account that is ready ends the onboarding: the servers of the account come to this iPhone without pairing.
+        .onChange(of: account.stage == .ready) { _, isReady in
+            guard isReady else { return }
+            onboarding.markCompleted()
+            showsAccount = false
         }
         .onChange(of: notifications.route) { _, route in
             open(route)
@@ -122,6 +141,13 @@ struct RootView: View {
             AppIntentHub.shared.liveServers = { ServerSession.shared.current }
             WidgetSnapshotWriter.shared.onPicture = { SpotlightAgentIndex.shared.sync($0.directory) }
             WidgetSnapshotWriter.shared.watch { ServerSession.shared.current }
+            if !IOSDemo.isRequested(in: arguments) {
+                // A stored account session is read and its cycle starts; with none this does nothing.
+                Task {
+                    await account.start()
+                    account.setActive(scenePhase == .active)
+                }
+            }
             if IOSDemo.isRequested(in: arguments) {
                 guard session.current.isEmpty else { return }
                 session.installDemo(await IOSDemo.startServers(withTeam: !IOSDemo.isEmptyRequested(in: arguments)))
@@ -136,6 +162,10 @@ struct RootView: View {
         .sheet(item: $connect, onDismiss: { Task { await askNotificationsIfFirstServer() } }) { request in
             ConnectServerView(
                 session: session, incomingLink: $incomingLink, start: request.mode, onClose: { connect = nil })
+        }
+        .sheet(isPresented: $showsAccount) {
+            NavigationStack { AccountScreen(account: account, onClose: { showsAccount = false }) }
+                .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $asksNotifications) {
             NotificationAskSheet(onDone: { asksNotifications = false })
