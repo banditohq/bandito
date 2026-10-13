@@ -6,6 +6,7 @@ import UIKit
 /// `-chat <agent name>` opens that agent's chat from the Crew (`CrewScreen`),
 /// `-chat-draft <text>` puts the text in the message box and opens the keyboard,
 /// `-chat-send <text>` sends a message as soon as the chat is on screen,
+/// `-chat-open <row id>` opens a folded row (a group of commands),
 /// `-chat-top` scrolls to the first message,
 /// `-chat-row <part of a row id>` puts that row at the top of the screen.
 @MainActor
@@ -35,6 +36,12 @@ enum ChatLaunchHooks {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(1200))
                 controller.scrollToRow(idContaining: part)
+            }
+        }
+        if let id = value(after: "-chat-open", in: arguments) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(900))
+                controller.toggleFold(id)
             }
         }
         if arguments.contains("-chat-top") {
