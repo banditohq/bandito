@@ -148,7 +148,7 @@ else
 fi
 
 git -C "$wt" checkout --quiet -B "$branch"
-git -C "$wt" add apps/mac/project.yml daemon/Cargo.toml daemon/Cargo.lock
+git -C "$wt" add apps/mac/project.yml apps/ios/project.yml daemon/Cargo.toml daemon/Cargo.lock
 git -C "$wt" commit --quiet -m "$title version"
 # A branch left from an earlier run without a PR is replaced (it is always cut from origin/main).
 git -C "$wt" push --quiet --force -u origin "$branch"
