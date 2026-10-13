@@ -144,6 +144,27 @@ sync key envelopes, `SyncPayload` in BanditoKit — shared by both apps).
   every minute otherwise. A token it receives goes to a `ServerAccessSink`; the connection itself is the relay and direct
   transports' job.
 
+**Glue between the two apps** (one server, one entry; `PhoneEndpoint.swift`, `MacAccessSink`, `AccountAccessSink`):
+
+- A server added by a link on a device (QR on the iPhone) is published as a `SyncedServer` with endpoint `.local(deviceID:)` of
+  the device that added it (so a build that does not know the entry still reads the blob) and a `phone` record made from its
+  endpoint (`SyncedPhone(endpoint:)`). Device tokens and Noise private keys are never in it.
+- The id of a server is the id of its first entry. A device that receives an access builds the server **with that id** (and the
+  Noise key it made for the request); the iPhone adds it to `ServerSession` and the Mac to its list, and both connect at once
+  (`ServerAccess.serverConfig`). `hasAccess(serverID:phone:)` also answers true when the device holds the **same daemon**
+  under another id: the same Noise key or certificate, and no key that differs. That is how a server paired by QR on the phone
+  before the account knew it is not asked for again, and how the Mac's own ssh server (whose daemon says its `phone.info`)
+  is not asked for from the Mac.
+- Two entries of one daemon collapse when the blob is merged (`SyncPayload.merged`): ssh, then a WebSocket address, then a
+  link-paired entry stays, the lower id among equals, and it keeps the way in the other knew. The same certificate behind
+  another Noise key is another server: pairing it is refused on the iPhone (`differentServer`), never a replacement.
+- The iPhone answers the account's requests for the servers it is connected to (`AccessResponder`, over the relay or
+  direct as the device it is), and publishes what it was paired with; the Mac asks for the servers of the account it lacks
+  (`AccessRequester`, every 30 s with the cycle). A server the person disconnected on the iPhone is remembered
+  (`ServerSession.dismissed`) and not asked for again.
+- A daemon can take a plain `ws://127.0.0.1` relay for tests only: the environment variable
+  `BANDITO_RELAY_ALLOW_LOOPBACK_PLAIN` of the daemon process (never a request); any other plain address is refused.
+
 **Residual risk.** A device removed from the account still holds the sync key: the key is not rotated on removal. It
 cannot write the blob or read a newer one without a session of the account, and its session ends with the removal. Its
 access to the servers is revoked by the rule above on the next cycle of any Mac that issued it.
