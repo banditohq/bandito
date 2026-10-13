@@ -1438,6 +1438,7 @@
 "menu.reportProblem" = "문제 신고…";
 "menu.terminals" = "터미널";
 "menu.view" = "보기";
+"menu.whatsNew" = "새로운 기능";
 "menubar.noneWaiting" = "나를 기다리는 것이 없어요.";
 "menubar.nothingRunning" = "지금 실행 중인 에이전트가 없어요.";
 "menubar.open" = "Bandito 열기";
@@ -3089,6 +3090,13 @@
 "viewer.tooLarge" = "파일이 2MB보다 커서 여기서 열 수 없어요. Mac으로 다운로드해 주세요.";
 "viewer.zoomIn" = "확대";
 "viewer.zoomOut" = "축소";
+"whatsNew.allChanges" = "모든 변경 사항";
+"whatsNew.continue" = "계속";
+"whatsNew.earlier" = "이전 버전";
+"whatsNew.empty" = "이 버전의 노트는 아직 없습니다.";
+"whatsNew.language" = "노트 언어";
+"whatsNew.olderVersion" = "버전 %1$@";
+"whatsNew.title" = "Bandito %1$@의 새로운 기능";
 "workbench.add" = "탭 추가";
 "workbench.agentInBrowser" = "에이전트가 브라우저를 사용 중이에요";
 "workbench.browser" = "브라우저";

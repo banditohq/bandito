@@ -1438,6 +1438,7 @@
 "menu.reportProblem" = "Informar de un problema…";
 "menu.terminals" = "Terminales";
 "menu.view" = "Visualización";
+"menu.whatsNew" = "Novedades";
 "menubar.noneWaiting" = "Nadie espera por ti.";
 "menubar.nothingRunning" = "Ahora mismo no hay ningún agente en marcha.";
 "menubar.open" = "Abrir Bandito";
@@ -3089,6 +3090,13 @@
 "viewer.tooLarge" = "El archivo pesa más de 2 MB y aquí no se puede abrir. Descárgalo al Mac.";
 "viewer.zoomIn" = "Acercar";
 "viewer.zoomOut" = "Alejar";
+"whatsNew.allChanges" = "Todos los cambios";
+"whatsNew.continue" = "Continuar";
+"whatsNew.earlier" = "Versiones anteriores";
+"whatsNew.empty" = "Aún no hay notas para esta versión.";
+"whatsNew.language" = "Idioma de las notas";
+"whatsNew.olderVersion" = "Versión %1$@";
+"whatsNew.title" = "Novedades de Bandito %1$@";
 "workbench.add" = "Añadir pestaña";
 "workbench.agentInBrowser" = "El agente está usando el navegador";
 "workbench.browser" = "Navegador";

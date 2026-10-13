@@ -56,3 +56,4 @@ Public repo (FSL-1.1-ALv2). Everything here is visible to the world: no secrets,
 - Writing `@State` from geometry, scroll or hover callbacks on every call re-renders whole trees. Write on change.
 - App releases need the server release of the same version (`release.yml` builds and signs the daemon binaries);
   without it "Add a server" fails.
+- Every release needs its "What's new" notes: `release-notes/X.Y.Z.json` (3-6 items, all 9 languages), merged before `scripts/release.sh X.Y.Z`; `scripts/check_release_notes.py` guards it in CI.

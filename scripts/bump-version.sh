@@ -109,3 +109,6 @@ cat "$tmp/lock" > "$lock"
 
 "$0" "$version" --check --root "$root" > /dev/null
 echo "version set to $version in project.yml, Cargo.toml, Cargo.lock"
+# A release ships its "What's new" notes (release-notes/X.Y.Z.json, checked by scripts/check_release_notes.py).
+[ -f "$root/release-notes/$version.json" ] \
+  || echo "bump-version: warning: release-notes/$version.json does not exist; write the notes before releasing (CI fails a release PR without them)" >&2

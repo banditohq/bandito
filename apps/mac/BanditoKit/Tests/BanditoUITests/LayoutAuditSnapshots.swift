@@ -132,6 +132,13 @@ import Testing
                     confirmTitle: L10n.Telemetry.Crash.send, confirmIsDanger: false,
                     cancelTitle: L10n.Telemetry.Notice.decline, onConfirm: {}, onCancel: {}))
         },
+        AuditCase(name: "sheet-whats-new", width: 560, selfSized: true) { _ in
+            AnyView(
+                WhatsNewContent(
+                    notes: try? WhatsNewSnapshots.notes("0.1.15"), version: "0.1.15",
+                    older: (try? WhatsNewSnapshots.notes("0.1.14")).map { [$0] } ?? [],
+                    preferredLanguages: L10n.languages.map(\.code), still: true))
+        },
         AuditCase(name: "sheet-snippet", width: 440, selfSized: true) { _ in AnyView(SnippetEditor(onSave: { _ in })) },
         AuditCase(name: "sheet-phone-pair", width: 420, selfSized: true) { env in
             AnyView(PhonePairSheet(server: env.server, preview: phonePairPreview))

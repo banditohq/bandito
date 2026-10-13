@@ -2128,6 +2128,7 @@ public enum L10n {
         public static var reportProblem: String { L10n.tr("menu.reportProblem") }
         public static var terminals: String { L10n.tr("menu.terminals") }
         public static var view: String { L10n.tr("menu.view") }
+        public static var whatsNew: String { L10n.tr("menu.whatsNew") }
     }
 
     public enum Menubar {
@@ -4441,6 +4442,16 @@ public enum L10n {
             public static var read: String { L10n.tr("viewer.mode.read") }
             public static var split: String { L10n.tr("viewer.mode.split") }
         }
+    }
+
+    public enum WhatsNew {
+        public static var allChanges: String { L10n.tr("whatsNew.allChanges") }
+        public static var `continue`: String { L10n.tr("whatsNew.continue") }
+        public static var earlier: String { L10n.tr("whatsNew.earlier") }
+        public static var empty: String { L10n.tr("whatsNew.empty") }
+        public static var language: String { L10n.tr("whatsNew.language") }
+        public static func olderVersion(version: String) -> String { L10n.tr("whatsNew.olderVersion", version) }
+        public static func title(version: String) -> String { L10n.tr("whatsNew.title", version) }
     }
 
     public enum Workbench {

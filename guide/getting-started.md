@@ -144,3 +144,12 @@ The last step of the flow. Reaching it stores that the introduction is done, and
 Starts the introduction from Welcome whatever the server state is.
 Где: Help → Show the introduction again (Показать знакомство снова)
 1. Open the Help menu and choose Show the introduction again (Показать знакомство снова).
+
+## What's new (Что нового)
+
+<!-- id: gs-whats-new; covers: sheet:whatsNew -->
+A sheet with the changes of the version you run: the raccoon of points of light, "What's new in Bandito 0.1.15" (Что нового в Bandito 0.1.15), the date, and one card for each change with a symbol, a title and a line. It opens by itself the first time you launch a new version after an update, and never over the introduction, the statistics notice or a question from Bandito: it waits until they are answered. A new person does not see it. If you skipped versions, the versions in between are listed folded under the current one; click a version to open it. The notes are read from the app, so the sheet works without a network.
+Где: Help (Справка) → What's New (Что нового); after an update, on the first launch
+1. Choose Help (Справка) → What's New (Что нового) at any time to read the notes of the current version.
+2. The language button at the top right shows the language of the notes (by default the language of the app; English if the notes have no such language). Pick another one among the nine; only the notes change, not the app, and nothing is saved.
+3. Click All changes (Все изменения) to open the full list on the website, or Continue (Продолжить), or press Esc, to close the sheet.

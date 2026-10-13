@@ -1438,6 +1438,7 @@
 "menu.reportProblem" = "問題を報告…";
 "menu.terminals" = "ターミナル";
 "menu.view" = "表示";
+"menu.whatsNew" = "新機能";
 "menubar.noneWaiting" = "あなたを待っているものはありません。";
 "menubar.nothingRunning" = "今は実行中のエージェントがありません。";
 "menubar.open" = "Bandito を開く";
@@ -3089,6 +3090,13 @@
 "viewer.tooLarge" = "ファイルが 2 MB を超えているため、ここでは開けません。Mac にダウンロードしてください。";
 "viewer.zoomIn" = "拡大";
 "viewer.zoomOut" = "縮小";
+"whatsNew.allChanges" = "すべての変更";
+"whatsNew.continue" = "続ける";
+"whatsNew.earlier" = "以前のバージョン";
+"whatsNew.empty" = "このバージョンのノートはまだありません。";
+"whatsNew.language" = "ノートの言語";
+"whatsNew.olderVersion" = "バージョン %1$@";
+"whatsNew.title" = "Bandito %1$@ の新機能";
 "workbench.add" = "タブを追加";
 "workbench.agentInBrowser" = "エージェントがブラウザを使用中";
 "workbench.browser" = "ブラウザ";
