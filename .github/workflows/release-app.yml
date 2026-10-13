@@ -1,10 +1,17 @@
 name: release-app
 
 # Builds, signs, notarizes and publishes the Mac app of one version. Run it after the server release of the same
-# version (release.yml) is published. The job runs in the environment named after the channel: `stable` needs the
-# owner's approval (set up in the repository settings). It is normally started by release-flow.yml after the server
-# release is published. At the end it opens the appcast PR in banditohq/platform and merges it once that repo's checks
-# are green, with a short-lived token of the Bandito Bot GitHub App. See docs/RELEASING.md.
+# version (release.yml) is published. It is normally started by release-flow.yml after the server release is published.
+#
+# The work is split so that the owner's approval comes last and takes minutes:
+#   check     the inputs, the tag and the server release                                  (no secrets)
+#   compile   arm64 and x86_64 are built at the same time on two runners, signed ad hoc  (no secrets)
+#   assemble  joins them (lipo), signs with Developer ID, notarizes, staples, zip + dmg   (environment beta: certificate
+#             and App Store Connect key, no reviewers; never the Sparkle key)
+#   publish   environment <channel>: `stable` needs the owner's approval. Verifies the signed files, signs the update
+#             with the Sparkle key (only here), uploads to the GitHub release, opens the appcast PR in banditohq/platform
+#             and waits until that repo merges it.
+# See docs/RELEASING.md.
 
 on:
   workflow_dispatch:
@@ -19,6 +26,16 @@ on:
         type: choice
         options: [stable, beta]
         default: beta
+      dry_run:
+        description: "Dry run: build, sign and notarize, then stop before anything is published (no release upload, no appcast PR)"
+        required: false
+        type: boolean
+        default: false
+      ref:
+        description: "Dry run only: build this branch, tag or commit instead of the tag v<version> (which then need not exist)"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -28,30 +45,25 @@ concurrency:
   group: release-app-${{ inputs.version }}
   cancel-in-progress: false
 
-jobs:
-  release:
-    name: Bandito ${{ inputs.version }} (${{ inputs.channel }})
-    runs-on: macos-15
-    environment: ${{ inputs.channel }}
-    timeout-minutes: 120
-    env:
-      VERSION: ${{ inputs.version }}
-      CHANNEL: ${{ inputs.channel }}
-      TAG: v${{ inputs.version }}
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      # runner.temp is not available in a job's env, so the folder is set by the first step.
-      - name: Set paths
-        run: echo "PLATFORM_DIR=$RUNNER_TEMP/platform" >> "$GITHUB_ENV"
+env:
+  VERSION: ${{ inputs.version }}
+  CHANNEL: ${{ inputs.channel }}
+  DRY_RUN: ${{ inputs.dry_run }}
+  TAG: v${{ inputs.version }}
+  GH_TOKEN: ${{ github.token }}
 
-      - name: Check the inputs, the server release and the secrets
+jobs:
+  check:
+    name: Check ${{ inputs.version }} (${{ inputs.channel }}${{ inputs.dry_run && ', dry run' || '' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.check.outputs.sha }}
+    steps:
+      - name: Check the inputs and the server release, find the commit to build
+        id: check
         env:
-          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
-          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
+          REF_INPUT: ${{ inputs.ref }}
         run: |
           set -euo pipefail
           fail() { echo "::error::$*"; exit 1; }
@@ -61,26 +73,50 @@ jobs:
             stable) case "$VERSION" in *-beta.*) fail "channel stable needs a version without -beta" ;; esac ;;
             beta) case "$VERSION" in *-beta.*) ;; *) fail "channel beta needs a version like 0.2.0-beta.1" ;; esac ;;
           esac
-          for name in MACOS_CERT_P12_BASE64 MACOS_CERT_PASSWORD ASC_KEY_P8_BASE64 ASC_KEY_ID ASC_ISSUER_ID SPARKLE_ED_KEY; do
-            [ -n "${!name:-}" ] || fail "repository secret $name is not set (see docs/RELEASING.md)"
-          done
-          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" > /dev/null 2>&1 \
-            || fail "tag $TAG does not exist: create it on the release commit first (see docs/RELEASING.md)"
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 \
-            || fail "no GitHub release $TAG: publish the server release first, release.yml builds its binaries"
-          draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
-          [ "$draft" = "false" ] || fail "release $TAG is still a draft: publish the server release first"
-          assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
-          for name in bandito-aarch64-apple-darwin.tar.gz bandito-x86_64-apple-darwin.tar.gz \
-              bandito-aarch64-unknown-linux-gnu.tar.gz bandito-x86_64-unknown-linux-gnu.tar.gz SHA256SUMS; do
-            grep -qxF "$name" <<< "$assets" \
-              || fail "release $TAG has no $name: publish the server release first (release.yml)"
-          done
+          if [ "$DRY_RUN" = "true" ] && [ -n "$REF_INPUT" ]; then
+            # A dry run of a branch: nothing is published, so the tag and the server release need not exist.
+            sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$REF_INPUT" --jq .sha)" || fail "cannot find ref '$REF_INPUT'"
+            echo "Dry run of $REF_INPUT ($sha); the tag and the server release are not checked."
+          else
+            [ -z "$REF_INPUT" ] || fail "input ref is for dry runs only"
+            gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" > /dev/null 2>&1 \
+              || fail "tag $TAG does not exist: create it on the release commit first (see docs/RELEASING.md)"
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 \
+              || fail "no GitHub release $TAG: publish the server release first, release.yml builds its binaries"
+            draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
+            [ "$draft" = "false" ] || fail "release $TAG is still a draft: publish the server release first"
+            assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+            for name in bandito-aarch64-apple-darwin.tar.gz bandito-x86_64-apple-darwin.tar.gz \
+                bandito-aarch64-unknown-linux-gnu.tar.gz bandito-x86_64-unknown-linux-gnu.tar.gz SHA256SUMS; do
+              grep -qxF "$name" <<< "$assets" \
+                || fail "release $TAG has no $name: publish the server release first (release.yml)"
+            done
+            sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)"
+          fi
+          printf '%s\n' "$sha" | grep -Eq '^[0-9a-f]{40}$' || fail "bad commit '$sha'"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Building commit $sha"
 
-      - name: Check out the release tag
+  # One architecture per runner, at the same time. No certificate, no keys: the app is signed ad hoc here (the
+  # entitlements are kept) and signed for real in `assemble`.
+  compile:
+    name: Compile ${{ matrix.arch }}
+    needs: check
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: arm64
+            rust_target: aarch64-apple-darwin
+          - arch: x86_64
+            rust_target: x86_64-apple-darwin
+    steps:
+      - name: Check out the release commit
         uses: actions/checkout@v5
         with:
-          ref: refs/tags/v${{ inputs.version }}
+          ref: ${{ needs.check.outputs.sha }}
           # The build number is the commit count of HEAD (plus 1000): the full history is needed.
           fetch-depth: 0
           persist-credentials: false
@@ -96,6 +132,120 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: brew install xcodegen
 
+      - name: Install Rust (the app bundles the bandito daemon)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      # The caches are per architecture. Only what a fresh checkout cannot invalidate is cached: the Swift packages and
+      # the Rust dependencies and target folder (cargo and SwiftPM compare content/fingerprints). Xcode's own build
+      # products are not: a checkout gives every source file a new modification time, so Xcode would recompile them anyway.
+      - name: Versions for the cache keys
+        id: ver
+        run: |
+          set -euo pipefail
+          xcode="$(xcodebuild -version | tr -s ' \n' '--')"
+          rustc_ver="$(rustc --version | tr -s ' ' '-')"
+          echo "xcode=$xcode" >> "$GITHUB_OUTPUT"
+          echo "rust=$rustc_ver" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the Rust cache
+        id: cache-cargo
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ runner.temp }}/cargo-target
+          key: cargo-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ steps.ver.outputs.rust }}-${{ hashFiles('daemon/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ steps.ver.outputs.rust }}-
+            cargo-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-
+
+      - name: Restore the Swift packages cache
+        id: cache-spm
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/derived-data/SourcePackages
+          key: spm-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ hashFiles('apps/mac/BanditoKit/Package.resolved', 'apps/mac/project.yml') }}
+          restore-keys: |
+            spm-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-
+
+      - name: Compile ${{ matrix.arch }}
+        env:
+          BANDITO_DERIVED_DATA: ${{ runner.temp }}/derived-data
+          CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-target
+        run: |
+          set -euo pipefail
+          apps/mac/scripts/release-app.sh "$VERSION" --stage compile --arch "${{ matrix.arch }}"
+
+      - name: Save the Rust cache
+        if: ${{ !cancelled() && steps.cache-cargo.outputs.cache-hit != 'true' && hashFiles('daemon/Cargo.lock') != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ runner.temp }}/cargo-target
+          key: cargo-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ steps.ver.outputs.rust }}-${{ hashFiles('daemon/Cargo.lock') }}
+
+      - name: Save the Swift packages cache
+        if: ${{ !cancelled() && steps.cache-spm.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/derived-data/SourcePackages
+          key: spm-${{ matrix.arch }}-${{ steps.ver.outputs.xcode }}-${{ hashFiles('apps/mac/BanditoKit/Package.resolved', 'apps/mac/project.yml') }}
+
+      # upload-artifact does not keep symlinks or permissions, so the bundle goes in as a ditto zip.
+      - name: Pack the compiled app
+        run: |
+          set -euo pipefail
+          cd apps/mac/build/release/compiled-${{ matrix.arch }}
+          ditto -c -k --keepParent --sequesterRsrc Bandito.app "$RUNNER_TEMP/compiled-${{ matrix.arch }}.zip"
+
+      - name: Keep the compiled app for assemble
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-${{ matrix.arch }}
+          path: ${{ runner.temp }}/compiled-${{ matrix.arch }}.zip
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  # The environment `beta` has no reviewers and holds the Developer ID certificate and the App Store Connect key (the
+  # same values as in `stable`). Everything slow that needs them happens here, before the owner's approval.
+  assemble:
+    name: Sign and notarize
+    needs: [check, compile]
+    runs-on: macos-15
+    environment: beta
+    timeout-minutes: 60
+    steps:
+      - name: Check the secrets
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          for name in MACOS_CERT_P12_BASE64 MACOS_CERT_PASSWORD ASC_KEY_P8_BASE64 ASC_KEY_ID ASC_ISSUER_ID; do
+            [ -n "${!name:-}" ] || { echo "::error::secret $name is not set in the environment beta (see docs/RELEASING.md)"; exit 1; }
+          done
+
+      - name: Check out the release commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+          persist-credentials: false
+
+      - name: Select the newest Xcode
+        run: |
+          xcode="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version
+
       # The disk image is built by dmgbuild (pinned in apps/mac/scripts/dmg-requirements.txt). setup-python gives a
       # python3 that pip may install into (the runner's Homebrew python refuses pip installs outside a venv).
       - name: Set up Python for dmgbuild
@@ -109,43 +259,21 @@ jobs:
           python3 -m pip install --user -r apps/mac/scripts/dmg-requirements.txt
           python3 -c 'import dmgbuild; print("dmgbuild", dmgbuild.__version__)'
 
-      - name: Install Rust (the app bundles the bandito daemon, for Apple Silicon and Intel)
-        uses: dtolnay/rust-toolchain@stable
+      - name: Get the two compiled apps
+        uses: actions/download-artifact@v4
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          pattern: compiled-*
+          path: ${{ runner.temp }}/compiled
+          merge-multiple: true
 
-      - name: Install Sparkle 2.10.0 (sign_update)
-        env:
-          SPARKLE_URL: https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz
-          SPARKLE_SHA256: c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c
+      - name: Unpack the compiled apps
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/sparkle-dl" "$RUNNER_TEMP/sparkle"
-          curl -fsSL -o "$RUNNER_TEMP/sparkle-dl/Sparkle.tar.xz" "$SPARKLE_URL"
-          echo "$SPARKLE_SHA256  $RUNNER_TEMP/sparkle-dl/Sparkle.tar.xz" | shasum -a 256 -c -
-          tar -xJf "$RUNNER_TEMP/sparkle-dl/Sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle" ./bin/sign_update
-          test -x "$RUNNER_TEMP/sparkle/bin/sign_update"
-
-      # Installation tokens last one hour, so one is made here (read the platform repo) and another at the end (push,
-      # open and merge the PR): the build in between can take longer than that. Needs the App installed on
-      # banditohq/platform with Contents: read and write, Pull requests: read and write.
-      - name: Token for the platform repo (read)
-        id: platform-read
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.BANDITO_BOT_APP_ID }}
-          private-key: ${{ secrets.BANDITO_BOT_PRIVATE_KEY }}
-          owner: banditohq
-          repositories: platform
-          permission-contents: read
-
-      - name: Get the current appcast (the base the new item is added to)
-        env:
-          GH_TOKEN: ${{ steps.platform-read.outputs.token }}
-        run: |
-          set -euo pipefail
-          gh repo clone banditohq/platform "$PLATFORM_DIR" -- --depth 1
-          test -f "$PLATFORM_DIR/public/appcast.xml"
+          for arch in arm64 x86_64; do
+            mkdir -p "$RUNNER_TEMP/compiled/$arch"
+            ditto -x -k "$RUNNER_TEMP/compiled/compiled-$arch.zip" "$RUNNER_TEMP/compiled/$arch"
+            test -d "$RUNNER_TEMP/compiled/$arch/Bandito.app"
+          done
 
       - name: Create a temporary keychain with the Developer ID certificate
         env:
@@ -181,6 +309,161 @@ jobs:
           printf '%s' "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
           test -s "$RUNNER_TEMP/AuthKey.p8"
 
+      - name: Join, sign, notarize and staple the app, zip and disk image
+        env:
+          BANDITO_DERIVED_DATA: ${{ runner.temp }}/derived-data
+          NOTARY_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          NOTARY_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          apps/mac/scripts/release-app.sh "$VERSION" --stage assemble \
+            --arm64-app "$RUNNER_TEMP/compiled/arm64/Bandito.app" --x86-app "$RUNNER_TEMP/compiled/x86_64/Bandito.app"
+
+      - name: Write the manifest of the signed files
+        env:
+          SHA: ${{ needs.check.outputs.sha }}
+        run: |
+          set -euo pipefail
+          cd apps/mac/build/release
+          build="$(plutil -extract CFBundleVersion raw -o - Bandito.app/Contents/Info.plist)"
+          {
+            printf 'version=%s\n' "$VERSION"
+            printf 'build=%s\n' "$build"
+            printf 'commit=%s\n' "$SHA"
+            printf 'zip_sha256=%s\n' "$(shasum -a 256 "Bandito-$VERSION.zip" | cut -d' ' -f1)"
+            printf 'dmg_sha256=%s\n' "$(shasum -a 256 "Bandito-$VERSION.dmg" | cut -d' ' -f1)"
+          } > manifest.txt
+          cat manifest.txt
+
+      - name: Keep the signed files for publish
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-${{ inputs.version }}
+          path: |
+            apps/mac/build/release/Bandito-${{ inputs.version }}.zip
+            apps/mac/build/release/Bandito-${{ inputs.version }}.dmg
+            apps/mac/build/release/manifest.txt
+          retention-days: 2
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Remove the signing keychain and the keys
+        if: always()
+        run: |
+          kc="$RUNNER_TEMP/bandito-signing.keychain-db"
+          if [ -f "$kc" ]; then security delete-keychain "$kc" || true; fi
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/AuthKey.p8"
+
+  # Runs in the environment of the channel: `stable` waits here for the owner's approval. By now everything slow is
+  # done; this job checks the signed files, signs the update with the Sparkle key and publishes.
+  publish:
+    name: Publish ${{ inputs.version }} (${{ inputs.channel }}${{ inputs.dry_run && ', dry run' || '' }})
+    needs: [check, assemble]
+    runs-on: macos-15
+    environment: ${{ inputs.channel }}
+    timeout-minutes: 90
+    steps:
+      - name: Set paths
+        run: |
+          echo "PLATFORM_DIR=$RUNNER_TEMP/platform" >> "$GITHUB_ENV"
+          echo "SIGNED_DIR=$RUNNER_TEMP/signed" >> "$GITHUB_ENV"
+
+      - name: Check the secrets
+        env:
+          SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
+          BANDITO_BOT_APP_ID: ${{ secrets.BANDITO_BOT_APP_ID }}
+          BANDITO_BOT_PRIVATE_KEY: ${{ secrets.BANDITO_BOT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in SPARKLE_ED_KEY BANDITO_BOT_APP_ID BANDITO_BOT_PRIVATE_KEY; do
+            [ -n "${!name:-}" ] || { echo "::error::secret $name is not set in the environment $CHANNEL (see docs/RELEASING.md)"; exit 1; }
+          done
+
+      - name: Check out the release commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+          persist-credentials: false
+
+      - name: Get the signed files
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-${{ inputs.version }}
+          path: ${{ runner.temp }}/signed
+
+      # The files are checked again here, in the job that publishes: whatever happened in between, only a signed,
+      # notarized, stapled, universal app of this version and this commit goes on.
+      - name: Verify the signed files
+        env:
+          SHA: ${{ needs.check.outputs.sha }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*"; exit 1; }
+          cd "$SIGNED_DIR"
+          get() { sed -n "s/^$1=//p" manifest.txt; }
+          [ "$(get version)" = "$VERSION" ] || fail "manifest is for version $(get version), not $VERSION"
+          [ "$(get commit)" = "$SHA" ] || fail "manifest is for commit $(get commit), not $SHA"
+          [ "$(shasum -a 256 "Bandito-$VERSION.zip" | cut -d' ' -f1)" = "$(get zip_sha256)" ] || fail "the zip does not match the manifest"
+          [ "$(shasum -a 256 "Bandito-$VERSION.dmg" | cut -d' ' -f1)" = "$(get dmg_sha256)" ] || fail "the dmg does not match the manifest"
+          if [ "$DRY_RUN" != "true" ]; then
+            # The tag must still be on the commit that was built.
+            [ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)" = "$SHA" ] || fail "tag $TAG moved while the app was built"
+          fi
+          mkdir -p check
+          ditto -x -k "Bandito-$VERSION.zip" check
+          app="check/Bandito.app"
+          [ "$(plutil -extract CFBundleShortVersionString raw -o - "$app/Contents/Info.plist")" = "$VERSION" ] || fail "the app is not version $VERSION"
+          [ "$(plutil -extract CFBundleVersion raw -o - "$app/Contents/Info.plist")" = "$(get build)" ] || fail "the app's build number is not $(get build)"
+          bad=0
+          while IFS= read -r -d '' file; do
+            case "$(file -b "$file")" in *Mach-O*) ;; *) continue ;; esac
+            archs=" $(lipo -archs "$file") "
+            case "$archs" in *" arm64 "*" x86_64 "* | *" x86_64 "*" arm64 "*) ;; *) echo "not universal:$archs ${file#"$app"/}"; bad=$((bad + 1)) ;; esac
+          done < <(find "$app" -type f -print0)
+          [ "$bad" -eq 0 ] || fail "$bad binaries are not universal"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          xcrun stapler validate "$app"
+          spctl_out="$(spctl -a -vv -t exec "$app" 2>&1 || true)"
+          echo "$spctl_out"
+          grep -Fq "source=Notarized Developer ID" <<< "$spctl_out" || fail "Gatekeeper does not accept the app as Notarized Developer ID"
+          codesign --verify --strict --verbose=2 "Bandito-$VERSION.dmg"
+          xcrun stapler validate "Bandito-$VERSION.dmg"
+          rm -rf check
+          echo "The signed files of $VERSION are good: universal, Developer ID, notarized and stapled." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Install Sparkle 2.10.0 (sign_update)
+        env:
+          SPARKLE_URL: https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz
+          SPARKLE_SHA256: c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/sparkle-dl" "$RUNNER_TEMP/sparkle"
+          curl -fsSL -o "$RUNNER_TEMP/sparkle-dl/Sparkle.tar.xz" "$SPARKLE_URL"
+          echo "$SPARKLE_SHA256  $RUNNER_TEMP/sparkle-dl/Sparkle.tar.xz" | shasum -a 256 -c -
+          tar -xJf "$RUNNER_TEMP/sparkle-dl/Sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle" ./bin/sign_update
+          test -x "$RUNNER_TEMP/sparkle/bin/sign_update"
+
+      # Installation tokens last one hour: one is made here (read the platform repo) and another before the push.
+      # Needs the App installed on banditohq/platform with Contents: read and write, Pull requests: read and write.
+      - name: Token for the platform repo (read)
+        id: platform-read
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.BANDITO_BOT_APP_ID }}
+          private-key: ${{ secrets.BANDITO_BOT_PRIVATE_KEY }}
+          owner: banditohq
+          repositories: platform
+          permission-contents: read
+
+      - name: Get the current appcast (the base the new item is added to)
+        env:
+          GH_TOKEN: ${{ steps.platform-read.outputs.token }}
+        run: |
+          set -euo pipefail
+          gh repo clone banditohq/platform "$PLATFORM_DIR" -- --depth 1
+          test -f "$PLATFORM_DIR/public/appcast.xml"
+
       - name: Write the Sparkle EdDSA key for sign_update
         env:
           SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
@@ -190,36 +473,36 @@ jobs:
           printf '%s\n' "$SPARKLE_ED_KEY" > "$RUNNER_TEMP/sparkle_ed_key"
           test -s "$RUNNER_TEMP/sparkle_ed_key"
 
-      - name: Build, sign, notarize and staple the app, then sign the update
+      - name: Sign the update and make the appcast item
         env:
           BANDITO_PLATFORM_DIR: ${{ runner.temp }}/platform
-          BANDITO_DERIVED_DATA: ${{ runner.temp }}/derived-data
-          CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-target
           SPARKLE_BIN: ${{ runner.temp }}/sparkle/bin
           SPARKLE_KEY_FILE: ${{ runner.temp }}/sparkle_ed_key
-          NOTARY_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
-          NOTARY_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           set -euo pipefail
-          apps/mac/scripts/release-app.sh "$VERSION" --appcast-out "$RUNNER_TEMP/release-out/appcast.xml"
-
-      - name: Upload the zip and the disk image to the release
-        run: |
-          set -euo pipefail
-          gh release upload "$TAG" \
-            "apps/mac/build/release/Bandito-$VERSION.zip" \
-            "apps/mac/build/release/Bandito-$VERSION.dmg" \
-            --repo "$GITHUB_REPOSITORY" --clobber
+          mkdir -p apps/mac/build/release
+          cp "$SIGNED_DIR/Bandito-$VERSION.zip" "$SIGNED_DIR/Bandito-$VERSION.dmg" apps/mac/build/release/
+          apps/mac/scripts/release-app.sh "$VERSION" --stage appcast --appcast-out "$RUNNER_TEMP/release-out/appcast.xml"
 
       - name: Keep the new appcast as a run artifact
         uses: actions/upload-artifact@v4
         with:
           name: appcast-${{ inputs.version }}
           path: ${{ runner.temp }}/release-out/appcast.xml
+          retention-days: 14
           if-no-files-found: error
 
+      - name: Upload the zip and the disk image to the release
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" \
+            "$SIGNED_DIR/Bandito-$VERSION.zip" \
+            "$SIGNED_DIR/Bandito-$VERSION.dmg" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
       - name: Token for the platform repo (push, open and merge the PR)
+        if: ${{ !inputs.dry_run }}
         id: platform-write
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -231,6 +514,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Open the appcast PR in banditohq/platform and merge it when its checks pass
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ steps.platform-write.outputs.token }}
           BRANCH: appcast-${{ inputs.version }}
@@ -280,10 +564,13 @@ jobs:
           done
           echo "Merged banditohq/platform#$pr: the appcast item for $VERSION is on the default branch." | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Remove the signing keychain and the keys
+      - name: Dry run summary
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "Dry run of $VERSION: built, signed, notarized and verified; the release, the appcast PR and the site are untouched. The appcast item is in the artifact appcast-$VERSION." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the keys
         if: always()
         run: |
-          kc="$RUNNER_TEMP/bandito-signing.keychain-db"
-          if [ -f "$kc" ]; then security delete-keychain "$kc" || true; fi
-          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/sparkle_ed_key"
-          rm -rf "$RUNNER_TEMP/sparkle-dl" "$RUNNER_TEMP/platform"
+          rm -f "$RUNNER_TEMP/sparkle_ed_key"
+          rm -rf "$RUNNER_TEMP/sparkle-dl" "$RUNNER_TEMP/platform" "$RUNNER_TEMP/signed"

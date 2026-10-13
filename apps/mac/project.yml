@@ -71,6 +71,12 @@ targets:
             done
             lipo -create -output "$helpers/bandito" \
               "$target/aarch64-apple-darwin/release/bandito" "$target/x86_64-apple-darwin/release/bandito"
+          elif [ "$ARCHS" != "$(uname -m)" ] && { [ "$ARCHS" = arm64 ] || [ "$ARCHS" = x86_64 ]; }; then
+            # A one-architecture build for the other architecture than this Mac's (release-app.sh --stage compile
+            # --arch x86_64 on an Apple Silicon runner): cross-compile that architecture's daemon.
+            if [ "$ARCHS" = arm64 ]; then triple=aarch64-apple-darwin; else triple=x86_64-apple-darwin; fi
+            (cd "$SRCROOT/../../daemon" && CARGO_TARGET_DIR="$target" cargo build --release --locked -p bandito --target "$triple")
+            cp -f "$target/$triple/release/bandito" "$helpers/bandito"
           else
             (cd "$SRCROOT/../../daemon" && CARGO_TARGET_DIR="$target" cargo build --release --locked -p bandito)
             cp -f "$target/release/bandito" "$helpers/bandito"
