@@ -10,6 +10,7 @@ struct ServerSettingsPage: View {
     let server: ServerModel
     let onBack: () -> Void
     let previewDevices: [Device]?
+    let previewCloud: CloudAccessRules.Status?
     @State private var model: ServerSettingsModel
     @AppStorage(PhoneAccessRules.betaStorageKey) private var iphoneBeta = false
 
@@ -17,11 +18,13 @@ struct ServerSettingsPage: View {
     /// them from the server.
     init(
         server: ServerModel, onBack: @escaping () -> Void,
-        preview: ServerSettingsSnapshot? = nil, previewStats: HostStats? = nil, previewDevices: [Device]? = nil
+        preview: ServerSettingsSnapshot? = nil, previewStats: HostStats? = nil, previewDevices: [Device]? = nil,
+        previewCloud: CloudAccessRules.Status? = nil
     ) {
         self.server = server
         self.onBack = onBack
         self.previewDevices = previewDevices
+        self.previewCloud = previewCloud
         _model = State(initialValue: ServerSettingsModel(server: server, snapshot: preview, stats: previewStats))
     }
 
@@ -39,7 +42,7 @@ struct ServerSettingsPage: View {
             ServerMainSection(server: server)
             ServerConnectionSection(server: server, onBack: onBack)
             if PhoneAccessRules.showsIPhoneBlock(betaEnabled: iphoneBeta, serverMode: model.snapshot?.settings.phoneAccess) {
-                ServerPhoneSection(server: server, model: model, previewDevices: previewDevices)
+                ServerPhoneSection(server: server, model: model, previewDevices: previewDevices, previewCloud: previewCloud)
             }
             ServerAgentDefaultsSection(server: server, model: model)
             ServerMaintenanceSection(server: server, model: model)

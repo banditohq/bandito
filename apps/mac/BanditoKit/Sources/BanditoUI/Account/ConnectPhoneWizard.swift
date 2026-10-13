@@ -13,6 +13,7 @@ struct ConnectPhoneWizard: View {
     /// A state to show without asking anybody (the layout audit and the screenshots).
     var preview: ConnectPhoneModel.Step?
     var previewServerName: String = ""
+    var previewServers: [String] = []
 
     var body: some View {
         VStack(spacing: 18) {
@@ -62,7 +63,7 @@ struct ConnectPhoneWizard: View {
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 6) {
-                ForEach(model?.servers.map { ServerChoice(id: $0.wizardID, name: $0.wizardName) } ?? []) { choice in
+                ForEach(choices) { choice in
                     Button {
                         if let server = model?.servers.first(where: { $0.wizardID == choice.id }) { model?.choose(server) }
                     } label: {
@@ -89,6 +90,11 @@ struct ConnectPhoneWizard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var choices: [ServerChoice] {
+        if !previewServers.isEmpty { return previewServers.map { ServerChoice(id: UUID(), name: $0) } }
+        return model?.servers.map { ServerChoice(id: $0.wizardID, name: $0.wizardName) } ?? []
     }
 
     private func preparing(_ detail: CloudAccessRules.Status) -> some View {
@@ -124,9 +130,12 @@ struct ConnectPhoneWizard: View {
                     .fixedSize(horizontal: false, vertical: true)
                 QRCodeView(text: link, size: 200)
                 Label(L10n.PhoneWizard.via, systemImage: "cloud.fill")
-                    .font(BanditoFont.text(size: 12, weight: 500))
-                    .foregroundStyle(Color.Bandito.text2)
+                    .font(BanditoFont.text(size: 12, weight: 600))
+                    .foregroundStyle(Color.Bandito.signal)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(Color.Bandito.signal.opacity(0.14), in: Capsule())
                 VStack(spacing: 4) {
                     Text(L10n.ServerSettings.Phone.Pair.codeLabel)
                         .font(BanditoFont.text(size: 12, weight: 400))

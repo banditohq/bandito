@@ -70,6 +70,30 @@ extension ScreenWorkSuites {
                 snapshot.settings.phoneAccess = .tailscale
                 return AnyView(ServerSettingsPage(server: env.server, onBack: {}, preview: snapshot, previewDevices: []))
             },
+            AuditCase(name: "settings-server-phone-cloud", width: settingsColumn, scrolls: true) { env in
+                env.serverInfo(features: ["server_settings", "phone_access", "pairing", "relay"])
+                return AnyView(
+                    ServerSettingsPage(
+                        server: env.server, onBack: {}, preview: serverSettingsPreview, previewDevices: phoneDevicesPreview,
+                        previewCloud: .connected))
+            },
+            AuditCase(name: "settings-server-phone-cloud-signin", width: settingsColumn, scrolls: true) { env in
+                env.serverInfo(features: ["server_settings", "phone_access", "pairing", "relay"])
+                return AnyView(
+                    ServerSettingsPage(
+                        server: env.server, onBack: {}, preview: serverSettingsPreview, previewDevices: [],
+                        previewCloud: .signIn))
+            },
+            AuditCase(name: "settings-server-phone-tailscale-help", width: settingsColumn, scrolls: true) { env in
+                env.serverInfo(features: ["server_settings", "phone_access", "pairing", "relay"])
+                var snapshot = serverSettingsPreview
+                snapshot.phone = PhoneAccessStatus(
+                    mode: .tailscale, listening: [], error: "No Tailscale address on this machine. Install Tailscale and sign in.")
+                snapshot.settings.phoneAccess = .tailscale
+                return AnyView(
+                    ServerSettingsPage(
+                        server: env.server, onBack: {}, preview: snapshot, previewDevices: [], previewCloud: .off))
+            },
             AuditCase(name: "settings-server-detail-old", width: settingsColumn, scrolls: true) { env in
                 env.serverInfo(version: "0.1.4", features: ["host"])
                 return AnyView(ServerSettingsPage(server: env.server, onBack: {}, previewStats: serverHostPreview))
@@ -114,6 +138,24 @@ extension ScreenWorkSuites {
         ]
 
         static let sheets: [AuditCase] = [
+            AuditCase(name: "sheet-connect-phone-pick", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(ConnectPhoneWizard(preview: .pickServer, previewServers: ["Production server in the Frankfurt datacenter", "This Mac"]))
+            },
+            AuditCase(name: "sheet-connect-phone-preparing", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(ConnectPhoneWizard(preview: .preparing(detail: .connecting)))
+            },
+            AuditCase(name: "sheet-connect-phone-scan", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(ConnectPhoneWizard(preview: .scan(Self.cloudPairPreview)))
+            },
+            AuditCase(name: "sheet-connect-phone-done", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(
+                    ConnectPhoneWizard(
+                        preview: .done(device: "Anna’s iPhone 17 Pro Max with a very long name"),
+                        previewServerName: "Build machine in the Frankfurt datacenter"))
+            },
+            AuditCase(name: "sheet-connect-phone-problem", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(ConnectPhoneWizard(preview: .problem(.noServer)))
+            },
             AuditCase(name: "sheet-file-name", width: 380, selfSized: true) { _ in
                 AnyView(FileNameSheet(sheet: .folder, existing: [], onSubmit: { _ in }))
             },
@@ -195,6 +237,14 @@ extension ScreenWorkSuites {
             code: "otter-lava-mint-orbit-crane-fig",
             hosts: ["100.101.102.103:7879", "[fd7a:115c:a1e0:ab12:4843:cd96:6265:4dc6]:7879", "192.168.100.250:65535"],
             expiresInMinutes: 10, viaCloud: false)
+
+        /// A pairing reply of a server that is on the cloud only: no address, the cloud's line instead.
+        static let cloudPairPreview = PhoneAccessRules.PairState.ready(
+            link: PhonePairLink.make(
+                code: "otter-lava-mint-orbit-crane-fig", fingerprint: nil, name: "Studio", hosts: [],
+                relay: RelayRoute(host: "relay.bandito.dev", sid: "abcdefghijklmnopqrstuvwxyz"),
+                noiseKey: Base64URL.encode(Data(repeating: 9, count: 32))),
+            code: "otter-lava-mint-orbit-crane-fig", hosts: [], expiresInMinutes: 10, viaCloud: true)
 
         /// A server reached over ssh with a key file, that answers the features of the settings page (never connected).
         static func sshServerForAudit() -> ServerModel {
