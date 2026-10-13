@@ -1,0 +1,81 @@
+{
+  "version": "0.1.16",
+  "date": "2026-10-13",
+  "items": [
+    {
+      "icon": "iphone",
+      "title": {
+        "en": "Bandito for iPhone (beta)",
+        "ru": "Bandito для iPhone (бета)",
+        "de": "Bandito für iPhone (Beta)",
+        "es": "Bandito para iPhone (beta)",
+        "fr": "Bandito pour iPhone (bêta)",
+        "ja": "iPhone 版 Bandito（ベータ）",
+        "ko": "iPhone용 Bandito(베타)",
+        "pt-BR": "Bandito para iPhone (beta)",
+        "zh-Hans": "iPhone 版 Bandito（测试版）"
+      },
+      "text": {
+        "en": "Turn on “iPhone app (beta)” in Settings: the server's settings show a QR code, and the iPhone app connects to your crew directly.",
+        "ru": "Включите «iPhone-приложение (бета)» в Настройках: в настройках сервера появится QR-код, и приложение на iPhone подключится к команде напрямую.",
+        "de": "Schalten Sie „iPhone-App (Beta)“ in den Einstellungen ein: Die Server-Einstellungen zeigen einen QR-Code, und die iPhone-App verbindet sich direkt mit Ihrer Crew.",
+        "es": "Active «App para iPhone (beta)» en Ajustes: los ajustes del servidor muestran un código QR y la app del iPhone se conecta directamente con su equipo.",
+        "fr": "Activez « App iPhone (bêta) » dans les Réglages : les réglages du serveur affichent un code QR, et l’app iPhone se connecte directement à votre équipe.",
+        "ja": "設定で「iPhone アプリ（ベータ）」をオンにすると、サーバーの設定に QR コードが表示され、iPhone アプリがクルーに直接つながります。",
+        "ko": "설정에서 ‘iPhone 앱(베타)’을 켜세요. 서버 설정에 QR 코드가 표시되고 iPhone 앱이 팀에 바로 연결됩니다.",
+        "pt-BR": "Ative “App para iPhone (beta)” nos Ajustes: os ajustes do servidor mostram um código QR, e o app do iPhone se conecta direto à sua equipe.",
+        "zh-Hans": "在设置中打开“iPhone 应用（测试版）”：服务器设置会显示二维码，iPhone 应用即可直接连接你的团队。"
+      }
+    },
+    {
+      "icon": "bolt.fill",
+      "title": {
+        "en": "A quicker Market",
+        "ru": "Маркетплейс быстрее",
+        "de": "Ein schnellerer Marktplatz",
+        "es": "Un Mercado más rápido",
+        "fr": "Un Marché plus rapide",
+        "ja": "マーケットがより速く",
+        "ko": "더 빨라진 마켓",
+        "pt-BR": "Um Mercado mais rápido",
+        "zh-Hans": "更快的市场"
+      },
+      "text": {
+        "en": "Switching categories no longer redraws the pages you are not looking at: two to three times less work per switch.",
+        "ru": "Переключение категорий больше не перерисовывает страницы, которые вы не видите: работы на каждое переключение в 2–3 раза меньше.",
+        "de": "Ein Kategoriewechsel zeichnet die Seiten, die Sie gerade nicht sehen, nicht mehr neu: zwei- bis dreimal weniger Arbeit pro Wechsel.",
+        "es": "Cambiar de categoría ya no vuelve a dibujar las páginas que no está viendo: entre dos y tres veces menos trabajo por cambio.",
+        "fr": "Changer de catégorie ne redessine plus les pages que vous ne regardez pas : deux à trois fois moins de travail à chaque changement.",
+        "ja": "カテゴリを切り替えても、見ていないページは描き直されません。切り替えごとの処理が 2〜3 分の 1 になりました。",
+        "ko": "카테고리를 바꿔도 보고 있지 않은 페이지는 다시 그리지 않습니다. 전환할 때의 작업이 2~3배 줄었습니다.",
+        "pt-BR": "Trocar de categoria não redesenha mais as páginas que você não está vendo: de duas a três vezes menos trabalho a cada troca.",
+        "zh-Hans": "切换分类时不再重绘你看不到的页面：每次切换的工作量减少到原来的二分之一到三分之一。"
+      }
+    },
+    {
+      "icon": "bubble.left.and.text.bubble.right.fill",
+      "title": {
+        "en": "A calmer chat",
+        "ru": "Чат спокойнее",
+        "de": "Ein ruhigerer Chat",
+        "es": "Un chat más fluido",
+        "fr": "Un chat plus fluide",
+        "ja": "より軽快なチャット",
+        "ko": "더 매끄러운 채팅",
+        "pt-BR": "Um chat mais fluido",
+        "zh-Hans": "更流畅的聊天"
+      },
+      "text": {
+        "en": "When an agent finishes a reply, only the reply changes: the header and the input field stay as they are.",
+        "ru": "Когда агент заканчивает ответ, меняется только ответ: шапка и поле ввода больше не перерисовываются.",
+        "de": "Wenn ein Agent eine Antwort beendet, ändert sich nur die Antwort: Kopfzeile und Eingabefeld bleiben, wie sie sind.",
+        "es": "Cuando un agente termina una respuesta, solo cambia la respuesta: la cabecera y el campo de texto se quedan como están.",
+        "fr": "Quand un agent termine une réponse, seule la réponse change : l’en-tête et le champ de saisie restent tels quels.",
+        "ja": "エージェントが返信を終えても、変わるのは返信だけ。ヘッダーと入力欄は描き直されません。",
+        "ko": "에이전트가 답장을 마치면 답장만 바뀝니다. 헤더와 입력란은 그대로입니다.",
+        "pt-BR": "Quando um agente termina uma resposta, só a resposta muda: o cabeçalho e o campo de texto ficam como estão.",
+        "zh-Hans": "代理完成回复时，只有回复会变化：顶部栏和输入框保持不动。"
+      }
+    }
+  ]
+}
