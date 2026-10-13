@@ -348,6 +348,21 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
+      # If notarization was accepted but the ticket could not be stapled, the files are kept so the work is not lost:
+      # the log names the submission id; staple them by hand and publish (see docs/RELEASING.md).
+      - name: Keep the files that were not finished
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unfinished-${{ inputs.version }}
+          path: |
+            apps/mac/build/release/Bandito-${{ inputs.version }}.zip
+            apps/mac/build/release/Bandito-${{ inputs.version }}.dmg
+            apps/mac/build/work/notary-*.json
+          retention-days: 2
+          compression-level: 0
+          if-no-files-found: ignore
+
       - name: Remove the signing keychain and the keys
         if: always()
         run: |
@@ -419,7 +434,10 @@ jobs:
           while IFS= read -r -d '' file; do
             case "$(file -b "$file")" in *Mach-O*) ;; *) continue ;; esac
             archs=" $(lipo -archs "$file") "
-            case "$archs" in *" arm64 "*" x86_64 "* | *" x86_64 "*" arm64 "*) ;; *) echo "not universal:$archs ${file#"$app"/}"; bad=$((bad + 1)) ;; esac
+            case "$archs" in
+              *" arm64 "*) case "$archs" in *" x86_64 "*) ;; *) echo "not universal:$archs ${file#"$app"/}"; bad=$((bad + 1)) ;; esac ;;
+              *) echo "not universal:$archs ${file#"$app"/}"; bad=$((bad + 1)) ;;
+            esac
           done < <(find "$app" -type f -print0)
           [ "$bad" -eq 0 ] || fail "$bad binaries are not universal"
           codesign --verify --deep --strict --verbose=2 "$app"

@@ -35,6 +35,7 @@ Every step can be run again. First fix the cause (the run log says what), then:
 | `release-flow` → tag and draft (version files disagree) | Fix the three files in a new PR to `main` (`scripts/bump-version.sh X.Y.Z`), merge, then run `release-flow` by hand with the version. Never move a tag. |
 | `release-flow` → server binaries or publish | Actions → release-flow → Run workflow, `version=X.Y.Z`: it reuses the tag and the draft and builds again. Manual fallback: `gh workflow run release.yml -f tag=vX.Y.Z`, wait, then `gh release edit vX.Y.Z --draft=false --latest`. |
 | `release-flow` never started (title or branch changed) | Same: run `release-flow` by hand with the version. By hand entirely: `git tag -a vX.Y.Z -m "Bandito X.Y.Z" <merge commit> && git push origin vX.Y.Z`, `gh release create vX.Y.Z --draft --notes-file notes.md`, then the line above. |
+| `release-app` stapler "Error 68" after Accepted | Apple's ticket is not published yet. The script waits for it up to 30 minutes (30, 60, then 120 s between tries). If it still fails, the error names the submission id and the zip, dmg and notary logs are in artifact `unfinished-X.Y.Z` (2 days); nothing was published. Run `release-app` again (a new notarization is quick). |
 | `release-app` not started | `gh workflow run release-app.yml -f version=X.Y.Z -f channel=stable` (or beta). |
 | `release-app` compile, assemble or notarization fails | Fix, then run it again with the same inputs (it uploads with `--clobber`). Nothing is on the release until the publish job runs, so a failure before the Approve costs nothing. Re-run only the failed jobs from the run page when the cause is Apple's service. |
 | Appcast PR not merged (checks red, no checks, App lacks rights) | The run is red but the zip is already on the release. Download artifact `appcast-X.Y.Z`, put it in `banditohq/platform` as `public/appcast.xml`, PR, merge. Until that is merged the apps do not see the update. |
@@ -71,6 +72,9 @@ from the Actions tab with a tag). It builds `bandito` for Linux (x86_64, aarch64
 
 - `version`: `X.Y.Z` or `X.Y.Z-beta.N`. The tag `v<version>` must exist.
 - `channel`: `stable` or `beta`. It selects the environment of the `publish` job (`stable` or `beta`).
+
+Build the app for a tag whose server release is already published (the release-flow made the tag and the release, the
+app failed or is missing): `gh workflow run release-app.yml --ref main -f version=0.1.17 -f channel=stable`.
 
 Dispatch it from the default branch: the workflow file is read from the branch you run it on.
 

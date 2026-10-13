@@ -418,7 +418,36 @@ if [ "$do_finish" -eq 1 ]; then
         done
     }
 
-    # notarize <file>: submits it to Apple and waits. Anything but Accepted fails, with Apple's log.
+    # staple_wait <path>: staples the ticket. Right after "Accepted" Apple's ticket service may not have the ticket yet
+# (stapler: "Error 68", "Record not found"); that passes. It tries again for up to 30 minutes, waiting 30, 60, then
+# 120 seconds between tries. If it never works, the error names the submission: the notarization itself was accepted,
+# so the same files can be stapled later (xcrun stapler staple) without notarizing again.
+last_submission_id=""
+staple_wait() {
+    local path="$1" waited=0 attempt=1 delay=30 err
+    err="$work/staple-err.txt"
+    while :; do
+        if xcrun stapler staple "$path" 2> "$err"; then
+            cat "$err" >&2
+            retry xcrun stapler validate "$path"
+            return 0
+        fi
+        echo "staple attempt $attempt for $(basename "$path") failed: $(tr '\n' ' ' < "$err")" >&2
+        if [ "$waited" -ge 1800 ]; then
+            echo "error: notarization was Accepted (submission ${last_submission_id:-unknown}) but the ticket could not be stapled to $(basename "$path") in 30 minutes." >&2
+            echo "       Check: xcrun notarytool info ${last_submission_id:-<id>} (the same key), then staple again; nothing was published." >&2
+            exit 1
+        fi
+        echo "the ticket may not be published yet; trying again in ${delay}s (waited ${waited}s)" >&2
+        sleep "$delay"
+        waited=$((waited + delay))
+        attempt=$((attempt + 1))
+        if [ "$delay" -lt 120 ]; then delay=$((delay * 2)); fi
+        if [ "$delay" -gt 120 ]; then delay=120; fi
+    done
+}
+
+# notarize <file>: submits it to Apple and waits. Anything but Accepted fails, with Apple's log.
     notarize() {
         local file="$1" out status id attempt=1 err delay
         local delays=(15 30 60 120)
@@ -444,7 +473,8 @@ if [ "$do_finish" -eq 1 ]; then
             [ -n "$id" ] && xcrun notarytool log "$id" "${notary_auth[@]}" >&2 || true
             exit 1
         fi
-        echo "notarized $(basename "$file"): Accepted (submission $id)"
+        last_submission_id="$id"
+    echo "notarized $(basename "$file"): Accepted (submission $id)"
     }
 
     # --- (d) notarize, staple, final archives -----------------------------------------------------------------------------
@@ -453,7 +483,7 @@ if [ "$do_finish" -eq 1 ]; then
     else
         step "Notarize the app"
         notarize "$zip_path"
-        retry xcrun stapler staple "$app"
+        staple_wait "$app"
         retry xcrun stapler validate "$app"
     fi
 
@@ -467,7 +497,7 @@ if [ "$do_finish" -eq 1 ]; then
     codesign --force --timestamp --sign "$IDENTITY" "$dmg_path"
     if [ "$dry_run" -eq 0 ]; then
         notarize "$dmg_path"
-        retry xcrun stapler staple "$dmg_path"
+        staple_wait "$dmg_path"
         retry xcrun stapler validate "$dmg_path"
         step "Gatekeeper check"
         spctl_out="$(spctl -a -vvv -t exec "$app" 2>&1 || true)"
