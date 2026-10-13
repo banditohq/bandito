@@ -1,0 +1,42 @@
+{
+  "initiator_ephemeral_private": "737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c",
+  "initiator_static_private": "11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3ea",
+  "initiator_static_public": "e52b940ad182cfed595624daaaa892f68f14d52c49ae9016b6ab870e080e8300",
+  "initiator_to_responder": [
+    {
+      "cipher": "8ef10da06727f42ab8c4f9caf3f45ebe74d0009cc4cfbbf32ae749f7a35f01",
+      "plain": "007b2261757468223a22746f6b227d"
+    },
+    {
+      "cipher": "dd9885c149143688aef1aa78bd50f84f21a4743331b4394a4822d5704121a8761f8bcafc4b323c3b37d1aa00dbc0380b2fecb54f5dadd71ea0df411fdcc0137fe2",
+      "plain": "007b226a736f6e727063223a22322e30222c226964223a312c226d6574686f64223a226461656d6f6e2e68656c6c6f227d"
+    },
+    {
+      "cipher": "d9d19c09a7d460a7363afa15e623831a03",
+      "plain": "00"
+    }
+  ],
+  "message1": "dd3aa01ebea9b65f7759d1ace5eb92561c435f3986856ad84596c96403c697219a12f737aaa0f3de37e351bc262682ebaab2de10d33b41fe0c8d7b68dfae50ff008f103df27b5c23e94cb62f6dfee5966c0b9a55fdbf69c35f1d2733d99f10f1684c3052a7babf",
+  "message1_payload": "7b2276223a317d",
+  "message2": "3c2ee2246ff19aada3f0f39122dada679b4a1cf3dcc93213852f8901daa4e24d18c7bad622f48ae5ebf52b99d88f1d256241ceaefdbd6d",
+  "message2_payload": "7b2276223a317d",
+  "pattern": "Noise_IK_25519_ChaChaPoly_SHA256",
+  "prologue": "62616e6469746f2d72656c61792d7631",
+  "responder_ephemeral_private": "9da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f76",
+  "responder_static_private": "424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b",
+  "responder_static_public": "f676b0801cd4bafea80f71854b43a9135ada65b975a13241d4949d962ed87e7b",
+  "responder_to_initiator": [
+    {
+      "cipher": "73f5148b785017b3c2c577a754b47ac8b9238fadffec39c887172b32b8378d372ca1cd44cf0e9e13154c1383dfe0b5d856c8a73e83",
+      "plain": "007b226a736f6e727063223a22322e30222c226964223a312c22726573756c74223a7b7d7d"
+    },
+    {
+      "cipher": "12b01cc52e965280bb79ac18cc60dcd8397c804d5641f66ce1618103",
+      "plain": "0166697273742d6368756e6b"
+    },
+    {
+      "cipher": "afc24289e8547e4e79215ab0d023daa3a3171a0f62393173cd18e6",
+      "plain": "006c6173742d6368756e6b"
+    }
+  ]
+}
