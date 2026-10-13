@@ -111,7 +111,6 @@ public struct OnboardingFlow: View {
                     .fixedSize()
                 }
                 .banditoButton(.quiet())
-                .keyboardShortcut("[", modifiers: .command)
             }
             Text(L10n.Onboarding.stepOf(step: "\(onboarding.step.position)", total: "\(OnboardingStep.barCount)"))
                 .font(BanditoFont.text(size: 12, weight: 500))
@@ -171,6 +170,14 @@ public struct OnboardingFlow: View {
                 }
                 // Visible when the step is taller than the window, so it is clear there is more below.
                 .scrollIndicators(.automatic)
+                // The last 22 pt fade out, so a step that goes on below the bottom bar is not cut like a blade.
+                .mask {
+                    VStack(spacing: 0) {
+                        Color.black
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 22)
+                    }
+                }
             }
             .clipped()
         }

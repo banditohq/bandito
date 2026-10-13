@@ -11,8 +11,8 @@ final class OnboardingSession {
     let server: ServerModel
     let subscriptions: SubscriptionsModel
     let crew: CrewModel
-    /// The first-task model, made when the step opens for an agent.
-    private(set) var task: FirstTaskModel?
+    /// The first-task model, made when the step opens for an agent. Not observed: it is made while the step is drawn.
+    @ObservationIgnored private var task: FirstTaskModel?
 
     init(server: ServerModel) {
         self.server = server

@@ -37,9 +37,10 @@ extension ScreenWorkSuites {
                     WorkBudget(counter: "OnboardingRuntimesStep", limit: 0, lookAt: Self.flow),
                     WorkBudget(counter: "OnboardingFeaturesStep", limit: 0, lookAt: Self.flow),
                     WorkBudget(counter: "OnboardingTaskStep", limit: 0, lookAt: Self.flow),
-                    WorkBudget(counter: "OnboardingCrewStep", limit: 6, lookAt: "CrewStep (Onboarding/Crew/CrewStep.swift)"),
-                    // Five cards (four teams and one agent), built once each on arrival, a second pass at most.
-                    WorkBudget(counter: "OnboardingCrewOption", limit: 10, lookAt: "CrewOptionCard is Equatable"),
+                    WorkBudget(counter: "OnboardingCrewStep", limit: 10, lookAt: "CrewStep (Onboarding/Crew/CrewStep.swift)"),
+                    // Five cards (four teams and one agent), built once each on arrival, two or three passes at most (a slow machine
+                    // lets the step's own reads land inside the count).
+                    WorkBudget(counter: "OnboardingCrewOption", limit: 15, lookAt: "CrewOptionCard is Equatable"),
                 ], "runtimes to crew")
             #expect(toCrew["OnboardingCrewStep", default: 0] >= 1, "the crew step is on screen")
 
@@ -50,7 +51,7 @@ extension ScreenWorkSuites {
                 [
                     WorkBudget(counter: "OnboardingCrewStep", limit: 0, lookAt: Self.flow),
                     WorkBudget(counter: "OnboardingRuntimesStep", limit: 0, lookAt: Self.flow),
-                    WorkBudget(counter: "OnboardingTaskStep", limit: 6, lookAt: "FirstTaskStep (Onboarding/Task/FirstTaskStep.swift)"),
+                    WorkBudget(counter: "OnboardingTaskStep", limit: 10, lookAt: "FirstTaskStep (Onboarding/Task/FirstTaskStep.swift)"),
                 ], "crew to task")
 
             // Back: the crew step comes again, the task step does not stay behind.

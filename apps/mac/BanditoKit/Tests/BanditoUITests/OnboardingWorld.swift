@@ -111,8 +111,10 @@ final class OnboardingWorld {
     }
 
     /// `rounds` turns of the run loop with a layout and a display after each: tasks the views started finish and their
-    /// changes are drawn. Never suspends, so the caller's task (and its pinned language) stays the one that draws.
-    func spin(_ rounds: Int = 40) {
+    /// changes are drawn. Never suspends, so the caller's task (and its pinned language) stays the one that draws. Few
+    /// rounds, because the main thread is held for all of them: other tests wait for it (one that times two checks
+    /// failed when this held it for two seconds).
+    func spin(_ rounds: Int = 12) {
         for _ in 0..<rounds {
             RunLoop.main.run(until: Date().addingTimeInterval(0.01))
             host.layoutSubtreeIfNeeded()

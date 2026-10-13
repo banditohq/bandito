@@ -322,7 +322,7 @@ struct CrewStep: View {
                             .font(BanditoFont.display(size: 15, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(2)
-                        if !agent.role.isEmpty {
+                        if !agent.role.isEmpty, agent.role != agent.name {
                             Text(agent.role)
                                 .font(BanditoFont.text(size: 12.5, weight: 400))
                                 .foregroundStyle(Color.Bandito.text3)

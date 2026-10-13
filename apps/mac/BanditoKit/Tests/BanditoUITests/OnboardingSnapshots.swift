@@ -9,8 +9,14 @@ import Testing
 /// Pictures of every step of the first-run flow for review: dark in Russian and light in English, drawn from the real
 /// flow on an in-memory demo daemon. Written to `$BANDITO_SNAPSHOTS` as `onb2-<step>-<dark|light>-<language>.png`
 /// (see `SnapshotSupport`). The window is borderless, off every screen, transparent, and never shown.
+///
+/// They run only when `BANDITO_SNAPSHOTS` names a folder: the pictures are for a person to look at, and drawing 13 full
+/// windows holds the main thread long enough to make the timing tests of other suites fail in a full run. The same
+/// screens are drawn by the layout audit and by `OnboardingWorkTests` in every run.
 extension ScreenWorkSuites {
-    @MainActor @Suite(.serialized) struct OnboardingSnapshots {
+    @MainActor
+    @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["BANDITO_SNAPSHOTS"] != nil))
+    struct OnboardingSnapshots {
         private func shoot(
             _ step: OnboardingStep, card: Int = 0, name: String, dark: Bool, language: String, hired: Bool = false
         ) async throws {

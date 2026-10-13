@@ -259,6 +259,21 @@ public final class OnboardingModel {
         set(.done)
     }
 
+    #if DEBUG
+    /// QA copies only (`onboarding <step> [card]`): the flow in front, at `step`, with its way back as if the person had
+    /// come through the steps before it. Not in a release build.
+    public func qaShow(_ target: OnboardingStep, card number: Int = 0) {
+        defaults.set(false, forKey: Self.doneKey)
+        tourRequested = false
+        needsApproval = false
+        history = OnboardingStep.allCases.filter { $0 != .approval && $0 != .done && $0.position < target.position }
+        persistHistory()
+        setCard(OnboardingRules.clampedCard(number))
+        set(target)
+        isActive = true
+    }
+    #endif
+
     // MARK: steps
 
     /// The step after `step`. Approval is visited only when the device needs it.
