@@ -45,6 +45,10 @@ struct WhatsNewContent: View {
     let preferredLanguages: [String]
     /// No motion whatever the settings say (the snapshots draw the finished picture).
     var still = false
+    /// The sheet's height and the versions open at first: the real sheet is `height` tall with all folded; the
+    /// snapshots show the folded list from a taller one.
+    var height = WhatsNewContent.height
+    var initiallyOpen: Set<String> = []
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -55,6 +59,7 @@ struct WhatsNewContent: View {
     /// The language of the notes on this screen only; nil is the default (the app's language, or English).
     @State private var picked: String?
     @State private var openVersions: Set<String> = []
+    @State private var seeded = false
 
     private var reduced: Bool { still || MotionLevel(stored: motionLevel).reducesMotion(systemReduceMotion: reduceMotion) }
 
@@ -99,7 +104,12 @@ struct WhatsNewContent: View {
                 .padding(.vertical, 18)
             }
         }
-        .frame(width: Self.width, height: Self.height)
+        .frame(width: Self.width, height: height)
+        .onAppear {
+            guard !seeded else { return }
+            seeded = true
+            if !initiallyOpen.isEmpty { openVersions = initiallyOpen }
+        }
         .onExitCommand { dismiss() }
         .accessibilityElement(children: .contain)
     }

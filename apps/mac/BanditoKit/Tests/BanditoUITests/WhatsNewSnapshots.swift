@@ -43,18 +43,24 @@ import Testing
         _ = try render("whatsnew-dark-de-older", dark: true, languages: ["de"], older: ["0.1.14", "0.1.13"])
     }
 
+    @Test(.language("ru")) func tallWithAnEarlierVersionOpen() throws {
+        _ = try render(
+            "whatsnew-dark-ru-older-open", dark: true, languages: ["ru"], older: ["0.1.14", "0.1.13"], tall: true)
+    }
+
     @Test(.language("en")) func noNotesForTheVersion() throws {
         _ = try render("whatsnew-dark-en-empty", dark: true, languages: ["en"], empty: true)
     }
 
     private func render(
-        _ name: String, dark: Bool, languages: [String], older: [String] = [], empty: Bool = false
+        _ name: String, dark: Bool, languages: [String], older: [String] = [], empty: Bool = false, tall: Bool = false
     ) throws -> URL {
         _ = BanditoFont.registerBundledFonts()
-        let size = CGSize(width: WhatsNewContent.width, height: WhatsNewContent.height)
+        let size = CGSize(width: WhatsNewContent.width, height: tall ? 1100 : WhatsNewContent.height)
         let content = WhatsNewContent(
             notes: empty ? nil : try Self.notes("0.1.15"), version: "0.1.15",
-            older: try older.map { try Self.notes($0) }, preferredLanguages: languages, still: true)
+            older: try older.map { try Self.notes($0) }, preferredLanguages: languages, still: true,
+            height: size.height, initiallyOpen: tall ? Set(older.prefix(1)) : [])
             .environment(\.colorScheme, dark ? .dark : .light)
         let hosting = NSHostingView(rootView: content)
         hosting.frame = NSRect(origin: .zero, size: size)
