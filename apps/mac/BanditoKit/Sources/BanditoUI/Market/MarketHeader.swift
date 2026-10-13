@@ -10,29 +10,63 @@ final class MarketSearch {
     var text = ""
 }
 
-/// The head of the Marketplace: the title and the page's line, the pages (Services, Bots, Skills), the search and the
-/// actions. Equal when what it shows is equal: the actions are closures that stay right for the page, so a change of
-/// the page under the header (a category, a search letter) does not build and measure the header again.
-struct MarketHeader: View, Equatable {
+/// What the header's controls do. They are closures made at every pass of `MarketView`: they travel in the header's
+/// `MarketPassed`, not in the header's own bytes.
+struct MarketHeaderCalls {
+    var onTab: (MarketTab) -> Void
+    var onImport: () -> Void
+    var onOwn: () -> Void
+    var onMine: () -> Void
+}
+
+/// What the header shows.
+struct MarketHeaderFacts: Equatable {
     let tab: MarketTab
     let tabs: [MarketTab]
     let supported: Bool
     let sharingSupported: Bool
     let search: MarketSearch
-    let onTab: (MarketTab) -> Void
-    let onImport: () -> Void
-    let onOwn: () -> Void
-    let onMine: () -> Void
+
+    nonisolated static func == (lhs: MarketHeaderFacts, rhs: MarketHeaderFacts) -> Bool {
+        lhs.tab == rhs.tab && lhs.tabs == rhs.tabs && lhs.supported == rhs.supported
+            && lhs.sharingSupported == rhs.sharingSupported && lhs.search === rhs.search
+    }
+}
+
+/// The head of the Marketplace, as `MarketView` hands it over: its facts and calls in a `MarketPassed`, and the
+/// number of the facts. Equal, and the same bytes, while the facts are the same, so a change of the page under the
+/// header (a category, a search letter) does not build and measure the header again (`MarketHeaderBar`).
+struct MarketHeader: View, Equatable {
+    let passed: MarketPassed<MarketHeaderFacts, MarketHeaderCalls>
+    let version: Int
+
+    nonisolated static func == (lhs: MarketHeader, rhs: MarketHeader) -> Bool {
+        lhs.passed === rhs.passed && lhs.version == rhs.version
+    }
+
+    var body: some View {
+        let facts = passed.facts
+        MarketHeaderBar(
+            tab: facts.tab, tabs: facts.tabs, supported: facts.supported, sharingSupported: facts.sharingSupported,
+            search: facts.search, calls: passed)
+    }
+}
+
+/// The head of the Marketplace: the title and the page's line, the pages (Services, Bots, Skills), the search and the
+/// actions. Built only when `MarketHeader` changed or its widths did.
+struct MarketHeaderBar: View {
+    let tab: MarketTab
+    let tabs: [MarketTab]
+    let supported: Bool
+    let sharingSupported: Bool
+    let search: MarketSearch
+    /// The calls of the last pass, read when a control is used.
+    let calls: MarketPassed<MarketHeaderFacts, MarketHeaderCalls>
 
     /// The header's width, and the widths of the parts beside the actions: what the actions may take follows.
     @State private var width: CGFloat?
     @State private var titleWidth: CGFloat?
     @State private var pickerWidth: CGFloat?
-
-    nonisolated static func == (lhs: MarketHeader, rhs: MarketHeader) -> Bool {
-        lhs.tab == rhs.tab && lhs.tabs == rhs.tabs && lhs.supported == rhs.supported
-            && lhs.sharingSupported == rhs.sharingSupported && lhs.search === rhs.search
-    }
 
     var body: some View {
         let _ = PerfCounters.hit("MarketHeader")
@@ -79,7 +113,7 @@ struct MarketHeader: View, Equatable {
             if tabs.count > 1 {
                 HStack(alignment: .center, spacing: 12) {
                     SegmentedPicker(
-                        selection: Binding(get: { tab }, set: { onTab($0) }),
+                        selection: Binding(get: { tab }, set: { calls.calls.onTab($0) }),
                         options: tabs.map { ($0, $0.title) }
                     )
                     .fixedSize()
@@ -102,9 +136,9 @@ struct MarketHeader: View, Equatable {
             search: MarketSearchField(search: search),
             addsIntegration: addsIntegration,
             showsMine: sharingSupported,
-            onImport: onImport,
-            onOwn: onOwn,
-            onMine: onMine,
+            onImport: { calls.calls.onImport() },
+            onOwn: { calls.calls.onOwn() },
+            onMine: { calls.calls.onMine() },
             available: width.flatMap { width in beside.map { width - $0 } })
     }
 

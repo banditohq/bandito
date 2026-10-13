@@ -117,6 +117,12 @@ list or animation is done:
   switch to Bots built the whole page in the frame of the click (140 ms). A kept page is an `Equatable` view of what it
   shows (`KeptMarketPage`) and reads no search while hidden: otherwise a category opened on Services rebuilt both pages
   and every shelf in them.
+- An `Equatable` view that its parent's pass must leave alone holds nothing but a reference and a number
+  (`MarketPassed`: its facts and closures in a box the parent hands over again, the number grows when the facts change).
+  SwiftUI calls `==` only once AttributeGraph has laid out the view's type, on a background queue; until then it
+  compares the bytes, and a closure, an array made in the body or a padding byte differs at every pass. On a busy Mac
+  that lasted seconds: each category switch rebuilt the Marketplace's header and both kept pages (MarketShelf 28 → 84,
+  MarketHeader 0 → 4 for four switches). `MarketPassedTests` checks the bytes.
 - A popover's open state belongs to the view that shows it (`OpenableMetricTile`): one `@State` in the Server overview
   rebuilt the passport, the banners and every card in the frame the popover opened.
 - First-use costs that no click should pay (Swift Charts' first chart) are paid once, offscreen, when nobody has

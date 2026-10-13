@@ -223,11 +223,58 @@ extension ScreenWorkSuites {
                 Self.budget("ThreadHeader", 12, Self.frame), Self.budget("TeamSidebar", 0, Self.sidebar),
             ], "open and close the agent's panel 3 times")
 
-            // 6. The Marketplace: a category opened and left, and a search typed.
+            // 6. The Marketplace: a category opened and left, twice. First before its Bots and Skills pages are built
+            // ahead (they wait here), then with both built and kept out of sight (`MarketView.pageAhead` says when):
+            // the hidden pages are not rebuilt by a category of Services.
+            let aheadDelay = MarketView.pagesAheadDelay
+            defer { MarketView.pagesAheadDelay = aheadDelay }
+            MarketView.pagesAheadDelay = .seconds(3600)
             router.select(mode: .market)
             router.marketTab = .services
             await harness.settle(rounds: 80)
-            let market = await harness.count {
+            let market = await switchMarketCategories(harness)
+            // The header is not rebuilt (MarketHeader is Equatable); the shelves come back as they were left.
+            check(market, marketBudgets, "open 2 Marketplace categories")
+
+            // Away until the Marketplace's fade-out is over: back during it, the same view (and its waiting task) returned.
+            router.select(mode: .team)
+            await harness.settle(rounds: 80)
+            MarketView.pagesAheadDelay = .zero
+            PerfCounters.reset()
+            PerfCounters.counting = true
+            router.select(mode: .market)
+            for _ in 0..<2000 where PerfCounters.snapshot()["MarketView.pageAhead", default: 0] < 2 {
+                await harness.settle(rounds: 1)
+            }
+            let builtAhead = PerfCounters.snapshot()["MarketView.pageAhead", default: 0]
+            PerfCounters.counting = false
+            #expect(builtAhead == 2, "the Bots and Skills pages are built ahead")
+            let marketKept = await switchMarketCategories(harness)
+            // The same work: the kept pages are not rebuilt by a category of Services (KeptMarketPage).
+            check(marketKept, marketBudgets, "open 2 Marketplace categories, Bots and Skills built ahead")
+
+            await harness.stop()
+        }
+
+        /// The Marketplace's category step: a budget for the header and the shelves.
+        private var marketBudgets: [WorkBudget] {
+            let passed = "MarketHeader and KeptMarketPage hold only their MarketPassed and its number (MarketView.swift): "
+                + "anything else in their bytes (a closure, an array made in the body) rebuilds them until SwiftUI has "
+                + "laid out their type, seconds on a busy Mac"
+            return [
+                Self.budget("MarketHeader", 0, "MarketHeader (Market/MarketHeader.swift) is rebuilt with the page; " + passed),
+                Self.budget(
+                    "MarketShelf", 34,
+                    "the shelves (MarketShelfViews.swift, MarketView.scrollArea); the Bots and Skills pages kept out of "
+                        + "sight (MarketView.keptPage) are rebuilt: " + passed),
+                Self.budget("MarketShelfArrows", 34, "the shelves' arrows (MarketShelfViews.swift)"),
+            ]
+        }
+
+        /// Opens the first two categories of Services and goes back to All after each.
+        private func switchMarketCategories(_ harness: WorkBudgetHarness) async -> [String: Int] {
+            let router = harness.router
+            return await harness.count {
                 for name in router.marketCategories.prefix(2) {
                     router.marketFilter = .category(name)
                     await harness.settle(rounds: 6)
@@ -235,14 +282,6 @@ extension ScreenWorkSuites {
                     await harness.settle(rounds: 6)
                 }
             }
-            // The header is not rebuilt (MarketHeader is Equatable); the shelves come back as they were left.
-            check(market, [
-                Self.budget("MarketHeader", 0, "MarketHeader (Market/MarketHeader.swift) is rebuilt with the page"),
-                Self.budget("MarketShelf", 34, "the shelves (MarketShelfViews.swift, MarketView.scrollArea)"),
-                Self.budget("MarketShelfArrows", 34, "the shelves' arrows (MarketShelfViews.swift)"),
-            ], "open 2 Marketplace categories")
-
-            await harness.stop()
         }
     }
 }
