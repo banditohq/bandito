@@ -1,0 +1,106 @@
+{
+  "version": "0.1.17",
+  "date": "2026-10-14",
+  "items": [
+    {
+      "icon": "cloud.fill",
+      "title": {
+        "en": "Your iPhone reaches your server from anywhere",
+        "ru": "Телефон дотянется до сервера откуда угодно",
+        "de": "Ihr iPhone erreicht Ihren Server von überall",
+        "es": "Su iPhone llega a su servidor desde cualquier lugar",
+        "fr": "Votre iPhone joint votre serveur de partout",
+        "ja": "iPhone からどこでもサーバーへ",
+        "ko": "어디서든 iPhone으로 서버에 연결",
+        "pt-BR": "Seu iPhone chega ao servidor de qualquer lugar",
+        "zh-Hans": "随时随地用 iPhone 连接服务器"
+      },
+      "text": {
+        "en": "“Through Bandito's cloud” works with a server in another country and a phone on mobile data. Nothing to open or configure, and it is end-to-end encrypted: the cloud only passes bytes it cannot read.",
+        "ru": "Режим «Через облако Bandito» работает, даже если сервер в другой стране, а телефон на мобильном интернете. Ничего не нужно открывать и настраивать, а шифрование сквозное: облако только передаёт байты и не может их прочитать.",
+        "de": "„Über die Bandito-Cloud“ funktioniert mit einem Server in einem anderen Land und einem Telefon im Mobilfunknetz. Nichts zu öffnen oder einzurichten, Ende-zu-Ende verschlüsselt: Die Cloud leitet nur Bytes weiter, die sie nicht lesen kann.",
+        "es": "«A través de la nube de Bandito» funciona con un servidor en otro país y un teléfono con datos móviles. No hay nada que abrir ni configurar, y el cifrado es de extremo a extremo: la nube solo pasa bytes que no puede leer.",
+        "fr": "« Via le cloud Bandito » fonctionne avec un serveur dans un autre pays et un téléphone en données mobiles. Rien à ouvrir ni à configurer, et c’est chiffré de bout en bout : le cloud ne fait que passer des octets qu’il ne peut pas lire.",
+        "ja": "「Bandito クラウド経由」なら、サーバーが別の国にあっても、iPhone がモバイル回線でもつながります。ポートの開放も設定も不要。エンドツーエンドで暗号化され、クラウドは読めないバイトを中継するだけです。",
+        "ko": "‘Bandito 클라우드를 통해’를 사용하면 서버가 다른 나라에 있고 휴대폰이 모바일 데이터를 써도 연결됩니다. 열거나 설정할 것이 없고, 종단 간 암호화되어 클라우드는 읽을 수 없는 바이트만 전달합니다.",
+        "pt-BR": "“Pela nuvem do Bandito” funciona com o servidor em outro país e o celular nos dados móveis. Nada para abrir ou configurar, e a criptografia é de ponta a ponta: a nuvem só repassa bytes que não consegue ler.",
+        "zh-Hans": "“通过 Bandito 云”即使服务器在其他国家、手机用移动数据也能连接。无需开放端口或设置，端到端加密：云端只转发它无法读取的字节。"
+      }
+    },
+    {
+      "icon": "iphone.radiowaves.left.and.right",
+      "title": {
+        "en": "Connect an iPhone in one step",
+        "ru": "Подключить iPhone в один шаг",
+        "de": "Ein iPhone in einem Schritt verbinden",
+        "es": "Conectar un iPhone en un paso",
+        "fr": "Connecter un iPhone en une étape",
+        "ja": "ワンステップで iPhone を接続",
+        "ko": "한 번에 iPhone 연결",
+        "pt-BR": "Conectar um iPhone em um passo",
+        "zh-Hans": "一步连接 iPhone"
+      },
+      "text": {
+        "en": "Profile → Devices → Connect iPhone turns everything on for you and shows a QR code: scan it and you are done. Tailscale now offers to help instead of showing an error.",
+        "ru": "Профиль → Устройства → «Подключить iPhone» сам всё включит и покажет QR-код: отсканируйте — и готово. А Tailscale теперь предлагает помощь вместо ошибки.",
+        "de": "Profil → Geräte → „iPhone verbinden“ schaltet alles für Sie ein und zeigt einen QR-Code: scannen, fertig. Tailscale bietet jetzt Hilfe an statt eines Fehlers.",
+        "es": "Perfil → Dispositivos → «Conectar iPhone» lo activa todo por usted y muestra un código QR: escanéelo y listo. Tailscale ahora ofrece ayuda en lugar de un error.",
+        "fr": "Profil → Appareils → « Connecter un iPhone » active tout pour vous et affiche un code QR : scannez-le, c’est fait. Tailscale propose désormais de l’aide au lieu d’une erreur.",
+        "ja": "プロフィール → デバイス →「iPhone を接続」で必要な設定をすべて行い、QR コードを表示します。読み取れば完了。Tailscale もエラーの代わりに手順を案内します。",
+        "ko": "프로필 → 기기 → ‘iPhone 연결’이 모든 것을 켜고 QR 코드를 보여 줍니다. 스캔하면 끝입니다. 이제 Tailscale도 오류 대신 도움을 제안합니다.",
+        "pt-BR": "Perfil → Dispositivos → “Conectar iPhone” ativa tudo para você e mostra um código QR: escaneie e pronto. O Tailscale agora oferece ajuda em vez de um erro.",
+        "zh-Hans": "个人资料 → 设备 →“连接 iPhone”会替你打开一切并显示二维码：扫一下就好。Tailscale 现在会提供帮助，而不是报错。"
+      }
+    },
+    {
+      "icon": "person.crop.circle.badge.checkmark",
+      "title": {
+        "en": "Servers follow your account",
+        "ru": "Серверы следуют за аккаунтом",
+        "de": "Server folgen Ihrem Konto",
+        "es": "Los servidores siguen a su cuenta",
+        "fr": "Les serveurs suivent votre compte",
+        "ja": "サーバーがアカウントについてくる",
+        "ko": "서버가 계정을 따라옵니다",
+        "pt-BR": "Os servidores seguem a sua conta",
+        "zh-Hans": "服务器随账户同步"
+      },
+      "text": {
+        "en": "Sign in to Bandito on the iPhone with the same account: approve it on the Mac, and your servers appear and connect by themselves. A server added on the phone shows up on the Mac too.",
+        "ru": "Войдите в Bandito на iPhone тем же аккаунтом и подтвердите вход на Mac — серверы появятся и подключатся сами. Сервер, добавленный на телефоне, тоже появится на Mac.",
+        "de": "Melden Sie sich auf dem iPhone mit demselben Konto bei Bandito an und bestätigen Sie es auf dem Mac: Ihre Server erscheinen und verbinden sich von selbst. Ein auf dem Telefon hinzugefügter Server erscheint auch auf dem Mac.",
+        "es": "Inicie sesión en Bandito en el iPhone con la misma cuenta y apruébelo en el Mac: sus servidores aparecen y se conectan solos. Un servidor añadido en el teléfono también aparece en el Mac.",
+        "fr": "Connectez-vous à Bandito sur l’iPhone avec le même compte et validez sur le Mac : vos serveurs apparaissent et se connectent tout seuls. Un serveur ajouté sur le téléphone apparaît aussi sur le Mac.",
+        "ja": "iPhone でも同じアカウントで Bandito にサインインし、Mac で承認するだけ。サーバーが自動で表示され、接続されます。iPhone で追加したサーバーも Mac に表示されます。",
+        "ko": "iPhone에서 같은 계정으로 Bandito에 로그인하고 Mac에서 승인하면 서버가 저절로 나타나고 연결됩니다. 휴대폰에서 추가한 서버도 Mac에 나타납니다.",
+        "pt-BR": "Entre no Bandito no iPhone com a mesma conta e aprove no Mac: seus servidores aparecem e se conectam sozinhos. Um servidor adicionado no celular também aparece no Mac.",
+        "zh-Hans": "在 iPhone 上用同一账户登录 Bandito，并在 Mac 上批准：服务器会自动出现并连接。在手机上添加的服务器也会出现在 Mac 上。"
+      }
+    },
+    {
+      "icon": "display",
+      "title": {
+        "en": "A real desktop on the server screen",
+        "ru": "Настоящий рабочий стол на экране сервера",
+        "de": "Ein echter Desktop auf dem Server-Bildschirm",
+        "es": "Un escritorio de verdad en la pantalla del servidor",
+        "fr": "Un vrai bureau sur l’écran du serveur",
+        "ja": "サーバー画面に本物のデスクトップ",
+        "ko": "서버 화면에 진짜 데스크톱",
+        "pt-BR": "Uma área de trabalho de verdade na tela do servidor",
+        "zh-Hans": "服务器屏幕上的真正桌面"
+      },
+      "text": {
+        "en": "A Bandito wallpaper and a dock with Browser, Terminal, Files and a clock. The browser loads sites again, and the moon button puts the screen to sleep.",
+        "ru": "Обои Bandito и панель с Браузером, Терминалом, Файлами и часами. Браузер снова открывает сайты, а кнопка с луной усыпляет экран.",
+        "de": "Ein Bandito-Hintergrund und ein Dock mit Browser, Terminal, Dateien und Uhr. Der Browser lädt wieder Seiten, und die Mond-Taste schickt den Bildschirm schlafen.",
+        "es": "Un fondo de Bandito y un dock con Navegador, Terminal, Archivos y reloj. El navegador vuelve a abrir sitios y el botón de la luna duerme la pantalla.",
+        "fr": "Un fond d’écran Bandito et un dock avec Navigateur, Terminal, Fichiers et une horloge. Le navigateur charge de nouveau les sites, et le bouton lune met l’écran en veille.",
+        "ja": "Bandito の壁紙と、ブラウザ・ターミナル・ファイル・時計のドック。ブラウザは再びサイトを開けるようになり、月のボタンで画面をスリープできます。",
+        "ko": "Bandito 배경 화면과 브라우저, 터미널, 파일, 시계가 있는 독. 브라우저가 다시 사이트를 열고, 달 버튼으로 화면을 잠재울 수 있습니다.",
+        "pt-BR": "Um papel de parede do Bandito e um dock com Navegador, Terminal, Arquivos e relógio. O navegador volta a abrir sites, e o botão da lua põe a tela para dormir.",
+        "zh-Hans": "Bandito 壁纸，以及带浏览器、终端、文件和时钟的程序坞。浏览器又能打开网站了，月亮按钮可让屏幕休眠。"
+      }
+    }
+  ]
+}
