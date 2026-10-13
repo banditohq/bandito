@@ -461,8 +461,12 @@ struct MarketView: View {
     }
 
     /// How long after the Marketplace opened its Bots and Skills pages are built ahead (`buildPagesAhead`). The work
-    /// budget makes it long to count a Marketplace without them, and short to count one with them.
+    /// budget makes it long to count a Marketplace without them, and short to count one with them (debug builds only).
+    #if DEBUG
     nonisolated(unsafe) static var pagesAheadDelay: Duration = .milliseconds(400)
+    #else
+    static let pagesAheadDelay: Duration = .milliseconds(400)
+    #endif
 
     /// Builds the Bots and Skills pages out of sight a moment after the Marketplace opened, so the first switch to them
     /// is as quick as the next ones. Their lists are read first (the same reads a switch makes).
@@ -1622,4 +1626,3 @@ struct KeptMarketPage<Content: View>: View, Equatable {
         .environment(\.marketShelvesAhead, !passed.facts.shown)
     }
 }
-
