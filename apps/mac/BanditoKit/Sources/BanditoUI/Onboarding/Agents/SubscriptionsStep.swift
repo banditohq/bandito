@@ -187,20 +187,27 @@ final class SubscriptionsModel {
     }
 }
 
-/// Step 4 of 5, part one: the agent subscriptions of the server.
+/// Step 4: "Who does the work". Claude Code, Codex and Grok on the server: install what is missing, sign in where
+/// needed. At least one ready program lets the person go on.
 struct SubscriptionsStep: View {
     var model: SubscriptionsModel
-    /// Goes on to the first agent, with or without a subscription (the next step explains what is needed).
+    /// Goes on to the crew; the button is on only while one program is ready.
     var onContinue: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// At least one agent program is installed and signed in; the others can wait.
+    private var canContinue: Bool {
+        OnboardingRules.canContinueRuntimes(signedIn: model.signedIn)
+    }
+
     var body: some View {
+        let _ = PerfCounters.hit("OnboardingRuntimesStep")
         VStack(alignment: .leading, spacing: 18) {
-            Text(L10n.Onboarding.Subs.title)
+            Text(L10n.Onboarding.Runtimes.title)
                 .font(BanditoFont.display(size: 35, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
-            Text(L10n.Onboarding.Subs.subtitle)
+            Text(L10n.Onboarding.Runtimes.subtitle)
                 .font(BanditoFont.text(size: 15, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
@@ -229,13 +236,17 @@ struct SubscriptionsStep: View {
                     }
                 }
             }
-            Text(L10n.Onboarding.Subs.needOne)
-                .font(BanditoFont.text(size: 12.5, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
+            if !canContinue {
+                Text(L10n.Onboarding.Runtimes.needOne)
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: 760, alignment: .topLeading)
         // "Next" of this step is in the flow's bottom bar, at the same place as on the other steps.
-        .onboardingNext(OnboardingNextAction(title: L10n.Onboarding.Subs.continueLabel, isEnabled: true, perform: onContinue))
+        .onboardingNext(
+            OnboardingNextAction(title: L10n.Onboarding.Subs.continueLabel, isEnabled: canContinue, perform: onContinue))
         .task { await model.checkAgain() }
     }
 

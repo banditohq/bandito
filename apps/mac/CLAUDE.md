@@ -87,7 +87,6 @@ list or animation is done:
 - The composer's text is read only by its field (`ComposerTextField`); the composer reads `DraftFacts` (has text, command, `/word`, `@word`), written on change. Each letter used to rebuild the whole composer. Clipboard checks in a body are cached by `changeCount` and check types, not data.
 - A streaming message parses only its last paragraph (`MessageRenderCache.streamingMessage`), and a stream replaces only its own row (`ThreadRows.replacingLast`): re-parsing the whole reply at every token grew with every word.
 - Sorting and filtering in a body compute their keys once (`sortedAgents`), not inside the comparator.
-- A preference read over the whole window (tour anchors) is read only while it is needed (`TourOverlay`).
 - Lists of rows of one height are lazy (team sidebar, files sidebar, ⌘K palette); staggered entrances stop after the first rows (`SidebarRise`). `ViewThatFits` builds every candidate: try only the parts that differ (words), never a whole toolbar or anything with an avatar in it.
 - A horizontal `ScrollView` per element is expensive (code blocks): only where the content needs it (`CodeBlockLayout`).
 - `ViewThatFits` measures all its candidates again at every layout of the window: a header or a toolbar with a field
@@ -107,7 +106,7 @@ list or animation is done:
   and measured the header with the page.
 - Team mode and its sidebar stay built under the other modes, for the last two servers (`KeptMode`,
   `Router.teamServers`): building them again cost 70–130 ms at each return. Kept out of sight they are faded, disabled
-  (no shortcuts, no focus), out of hit testing, VoiceOver and the tour; AppKit views in them are hidden by hand (a fade
+  (no shortcuts, no focus), out of hit testing and VoiceOver; AppKit views in them are hidden by hand (a fade
   leaves pointer shapes and hover live: `ThreadList.hidden`); they read none of the router's choices (`TeamModeShown`),
   or a home opened or an agent chosen elsewhere rebuilds them unseen; the composer gives up the focus and takes it back.
   A chat with its workbench panel open is not kept (a terminal or a browser would go on running). The chat stays built

@@ -54,34 +54,6 @@ import Testing
         #expect(frame == WelcomeTimeline.finalFrame)
     }
 
-    @Test func storiesAdvanceEverySixSecondsAndLoop() {
-        let at0 = WelcomeTimeline.storyPosition(anchorIndex: 0, elapsed: 0)
-        #expect(at0.index == 0 && at0.progress == 0)
-        let at6 = WelcomeTimeline.storyPosition(anchorIndex: 0, elapsed: 6)
-        #expect(at6.index == 1 && at6.progress == 0)
-        let almostEnd = WelcomeTimeline.storyPosition(anchorIndex: 0, elapsed: 23.9)
-        #expect(almostEnd.index == 3)
-        #expect(almostEnd.progress > 0.98 && almostEnd.progress <= 1)
-        let looped = WelcomeTimeline.storyPosition(anchorIndex: 0, elapsed: 24)
-        #expect(looped.index == 0)
-    }
-
-    @Test func pickedStoryRestartsItsOwnTimer() {
-        let picked = WelcomeTimeline.storyPosition(anchorIndex: 2, elapsed: 3)
-        #expect(picked.index == 2)
-        #expect(picked.progress == 0.5)
-        let next = WelcomeTimeline.storyPosition(anchorIndex: 2, elapsed: 6)
-        #expect(next.index == 3)
-    }
-
-    @Test func storyProgressStaysInRange() {
-        for elapsed in stride(from: 0.0, through: 100.0, by: 0.37) {
-            let position = WelcomeTimeline.storyPosition(anchorIndex: 1, elapsed: elapsed)
-            #expect((0..<WelcomeTimeline.storyCount).contains(position.index))
-            #expect(position.progress >= 0 && position.progress <= 1)
-        }
-    }
-
     @Test func entranceRisesFromZeroToOneAfterItsStart() {
         #expect(WelcomeTimeline.entrance(at: 0.5, start: 0.6) == 0)
         #expect(abs(WelcomeTimeline.entrance(at: 0.6 + 0.175, start: 0.6) - 0.5) < 0.0001)

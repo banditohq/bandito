@@ -103,7 +103,7 @@ extension DemoDaemonTransport {
             "context_tokens": 0, "chapter": 1, "pending_approvals": 0, "pending_approval_ids": [String](),
         ]
         for key in ["model", "system_prompt", "effort", "context_budget", "fallback_runtime", "fallback_model",
-            "avatar", "capabilities", "integrations"]
+            "avatar", "capabilities", "integrations", "template_id"]
         {
             if let value = params[key], !(value is NSNull) {
                 agent[key] = value
@@ -152,7 +152,7 @@ extension DemoDaemonTransport {
             var fields: [String: Any] = [
                 "name": name, "role": role, "runtime": params["runtime"] as? String ?? template["runtime"] as? String ?? "claude",
                 "cwd": params["cwd"] as? String ?? DemoDaemonFiles.projects + "/" + name,
-                "capabilities": template["capabilities"] as? [String] ?? [],
+                "capabilities": template["capabilities"] as? [String] ?? [], "template_id": templateID,
             ]
             if let model = params["model"] as? String {
                 fields["model"] = model

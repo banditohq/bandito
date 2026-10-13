@@ -39,6 +39,8 @@ enum QACommand: Equatable {
     case settings
     case settingsSection(SettingsSection)
     case onboarding
+    /// The first-run flow at a step (`onboarding team`, `onboarding features 2`): for pictures of each step.
+    case onboardingStep(OnboardingStep, card: Int)
     case tab(ServerSection)
     /// The workbench of the agent on screen: `details`, `terminal`, `browser`, `changes`, `toggle`, `split`.
     case workbench(String)
@@ -77,6 +79,13 @@ enum QACommand: Equatable {
             return SettingsSection(rawValue: name).map { .settingsSection($0) }
         case ("onboarding", nil):
             return .onboarding
+        case ("onboarding", let rest?):
+            let words = rest.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+            guard let name = words.first, let step = OnboardingStep(rawValue: name), step != .done, words.count <= 2
+            else { return nil }
+            let card = words.count == 2 ? Int(words[1]) : 0
+            guard let card, card >= 0 else { return nil }
+            return .onboardingStep(step, card: card)
         case ("tab", let name?):
             return ServerSection(rawValue: name).map { .tab($0) }
         case ("workbench", let action?) where ["details", "terminal", "browser", "changes", "toggle", "split"].contains(action):
@@ -212,6 +221,8 @@ enum QAHooks {
             WindowActions.showSettings()
         case .onboarding:
             onboarding.replay()
+        case .onboardingStep(let step, let card):
+            onboarding.qaShow(step, card: card)
         case .tab(let section):
             router.select(mode: .server)
             router.serverSection = section

@@ -59,7 +59,7 @@ struct BanditoApp: App {
                     // Actions aimed at the server that was in front are dropped when another one is chosen.
                     model.onServerChanged = { [router] in router.dropPendingServerActions() }
                     model.startNotifications(
-                        askPermission: !onboarding.isActive,
+                        askPermission: false,
                         selectedAgentID: { [router] in
                             router.mode == .team ? router.selectedAgentID : nil
                         },

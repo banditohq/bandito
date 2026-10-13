@@ -17,9 +17,6 @@ struct WelcomeDemoFrame: Equatable, Sendable {
 /// Timing of the Welcome screen as pure functions of elapsed time, so the tests need no clock.
 /// The numbers are the ones in docs/design/Welcome.dc.html (the CSS delays of the demo).
 enum WelcomeTimeline {
-    static let storyDuration: TimeInterval = 6
-    static let storyCount = 4
-
     // Start times of the demo steps, in seconds since the demo started (or was replayed).
     static let userMessageAt: TimeInterval = 0.6
     static let typingAt: TimeInterval = 1.3
@@ -46,16 +43,6 @@ enum WelcomeTimeline {
 
     /// The demo after its last step. Reduce Motion shows this frame at once.
     static let finalFrame = demo(at: 60)
-
-    /// The story shown after `elapsed` seconds since `anchorIndex` was picked (or the carousel started).
-    /// Stories loop. `progress` is how far the current story's bar has filled, from 0 to 1.
-    static func storyPosition(anchorIndex: Int, elapsed: TimeInterval) -> (index: Int, progress: Double) {
-        let total = max(elapsed, 0)
-        let steps = Int(total / storyDuration)
-        let index = (anchorIndex + steps) % storyCount
-        let progress = (total - Double(steps) * storyDuration) / storyDuration
-        return (index, min(max(progress, 0), 1))
-    }
 
     /// Opacity and rise of an element that appears at `start`: 0 before, 1 after `duration` seconds.
     static func entrance(at t: TimeInterval, start: TimeInterval, duration: TimeInterval = 0.35) -> Double {

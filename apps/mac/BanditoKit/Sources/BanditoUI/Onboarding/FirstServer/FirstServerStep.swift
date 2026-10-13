@@ -3,7 +3,7 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Step 3 of 5 on screen: choose "This Mac" or "your server", watch the install, then see what the server has.
+/// Step 4 on screen: choose "This Mac" or "your server", watch the install, then see what the server has.
 struct FirstServerStep: View {
     /// Goes on to the first agent (onboarding), or closes the add-server sheet.
     var onFinished: () -> Void
@@ -72,7 +72,7 @@ struct FirstServerStep: View {
     private var chooser: some View {
         VStack(alignment: .leading, spacing: 26) {
             VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.Onboarding.Server.title)
+                Text(L10n.Ios.Onboarding.Connect.title)
                     .font(BanditoFont.display(size: 35, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(2)
@@ -118,7 +118,7 @@ struct FirstServerStep: View {
             ServerOptionCard(
                 title: L10n.Onboarding.Server.onThisMac, text: L10n.Onboarding.Server.thisMacDesc,
                 icon: "laptopcomputer", tint: AvatarColor.sky.color,
-                chip: L10n.Onboarding.Server.minutes(count: 1), link: nil, badge: nil,
+                chip: L10n.Onboarding.Server.minutes(count: 1), link: nil, badge: L10n.Common.recommended,
                 selected: model.option == .thisMac, dashed: false, side: side
             ) {
                 model.startThisMac(app: app)
@@ -126,7 +126,7 @@ struct FirstServerStep: View {
             ServerOptionCard(
                 title: L10n.Onboarding.Server.ownServer, text: L10n.Onboarding.Server.ownServerDesc,
                 icon: "server.rack", tint: AvatarColor.sage.color,
-                chip: L10n.Onboarding.Server.minutes(count: 3), link: nil, badge: L10n.Common.recommended,
+                chip: L10n.Onboarding.Server.minutes(count: 3), link: nil, badge: nil,
                 selected: model.option == .ownServer, dashed: false, side: side
             ) {
                 model.choose(.ownServer)
@@ -639,7 +639,7 @@ struct FirstServerStep: View {
             }
         }
         .onboardingNext(placesNextInFooter
-            ? OnboardingNextAction(title: L10n.Onboarding.Server.nextAgent, isEnabled: true, perform: onFinished)
+            ? OnboardingNextAction(title: L10n.Onboarding.Server.nextRuntimes, isEnabled: true, perform: onFinished)
             : nil)
     }
 

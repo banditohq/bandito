@@ -103,41 +103,6 @@ enum BundleLogic {
         }
     }
 
-    /// Created this long ago or less counts as made by the request that failed. An older bot of the same template is
-    /// from an earlier team of the set.
-    static let retryWindow: TimeInterval = 10 * 60
-
-    /// The bots of the set that a retry still has to make: those with no agent of their template created within the
-    /// retry window. The answer keeps the set's order.
-    static func remaining(members: [BotTemplate], agents: [Agent], now: Date) -> [BotTemplate] {
-        let recent = recentAgents(agents, now: now)
-        return members.filter { member in !recent.contains { $0.templateId == member.id } }
-    }
-
-    /// The entries of the bots of the set that were made within the retry window, one per template (the newest).
-    static func recentEntries(members: [BotTemplate], agents: [Agent], now: Date) -> [BundleEntry] {
-        let recent = recentAgents(agents, now: now)
-        return members.compactMap { member in
-            recent.filter { $0.templateId == member.id }
-                .max { $0.createdAt < $1.createdAt }
-                .map { BundleEntry(templateId: member.id, agent: $0) }
-        }
-    }
-
-    private static func recentAgents(_ agents: [Agent], now: Date) -> [Agent] {
-        let since = Int64((now.timeIntervalSince1970 - retryWindow) * 1000)
-        return agents.filter { $0.templateId != nil && $0.createdAt >= since }
-    }
-
-    /// The whole answer of a team made in two steps: the bots that were made before (`earlier`) and the answer of the
-    /// retry (`made`). One entry per template of the set, in the set's order; a template in neither is left out.
-    static func combined(members: [BotTemplate], earlier: [BundleEntry], made: BundleCreation) -> BundleCreation {
-        let entries = members.compactMap { member in
-            made.agents.first { $0.templateId == member.id } ?? earlier.first { $0.templateId == member.id }
-        }
-        return BundleCreation(agents: entries, missingIntegrations: made.missingIntegrations)
-    }
-
     /// The result lines, in the set's order. The name is the bot's in the app's language, or the template id when the
     /// catalog no longer lists it.
     static func rows(of creation: BundleCreation, templates: [BotTemplate], languageCode: String) -> [Row] {

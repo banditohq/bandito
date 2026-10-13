@@ -1,3 +1,4 @@
+import BanditoKit
 import BanditoDesign
 import BanditoL10n
 import SwiftUI
@@ -54,17 +55,32 @@ extension View {
 /// the content, and the bottom bar (step bar, primary action). Steps draw only their content.
 public struct OnboardingFlow: View {
     @Environment(OnboardingModel.self) private var onboarding
+    @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
     @State private var next: OnboardingNextAction?
+    /// The models of the steps that need the server (see `OnboardingSession`), made when the first of them opens.
+    @State private var session: OnboardingSession?
 
     public init() {}
+
+    /// A flow whose server steps already have their session: a picture or a test that has no server to wait for.
+    init(session: OnboardingSession?) {
+        _session = State(initialValue: session)
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
             topBar
                 .frame(height: OnboardingLayout.topBarHeight)
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 24)
+            // A step leaves and the next one comes by a short fade (none under Reduce Motion).
+            ZStack {
+                content
+                    .id(onboarding.step)
+                    .transition(.opacity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 24)
+            .banditoAnimation(BanditoMotion.ease, value: onboarding.step)
             bottomBar
                 .frame(height: OnboardingLayout.bottomBarHeight)
                 .padding(.top, OnboardingLayout.bottomGap)
@@ -83,8 +99,20 @@ public struct OnboardingFlow: View {
     }
 
     private var topBar: some View {
-        HStack {
-            Text(L10n.Onboarding.stepOf(step: "\(onboarding.step.position)", total: "5"))
+        HStack(spacing: 14) {
+            // Back always works, except on the first step.
+            if onboarding.canGoBack {
+                Button { onboarding.back() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(L10n.Common.back)
+                    }
+                    .fixedSize()
+                }
+                .banditoButton(.quiet())
+            }
+            Text(L10n.Onboarding.stepOf(step: "\(onboarding.step.position)", total: "\(OnboardingStep.barCount)"))
                 .font(BanditoFont.text(size: 12, weight: 500))
                 .monospacedDigit()
                 .foregroundStyle(Color.Bandito.text3)
@@ -142,6 +170,14 @@ public struct OnboardingFlow: View {
                 }
                 // Visible when the step is taller than the window, so it is clear there is more below.
                 .scrollIndicators(.automatic)
+                // The last 22 pt fade out, so a step that goes on below the bottom bar is not cut like a blade.
+                .mask {
+                    VStack(spacing: 0) {
+                        Color.black
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 22)
+                    }
+                }
             }
             .clipped()
         }
@@ -152,6 +188,8 @@ public struct OnboardingFlow: View {
         switch onboarding.step {
         case .welcome:
             WelcomeView(onContinue: { onboarding.advance() }, onHaveServer: { onboarding.haveServer() })
+        case .features:
+            FeaturesStep()
         case .account:
             AccountSignInView(onFinished: { route in
                 // A first device or a ready device goes on; anything else needs the approval step.
@@ -169,13 +207,44 @@ public struct OnboardingFlow: View {
             FirstServerStep(onFinished: {
                 onboarding.advance()
             }, placesNextInFooter: true)
-        case .agent:
-            AgentStep {
-                onboarding.finishWithTour()
+        case .runtimes:
+            OnboardingSessionHost(session: $session) { session in
+                RuntimesPane(model: session.subscriptions) { onboarding.advance() }
+            }
+        case .team:
+            OnboardingSessionHost(session: $session) { session in
+                CrewStep(
+                    model: session.crew, rememberedAgentID: onboarding.firstAgentID,
+                    onMade: { agent, team in onboarding.rememberFirstAgent(agent.id, team: team) },
+                    onContinue: { onboarding.advance() })
+            }
+        case .task:
+            OnboardingSessionHost(session: $session) { session in
+                taskStep(session)
             }
         case .done:
             EmptyView()
         }
+    }
+
+    /// The first task goes to the agent the crew step made (also after a relaunch: the flow remembers it).
+    @ViewBuilder
+    private func taskStep(_ session: OnboardingSession) -> some View {
+        let agentID = onboarding.firstAgentID ?? session.crew.firstAgent?.id ?? ""
+        let model = session.taskModel(agentID: agentID, teamID: onboarding.firstTeamID)
+        FirstTaskStep(
+            model: model, onSent: { openChat(agentID, on: session.server) },
+            onLater: { openChat(agentID, on: session.server) }, onChooseCrew: { onboarding.back() })
+    }
+
+    /// The flow ends inside the agent's chat: the agent is chosen, the Team mode is in front, and the reply is already
+    /// coming in (the task was sent before this).
+    private func openChat(_ agentID: String, on server: ServerModel) {
+        // Without an agent there is no chat to open: the flow does not end in silence (the step offers the way back).
+        guard !agentID.isEmpty else { return }
+        router.selectAgent(agentID, on: server)
+        router.select(mode: .team)
+        onboarding.finish()
     }
 }
 
