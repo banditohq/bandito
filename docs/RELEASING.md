@@ -13,8 +13,11 @@ Both parts are built by GitHub Actions. Nobody builds a release on a laptop.
    `release: Bandito X.Y.Z`. Edit the PR description: it becomes the release notes. When CI is green, squash-merge.
 2. Nothing to do: `release-flow` tags the merge commit, builds the server into a draft release (`release.yml`),
    publishes it (latest) and starts `release-app`.
-3. **Approve** the `release-app` run: Actions → release-app → Review deployments → `stable`. The app is built, signed,
-   notarized and uploaded; then the run opens the appcast PR in `banditohq/platform`, which merges it itself when its ci passes (`appcast-merge.yml` there), and waits for that merge.
+3. Nothing to do yet: `release-app` starts at once and builds, signs and notarizes the app (about 15 minutes, both
+   architectures at the same time) **before** it asks for anything. Then **Approve** it: Actions → release-app →
+   Review deployments → `stable`. The Approve only publishes (2–3 minutes): the signed files are checked again, the
+   update is signed with the Sparkle key, the zip and dmg go to the release, and the run opens the appcast PR in
+   `banditohq/platform`, which merges it itself when its ci passes (`appcast-merge.yml` there), and waits for that merge.
    A Telegram message says when it is done (`notify.yml`). Betas (`X.Y.Z-beta.N`) use the `beta` environment, no approval.
 
 The iPhone app's version (`MARKETING_VERSION` in `apps/ios/project.yml`) changes with the same bump; its TestFlight build is `apps/ios/scripts/testflight.sh`.
@@ -32,8 +35,9 @@ Every step can be run again. First fix the cause (the run log says what), then:
 | `release-flow` → tag and draft (version files disagree) | Fix the three files in a new PR to `main` (`scripts/bump-version.sh X.Y.Z`), merge, then run `release-flow` by hand with the version. Never move a tag. |
 | `release-flow` → server binaries or publish | Actions → release-flow → Run workflow, `version=X.Y.Z`: it reuses the tag and the draft and builds again. Manual fallback: `gh workflow run release.yml -f tag=vX.Y.Z`, wait, then `gh release edit vX.Y.Z --draft=false --latest`. |
 | `release-flow` never started (title or branch changed) | Same: run `release-flow` by hand with the version. By hand entirely: `git tag -a vX.Y.Z -m "Bandito X.Y.Z" <merge commit> && git push origin vX.Y.Z`, `gh release create vX.Y.Z --draft --notes-file notes.md`, then the line above. |
+| `release-app` stapler "Error 68" after Accepted | Apple's ticket is not published yet. The script waits for it up to 30 minutes (30, 60, then 120 s between tries). If it still fails, the error names the submission id and the zip, dmg and notary logs are in artifact `unfinished-X.Y.Z` (2 days); nothing was published. Run `release-app` again (a new notarization is quick). |
 | `release-app` not started | `gh workflow run release-app.yml -f version=X.Y.Z -f channel=stable` (or beta). |
-| `release-app` build fails | Fix, then run it again with the same inputs (it uploads with `--clobber`). The zip is not on the release until it succeeds. |
+| `release-app` compile, assemble or notarization fails | Fix, then run it again with the same inputs (it uploads with `--clobber`). Nothing is on the release until the publish job runs, so a failure before the Approve costs nothing. Re-run only the failed jobs from the run page when the cause is Apple's service. |
 | Appcast PR not merged (checks red, no checks, App lacks rights) | The run is red but the zip is already on the release. Download artifact `appcast-X.Y.Z`, put it in `banditohq/platform` as `public/appcast.xml`, PR, merge. Until that is merged the apps do not see the update. |
 
 # Details
@@ -67,36 +71,68 @@ from the Actions tab with a tag). It builds `bandito` for Linux (x86_64, aarch64
 `release-flow` starts it. By hand: Actions → `release-app` → Run workflow. Inputs:
 
 - `version`: `X.Y.Z` or `X.Y.Z-beta.N`. The tag `v<version>` must exist.
-- `channel`: `stable` or `beta`. It selects the environment of the run (`stable` or `beta`).
+- `channel`: `stable` or `beta`. It selects the environment of the `publish` job (`stable` or `beta`).
+
+Build the app for a tag whose server release is already published (the release-flow made the tag and the release, the
+app failed or is missing): `gh workflow run release-app.yml --ref main -f version=0.1.17 -f channel=stable`.
 
 Dispatch it from the default branch: the workflow file is read from the branch you run it on.
 
 Entitlements: `apps/mac/Config/Bandito.entitlements` (`audio-input`, for dictation) comes from `project.yml`; `release-app.sh` re-signs with the entitlements of the built app, so it is kept.
 
-The single job (macOS 15 runner) does this:
+- `dry_run`: builds, signs and notarizes, verifies, signs the appcast item, and stops: nothing goes to the release, no
+  appcast PR. The tag must exist and its commit must be on the default branch.
+- `ref` (dry run only): a compile check of a branch, tag or commit instead of the tag `v<version>`, which then need not
+  exist. Only `check` and `compile` run, with the caches off: nothing is signed, no secret is read, `assemble` and
+  `publish` are skipped. Example: `gh workflow run release-app.yml --ref my-branch -f version=0.1.99-beta.1 -f channel=beta -f dry_run=true -f ref=my-branch`.
 
-1. Checks the inputs, that the tag exists, that the release is published and has the server assets, and that the
-   secrets are set. It stops with a message if any is missing.
-2. Checks out the tag with full history.
-3. Installs XcodeGen and Rust, and Sparkle 2.10.0 from the official release (SHA-256 checked).
-4. Gets the base appcast from a checkout of `banditohq/platform` (token of the Bandito Bot App).
-5. Imports the Developer ID certificate into a temporary keychain with a random password, and writes the App Store
-   Connect key and the Sparkle key to temporary files.
-6. Runs `apps/mac/scripts/release-app.sh <version> --appcast-out <file>`: Release build, Developer ID signing with the
-   hardened runtime, notarization with the API key, staple, dmg, Sparkle signature of the zip.
-7. Uploads `Bandito-<version>.zip` and `Bandito-<version>.dmg` to the release `v<version>` (clobbering older files).
-8. Uploads the new `appcast.xml` as a run artifact `appcast-<version>`.
-9. Makes a second App token (the first expires after an hour), pushes branch `appcast-<version>` to
-   `banditohq/platform`, opens a PR and waits for its checks (the repo has no auto-merge): all green → squash-merge;
-   red, none after 3 minutes, or still pending after 30 minutes → the run fails and the PR stays for you. It never
-   pushes to `main`.
-10. Deletes the temporary keychain and key files (always, even on failure).
+Entitlements: `apps/mac/Config/Bandito.entitlements` (`audio-input`, for dictation) comes from `project.yml`; `release-app.sh` re-signs with the entitlements of the built app, so it is kept.
+
+Permissions: the workflow is `contents: read`; only `publish` has `contents: write`, and `GH_TOKEN` is set only in `check`
+and `publish`. A real run is refused if the commit of the tag is not on the default branch (`check`).
+
+Four jobs (macOS 15 runners), so that the slow work comes before the owner's approval:
+
+1. `check` (Linux, seconds): the inputs, that the tag exists, that the release is published and has the server assets.
+   It stops with a message if any is missing, and passes the tagged commit to the others.
+2. `compile` (two runners at once, `arm64` and `x86_64`, no secrets, no environment): checks out the commit with full
+   history, installs XcodeGen and Rust, restores the caches, runs `release-app.sh --stage compile --arch <arch>` (Release
+   build of that architecture, signed ad hoc with the app's entitlements) and hands the app over as an artifact. The
+   x86_64 daemon is cross-compiled (`apps/mac/project.yml`, build phase of the daemon).
+3. `assemble` (environment `beta`: the Developer ID certificate and the App Store Connect key, no reviewers; never the
+   Sparkle key): `release-app.sh --stage assemble` joins the two apps file by file with `lipo` (both must hold the same
+   files; non-binary files must be identical), checks that every Mach-O is arm64 + x86_64, signs inside out with the
+   hardened runtime, notarizes with the API key, staples, builds the zip and the dmg (notarized and stapled too), and
+   checks Gatekeeper. The files and a manifest (version, build, commit, SHA-256) go to an artifact kept for 2 days.
+   The temporary keychain and the key files are deleted at the end, always.
+4. `publish` (environment `stable` or `beta` by `channel`; `stable` waits for the Approve): verifies the manifest, that
+   the tag still points at the built commit, the version and build number, `codesign --verify --deep --strict`,
+   `stapler validate` and `spctl` of the app and the dmg, and that all binaries are universal; signs the zip with the
+   Sparkle key (`release-app.sh --stage appcast`; the key exists only in this job); uploads the zip and dmg to the
+   release `v<version>` (clobbering older files); keeps the appcast as artifact `appcast-<version>`; makes a second App
+   token (the first expires after an hour), pushes branch `appcast-<version>` to `banditohq/platform`, opens a PR and
+   waits until that repo's `appcast-merge.yml` merges it (up to 45 minutes; it never pushes to `main`). The key files
+   are deleted at the end, always.
+
+Caches (per architecture; keyed by the Xcode version, the Rust version and `daemon/Cargo.lock` or `Package.resolved`,
+with a fallback on the same Rust version only; the keys carry `tag`: only runs without `ref`, started from the default
+branch, write them): the Rust registry and target folder, and the Swift packages (`SourcePackages`). Xcode's build
+products are not cached on purpose: a checkout gives every file a new modification time, so Xcode would recompile
+them anyway, and a stale product must never reach a signed release. A cache entry is never trusted for the result:
+cargo and SwiftPM check their inputs, and the app itself is always compiled from the checkout.
 
 ## 4. Approval (stable)
 
 The `stable` environment must have the owner as a required reviewer (set in the repository settings, Environments).
-A stable run then waits for approval in the run page (Review deployments). The `beta` environment has no approval
-gate. Only users with write access can start a run.
+The environments `beta` and `stable` accept deployments only from `main` and from tags `v*` (deployment branch policy).
+To check a CI branch use a compile check (`ref`, which needs no environment); a full run on a branch needs a temporary
+rule in `beta` for that branch, removed after the merge.
+
+Only the `publish` job uses it, so a stable run waits for the approval after the build is done (Review deployments)
+and the Approve takes minutes. The `beta` environment has no approval gate; it also holds the Developer ID certificate
+and the App Store Connect key that `assemble` uses for both channels, so keep those two secrets identical in `beta`
+and `stable` when they are rotated. `SPARKLE_ED_KEY` must be set in `stable` and `beta` (publish) and is not needed by
+`assemble`. Only users with write access can start a run.
 
 ## 5. Appcast
 
