@@ -97,23 +97,39 @@ fn too_many(message: &'static str) -> Response {
         .unwrap_or_else(|_| StatusCode::TOO_MANY_REQUESTS.into_response())
 }
 
-/// On a phone listener: an upgrade of `/v1/rpc` is anonymous unless it carries a valid device token (whatever the
-/// `Authorization` header says: `Basic`, an empty one, anything that is no device's token is anonymous). An anonymous
-/// upgrade is counted per source (an IPv4 address, or an IPv6 /64) and holds one of the few anonymous slots of its
-/// source until the socket closes.
+/// On a phone listener, for `/v1/rpc`, the tries of each source (an IPv4 address, or an IPv6 /64) are counted:
+/// - an anonymous upgrade (no token, or one of another scheme: whatever the `Authorization` header says) is a try,
+///   and holds one of the few anonymous slots of its source until the socket closes;
+/// - a token that no device has (401) is a failed try, refused as 401 by the route;
+/// - a valid token is a paired device's: never a try, never held back.
+///
+/// Over the tries of a source: 429.
 async fn limit_anonymous(State(guard): State<PhoneGuard>, mut req: Request, next: Next) -> Response {
-    if req.uri().path() == "/v1/rpc" && matches!(device_for(&guard.app, req.headers()), Ok(None)) {
+    if req.uri().path() == "/v1/rpc" {
         let source = req
             .extensions()
             .get::<ClientAddr>()
             .map_or("unknown".to_string(), |c| c.0.clone());
-        if !guard.limits.attempts.attempt(&source, crate::store::now_ms()) {
-            return too_many("too many pairing attempts, try again in a few minutes");
+        let now = crate::store::now_ms();
+        match device_for(&guard.app, req.headers()) {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                if !guard.limits.attempts.attempt(&source, now) {
+                    return too_many("too many pairing attempts, try again in a few minutes");
+                }
+                let Some(slot) = guard.limits.anonymous.acquire(&source) else {
+                    return too_many("too many open pairing connections");
+                };
+                req.extensions_mut().insert(AnonymousSlot(Arc::new(slot)));
+            }
+            Err((status, _)) if status == StatusCode::UNAUTHORIZED => {
+                if !guard.limits.attempts.attempt(&source, now) {
+                    return too_many("too many pairing attempts, try again in a few minutes");
+                }
+            }
+            // Any other failure (the device lookup itself) is for the route to report.
+            Err(_) => {}
         }
-        let Some(slot) = guard.limits.anonymous.acquire(&source) else {
-            return too_many("too many open pairing connections");
-        };
-        req.extensions_mut().insert(AnonymousSlot(Arc::new(slot)));
     }
     next.run(req).await
 }
@@ -548,6 +564,15 @@ fn percent_encode(s: &str) -> String {
     out
 }
 
+/// Whether a message is a `pair.redeem` request: its `method` is that name. The text anywhere else in a message (a
+/// param, say) does not count.
+fn asks_to_pair(text: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .and_then(|v| v.get("method").and_then(|m| m.as_str()).map(|m| m == "pair.redeem"))
+        .unwrap_or(false)
+}
+
 async fn handle(app: Arc<App>, peer: Peer, socket: WebSocket, anonymous_slot: Option<AnonymousSlot>) {
     // An anonymous socket on a phone listener may only pair: it closes when no `pair.redeem` comes in time, and a while
     // after the one that did (the app reconnects with its token). The slot it holds is freed when it closes.
@@ -574,7 +599,7 @@ async fn handle(app: Arc<App>, peer: Peer, socket: WebSocket, anonymous_slot: Op
                 // Pings are answered by the library; binary is not used.
                 _ => continue,
             };
-            if anonymous && text.contains("pair.redeem") {
+            if anonymous && asks_to_pair(&text) {
                 seen.store(true, std::sync::atomic::Ordering::Relaxed);
             }
             if in_tx.send(text).await.is_err() {

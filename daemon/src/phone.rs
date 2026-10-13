@@ -2,7 +2,7 @@
 //!
 //! Off by default. The owner turns it on with the server setting `phone_access`:
 //! - `tailscale`: listens only on this machine's Tailscale addresses (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`), found
-//!   in the interface list (no call to the `tailscale` command);
+//!   in the interface list, and on a `utun*` only when `tailscale ip` reports its address;
 //! - `lan`: listens on every address (`0.0.0.0` and `::`).
 //!
 //! Only TLS 1.3 is spoken there, with a self-signed certificate made at the first switch-on and kept in
@@ -23,10 +23,11 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
+use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 use tokio::task::{JoinHandle, JoinSet};
 use tokio_rustls::TlsAcceptor;
@@ -68,6 +69,9 @@ pub const ANONYMOUS_AFTER_REDEEM: Duration = Duration::from_secs(3);
 const HEADER_TIMEOUT: Duration = Duration::from_secs(20);
 /// How often the listeners are matched to the machine's addresses (Tailscale may come up after the daemon).
 const WATCH_INTERVAL: Duration = Duration::from_secs(30);
+
+/// How long `tailscale ip` may take before it is given up (and killed).
+const TAILSCALE_TIMEOUT: Duration = Duration::from_secs(2);
 /// Hosts in a pairing link.
 const MAX_HOSTS: usize = 6;
 /// Characters of the server name in a pairing link.
@@ -93,6 +97,8 @@ impl IfaceAddr {
 
 /// Where the machine's addresses come from. Replaced in tests.
 pub type Ifaces = Arc<dyn Fn() -> Vec<IfaceAddr> + Send + Sync>;
+/// The addresses Tailscale reports for this machine. Replaced in tests.
+pub type TailscaleIps = Arc<dyn Fn() -> Vec<IpAddr> + Send + Sync>;
 /// Which addresses a mode listens on. Replaced in tests, to listen on loopback with a port the system picks.
 type Planner = Arc<dyn Fn(PhoneMode, u16) -> Vec<SocketAddr> + Send + Sync>;
 
@@ -108,15 +114,18 @@ pub fn is_tailscale_range(ip: IpAddr) -> bool {
     }
 }
 
-/// Whether an interface of this name is Tailscale's: `tailscale*`, `ts*`, or a `utun*` (macOS names it so).
+/// Whether an interface of this name is Tailscale's by its name: `tailscale*` or `ts*`. A `utun*` is not: macOS
+/// names every VPN's tunnel so, see [`is_tailscale`].
 pub fn is_tailscale_iface(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
-    name.starts_with("tailscale") || name.starts_with("ts") || name.starts_with("utun")
+    name.starts_with("tailscale") || name.starts_with("ts")
 }
 
-/// Whether the address is a Tailscale address: in Tailscale's range and on an interface of Tailscale's name.
-pub fn is_tailscale(addr: &IfaceAddr) -> bool {
-    is_tailscale_range(addr.ip) && is_tailscale_iface(&addr.name)
+/// Whether the address is Tailscale's: in Tailscale's range, and either on an interface of Tailscale's name, or on a
+/// `utun*` with one of the addresses Tailscale reports itself (`tailscale_ips`). Without that answer a utun is not.
+pub fn is_tailscale(addr: &IfaceAddr, tailscale_ips: &[IpAddr]) -> bool {
+    let utun = addr.name.to_ascii_lowercase().starts_with("utun");
+    is_tailscale_range(addr.ip) && (is_tailscale_iface(&addr.name) || (utun && tailscale_ips.contains(&addr.ip)))
 }
 
 /// Whether `ip` is a private address of a local network: RFC 1918 or `fc00::/7`. Not Tailscale's range, not
@@ -132,8 +141,85 @@ fn is_private(ip: IpAddr) -> bool {
 }
 
 /// An address the `lan` mode may listen on and the pairing link may name: private (a local network) or Tailscale's.
-fn is_phone_reachable(addr: &IfaceAddr) -> bool {
-    is_private(addr.ip) || is_tailscale(addr)
+fn is_phone_reachable(addr: &IfaceAddr, tailscale_ips: &[IpAddr]) -> bool {
+    is_private(addr.ip) || is_tailscale(addr, tailscale_ips)
+}
+
+/// The addresses `tailscale ip` prints, one per line; a line that is no address is skipped.
+pub fn parse_tailscale_ips(text: &str) -> Vec<IpAddr> {
+    text.lines()
+        .filter_map(|line| line.trim().parse::<IpAddr>().ok())
+        .collect()
+}
+
+/// Runs `<program> ip` and reads the addresses it prints. Nothing when it fails, or takes longer than
+/// [`TAILSCALE_TIMEOUT`] (then it is killed).
+pub fn run_tailscale_ip(program: &Path) -> Vec<IpAddr> {
+    let Ok(mut child) = std::process::Command::new(program)
+        .arg("ip")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    else {
+        return Vec::new();
+    };
+    let deadline = Instant::now() + TAILSCALE_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return Vec::new();
+                }
+                let mut text = String::new();
+                let Some(mut out) = child.stdout.take() else {
+                    return Vec::new();
+                };
+                if out.read_to_string(&mut text).is_err() {
+                    return Vec::new();
+                }
+                return parse_tailscale_ips(&text);
+            }
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Vec::new();
+            }
+        }
+    }
+}
+
+/// The addresses Tailscale reports for this machine: `tailscale ip`, found on the daemon's `PATH` the way the other
+/// programs are. Nothing when the command is not there.
+pub fn fetch_tailscale_ips() -> Vec<IpAddr> {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    match crate::setup::which("tailscale", &path) {
+        Some(program) => run_tailscale_ip(&program),
+        None => Vec::new(),
+    }
+}
+
+/// The answer of [`fetch_tailscale_ips`], kept for one [`WATCH_INTERVAL`]: the watcher asks once per round, and a
+/// pairing reply in between does not run the command again.
+#[derive(Default)]
+pub struct TailscaleCache {
+    last: Mutex<Option<(Instant, Vec<IpAddr>)>>,
+}
+
+impl TailscaleCache {
+    /// The kept answer when it is younger than [`WATCH_INTERVAL`] at `now`; otherwise `fetch` is asked and its answer kept.
+    pub fn get(&self, now: Instant, fetch: impl FnOnce() -> Vec<IpAddr>) -> Vec<IpAddr> {
+        let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((at, ips)) = last.as_ref()
+            && now.saturating_duration_since(*at) < WATCH_INTERVAL
+        {
+            return ips.clone();
+        }
+        let ips = fetch();
+        *last = Some((now, ips.clone()));
+        ips
+    }
 }
 
 /// The key a source is counted under: an IPv4 address, or the /64 of an IPv6 one (a host can use any address of its
@@ -198,15 +284,15 @@ pub fn interface_addrs() -> Vec<IfaceAddr> {
     out
 }
 
-/// The addresses the daemon listens on for `mode` and `port`, given the machine's `ifaces`. Never a wildcard and never a
-/// public address: `tailscale` takes Tailscale's addresses, `lan` takes those and the private ones (RFC 1918,
-/// `fc00::/7`). Link-local IPv6 (`fe80::/10`) is left out: it needs the interface's scope to be bound or named in a
-/// link, and no phone pairs through it.
-pub fn plan(mode: PhoneMode, port: u16, ifaces: &[IfaceAddr]) -> Vec<SocketAddr> {
+/// The addresses the daemon listens on for `mode` and `port`, given the machine's `ifaces` and the addresses Tailscale
+/// reports (`tailscale_ips`). Never a wildcard and never a public address: `tailscale` takes Tailscale's addresses,
+/// `lan` takes those and the private ones (RFC 1918, `fc00::/7`). Link-local IPv6 (`fe80::/10`) is left out: it needs
+/// the interface's scope to be bound or named in a link, and no phone pairs through it.
+pub fn plan(mode: PhoneMode, port: u16, ifaces: &[IfaceAddr], tailscale_ips: &[IpAddr]) -> Vec<SocketAddr> {
     let wanted = |addr: &&IfaceAddr| match mode {
         PhoneMode::Off => false,
-        PhoneMode::Tailscale => is_tailscale(addr),
-        PhoneMode::Lan => is_phone_reachable(addr),
+        PhoneMode::Tailscale => is_tailscale(addr, tailscale_ips),
+        PhoneMode::Lan => is_phone_reachable(addr, tailscale_ips),
     };
     let mut ips: Vec<IpAddr> = ifaces.iter().filter(wanted).map(|a| a.ip).collect();
     ips.sort();
@@ -216,7 +302,7 @@ pub fn plan(mode: PhoneMode, port: u16, ifaces: &[IfaceAddr]) -> Vec<SocketAddr>
 
 /// The `host:port` strings a phone can try for this machine, the best first: Tailscale, then the local network
 /// (not in `tailscale` mode). IPv6 is in square brackets.
-pub fn pair_hosts(mode: PhoneMode, port: u16, ifaces: &[IfaceAddr]) -> Vec<String> {
+pub fn pair_hosts(mode: PhoneMode, port: u16, ifaces: &[IfaceAddr], tailscale_ips: &[IpAddr]) -> Vec<String> {
     let mut hosts: Vec<IpAddr> = Vec::new();
     let mut push = |filter: &dyn Fn(&IfaceAddr) -> bool| {
         let mut found: Vec<IpAddr> = ifaces.iter().filter(|a| filter(a)).map(|a| a.ip).collect();
@@ -226,9 +312,9 @@ pub fn pair_hosts(mode: PhoneMode, port: u16, ifaces: &[IfaceAddr]) -> Vec<Strin
     };
     match mode {
         PhoneMode::Off => return Vec::new(),
-        PhoneMode::Tailscale => push(&is_tailscale),
+        PhoneMode::Tailscale => push(&|a: &IfaceAddr| is_tailscale(a, tailscale_ips)),
         PhoneMode::Lan => {
-            push(&is_tailscale);
+            push(&|a: &IfaceAddr| is_tailscale(a, tailscale_ips));
             push(&|a: &IfaceAddr| is_private(a.ip));
         }
     }
@@ -269,6 +355,12 @@ fn percent_encode(s: &str) -> String {
         }
     }
     out
+}
+
+/// The Tailscale addresses of this machine, asked through the command at most once per watch round.
+fn tailscale_cached() -> TailscaleIps {
+    let cache = TailscaleCache::default();
+    Arc::new(move || cache.get(Instant::now(), fetch_tailscale_ips))
 }
 
 /// Anonymous upgrades by source and time: at most [`ATTEMPT_MAX`] in [`ATTEMPT_WINDOW_MS`] from one source (an IPv4
@@ -429,6 +521,8 @@ pub struct PairInfo {
 struct Sources {
     ifaces: Ifaces,
     planner: Option<Planner>,
+    /// The addresses Tailscale reports for this machine (asked at most once per watch round).
+    tailscale: TailscaleIps,
 }
 
 struct Tls {
@@ -471,6 +565,7 @@ impl PhoneAccess {
             sources: Mutex::new(Sources {
                 ifaces: Arc::new(interface_addrs),
                 planner: None,
+                tailscale: tailscale_cached(),
             }),
             running: tokio::sync::Mutex::new(Running {
                 mode: PhoneMode::Off,
@@ -487,7 +582,11 @@ impl PhoneAccess {
     /// Replaces the interface list, and the addresses to listen on (tests: loopback, any port).
     #[cfg(test)]
     pub fn set_sources(&self, ifaces: Ifaces, planner: Option<Planner>) {
-        *self.sources.lock().unwrap_or_else(|e| e.into_inner()) = Sources { ifaces, planner };
+        *self.sources.lock().unwrap_or_else(|e| e.into_inner()) = Sources {
+            ifaces,
+            planner,
+            tailscale: Arc::new(Vec::new),
+        };
     }
 
     fn sources(&self) -> Sources {
@@ -525,7 +624,9 @@ impl PhoneAccess {
         let hosts = if status.listening.is_empty() {
             Vec::new()
         } else {
-            pair_hosts(status.mode, status.port, &(self.sources().ifaces)())
+            let sources = self.sources();
+            let tailscale = (sources.tailscale)();
+            pair_hosts(status.mode, status.port, &(sources.ifaces)(), &tailscale)
         };
         let link = match (&fingerprint, hosts.is_empty()) {
             (Some(fp), false) => Some(pair_link(code, fp, server_name, &hosts)),
@@ -554,7 +655,13 @@ impl PhoneAccess {
         let wanted: Vec<SocketAddr> = match (&sources.planner, mode) {
             (_, PhoneMode::Off) => Vec::new(),
             (Some(planner), _) => planner(mode, port),
-            (None, _) => plan(mode, port, &(sources.ifaces)()),
+            (None, _) => {
+                let tailscale = sources.tailscale.clone();
+                let ips = tokio::task::spawn_blocking(move || tailscale())
+                    .await
+                    .unwrap_or_default();
+                plan(mode, port, &(sources.ifaces)(), &ips)
+            }
         };
         // Close what is not wanted any more. The mode or the port changing drops the listeners of the old one.
         let stale: Vec<SocketAddr> = state
@@ -578,7 +685,11 @@ impl PhoneAccess {
                 Ok(tls) => {
                     error = self.open_missing(&mut state, app, &tls, &wanted).await;
                     if wanted.is_empty() {
-                        error = Some("No Tailscale address on this machine. Install Tailscale and sign in.".into());
+                        error = Some(match mode {
+                            PhoneMode::Tailscale => "No Tailscale address on this machine. Install Tailscale and sign in.",
+                            _ => "No private network address on this machine. Connect to a local network and try again.",
+                        }
+                        .into());
                     }
                 }
                 Err(e) => error = Some(format!("{e:#}")),
@@ -1323,13 +1434,13 @@ mod tests {
             let _ = socket.close(None).await;
             wait_no_anonymous(&w.app).await;
         }
-        // A bearer token that no device has is refused as one, and is not an anonymous upgrade.
+        // A bearer token that no device has is refused as one (401), and it uses one of the source's tries.
         assert_eq!(
             status_of(ws(addr, &fp, &[("Authorization", "Bearer bdt_not_a_device")]).await),
             401
         );
         let basic = [("Authorization", "Basic dXNlcjpwYXNz")];
-        let counted = ATTEMPT_MAX - headers.len();
+        let counted = ATTEMPT_MAX - headers.len() - 1;
         for i in 0..counted {
             let result = ws(addr, &fp, &basic).await;
             assert_eq!(status_of(result), 0, "attempt {i}");
@@ -1808,6 +1919,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_empty_plan_says_what_the_mode_lacks() {
+        let w = world();
+        w.app.phone.set_sources(Arc::new(Vec::new), None);
+        set(&w.app, json!({"phone_access": "lan"})).await;
+        let error = w.app.phone.status().error.expect("an error");
+        assert!(error.contains("private network address"), "{error}");
+        assert!(!error.contains("Tailscale"), "{error}");
+        set(&w.app, json!({"phone_access": "tailscale"})).await;
+        let error = w.app.phone.status().error.expect("an error");
+        assert!(error.contains("No Tailscale address"), "{error}");
+        w.app.phone.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn a_hello_that_only_names_pair_redeem_does_not_extend_the_anonymous_window() {
+        let w = world();
+        set(&w.app, json!({"phone_access": "lan"})).await;
+        let addr = bound(&w.app);
+        let fp = w.app.phone.fingerprint().unwrap();
+        let mut socket = ws(addr, &fp, &[]).await.unwrap();
+        // The text "pair.redeem" inside another request is no pairing request: the socket gets the idle time only.
+        socket
+            .send(Message::Text(
+                json!({"jsonrpc":"2.0","id":1,"method":"daemon.hello","params":{"note":"pair.redeem"}})
+                    .to_string()
+                    .into(),
+            ))
+            .await
+            .unwrap();
+        let ended = tokio::time::timeout(ANONYMOUS_IDLE + ANONYMOUS_AFTER_REDEEM / 2, async {
+            while let Some(Ok(_)) = socket.next().await {}
+        })
+        .await;
+        assert!(ended.is_ok(), "closed at the idle time, not after the pairing window");
+        w.app.phone.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn a_wrong_token_is_a_failed_try_from_its_source_and_another_source_has_its_own() {
+        let w = world();
+        let planner: Planner = Arc::new(|_, _| vec!["127.0.0.1:0".parse().unwrap(), "[::1]:0".parse().unwrap()]);
+        w.app.phone.set_sources(Arc::new(Vec::new), Some(planner));
+        set(&w.app, json!({"phone_access": "lan"})).await;
+        let listening: Vec<SocketAddr> = w
+            .app
+            .phone
+            .status()
+            .listening
+            .iter()
+            .map(|a| a.parse().unwrap())
+            .collect();
+        let v4 = *listening.iter().find(|a| a.is_ipv4()).expect("an IPv4 listener");
+        let v6 = *listening.iter().find(|a| a.is_ipv6()).expect("an IPv6 listener on ::1");
+        let fp = w.app.phone.fingerprint().unwrap();
+        let wrong = [("Authorization", "Bearer bdt_not_a_device")];
+        for i in 0..ATTEMPT_MAX {
+            assert_eq!(status_of(ws(v4, &fp, &wrong).await), 401, "try {i}");
+        }
+        assert_eq!(status_of(ws(v4, &fp, &wrong).await), 429, "over the source's tries");
+        // A valid token of the same source is not held back by the tries spent on wrong ones.
+        let auth = format!("Bearer {TOKEN}");
+        assert!(ws(v4, &fp, &[("Authorization", &auth)]).await.is_ok());
+        // Another source (the IPv6 loopback is another /64) still has its own tries.
+        assert_eq!(status_of(ws(v6, &fp, &wrong).await), 401);
+        w.app.phone.shutdown().await;
+    }
+
+    #[tokio::test]
     async fn revoking_a_device_ends_its_open_connection() {
         let w = world();
         set(&w.app, json!({"phone_access": "lan"})).await;
@@ -1900,18 +2079,107 @@ mod tests {
         }
     }
 
+    fn ip(s: &str) -> IpAddr {
+        s.parse().unwrap()
+    }
+
     #[test]
     fn a_tailscale_address_is_on_an_interface_of_tailscales_name() {
-        for name in ["tailscale0", "utun4", "ts0", "Tailscale"] {
-            assert!(is_tailscale(&ia(name, "100.101.102.103")), "{name}");
+        let none: &[IpAddr] = &[];
+        for name in ["tailscale0", "ts0", "Tailscale"] {
+            assert!(is_tailscale(&ia(name, "100.101.102.103"), none), "{name}");
         }
         // The same range on another carrier (a mobile network's CGNAT, another VPN) is not Tailscale.
         for name in ["en0", "wlan0", "ppp0", "eth0", "wg0", "bridge100"] {
-            assert!(!is_tailscale(&ia(name, "100.101.102.103")), "{name}");
+            assert!(!is_tailscale(&ia(name, "100.101.102.103"), none), "{name}");
         }
         // The name alone is not enough either.
-        assert!(!is_tailscale(&ia("utun4", "192.168.1.5")));
-        assert!(!is_tailscale(&ia("tailscale0", "10.0.0.1")));
+        assert!(!is_tailscale(&ia("tailscale0", "10.0.0.1"), none));
+        assert!(!is_tailscale(&ia("utun4", "192.168.1.5"), &[ip("192.168.1.5")]));
+    }
+
+    #[test]
+    fn a_utun_address_is_tailscales_only_when_tailscale_reports_it() {
+        // macOS names every VPN's tunnel utun*: only the addresses Tailscale itself reports make one Tailscale's.
+        let reported = [ip("100.101.102.103"), ip("fd7a:115c:a1e0::5")];
+        assert!(is_tailscale(&ia("utun4", "100.101.102.103"), &reported));
+        assert!(is_tailscale(&ia("utun4", "fd7a:115c:a1e0::5"), &reported));
+        assert!(
+            !is_tailscale(&ia("utun5", "100.101.102.104"), &reported),
+            "a 100.x that Tailscale does not report is another VPN's"
+        );
+        assert!(
+            !is_tailscale(&ia("utun5", "100.101.102.103"), &[]),
+            "without an answer from Tailscale, utun is not Tailscale's"
+        );
+        assert!(is_tailscale(&ia("tailscale0", "100.101.102.103"), &[]));
+    }
+
+    #[test]
+    fn tailscale_ips_are_read_one_per_line_and_other_lines_are_skipped() {
+        assert_eq!(
+            parse_tailscale_ips("100.101.102.103\nfd7a:115c:a1e0::5\n\nnot an address\n"),
+            vec![ip("100.101.102.103"), ip("fd7a:115c:a1e0::5")]
+        );
+        assert!(parse_tailscale_ips("").is_empty());
+    }
+
+    #[test]
+    fn the_tailscale_answer_is_kept_for_one_watch_interval() {
+        let cache = TailscaleCache::default();
+        let calls = std::cell::Cell::new(0);
+        let fetch = || {
+            calls.set(calls.get() + 1);
+            vec![ip("100.101.102.103")]
+        };
+        let t0 = std::time::Instant::now();
+        assert_eq!(cache.get(t0, fetch), vec![ip("100.101.102.103")]);
+        let again = || {
+            calls.set(calls.get() + 1);
+            Vec::new()
+        };
+        assert_eq!(
+            cache.get(t0 + WATCH_INTERVAL - Duration::from_millis(1), again),
+            vec![ip("100.101.102.103")]
+        );
+        assert_eq!(calls.get(), 1, "asked once within the interval");
+        let later = || {
+            calls.set(calls.get() + 1);
+            Vec::new()
+        };
+        assert!(cache.get(t0 + WATCH_INTERVAL, later).is_empty());
+        assert_eq!(calls.get(), 2, "asked again after the interval");
+    }
+
+    #[test]
+    fn a_tailscale_command_that_is_missing_or_fails_reports_no_addresses() {
+        assert!(run_tailscale_ip(Path::new("/nonexistent/dir/tailscale")).is_empty());
+        assert!(run_tailscale_ip(Path::new("/usr/bin/false")).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_tailscale_command_gives_its_addresses_and_one_that_hangs_is_given_up() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::TempDir::new().unwrap();
+        let script = |name: &str, body: &str| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            path
+        };
+        let good = script("good", "echo 100.101.102.103\necho fd7a:115c:a1e0::5");
+        assert_eq!(
+            run_tailscale_ip(&good),
+            vec![ip("100.101.102.103"), ip("fd7a:115c:a1e0::5")]
+        );
+        let hangs = script("hangs", "exec sleep 30");
+        let started = std::time::Instant::now();
+        assert!(run_tailscale_ip(&hangs).is_empty());
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "given up after the timeout"
+        );
     }
 
     fn machine() -> Vec<IfaceAddr> {
@@ -1936,8 +2204,9 @@ mod tests {
     #[test]
     fn the_plan_follows_the_mode_and_never_names_a_wildcard_or_a_public_address() {
         let ifaces = machine();
-        assert!(plan(PhoneMode::Off, 7879, &ifaces).is_empty());
-        let ts: Vec<String> = plan(PhoneMode::Tailscale, 7879, &ifaces)
+        let reported = [ip("100.64.0.9"), ip("100.101.102.103"), ip("fd7a:115c:a1e0::5")];
+        assert!(plan(PhoneMode::Off, 7879, &ifaces, &reported).is_empty());
+        let ts: Vec<String> = plan(PhoneMode::Tailscale, 7879, &ifaces, &reported)
             .iter()
             .map(ToString::to_string)
             .collect();
@@ -1945,8 +2214,15 @@ mod tests {
             ts,
             vec!["100.64.0.9:7879", "100.101.102.103:7879", "[fd7a:115c:a1e0::5]:7879"]
         );
-        assert!(plan(PhoneMode::Tailscale, 7879, &[]).is_empty());
-        let lan: Vec<String> = plan(PhoneMode::Lan, 7900, &ifaces)
+        assert!(plan(PhoneMode::Tailscale, 7879, &[], &reported).is_empty());
+        // utun3 carries 100.64.0.9, but that is only Tailscale's when Tailscale reports it.
+        assert!(
+            plan(PhoneMode::Tailscale, 7879, &ifaces, &[])
+                .iter()
+                .all(|a| a.ip() != ip("100.64.0.9")),
+            "a utun is not listened on as Tailscale's unless Tailscale reports its address"
+        );
+        let lan: Vec<String> = plan(PhoneMode::Lan, 7900, &ifaces, &reported)
             .iter()
             .map(ToString::to_string)
             .collect();
@@ -1963,7 +2239,7 @@ mod tests {
             ]
         );
         for mode in [PhoneMode::Tailscale, PhoneMode::Lan] {
-            for addr in plan(mode, 7879, &ifaces) {
+            for addr in plan(mode, 7879, &ifaces, &reported) {
                 assert!(!addr.ip().is_unspecified(), "{addr}");
                 let public = [
                     "203.0.113.50",
@@ -1980,7 +2256,7 @@ mod tests {
             }
         }
         assert!(
-            plan(PhoneMode::Lan, 7879, &[ia("en1", "203.0.113.50")]).is_empty(),
+            plan(PhoneMode::Lan, 7879, &[ia("en1", "203.0.113.50")], &[]).is_empty(),
             "only a public address: nothing listens"
         );
     }
@@ -1988,8 +2264,9 @@ mod tests {
     #[test]
     fn the_hosts_put_tailscale_first_then_the_local_network() {
         let ifaces = machine();
+        let reported = [ip("100.64.0.9"), ip("100.101.102.103"), ip("fd7a:115c:a1e0::5")];
         assert_eq!(
-            pair_hosts(PhoneMode::Lan, 7879, &ifaces),
+            pair_hosts(PhoneMode::Lan, 7879, &ifaces, &reported),
             vec![
                 "100.64.0.9:7879",
                 "100.101.102.103:7879",
@@ -2000,10 +2277,10 @@ mod tests {
             ]
         );
         assert_eq!(
-            pair_hosts(PhoneMode::Tailscale, 7879, &ifaces),
+            pair_hosts(PhoneMode::Tailscale, 7879, &ifaces, &reported),
             vec!["100.64.0.9:7879", "100.101.102.103:7879", "[fd7a:115c:a1e0::5]:7879"]
         );
-        assert!(pair_hosts(PhoneMode::Off, 7879, &ifaces).is_empty());
+        assert!(pair_hosts(PhoneMode::Off, 7879, &ifaces, &reported).is_empty());
     }
 
     #[test]
