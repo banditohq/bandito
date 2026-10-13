@@ -926,7 +926,6 @@
 "integrations.status.unchecked" = "Not checked yet";
 "integrations.title" = "Integrations";
 "integrations.toolsFound" = "Tools: %1$@";
-"ios.activity.chatSoon" = "The chat with %1$@ opens here soon. Event %2$@.";
 "ios.activity.emptyErrors" = "No errors.";
 "ios.activity.emptyMessage" = "Finished replies and scheduled runs that had something to say show up here.";
 "ios.activity.emptyTitle" = "All quiet for now";
@@ -1017,7 +1016,6 @@
 "ios.connect.trust.body" = "This iPhone has not seen this server yet. Compare the fingerprint below with the one on your Mac (Settings → Servers → iPhone). Connect only if they are the same.";
 "ios.connect.trust.title" = "Is this your server?";
 "ios.connect.working" = "Connecting…";
-"ios.crew.chatSoon" = "The chat with %1$@ is coming soon.";
 "ios.crew.createAgent" = "Create agent";
 "ios.crew.emptyMessage" = "This server has no agents. Create the first one to put the crew to work.";
 "ios.crew.emptyTitle" = "No agents yet";

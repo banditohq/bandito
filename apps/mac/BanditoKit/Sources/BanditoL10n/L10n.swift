@@ -1341,7 +1341,6 @@ public enum L10n {
     public enum Ios {
 
         public enum Activity {
-            public static func chatSoon(name: String, event: String) -> String { L10n.tr("ios.activity.chatSoon", name, event) }
             public static var emptyErrors: String { L10n.tr("ios.activity.emptyErrors") }
             public static var emptyMessage: String { L10n.tr("ios.activity.emptyMessage") }
             public static var emptyTitle: String { L10n.tr("ios.activity.emptyTitle") }
@@ -1501,7 +1500,6 @@ public enum L10n {
         }
 
         public enum Crew {
-            public static func chatSoon(name: String) -> String { L10n.tr("ios.crew.chatSoon", name) }
             public static var createAgent: String { L10n.tr("ios.crew.createAgent") }
             public static var emptyMessage: String { L10n.tr("ios.crew.emptyMessage") }
             public static var emptyTitle: String { L10n.tr("ios.crew.emptyTitle") }

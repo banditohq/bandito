@@ -926,7 +926,6 @@
 "integrations.status.unchecked" = "尚未检查";
 "integrations.title" = "集成";
 "integrations.toolsFound" = "工具：%1$@";
-"ios.activity.chatSoon" = "与%1$@的聊天即将在此打开。事件 %2$@。";
 "ios.activity.emptyErrors" = "没有错误。";
 "ios.activity.emptyMessage" = "已完成的回复和有话要说的定时运行会显示在这里。";
 "ios.activity.emptyTitle" = "目前很安静";
@@ -1017,7 +1016,6 @@
 "ios.connect.trust.body" = "这台 iPhone 还没见过此服务器。请将下方指纹与 Mac 上的（设置 → 服务器 → iPhone）比对，一致时才连接。";
 "ios.connect.trust.title" = "这是你的服务器吗？";
 "ios.connect.working" = "正在连接…";
-"ios.crew.chatSoon" = "与 %1$@ 的聊天即将推出。";
 "ios.crew.createAgent" = "创建代理";
 "ios.crew.emptyMessage" = "这台服务器还没有代理。创建第一个，让团队开始工作。";
 "ios.crew.emptyTitle" = "还没有代理";

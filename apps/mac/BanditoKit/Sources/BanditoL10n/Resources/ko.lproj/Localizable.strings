@@ -926,7 +926,6 @@
 "integrations.status.unchecked" = "아직 확인 안 함";
 "integrations.title" = "연동";
 "integrations.toolsFound" = "도구: %1$@";
-"ios.activity.chatSoon" = "%1$@과의 채팅은 곧 여기서 열려요. 이벤트 %2$@.";
 "ios.activity.emptyErrors" = "오류가 없어요.";
 "ios.activity.emptyMessage" = "완료된 답변과 알릴 내용이 있었던 예약 실행이 여기에 표시돼요.";
 "ios.activity.emptyTitle" = "아직 조용해요";
@@ -1017,7 +1016,6 @@
 "ios.connect.trust.body" = "이 iPhone은 아직 이 서버를 모릅니다. 아래 지문을 Mac의 설정 → 서버 → iPhone에 있는 것과 비교하고, 같을 때만 연결하세요.";
 "ios.connect.trust.title" = "내 서버가 맞나요?";
 "ios.connect.working" = "연결 중…";
-"ios.crew.chatSoon" = "%1$@와(과)의 대화는 곧 지원돼요.";
 "ios.crew.createAgent" = "에이전트 만들기";
 "ios.crew.emptyMessage" = "이 서버에는 에이전트가 없어요. 첫 에이전트를 만들어 팀을 시작하세요.";
 "ios.crew.emptyTitle" = "아직 에이전트가 없어요";

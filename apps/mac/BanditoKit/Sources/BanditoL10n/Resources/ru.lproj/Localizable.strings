@@ -926,7 +926,6 @@
 "integrations.status.unchecked" = "Ещё не проверена";
 "integrations.title" = "Интеграции";
 "integrations.toolsFound" = "Инструменты: %1$@";
-"ios.activity.chatSoon" = "Чат с %1$@ скоро откроется здесь. Событие %2$@.";
 "ios.activity.emptyErrors" = "Ошибок нет.";
 "ios.activity.emptyMessage" = "Здесь появляются законченные ответы и запуски по расписанию, которые что-то сказали.";
 "ios.activity.emptyTitle" = "Пока тихо";
@@ -1017,7 +1016,6 @@
 "ios.connect.trust.body" = "Этот iPhone ещё не видел этот сервер. Сравните отпечаток ниже с тем, что на Mac (Настройки → Серверы → iPhone). Подключайтесь, только если они совпадают.";
 "ios.connect.trust.title" = "Это ваш сервер?";
 "ios.connect.working" = "Подключаюсь…";
-"ios.crew.chatSoon" = "Чат с %1$@ появится скоро.";
 "ios.crew.createAgent" = "Создать агента";
 "ios.crew.emptyMessage" = "На этом сервере нет агентов. Создайте первого, чтобы команда начала работать.";
 "ios.crew.emptyTitle" = "Агентов пока нет";

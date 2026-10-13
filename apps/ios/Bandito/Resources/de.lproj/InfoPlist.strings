@@ -1,0 +1,6 @@
+/* Berechtigungstext, den iOS anzeigt. */
+"NSCameraUsageDescription" = "Bandito verwendet die Kamera, um den Pairing-QR-Code eines Servers zu scannen und ein Foto aufzunehmen, das Sie an eine Nachricht anhängen.";
+"NSLocalNetworkUsageDescription" = "Bandito kommuniziert in Ihrem lokalen Netzwerk mit Ihrem Mac oder Server.";
+"NSFaceIDUsageDescription" = "Bandito verwendet Face ID, um die App zu sperren und riskante Aktionen zu bestätigen.";
+"NSMicrophoneUsageDescription" = "Bandito verwendet das Mikrofon nur, während Sie eine Nachricht diktieren.";
+"NSSpeechRecognitionUsageDescription" = "Bandito wandelt Ihre Sprache nur in Text um, während Sie eine Nachricht diktieren.";

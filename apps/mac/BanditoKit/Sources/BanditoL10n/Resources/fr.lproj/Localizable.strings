@@ -926,7 +926,6 @@
 "integrations.status.unchecked" = "Pas encore vérifiée";
 "integrations.title" = "Intégrations";
 "integrations.toolsFound" = "Outils : %1$@";
-"ios.activity.chatSoon" = "Le chat avec %1$@ s'ouvrira ici bientôt. Événement %2$@.";
 "ios.activity.emptyErrors" = "Aucune erreur.";
 "ios.activity.emptyMessage" = "Ici apparaissent les réponses terminées et les exécutions planifiées qui avaient quelque chose à dire.";
 "ios.activity.emptyTitle" = "Rien pour l'instant";
@@ -1017,7 +1016,6 @@
 "ios.connect.trust.body" = "Cet iPhone ne connaît pas encore ce serveur. Compare l’empreinte ci-dessous avec celle de ton Mac (Réglages → Serveurs → iPhone). Ne te connecte que si elles sont identiques.";
 "ios.connect.trust.title" = "Est-ce ton serveur ?";
 "ios.connect.working" = "Connexion…";
-"ios.crew.chatSoon" = "Le chat avec %1$@ arrive bientôt.";
 "ios.crew.createAgent" = "Créer un agent";
 "ios.crew.emptyMessage" = "Ce serveur n'a pas d'agent. Créez le premier pour que l'équipe se mette au travail.";
 "ios.crew.emptyTitle" = "Aucun agent pour l'instant";

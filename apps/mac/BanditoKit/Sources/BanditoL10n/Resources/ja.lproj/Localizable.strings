@@ -926,7 +926,6 @@
 "integrations.status.unchecked" = "未確認";
 "integrations.title" = "連携";
 "integrations.toolsFound" = "ツール: %1$@";
-"ios.activity.chatSoon" = "%1$@とのチャットはまもなくここで開きます。イベント %2$@。";
 "ios.activity.emptyErrors" = "エラーはありません。";
 "ios.activity.emptyMessage" = "完了した返信と、何か知らせたスケジュール実行がここに表示されます。";
 "ios.activity.emptyTitle" = "今のところ静かです";
@@ -1017,7 +1016,6 @@
 "ios.connect.trust.body" = "この iPhone はまだこのサーバーを知りません。下のフィンガープリントを Mac の「設定」→「サーバー」→ iPhone のものと比べ、同じ場合のみ接続してください。";
 "ios.connect.trust.title" = "これはあなたのサーバーですか？";
 "ios.connect.working" = "接続中…";
-"ios.crew.chatSoon" = "%1$@ とのチャットは近日対応予定です。";
 "ios.crew.createAgent" = "エージェントを作成";
 "ios.crew.emptyMessage" = "このサーバーにはエージェントがいません。最初のエージェントを作って、チームを動かしましょう。";
 "ios.crew.emptyTitle" = "まだエージェントがいません";
