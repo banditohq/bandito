@@ -132,9 +132,10 @@ import UIKit
 extension BanditoFont {
     /// The font at the size the person's Dynamic Type setting gives it. The text style only picks the scaling curve:
     /// the style whose default size is nearest to the font's size, so a 13 pt caption grows like a footnote.
-    static func scaledForDynamicType(_ font: CTFont) -> CTFont {
+    static func scaledForDynamicType(_ font: CTFont, category: UIContentSizeCategory? = nil) -> CTFont {
         let style = textStyle(forPointSize: CTFontGetSize(font))
-        let scaled = UIFontMetrics(forTextStyle: style).scaledFont(for: font as UIFont)
+        let traits = category.map { UITraitCollection(preferredContentSizeCategory: $0) }
+        let scaled = UIFontMetrics(forTextStyle: style).scaledFont(for: font as UIFont, compatibleWith: traits)
         return scaled as CTFont
     }
 

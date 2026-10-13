@@ -32,6 +32,14 @@ extension DemoDaemonTransport {
         clientHook = hook
     }
 
+    /// Sets the status in the daemon's own record of an agent, so the list the app reads again after a turn (`agents.list`)
+    /// agrees with the `agent.status` events the demo script sent. Not done by `emitEvent`: the smoothness check's demo
+    /// world keeps its agents' records as they were.
+    public func setAgentStatus(_ agentID: String, _ status: String) {
+        guard let index = demoAgents.firstIndex(where: { ($0["id"] as? String) == agentID }) else { return }
+        demoAgents[index]["status"] = status
+    }
+
     /// The demo's changes: twelve files with 240 lines added and 30 removed, and a diff for each.
     public static let changedFiles: [(path: String, status: String, additions: Int, deletions: Int)] = [
         ("Sources/App/ThreadView.swift", "modified", 62, 8),
@@ -76,8 +84,11 @@ extension DemoDaemonTransport {
             """
     }
 
-    /// Answers `changes.diff`, `changes.file`, `changes.checkpoints` and `attachments.upload`; nil for any other method.
+    /// Answers `changes.diff`, `changes.file`, `changes.checkpoints` and `attachments.upload`; nil for any other method,
+    /// and for all of them in a demo without a script (the Mac's smoothness check has no changes to show: the chat's
+    /// header would draw a chip it does not draw today).
     func answerChat(_ method: String, _ params: [String: Any], now: Int64) -> Result<String, RPCError>? {
+        guard clientHook != nil else { return nil }
         switch method {
         case "changes.diff":
             let files = Self.changedFiles.map { file -> [String: Any] in

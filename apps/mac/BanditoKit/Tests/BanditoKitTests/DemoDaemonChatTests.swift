@@ -6,8 +6,11 @@ import Testing
 /// What the demo daemon answers for a chat: changes, a saved attachment, and the hook the iPhone's demo script uses.
 @Suite struct DemoDaemonChatTests {
     @MainActor @Test func theDemoChangesAreTwelveFilesWithTheirDiffs() async throws {
-        let (server, _) = DemoDaemon.server(id: UUID(), name: "Demo", setup: DemoDaemonSetup(agentIDs: ["a1"]))
+        let (server, transport) = DemoDaemon.server(id: UUID(), name: "Demo", setup: DemoDaemonSetup(agentIDs: ["a1"]))
         await server.connect()
+        // Without a script the demo has no changes to show (the Mac's smoothness check relies on it).
+        await #expect(throws: RPCError.self) { _ = try await server.changesDiff(agentID: "a1") }
+        await transport.setClientHook { _ in }
         let diff = try await server.changesDiff(agentID: "a1")
         #expect(diff.files.count == 12)
         #expect(diff.additions == 240 && diff.deletions == 30)
@@ -20,8 +23,9 @@ import Testing
     }
 
     @MainActor @Test func anUploadedFileComesBackAsAnAttachment() async throws {
-        let (server, _) = DemoDaemon.server(id: UUID(), name: "Demo", setup: DemoDaemonSetup(agentIDs: ["a1"]))
+        let (server, transport) = DemoDaemon.server(id: UUID(), name: "Demo", setup: DemoDaemonSetup(agentIDs: ["a1"]))
         await server.connect()
+        await transport.setClientHook { _ in }
         let saved = try await server.uploadAttachment(Data(repeating: 1, count: 300), name: "shot.png", agentId: "a1")
         #expect(saved.name == "shot.png" && saved.size == 300 && saved.mime == "image/png")
         #expect(AttachmentRules.isImage(name: saved.name))

@@ -30,25 +30,24 @@ public extension UIColor {
 }
 
 public extension BanditoFont {
-    /// Onest as a `UIFont`, scaled with Dynamic Type from `size`.
-    static func uiText(size: CGFloat, weight: Int = 400) -> UIFont {
-        scaled(ctFont(family: textFamily, size: size, weight: weight))
+    /// Onest as a `UIFont`, scaled with Dynamic Type from `size`. `category` fixes the size category (a list that
+    /// measures text off the main thread asks for the one its layout is cached for); nil follows the system's.
+    static func uiText(size: CGFloat, weight: Int = 400, category: UIContentSizeCategory? = nil) -> UIFont {
+        scaled(ctFont(family: textFamily, size: size, weight: weight), category)
     }
 
     /// Unbounded as a `UIFont`, scaled with Dynamic Type.
-    static func uiDisplay(size: CGFloat, weight: Int = 600) -> UIFont {
-        scaled(ctFont(family: displayFamily, size: size, weight: weight))
+    static func uiDisplay(size: CGFloat, weight: Int = 600, category: UIContentSizeCategory? = nil) -> UIFont {
+        scaled(ctFont(family: displayFamily, size: size, weight: weight), category)
     }
 
     /// JetBrains Mono as a `UIFont`, scaled with Dynamic Type.
-    static func uiMono(size: CGFloat, weight: Int = 400) -> UIFont {
-        scaled(ctFont(family: monoFamily, size: size, weight: weight))
+    static func uiMono(size: CGFloat, weight: Int = 400, category: UIContentSizeCategory? = nil) -> UIFont {
+        scaled(ctFont(family: monoFamily, size: size, weight: weight), category)
     }
 
-    /// The same face at a size given by the person's Dynamic Type setting, for the measured text of a list: a size
-    /// category the list was laid out for is part of its cache key.
-    private static func scaled(_ font: CTFont) -> UIFont {
-        scaledForDynamicType(font) as UIFont
+    private static func scaled(_ font: CTFont, _ category: UIContentSizeCategory?) -> UIFont {
+        scaledForDynamicType(font, category: category) as UIFont
     }
 }
 #endif
