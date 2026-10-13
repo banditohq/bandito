@@ -4,6 +4,12 @@
 [advisories]
 # Known vulnerabilities (RUSTSEC) always fail. Yanked crates fail too.
 yanked = "deny"
+ignore = [
+    # ttf-parser is unmaintained (no vulnerability). It comes with ab_glyph, which draws the server screen's dock and
+    # wallpaper text from fonts bundled in the daemon itself: it never parses a font from outside. Replace ab_glyph
+    # (for example with skrifa) when touching the desktop painter next.
+    { id = "RUSTSEC-2026-0192", reason = "unmaintained only; parses only fonts bundled in the daemon" },
+]
 
 [licenses]
 # Only permissive licenses. Copyleft licenses (GPL, LGPL, AGPL) are not on the list on purpose.

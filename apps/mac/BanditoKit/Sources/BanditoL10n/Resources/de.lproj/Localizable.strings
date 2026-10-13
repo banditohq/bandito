@@ -2109,7 +2109,13 @@
 "screen.sendCAD" = "Ctrl+Alt+Del senden";
 "screen.shared" = "Gemeinsam";
 "screen.sharedSub" = "Bildschirm des Arbeitsplatzes";
+"screen.sleep" = "Bildschirm schlafen legen";
+"screen.sleepAgentTitle" = "Ein Agent arbeitet am Bildschirm";
+"screen.sleepConfirm" = "Schlafen legen";
 "screen.sleepHint" = "Der Bildschirm wacht auf Anfrage auf. Wird er 30 Minuten lang von niemandem genutzt — weder von Ihnen noch von Agenten —, schläft er ein und gibt den Arbeitsspeicher des Servers frei.";
+"screen.sleepMessage" = "Die geöffneten Programme werden geschlossen. Der Bildschirm startet wieder, sobald Sie oder ein Agent ihn brauchen.";
+"screen.sleepUserTitle" = "Sie haben die Steuerung";
+"screen.sleeping" = "Bildschirm wird schlafen gelegt…";
 "screen.start" = "Bildschirm starten";
 "screen.startFailed" = "Der Bildschirm konnte nicht gestartet werden";
 "screen.starting" = "Bildschirm wird gestartet…";

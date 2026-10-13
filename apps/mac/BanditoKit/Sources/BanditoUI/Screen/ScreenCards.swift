@@ -23,6 +23,11 @@ final class ScreenOverview {
         states[id] ?? .unknown
     }
 
+    /// The screen of `id` was just put to sleep: its card says so now, not at the next poll.
+    func markAsleep(_ id: String) {
+        if states[id] != .asleep { states[id] = .asleep }
+    }
+
     func poll(_ workspaces: [Workspace]) async {
         guard server.supports("screen") else { return }
         for workspace in workspaces {

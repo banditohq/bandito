@@ -2109,7 +2109,13 @@
 "screen.sendCAD" = "Ctrl+Alt+Delete 보내기";
 "screen.shared" = "공용";
 "screen.sharedSub" = "작업 장소 화면";
+"screen.sleep" = "화면 절전시키기";
+"screen.sleepAgentTitle" = "에이전트가 화면에서 작업 중이에요";
+"screen.sleepConfirm" = "절전시키기";
 "screen.sleepHint" = "화면은 필요할 때 깨어나요. 30분 동안 나도 에이전트도 쓰지 않으면 절전 상태로 들어가 서버 메모리를 비워요.";
+"screen.sleepMessage" = "화면에 열려 있는 프로그램이 닫혀요. 내가 쓰거나 에이전트가 필요할 때 화면이 다시 시작돼요.";
+"screen.sleepUserTitle" = "지금 제어권은 나에게 있어요";
+"screen.sleeping" = "화면을 절전시키는 중이에요…";
 "screen.start" = "화면 시작";
 "screen.startFailed" = "화면을 시작하지 못했습니다";
 "screen.starting" = "화면을 시작하는 중…";

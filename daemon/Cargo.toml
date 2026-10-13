@@ -5,6 +5,7 @@ license = "FSL-1.1-ALv2"
 edition = "2024"
 
 [dependencies]
+ab_glyph = "0.2"
 anyhow = "1.0.104"
 async-trait = "0.1.92"
 axum = { version = "0.8.9", features = ["ws"] }
@@ -30,6 +31,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
 tar = { version = "0.4.46", default-features = false }
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd", "png-format"] }
 thiserror = "2.0.21"
 unicode-normalization = "0.1"
 tokio = { version = "1.53.2", features = ["full"] }
@@ -39,6 +41,10 @@ tokio-util = { version = "0.7", features = ["io"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.27.0", features = ["v7", "serde"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = "0.13"
+x11rb-protocol = "0.13"
 
 [dev-dependencies]
 tempfile = "3.27.0"

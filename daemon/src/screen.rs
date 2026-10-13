@@ -27,7 +27,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 #[cfg(target_os = "linux")]
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 #[cfg(target_os = "linux")]
 use std::sync::{Mutex as StdMutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -58,6 +58,9 @@ pub const MAX_SCROLL: u32 = 20;
 const FIRST_DISPLAY: u32 = 90;
 #[cfg(any(target_os = "linux", test))]
 const LAST_DISPLAY: u32 = 199;
+/// Folder of a screen's desktop files (theme, menu, fonts, browser wrappers), inside its folder.
+#[cfg(target_os = "linux")]
+const DESKTOP_DIR: &str = "desktop";
 /// File name of a screen's X authority, inside its folder.
 #[cfg(target_os = "linux")]
 const XAUTH_FILE: &str = "Xauthority";
@@ -227,9 +230,20 @@ struct Session {
     last_agent_ms: i64,
     xvfb: TrackedChild,
     openbox: Option<TrackedChild>,
+    /// The screen's own D-Bus session bus (see `spawn_session_bus`), watched like x11vnc, with its address.
+    bus: Option<(VncTask, String)>,
+    /// The thread that draws the dock; joined at stop, before the programs it started are stopped.
+    desktop: Option<std::thread::JoinHandle<()>>,
     vnc: VncTask,
-    /// Process group ids of programs started with `Launch` that are still running.
-    launched: Arc<StdMutex<Vec<i32>>>,
+    /// Process group ids of programs started with `Launch` (or from the dock) that are still running.
+    launched: Arc<StdMutex<Vec<LaunchedGroup>>>,
+    /// The environment of every program on this screen: `DISPLAY`, `XAUTHORITY` and the desktop's own variables
+    /// (fonts, cursor, theme, `PATH` with the browser wrappers first).
+    env: Vec<(String, String)>,
+    /// Who holds the controls, for the dock: `desktop::xpanel::HOLDER_*`.
+    holder: Arc<AtomicU8>,
+    /// Set when the screen stops, so the dock's thread ends even if Xvfb lingers.
+    desktop_stop: Arc<AtomicBool>,
 }
 
 /// The x11vnc process and its watcher. The watcher restarts x11vnc once if it dies.
@@ -292,14 +306,17 @@ impl ScreenManager {
         })
     }
 
-    /// Stop the screen of `workspace` and every program started on it. Stopping a stopped screen is fine.
-    pub async fn stop(&self, workspace: &str) -> Result<(), ScreenError> {
+    /// Stop the screen of `workspace` and every program started on it, at once, as the idle check does: this is
+    /// the person's "put the screen to sleep" (`screen.stop`). Stopping a stopped screen is fine. Returns whether
+    /// a screen was running.
+    pub async fn stop(&self, workspace: &str) -> Result<bool, ScreenError> {
         validate_workspace(workspace)?;
         let removed = self.sessions.lock().await.remove(workspace);
+        let was_running = removed.is_some();
         if let Some(session) = removed {
             shutdown_session(session).await;
         }
-        Ok(())
+        Ok(was_running)
     }
 
     /// Set who drives the screen. `None` means nobody.
@@ -308,16 +325,21 @@ impl ScreenManager {
         let mut sessions = self.sessions.lock().await;
         let session = sessions.get_mut(workspace).ok_or(ScreenError::NotRunning)?;
         session.controller = holder;
+        session.holder.store(
+            match holder {
+                None => crate::desktop::xpanel::HOLDER_NONE,
+                Some(Controller::Agent) => crate::desktop::xpanel::HOLDER_AGENT,
+                Some(Controller::User) => crate::desktop::xpanel::HOLDER_USER,
+            },
+            Ordering::Relaxed,
+        );
         Ok(session.status(now_ms()))
     }
 
     /// Environment that puts a program on this screen (`DISPLAY=:N`, `XAUTHORITY`). Empty if it is not running.
     pub async fn env_for(&self, workspace: &str) -> Vec<(String, String)> {
         let sessions = self.sessions.lock().await;
-        sessions
-            .get(workspace)
-            .map(|s| display_env(s.display, &s.xauth))
-            .unwrap_or_default()
+        sessions.get(workspace).map(|s| s.env.clone()).unwrap_or_default()
     }
 
     /// Run one agent tool call. Starts the screen if needed, refuses while the user holds the
@@ -338,7 +360,7 @@ impl ScreenManager {
         agent_gate(session.controller)?;
         session.last_agent_ms = now_ms();
         let (display, width, height) = (session.display, session.width, session.height);
-        let env = display_env(display, &session.xauth);
+        let env = session.env.clone();
         match action {
             AgentAction::Screenshot => {
                 let png = screenshot(display, &env).await?;
@@ -449,7 +471,7 @@ impl ScreenManager {
         Err(ScreenError::Unsupported)
     }
 
-    pub async fn stop(&self, workspace: &str) -> Result<(), ScreenError> {
+    pub async fn stop(&self, workspace: &str) -> Result<bool, ScreenError> {
         let _ = workspace;
         Err(ScreenError::Unsupported)
     }
@@ -817,7 +839,7 @@ async fn start_locked(
     }
     let display = pick_display(&busy_displays())
         .ok_or_else(|| ScreenError::StartFailed("no free X display from :90 to :199".into()))?;
-    let session = launch(&state_dir.join(workspace), display, width, height).await?;
+    let session = launch(&state_dir.join(workspace), display, width, height, path).await?;
     sessions.insert(workspace.to_string(), session);
     Ok(())
 }
@@ -825,9 +847,15 @@ async fn start_locked(
 /// Writes the screen's `Xauthority`, then starts Xvfb, openbox and x11vnc. On failure, what already
 /// started is stopped again and the authority file is removed.
 #[cfg(target_os = "linux")]
-async fn launch(dir: &Path, display: u32, width: u32, height: u32) -> Result<Session, ScreenError> {
-    let xauth = write_xauthority(dir, display).await?;
-    match start_processes(dir, display, width, height, &xauth).await {
+async fn launch(
+    dir: &Path,
+    display: u32,
+    width: u32,
+    height: u32,
+    path: &std::ffi::OsStr,
+) -> Result<Session, ScreenError> {
+    let (xauth, cookie) = write_xauthority(dir, display).await?;
+    match start_processes(dir, display, width, height, &xauth, &cookie, path).await {
         Ok(session) => Ok(session),
         Err(e) => {
             let _ = std::fs::remove_file(&xauth);
@@ -849,10 +877,11 @@ fn create_screen_dir(dir: &Path) -> Result<(), ScreenError> {
         .map_err(|e| ScreenError::StartFailed(format!("cannot protect {}: {e}", dir.display())))
 }
 
-/// Writes `<dir>/Xauthority` with a new cookie for `:display`, mode 0600. A file left by a crashed
-/// screen is replaced. Missing `xauth` gives `MissingComponent(["xauth"])`.
+/// Writes `<dir>/Xauthority` with a new cookie for `:display`, mode 0600, and returns the file and the cookie
+/// (hex), which the dock's connection needs. A file left by a crashed screen is replaced. Missing `xauth`
+/// gives `MissingComponent(["xauth"])`.
 #[cfg(target_os = "linux")]
-async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenError> {
+async fn write_xauthority(dir: &Path, display: u32) -> Result<(PathBuf, String), ScreenError> {
     create_screen_dir(dir)?;
     let path = dir.join(XAUTH_FILE);
     let _ = std::fs::remove_file(&path);
@@ -871,7 +900,7 @@ async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenErr
     }
     .await;
     match written {
-        Ok(()) => Ok(path),
+        Ok(()) => Ok((path, cookie)),
         Err(e) => {
             let _ = std::fs::remove_file(&path);
             Err(e)
@@ -879,7 +908,8 @@ async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenErr
     }
 }
 
-/// Starts the processes of a screen whose `Xauthority` is written.
+/// Starts the processes of a screen whose `Xauthority` is written: Xvfb, then the desktop (openbox with the Bandito
+/// theme, the wallpaper and the dock), then x11vnc.
 #[cfg(target_os = "linux")]
 async fn start_processes(
     dir: &Path,
@@ -887,19 +917,65 @@ async fn start_processes(
     width: u32,
     height: u32,
     xauth: &Path,
+    cookie: &str,
+    path: &std::ffi::OsStr,
 ) -> Result<Session, ScreenError> {
     let mut xvfb = spawn_group(&xvfb_argv(display, width, height, xauth), &[], "xvfb")?;
     if let Err(e) = wait_for_socket(&mut xvfb, display).await {
         terminate_child(xvfb).await;
         return Err(e);
     }
-    let openbox = spawn_openbox(display, xauth);
+    let launched = Arc::new(StdMutex::new(Vec::new()));
+    let holder = Arc::new(AtomicU8::new(crate::desktop::xpanel::HOLDER_NONE));
+    let desktop_stop = Arc::new(AtomicBool::new(false));
+    let mut env = display_env(display, xauth);
+    // Programs on this screen get a D-Bus session bus of their own: on the shared one, a program that keeps a single
+    // instance (a file manager, a terminal) hands its window to the copy running on the person's own desktop.
+    let bus = spawn_session_bus(&dir.join(DESKTOP_DIR), path).await;
+    if let Some((_, address)) = &bus {
+        env.push(("DBUS_SESSION_BUS_ADDRESS".to_string(), address.clone()));
+    }
+    // The desktop's files. If they cannot be written the screen still works, with openbox's own look.
+    let prepared =
+        match crate::desktop::theme::prepare(&dir.join(DESKTOP_DIR), path, Path::new("/usr/share/icons"), height) {
+            Ok(prepared) => {
+                env.extend(prepared.env.iter().cloned());
+                Some(prepared)
+            }
+            Err(e) => {
+                tracing::warn!("the screen's desktop files were not written ({e}); the screen runs with plain openbox");
+                None
+            }
+        };
+    let openbox = spawn_openbox(&env, prepared.as_ref().map(|p| p.rc_file.as_path()));
+    let mut desktop = None;
+    if let Some(prepared) = &prepared {
+        let params = crate::desktop::xpanel::Params {
+            display,
+            width,
+            height,
+            cookie: cookie.to_string(),
+            launchers: prepared.launchers.clone(),
+            env: env.clone(),
+            launched: Arc::clone(&launched),
+            holder: Arc::clone(&holder),
+            stop: Arc::clone(&desktop_stop),
+        };
+        match crate::desktop::xpanel::spawn(params) {
+            Ok(handle) => desktop = Some(handle),
+            Err(e) => tracing::warn!("the screen's desktop thread did not start: {e}"),
+        }
+    }
     let vnc = match start_vnc(dir, display, xauth).await {
         Ok(vnc) => vnc,
         Err(e) => {
+            desktop_stop.store(true, Ordering::Relaxed);
             terminate_child(xvfb).await;
             if let Some(child) = openbox {
                 terminate_child(child).await;
+            }
+            if let Some((task, address)) = bus {
+                stop_bus(task, &address).await;
             }
             return Err(e);
         }
@@ -916,8 +992,13 @@ async fn start_processes(
         last_agent_ms: now_ms(),
         xvfb,
         openbox,
+        bus,
+        desktop,
         vnc: vnc.task,
-        launched: Arc::new(StdMutex::new(Vec::new())),
+        launched,
+        env,
+        holder,
+        desktop_stop,
     })
 }
 
@@ -1026,10 +1107,275 @@ async fn wait_for_socket(child: &mut TrackedChild, display: u32) -> Result<(), S
     }))
 }
 
-/// openbox is optional: without it the screen works, but windows have no frames.
+/// Longest socket path the kernel accepts for a Unix socket is 107 bytes; a longer path gets no private bus.
 #[cfg(target_os = "linux")]
-fn spawn_openbox(display: u32, xauth: &Path) -> Option<TrackedChild> {
-    match spawn_group(&["openbox".to_string()], &display_env(display, xauth), "openbox") {
+const MAX_SOCKET_PATH: usize = 100;
+
+/// Starts `dbus-daemon --session` on a socket inside the screen's desktop folder and returns its watcher with its
+/// address. `None` when `dbus-daemon` is not installed, the path is too long for a socket, or the bus does not come
+/// up: the programs then use the server's session bus, as they would without Bandito.
+#[cfg(target_os = "linux")]
+async fn spawn_session_bus(dir: &Path, path: &std::ffi::OsStr) -> Option<(VncTask, String)> {
+    crate::setup::which("dbus-daemon", path)?;
+    let socket = dir.join("bus");
+    if socket.as_os_str().len() > MAX_SOCKET_PATH {
+        return None;
+    }
+    if let Err(e) = std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir) {
+        tracing::debug!("no folder for the screen's session bus: {e}");
+        return None;
+    }
+    let _ = std::fs::remove_file(&socket);
+    let address = format!("unix:path={}", socket.display());
+    let argv = bus_argv(&address);
+    let child = spawn_group(&argv, &[], "dbus-daemon").ok()?;
+    if wait_until(START_TIMEOUT, || socket.exists()).await {
+        Some((spawn_bus_watcher(socket, argv, child), address))
+    } else {
+        tracing::warn!("the screen's session bus did not come up");
+        terminate_child(child).await;
+        None
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn bus_argv(address: &str) -> Vec<String> {
+    argv![
+        "dbus-daemon",
+        "--session",
+        "--nofork",
+        "--nopidfile",
+        format!("--address={address}")
+    ]
+}
+
+/// Owns the screen's bus like x11vnc is owned: restarts it once if it exits on its own (on the same socket, so
+/// programs started later find it), and says so in the log when it is gone for good. Programs that were connected
+/// to the first bus lose it; the screen goes on.
+#[cfg(target_os = "linux")]
+fn spawn_bus_watcher(socket: PathBuf, argv: Vec<String>, mut child: TrackedChild) -> VncTask {
+    let pgid = Arc::new(AtomicI32::new(child.id().map_or(0, |p| p as i32)));
+    let stopping = Arc::new(AtomicBool::new(false));
+    let (watch_pgid, watch_stopping) = (Arc::clone(&pgid), Arc::clone(&stopping));
+    let handle = tokio::spawn(async move {
+        let mut restarted = false;
+        loop {
+            let _ = child.wait().await;
+            child.release();
+            watch_pgid.store(0, Ordering::SeqCst);
+            if watch_stopping.load(Ordering::SeqCst) {
+                return;
+            }
+            if restarted {
+                tracing::error!(
+                    "the screen's session bus exited again; programs started on this screen now have no bus until the screen is started again"
+                );
+                return;
+            }
+            restarted = true;
+            tracing::warn!("the screen's session bus exited; restarting it once");
+            let _ = std::fs::remove_file(&socket);
+            match spawn_group(&argv, &[], "dbus-daemon") {
+                Ok(next) => {
+                    watch_pgid.store(next.id().map_or(0, |p| p as i32), Ordering::SeqCst);
+                    child = next;
+                }
+                Err(e) => {
+                    tracing::error!("cannot restart the screen's session bus: {e}");
+                    return;
+                }
+            }
+        }
+    });
+    VncTask { pgid, stopping, handle }
+}
+
+/// Stops the bus, then the services it started that left its process group (`setsid`): those are found by the
+/// bus address in their environment, and only among this user's processes. Each is held by a pidfd from before its
+/// environment was read, so a signal goes to that process and never to a later one that got its number.
+#[cfg(target_os = "linux")]
+async fn stop_bus(task: VncTask, address: &str) {
+    stop_vnc(task).await;
+    let targets = processes_using_bus(address);
+    for target in &targets {
+        target.signal(libc::SIGTERM);
+    }
+    let deadline = Instant::now() + GRACE;
+    while Instant::now() < deadline && targets.iter().any(ProcTarget::alive) {
+        tokio::time::sleep(POLL).await;
+    }
+    for target in targets.iter().filter(|t| t.alive()) {
+        target.signal(libc::SIGKILL);
+    }
+}
+
+/// The `starttime` of a process (field 22 of `/proc/<pid>/stat`, in clock ticks since boot): with the pid it names
+/// one process for ever, since a number reused later starts at a later time.
+#[cfg(target_os = "linux")]
+fn proc_start(pid: i32) -> Option<u64> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // The command name is in brackets and may hold spaces and brackets; the fields after the last `)` start at 3.
+    let rest = stat.rsplit_once(')')?.1;
+    rest.split_whitespace().nth(19)?.parse().ok()
+}
+
+/// A process that is signalled by what identifies it, not by its number alone: a pidfd opened at once (Linux 5.3 and
+/// later), else the number with its start time, checked again before every signal.
+#[cfg(target_os = "linux")]
+struct ProcTarget {
+    pid: i32,
+    start: Option<u64>,
+    fd: Option<std::os::fd::OwnedFd>,
+}
+
+#[cfg(target_os = "linux")]
+impl ProcTarget {
+    /// Holds the process `pid` now. Open it before reading anything that decides whether it is the one wanted.
+    fn open(pid: i32) -> Self {
+        use std::os::fd::FromRawFd;
+        // SAFETY: pidfd_open takes a pid and flags and returns a new descriptor or -1; a descriptor is owned here.
+        let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
+        let fd = (raw >= 0).then(|| {
+            // SAFETY: `raw` is a descriptor the kernel just made for us and nobody else holds.
+            unsafe { std::os::fd::OwnedFd::from_raw_fd(raw as i32) }
+        });
+        Self {
+            pid,
+            start: proc_start(pid),
+            fd,
+        }
+    }
+
+    /// Sends `sig` (0 only asks) to the process this holds. False when it is gone, or when without a pidfd the number
+    /// now belongs to another process.
+    fn signal(&self, sig: libc::c_int) -> bool {
+        use std::os::fd::AsRawFd;
+        if let Some(fd) = &self.fd {
+            // SAFETY: pidfd_send_signal on our own descriptor with no siginfo; a gone process yields ESRCH.
+            return unsafe {
+                libc::syscall(
+                    libc::SYS_pidfd_send_signal,
+                    fd.as_raw_fd(),
+                    sig,
+                    std::ptr::null::<libc::siginfo_t>(),
+                    0u32,
+                )
+            } == 0;
+        }
+        if self.start.is_none() || proc_start(self.pid) != self.start {
+            return false;
+        }
+        // SAFETY: kill only sends a signal; the start time says this is still the process held.
+        unsafe { libc::kill(self.pid, sig) == 0 }
+    }
+
+    /// Still running (a zombie is not: its parent reaps it).
+    fn alive(&self) -> bool {
+        self.signal(0) && !(proc_start(self.pid) == self.start && is_zombie(self.pid))
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn is_zombie(pid: i32) -> bool {
+    std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()
+        .and_then(|stat| {
+            stat.rsplit_once(')')
+                .map(|(_, rest)| rest.trim_start().starts_with('Z'))
+        })
+        .unwrap_or(false)
+}
+
+/// Whether a process environment (`/proc/<pid>/environ`: `NAME=value` entries separated by NUL) points at the bus
+/// `address`, as the bus's clients do (`DBUS_SESSION_BUS_ADDRESS`) and the services it starts do
+/// (`DBUS_STARTER_ADDRESS`).
+#[cfg(any(target_os = "linux", test))]
+pub fn environ_names_bus(environ: &[u8], address: &str) -> bool {
+    let session = format!("DBUS_SESSION_BUS_ADDRESS={address}");
+    let starter = format!("DBUS_STARTER_ADDRESS={address}");
+    environ
+        .split(|&b| b == 0)
+        .any(|entry| entry == session.as_bytes() || entry == starter.as_bytes())
+}
+
+/// This user's processes (not this daemon) whose environment names the bus `address`. Each is opened (pidfd) before
+/// its environment is read, so what is returned is the process that was read.
+#[cfg(target_os = "linux")]
+fn processes_using_bus(address: &str) -> Vec<ProcTarget> {
+    use std::os::unix::fs::MetadataExt;
+    // SAFETY: getuid cannot fail.
+    let uid = unsafe { libc::getuid() };
+    let me = std::process::id() as i32;
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|entry| {
+            let pid: i32 = entry.file_name().to_str()?.parse().ok()?;
+            if pid == me || entry.metadata().ok()?.uid() != uid {
+                return None;
+            }
+            let target = ProcTarget::open(pid);
+            let environ = std::fs::read(entry.path().join("environ")).ok()?;
+            environ_names_bus(&environ, address).then_some(target)
+        })
+        .collect()
+}
+
+/// A process group the screen started: its number and the start time of its leader, so that a number reused by a
+/// later group is not taken for this one. (While any process of a group lives, no process can get the number.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LaunchedGroup {
+    pub pgid: i32,
+    start: Option<u64>,
+}
+
+impl LaunchedGroup {
+    /// The group led by `leader`, which has just been started.
+    #[cfg(target_os = "linux")]
+    pub fn of(leader: i32) -> Self {
+        Self {
+            pgid: leader,
+            start: proc_start(leader),
+        }
+    }
+}
+
+/// Whether anything is left in the group. When the leader still has its entry in `/proc` with another start time,
+/// the number belongs to a newer process and the group we started is gone.
+#[cfg(target_os = "linux")]
+pub fn group_alive(group: &LaunchedGroup) -> bool {
+    if group.pgid <= 0 {
+        return false;
+    }
+    if let (Some(started), Some(now)) = (group.start, proc_start(group.pgid))
+        && started != now
+    {
+        return false;
+    }
+    // SAFETY: signal 0 sends nothing; it only asks whether the group has a process we may signal.
+    unsafe { libc::killpg(group.pgid, 0) == 0 }
+}
+
+/// Sends `sig` to the group when it is still the one we started.
+#[cfg(target_os = "linux")]
+fn signal_launched(group: &LaunchedGroup, sig: libc::c_int) {
+    if group_alive(group) {
+        signal_group(group.pgid, sig);
+    }
+}
+
+/// openbox is optional: without it the screen works, but windows have no frames. With `rc` it starts with the
+/// Bandito configuration (theme, menu, keys).
+#[cfg(target_os = "linux")]
+fn spawn_openbox(env: &[(String, String)], rc: Option<&Path>) -> Option<TrackedChild> {
+    let mut argv = vec!["openbox".to_string()];
+    if let Some(rc) = rc {
+        argv.push("--config-file".to_string());
+        argv.push(rc.display().to_string());
+    }
+    match spawn_group(&argv, env, "openbox") {
         Ok(child) => Some(child),
         Err(e) => {
             tracing::warn!("openbox is not available ({e}); the screen runs without a window manager");
@@ -1174,16 +1520,21 @@ fn check_point(x: u32, y: u32, width: u32, height: u32) -> Result<(), ScreenErro
 fn launch_program(session: &Session, command: &str) -> Result<(), ScreenError> {
     let mut child = spawn_group(
         &["sh".to_string(), "-c".to_string(), command.to_string()],
-        &display_env(session.display, &session.xauth),
+        &session.env,
         "sh",
     )?;
-    let pgid = child.id().map_or(0, |p| p as i32);
-    lock_std(&session.launched).push(pgid);
+    let group = LaunchedGroup::of(child.id().map_or(0, |p| p as i32));
+    lock_std(&session.launched).push(group);
     let launched = Arc::clone(&session.launched);
     tokio::spawn(async move {
         let _ = child.wait().await;
         child.release();
-        lock_std(&launched).retain(|&p| p != pgid);
+        // The program may have left behind members of its group (a browser that detaches): the group stays in the
+        // list for as long as any of them lives, stop or no stop, so that stopping the screen can still end it.
+        while group_alive(&group) {
+            tokio::time::sleep(POLL * 4).await;
+        }
+        lock_std(&launched).retain(|g| *g != group);
     });
     Ok(())
 }
@@ -1195,17 +1546,32 @@ async fn shutdown_session(session: Session) {
     let Session {
         xvfb,
         openbox,
+        bus,
+        desktop,
         vnc,
         launched,
         xauth,
+        desktop_stop,
         ..
     } = session;
+    desktop_stop.store(true, Ordering::Relaxed);
     stop_vnc(vnc).await;
     if let Some(child) = openbox {
         terminate_child(child).await;
     }
     terminate_child(xvfb).await;
+    // The dock's thread may be starting a program right now: it ends first (it checks the stop flag at every turn
+    // and the X connection is gone), so nothing is started after the programs are signalled.
+    if let Some(handle) = desktop {
+        let joined = tokio::task::spawn_blocking(move || handle.join());
+        if tokio::time::timeout(GRACE + GRACE, joined).await.is_err() {
+            tracing::warn!("the screen's dock thread did not end in time");
+        }
+    }
     stop_launched(&launched).await;
+    if let Some((task, address)) = bus {
+        stop_bus(task, &address).await;
+    }
     let _ = std::fs::remove_file(&xauth);
 }
 
@@ -1221,18 +1587,21 @@ async fn terminate_child(mut child: TrackedChild) {
     child.release();
 }
 
+/// Ends every program started on the screen: SIGTERM to the groups listed now, a wait of `GRACE`, then SIGKILL to
+/// those of the same list that still live. The list is read once, before the first signal: the watchers take a
+/// group out only when it is gone, but the SIGKILL does not depend on that.
 #[cfg(target_os = "linux")]
-async fn stop_launched(launched: &StdMutex<Vec<i32>>) {
+pub(crate) async fn stop_launched(launched: &StdMutex<Vec<LaunchedGroup>>) {
     let groups = lock_std(launched).clone();
-    for &pgid in &groups {
-        signal_group(pgid, libc::SIGTERM);
+    for group in &groups {
+        signal_launched(group, libc::SIGTERM);
     }
     let deadline = Instant::now() + GRACE;
-    while Instant::now() < deadline && !lock_std(launched).is_empty() {
+    while Instant::now() < deadline && groups.iter().any(group_alive) {
         tokio::time::sleep(POLL).await;
     }
-    for pgid in lock_std(launched).clone() {
-        signal_group(pgid, libc::SIGKILL);
+    for group in &groups {
+        signal_launched(group, libc::SIGKILL);
     }
 }
 
@@ -1700,6 +2069,194 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_process_environment_names_the_bus_it_uses() {
+        let address = "unix:path=/h/screens/shared/desktop/bus";
+        let env = b"HOME=/h\0DBUS_SESSION_BUS_ADDRESS=unix:path=/h/screens/shared/desktop/bus\0LANG=C\0";
+        assert!(environ_names_bus(env, address));
+        let started = b"DBUS_STARTER_ADDRESS=unix:path=/h/screens/shared/desktop/bus\0";
+        assert!(environ_names_bus(started, address));
+        // Another screen's bus, a prefix of the address, and an empty environment do not match.
+        assert!(!environ_names_bus(
+            b"DBUS_SESSION_BUS_ADDRESS=unix:path=/h/screens/other/desktop/bus\0",
+            address
+        ));
+        assert!(!environ_names_bus(
+            b"DBUS_SESSION_BUS_ADDRESS=unix:path=/h/screens/shared/desktop/bus2\0",
+            address
+        ));
+        assert!(!environ_names_bus(b"", address));
+    }
+
+    /// A service the bus started with `setsid` is in no group of the bus, so stopping the screen finds it by the
+    /// bus address in its environment, and leaves processes of other buses alone.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn stopping_the_bus_ends_services_that_left_its_group() {
+        let tmp = tempfile::tempdir().unwrap();
+        let address = format!("unix:path={}/bus", tmp.path().display());
+        let other = format!("unix:path={}/other-bus", tmp.path().display());
+        let service = |address: &str| {
+            std::process::Command::new("setsid")
+                .args(["env", &format!("DBUS_SESSION_BUS_ADDRESS={address}"), "sleep", "60"])
+                .spawn()
+                .unwrap()
+        };
+        let mut ours = service(&address);
+        let mut theirs = service(&other);
+        // `setsid` forks when it leads a group already, so wait until the sleeps carry their environment.
+        let mut found = Vec::new();
+        for _ in 0..100 {
+            found = processes_using_bus(&address);
+            if !found.is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(found.len(), 1);
+        assert_eq!(processes_using_bus(&other).len(), 1);
+
+        let sleep = argv!["sleep", "60"];
+        let bus = spawn_group(&sleep, &[], "sleep").unwrap();
+        let task = spawn_bus_watcher(tmp.path().join("bus"), argv!["true"], bus);
+        stop_bus(task, &address).await;
+        assert!(!found[0].alive(), "the service outlived its bus");
+        assert_eq!(
+            processes_using_bus(&other).len(),
+            1,
+            "another bus's service was touched"
+        );
+        let _ = ours.wait();
+        let _ = theirs.kill();
+        let _ = theirs.wait();
+    }
+
+    /// A group that ignores SIGTERM is still ended: the watchers keep a group in the list until it is gone, even
+    /// after the stop flag is set, so the SIGKILL after the grace finds it.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_group_that_ignores_sigterm_is_killed_when_the_screen_stops() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let program = tmp.path().join("stubborn.sh");
+        std::fs::write(&program, "#!/bin/sh\ntrap '' TERM\nwhile true; do sleep 1; done\n").unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let launched = Arc::new(StdMutex::new(Vec::new()));
+        let stop = Arc::new(AtomicBool::new(false));
+        crate::desktop::xpanel::spawn_detached(&[program.display().to_string()], &[], &launched, &stop);
+        let group = lock_std(&launched)[0];
+        assert!(group_alive(&group));
+        // What `shutdown_session` does first: the flag. The watcher must not take the group out because of it.
+        stop.store(true, Ordering::SeqCst);
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        assert_eq!(lock_std(&launched).len(), 1, "the group left the list while it lived");
+
+        stop_launched(&launched).await;
+        // The kill is sent; the dead leader is a zombie until the watcher's wait reaps it.
+        for _ in 0..40 {
+            if !group_alive(&group) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(!group_alive(&group), "a group that ignores SIGTERM survived the stop");
+        for _ in 0..40 {
+            if lock_std(&launched).is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(lock_std(&launched).is_empty(), "a dead group stayed in the list");
+    }
+
+    /// A process group number that a newer process now holds is not taken for the group we started.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_reused_group_number_is_not_ours() {
+        use std::os::unix::process::CommandExt;
+        let mut leader = std::process::Command::new("sleep")
+            .arg("30")
+            .process_group(0)
+            .spawn()
+            .unwrap();
+        let ours = LaunchedGroup::of(leader.id() as i32);
+        assert!(group_alive(&ours));
+        let reused = LaunchedGroup {
+            start: ours.start.map(|s| s + 1),
+            ..ours
+        };
+        assert!(!group_alive(&reused), "another start time means another group");
+        signal_launched(&reused, libc::SIGKILL);
+        assert!(group_alive(&ours), "a group that is not ours was signalled");
+        signal_launched(&ours, libc::SIGKILL);
+        let _ = leader.wait();
+        assert!(!group_alive(&ours));
+    }
+
+    /// Without a pidfd a process is signalled only while its number still has the start time it had.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_process_with_another_start_time_is_not_signalled() {
+        let mut child = std::process::Command::new("sleep").arg("30").spawn().unwrap();
+        let pid = child.id() as i32;
+        let wrong = ProcTarget {
+            pid,
+            start: proc_start(pid).map(|s| s + 1),
+            fd: None,
+        };
+        assert!(!wrong.signal(libc::SIGKILL));
+        assert!(
+            child.try_wait().unwrap().is_none(),
+            "a process of another start time was killed"
+        );
+        let right = ProcTarget {
+            pid,
+            start: proc_start(pid),
+            fd: None,
+        };
+        assert!(right.signal(libc::SIGKILL));
+        let _ = child.wait();
+        // With the pidfd of the process the signal reaches it by its identity.
+        let held = ProcTarget::open(std::process::id() as i32);
+        assert!(held.signal(0));
+    }
+
+    /// A bus that dies is started again once, on the same socket; a second death is only logged.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_bus_that_dies_is_restarted_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let quick = argv!["true"];
+        let first = spawn_group(&quick, &[], "true").unwrap();
+        let task = spawn_bus_watcher(tmp.path().join("bus"), argv!["sleep", "60"], first);
+        let mut restarted = 0;
+        for _ in 0..100 {
+            restarted = task.pgid.load(Ordering::SeqCst);
+            if restarted > 0 && group_alive(&LaunchedGroup::of(restarted)) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(
+            restarted > 0 && group_alive(&LaunchedGroup::of(restarted)),
+            "the bus was not started again"
+        );
+        stop_vnc(task).await;
+        assert!(!group_alive(&LaunchedGroup::of(restarted)));
+    }
+
+    /// Putting a screen to sleep that is not running is fine and says so; a bad workspace name is refused.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn stopping_a_screen_that_is_not_running_says_so() {
+        let dir = tempfile::tempdir().unwrap();
+        let mgr = ScreenManager::new(dir.path().to_path_buf());
+        assert_eq!(mgr.stop(DEFAULT_WORKSPACE).await, Ok(false));
+        assert_eq!(mgr.stop("other").await, Ok(false));
+        assert!(matches!(mgr.stop("../x").await, Err(ScreenError::InvalidArgs(_))));
+        assert!(matches!(mgr.stop("").await, Err(ScreenError::InvalidArgs(_))));
+    }
+
     /// Without x11vnc and xdotool the start stops before anything runs: the error names both, and no
     /// folder, authority file or program was made.
     #[cfg(target_os = "linux")]
@@ -1893,9 +2450,57 @@ mod tests {
         assert!(!pids.is_empty());
         assert!(pids.iter().all(|&p| alive(p)));
 
-        mgr.stop(DEFAULT_WORKSPACE).await.unwrap();
+        assert_eq!(
+            mgr.stop(DEFAULT_WORKSPACE).await,
+            Ok(true),
+            "stop says a screen was running"
+        );
+        assert_eq!(
+            mgr.stop(DEFAULT_WORKSPACE).await,
+            Ok(false),
+            "a second stop finds nothing"
+        );
         assert!(!mgr.status(DEFAULT_WORKSPACE).await.unwrap().running);
         assert!(pids.iter().all(|&p| !alive(p)), "processes still alive: {pids:?}");
         assert!(!auth.exists(), "the Xauthority file stays after the screen stops");
+    }
+
+    /// Starts a screen and keeps it until the file `BANDITO_SCREEN_HOLD/stop` exists, so a person can look at its
+    /// desktop (screenshots with `import`, `xdotool`) while changing it. It prints the display and the Xauthority.
+    /// `BANDITO_SCREEN_IT=1 BANDITO_SCREEN_HOLD=/tmp/hold cargo test -- --ignored screen_hold_for_inspection`
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    #[ignore = "needs a Linux server with the screen programs; keeps the screen until BANDITO_SCREEN_HOLD/stop exists"]
+    async fn screen_hold_for_inspection() {
+        if !it_enabled() {
+            return;
+        }
+        let Some(hold) = std::env::var_os("BANDITO_SCREEN_HOLD").map(PathBuf::from) else {
+            return;
+        };
+        std::fs::create_dir_all(&hold).unwrap();
+        let _ = std::fs::remove_file(hold.join("stop"));
+        let width = std::env::var("BANDITO_SCREEN_WIDTH")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1280);
+        let height = std::env::var("BANDITO_SCREEN_HEIGHT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(800);
+        let mgr = ScreenManager::new(hold.join("state"));
+        let st = mgr.start(DEFAULT_WORKSPACE, width, height).await.unwrap();
+        println!("DISPLAY=:{}", st.display.unwrap());
+        println!(
+            "XAUTHORITY={}",
+            hold.join("state").join(DEFAULT_WORKSPACE).join(XAUTH_FILE).display()
+        );
+        for _ in 0..1800 {
+            if hold.join("stop").exists() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        mgr.stop(DEFAULT_WORKSPACE).await.unwrap();
     }
 }

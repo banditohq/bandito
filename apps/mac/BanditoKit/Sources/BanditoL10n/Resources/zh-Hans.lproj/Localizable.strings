@@ -2109,7 +2109,13 @@
 "screen.sendCAD" = "发送 Ctrl+Alt+Delete";
 "screen.shared" = "共享";
 "screen.sharedSub" = "工作区屏幕";
+"screen.sleep" = "让屏幕休眠";
+"screen.sleepAgentTitle" = "代理正在屏幕上工作";
+"screen.sleepConfirm" = "休眠";
 "screen.sleepHint" = "屏幕会按需唤醒。如果 30 分钟内无人使用（包括用户和代理），它会进入休眠以释放服务器内存。";
+"screen.sleepMessage" = "屏幕上打开的程序将被关闭。您或代理需要时，屏幕会重新启动。";
+"screen.sleepUserTitle" = "您正持有控制权";
+"screen.sleeping" = "正在让屏幕休眠…";
 "screen.start" = "启动屏幕";
 "screen.startFailed" = "无法启动屏幕";
 "screen.starting" = "正在启动屏幕…";

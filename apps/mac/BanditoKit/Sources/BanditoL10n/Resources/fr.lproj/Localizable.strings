@@ -2109,7 +2109,13 @@
 "screen.sendCAD" = "Envoyer Ctrl+Alt+Suppr";
 "screen.shared" = "Partagé";
 "screen.sharedSub" = "Écran de l’espace de travail";
+"screen.sleep" = "Mettre l’écran en veille";
+"screen.sleepAgentTitle" = "Un agent travaille sur l’écran";
+"screen.sleepConfirm" = "Mettre en veille";
 "screen.sleepHint" = "L’écran se réveille à la demande. Après 30 minutes sans utilisation, ni de votre part ni de celle des agents, il se met en veille pour libérer la mémoire du serveur.";
+"screen.sleepMessage" = "Les programmes ouverts dessus seront fermés. L’écran redémarre dès que vous ou un agent en avez besoin.";
+"screen.sleepUserTitle" = "Vous avez le contrôle";
+"screen.sleeping" = "Mise en veille de l’écran…";
 "screen.start" = "Démarrer l’écran";
 "screen.startFailed" = "Impossible de démarrer l’écran";
 "screen.starting" = "Démarrage de l’écran…";
