@@ -22,8 +22,8 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
+use std::ffi::OsStr;
 use std::future::Future;
-use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
@@ -153,72 +153,58 @@ pub fn parse_tailscale_ips(text: &str) -> Vec<IpAddr> {
 }
 
 /// Runs `<program> ip` and reads the addresses it prints. Nothing when it fails, or takes longer than
-/// [`TAILSCALE_TIMEOUT`] (then it is killed).
-pub fn run_tailscale_ip(program: &Path) -> Vec<IpAddr> {
-    let Ok(mut child) = std::process::Command::new(program)
-        .arg("ip")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-    else {
-        return Vec::new();
-    };
-    let deadline = Instant::now() + TAILSCALE_TIMEOUT;
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                if !status.success() {
-                    return Vec::new();
-                }
-                let mut text = String::new();
-                let Some(mut out) = child.stdout.take() else {
-                    return Vec::new();
-                };
-                if out.read_to_string(&mut text).is_err() {
-                    return Vec::new();
-                }
-                return parse_tailscale_ips(&text);
-            }
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Vec::new();
-            }
-        }
+/// [`TAILSCALE_TIMEOUT`] (then the child is killed: it dies with the future that waited for it).
+pub async fn run_tailscale_ip(program: &Path) -> Vec<IpAddr> {
+    let mut command = tokio::process::Command::new(program);
+    command.arg("ip").stdin(std::process::Stdio::null()).kill_on_drop(true);
+    match tokio::time::timeout(TAILSCALE_TIMEOUT, command.output()).await {
+        Ok(Ok(out)) if out.status.success() => parse_tailscale_ips(&String::from_utf8_lossy(&out.stdout)),
+        _ => Vec::new(),
     }
 }
 
-/// The addresses Tailscale reports for this machine: `tailscale ip`, found on the daemon's `PATH` the way the other
-/// programs are. Nothing when the command is not there.
-pub fn fetch_tailscale_ips() -> Vec<IpAddr> {
+/// The places Tailscale's command is looked for after the `PATH`: the app's own (macOS, from the App Store or the
+/// standalone download), then Homebrew's and a manual install's. A launchd service has a short `PATH` and does not
+/// find the command there.
+const TAILSCALE_FALLBACKS: [&str; 3] = [
+    "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+    "/usr/local/bin/tailscale",
+    "/opt/homebrew/bin/tailscale",
+];
+
+/// The Tailscale command: the first `tailscale` on `path`, else the first of `fallbacks` that is there.
+pub fn find_tailscale(path: &OsStr, fallbacks: &[PathBuf]) -> Option<PathBuf> {
+    crate::setup::which("tailscale", path).or_else(|| fallbacks.iter().find(|p| p.is_file()).cloned())
+}
+
+/// The addresses Tailscale reports for this machine (see [`find_tailscale`]). Nothing when the command is not there.
+pub async fn fetch_tailscale_ips() -> Vec<IpAddr> {
     let path = std::env::var_os("PATH").unwrap_or_default();
-    match crate::setup::which("tailscale", &path) {
-        Some(program) => run_tailscale_ip(&program),
+    let fallbacks: Vec<PathBuf> = TAILSCALE_FALLBACKS.iter().map(PathBuf::from).collect();
+    match find_tailscale(&path, &fallbacks) {
+        Some(program) => run_tailscale_ip(&program).await,
         None => Vec::new(),
     }
 }
 
-/// The answer of [`fetch_tailscale_ips`], kept for one [`WATCH_INTERVAL`]: the watcher asks once per round, and a
-/// pairing reply in between does not run the command again.
+/// The last answer of `tailscale ip` and when it came. The command runs in [`PhoneAccess::apply`] (the watcher's round,
+/// and a settings change), never while a pairing waits: planning and pairing read the kept answer.
 #[derive(Default)]
 pub struct TailscaleCache {
     last: Mutex<Option<(Instant, Vec<IpAddr>)>>,
 }
 
 impl TailscaleCache {
-    /// The kept answer when it is younger than [`WATCH_INTERVAL`] at `now`; otherwise `fetch` is asked and its answer kept.
-    pub fn get(&self, now: Instant, fetch: impl FnOnce() -> Vec<IpAddr>) -> Vec<IpAddr> {
-        let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((at, ips)) = last.as_ref()
-            && now.saturating_duration_since(*at) < WATCH_INTERVAL
-        {
-            return ips.clone();
+    pub fn store(&self, at: Instant, ips: Vec<IpAddr>) {
+        *self.last.lock().unwrap_or_else(|e| e.into_inner()) = Some((at, ips));
+    }
+
+    /// The kept answer when it is younger than [`WATCH_INTERVAL`] at `now`; nothing otherwise.
+    pub fn get(&self, now: Instant) -> Vec<IpAddr> {
+        match self.last.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            Some((at, ips)) if now.saturating_duration_since(*at) < WATCH_INTERVAL => ips.clone(),
+            _ => Vec::new(),
         }
-        let ips = fetch();
-        *last = Some((now, ips.clone()));
-        ips
     }
 }
 
@@ -355,12 +341,6 @@ fn percent_encode(s: &str) -> String {
         }
     }
     out
-}
-
-/// The Tailscale addresses of this machine, asked through the command at most once per watch round.
-fn tailscale_cached() -> TailscaleIps {
-    let cache = TailscaleCache::default();
-    Arc::new(move || cache.get(Instant::now(), fetch_tailscale_ips))
 }
 
 /// Anonymous upgrades by source and time: at most [`ATTEMPT_MAX`] in [`ATTEMPT_WINDOW_MS`] from one source (an IPv4
@@ -521,7 +501,7 @@ pub struct PairInfo {
 struct Sources {
     ifaces: Ifaces,
     planner: Option<Planner>,
-    /// The addresses Tailscale reports for this machine (asked at most once per watch round).
+    /// The addresses Tailscale reports for this machine: the kept answer ([`TailscaleCache`]).
     tailscale: TailscaleIps,
 }
 
@@ -549,6 +529,8 @@ pub struct PhoneAccess {
     /// The daemon this belongs to (the routers of the listeners serve it).
     app: Weak<App>,
     sources: Mutex<Sources>,
+    /// The last `tailscale ip` answer, read by planning and pairing.
+    tailscale_cache: Arc<TailscaleCache>,
     /// Serializes `apply`: one change at a time.
     running: tokio::sync::Mutex<Running>,
     status: Mutex<Status>,
@@ -559,14 +541,17 @@ pub struct PhoneAccess {
 impl PhoneAccess {
     /// Phone access of the daemon whose data folder is `home`. Nothing is made or opened until it is switched on.
     pub fn new(home: PathBuf, app: Weak<App>) -> Self {
+        let tailscale_cache = Arc::new(TailscaleCache::default());
+        let reader = tailscale_cache.clone();
         Self {
             home,
             app,
             sources: Mutex::new(Sources {
                 ifaces: Arc::new(interface_addrs),
                 planner: None,
-                tailscale: tailscale_cached(),
+                tailscale: Arc::new(move || reader.get(Instant::now())),
             }),
+            tailscale_cache,
             running: tokio::sync::Mutex::new(Running {
                 mode: PhoneMode::Off,
                 port: DEFAULT_PHONE_PORT,
@@ -646,6 +631,10 @@ impl PhoneAccess {
             return self.status();
         };
         let settings = app.sup.hub().store.server_settings_or_default();
+        if settings.phone_access != PhoneMode::Off {
+            // The one place the command runs: the watcher's round and a settings change (bounded by its timeout).
+            self.tailscale_cache.store(Instant::now(), fetch_tailscale_ips().await);
+        }
         self.apply_with(&app, settings.phone_access, settings.phone_port).await
     }
 
@@ -656,10 +645,7 @@ impl PhoneAccess {
             (_, PhoneMode::Off) => Vec::new(),
             (Some(planner), _) => planner(mode, port),
             (None, _) => {
-                let tailscale = sources.tailscale.clone();
-                let ips = tokio::task::spawn_blocking(move || tailscale())
-                    .await
-                    .unwrap_or_default();
+                let ips = (sources.tailscale)();
                 plan(mode, port, &(sources.ifaces)(), &ips)
             }
         };
@@ -1987,6 +1973,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_wrong_token_on_another_route_is_a_failed_try_too() {
+        let w = world();
+        let planner: Planner = Arc::new(|_, _| vec!["127.0.0.1:0".parse().unwrap()]);
+        w.app.phone.set_sources(Arc::new(Vec::new), Some(planner));
+        set(&w.app, json!({"phone_access": "lan"})).await;
+        let addr: SocketAddr = w.app.phone.status().listening[0].parse().unwrap();
+        let fp = w.app.phone.fingerprint().unwrap();
+        let wrong = [("Authorization", "Bearer bdt_not_a_device")];
+        let raw = "/v1/files/raw?path=%2Ftmp%2Fnothing";
+        for i in 0..ATTEMPT_MAX {
+            assert_eq!(https(addr, &fp, raw, &wrong).await.0, 401, "try {i}");
+        }
+        assert_eq!(https(addr, &fp, raw, &wrong).await.0, 429, "over the source's tries");
+        // The tries are the source's: the RPC upgrade from the same source is refused too.
+        assert_eq!(status_of(ws(addr, &fp, &wrong).await), 429);
+        // A valid token is never counted, so it is not held back by the wrong ones.
+        let auth = format!("Bearer {TOKEN}");
+        assert_ne!(https(addr, &fp, raw, &[("Authorization", &auth)]).await.0, 429);
+        w.app.phone.shutdown().await;
+    }
+
+    #[tokio::test]
     async fn revoking_a_device_ends_its_open_connection() {
         let w = world();
         set(&w.app, json!({"phone_access": "lan"})).await;
@@ -2127,39 +2135,32 @@ mod tests {
     #[test]
     fn the_tailscale_answer_is_kept_for_one_watch_interval() {
         let cache = TailscaleCache::default();
-        let calls = std::cell::Cell::new(0);
-        let fetch = || {
-            calls.set(calls.get() + 1);
-            vec![ip("100.101.102.103")]
-        };
-        let t0 = std::time::Instant::now();
-        assert_eq!(cache.get(t0, fetch), vec![ip("100.101.102.103")]);
-        let again = || {
-            calls.set(calls.get() + 1);
-            Vec::new()
-        };
+        let t0 = Instant::now();
+        assert!(cache.get(t0).is_empty(), "nothing asked yet");
+        cache.store(t0, vec![ip("100.101.102.103")]);
         assert_eq!(
-            cache.get(t0 + WATCH_INTERVAL - Duration::from_millis(1), again),
+            cache.get(t0 + WATCH_INTERVAL - Duration::from_millis(1)),
             vec![ip("100.101.102.103")]
         );
-        assert_eq!(calls.get(), 1, "asked once within the interval");
-        let later = || {
-            calls.set(calls.get() + 1);
-            Vec::new()
-        };
-        assert!(cache.get(t0 + WATCH_INTERVAL, later).is_empty());
-        assert_eq!(calls.get(), 2, "asked again after the interval");
+        assert!(
+            cache.get(t0 + WATCH_INTERVAL).is_empty(),
+            "older than the interval: nothing"
+        );
     }
 
-    #[test]
-    fn a_tailscale_command_that_is_missing_or_fails_reports_no_addresses() {
-        assert!(run_tailscale_ip(Path::new("/nonexistent/dir/tailscale")).is_empty());
-        assert!(run_tailscale_ip(Path::new("/usr/bin/false")).is_empty());
+    #[tokio::test]
+    async fn a_tailscale_command_that_is_missing_or_fails_reports_no_addresses() {
+        assert!(
+            run_tailscale_ip(Path::new("/nonexistent/dir/tailscale"))
+                .await
+                .is_empty()
+        );
+        assert!(run_tailscale_ip(Path::new("/usr/bin/false")).await.is_empty());
     }
 
     #[cfg(unix)]
-    #[test]
-    fn the_tailscale_command_gives_its_addresses_and_one_that_hangs_is_given_up() {
+    #[tokio::test]
+    async fn the_tailscale_command_gives_its_addresses_and_one_that_hangs_is_given_up() {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::TempDir::new().unwrap();
         let script = |name: &str, body: &str| {
@@ -2170,16 +2171,41 @@ mod tests {
         };
         let good = script("good", "echo 100.101.102.103\necho fd7a:115c:a1e0::5");
         assert_eq!(
-            run_tailscale_ip(&good),
+            run_tailscale_ip(&good).await,
             vec![ip("100.101.102.103"), ip("fd7a:115c:a1e0::5")]
         );
         let hangs = script("hangs", "exec sleep 30");
         let started = std::time::Instant::now();
-        assert!(run_tailscale_ip(&hangs).is_empty());
+        assert!(run_tailscale_ip(&hangs).await.is_empty());
         assert!(
             started.elapsed() < Duration::from_secs(10),
             "given up after the timeout"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tailscale_is_looked_for_on_the_path_and_then_at_the_usual_places() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::TempDir::new().unwrap();
+        let exe = |sub: &str| {
+            let folder = dir.path().join(sub);
+            std::fs::create_dir_all(&folder).unwrap();
+            let path = folder.join("tailscale");
+            std::fs::write(&path, "#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            path
+        };
+        let on_path = exe("on_path");
+        let usual = exe("usual");
+        let missing = dir.path().join("nowhere").join("tailscale");
+        let path = std::env::join_paths([dir.path().join("on_path")]).unwrap();
+        // The PATH wins over the usual places.
+        assert_eq!(find_tailscale(&path, std::slice::from_ref(&usual)), Some(on_path));
+        // Not on the PATH (a directory with no such file): the usual place is taken.
+        let nowhere = std::env::join_paths([dir.path().join("nowhere")]).unwrap();
+        assert_eq!(find_tailscale(&nowhere, &[missing.clone(), usual.clone()]), Some(usual));
+        assert_eq!(find_tailscale(&nowhere, &[missing]), None);
     }
 
     fn machine() -> Vec<IfaceAddr> {

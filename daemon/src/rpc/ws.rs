@@ -46,9 +46,9 @@ pub fn router_listening(app: Arc<App>, listen: IpAddr, allowed_hosts: Vec<String
 }
 
 /// The router of a phone listener (see `phone.rs`): the same routes, on a non-loopback address, where the `Host`
-/// is not checked (the device token and the refused `Origin` protect it). An upgrade of `/v1/rpc` without a token,
-/// the only way to pair, is counted per client source and may be held by only a few sockets at once; over a limit it
-/// gets 429.
+/// is not checked (the device token and the refused `Origin` protect it). The tries of a client source are counted on
+/// every route (a wrong token is a failed try; an upgrade of `/v1/rpc` without a token, the only way to pair, also
+/// holds one of a few sockets); over a limit it gets 429.
 pub fn router_phone(app: Arc<App>, listen: IpAddr, limits: PhoneLimits) -> Router {
     build_router(app, listen, Vec::new(), Some(limits))
 }
@@ -97,39 +97,43 @@ fn too_many(message: &'static str) -> Response {
         .unwrap_or_else(|_| StatusCode::TOO_MANY_REQUESTS.into_response())
 }
 
-/// On a phone listener, for `/v1/rpc`, the tries of each source (an IPv4 address, or an IPv6 /64) are counted:
-/// - an anonymous upgrade (no token, or one of another scheme: whatever the `Authorization` header says) is a try,
-///   and holds one of the few anonymous slots of its source until the socket closes;
-/// - a token that no device has (401) is a failed try, refused as 401 by the route;
+/// On a phone listener the tries of each source (an IPv4 address, or an IPv6 /64) are counted, on every route but
+/// `/v1/health`, by the one check of the device token:
+/// - an anonymous upgrade of `/v1/rpc` (no token, or one of another scheme: whatever the `Authorization` header says)
+///   is a try, and holds one of the few anonymous slots of its source until the socket closes;
+/// - a token that no device has (401) is a failed try on any route, refused as 401 by the route itself;
 /// - a valid token is a paired device's: never a try, never held back.
 ///
 /// Over the tries of a source: 429.
 async fn limit_anonymous(State(guard): State<PhoneGuard>, mut req: Request, next: Next) -> Response {
-    if req.uri().path() == "/v1/rpc" {
-        let source = req
-            .extensions()
-            .get::<ClientAddr>()
-            .map_or("unknown".to_string(), |c| c.0.clone());
-        let now = crate::store::now_ms();
-        match device_for(&guard.app, req.headers()) {
-            Ok(Some(_)) => {}
-            Ok(None) => {
-                if !guard.limits.attempts.attempt(&source, now) {
-                    return too_many("too many pairing attempts, try again in a few minutes");
-                }
-                let Some(slot) = guard.limits.anonymous.acquire(&source) else {
-                    return too_many("too many open pairing connections");
-                };
-                req.extensions_mut().insert(AnonymousSlot(Arc::new(slot)));
+    let path = req.uri().path();
+    if path == "/v1/health" {
+        return next.run(req).await;
+    }
+    let is_rpc = path == "/v1/rpc";
+    let source = req
+        .extensions()
+        .get::<ClientAddr>()
+        .map_or("unknown".to_string(), |c| c.0.clone());
+    let now = crate::store::now_ms();
+    match device_for(&guard.app, req.headers()) {
+        Ok(Some(_)) => {}
+        Ok(None) if is_rpc => {
+            if !guard.limits.attempts.attempt(&source, now) {
+                return too_many("too many pairing attempts, try again in a few minutes");
             }
-            Err((status, _)) if status == StatusCode::UNAUTHORIZED => {
-                if !guard.limits.attempts.attempt(&source, now) {
-                    return too_many("too many pairing attempts, try again in a few minutes");
-                }
-            }
-            // Any other failure (the device lookup itself) is for the route to report.
-            Err(_) => {}
+            let Some(slot) = guard.limits.anonymous.acquire(&source) else {
+                return too_many("too many open pairing connections");
+            };
+            req.extensions_mut().insert(AnonymousSlot(Arc::new(slot)));
         }
+        Err((status, _)) if status == StatusCode::UNAUTHORIZED => {
+            if !guard.limits.attempts.attempt(&source, now) {
+                return too_many("too many failed attempts, try again in a few minutes");
+            }
+        }
+        // No token on another route, or a failure of the device lookup itself: the route refuses or reports it.
+        Ok(None) | Err(_) => {}
     }
     next.run(req).await
 }
