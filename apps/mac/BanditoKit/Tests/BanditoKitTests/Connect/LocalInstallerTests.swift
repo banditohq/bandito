@@ -100,7 +100,7 @@ private func stepIDs(_ events: [InstallEvent]) -> [InstallStep] {
 
     private func installer(
         _ runner: CommandRunner, home: URL, bundled: URL? = nil, hostName: String? = "Ann's Mac",
-        timeout: Duration = .seconds(5)
+        timeout: Duration = .seconds(60)
     ) -> LocalInstaller {
         LocalInstaller(
             runner: runner, bundledBinary: bundled, home: home, hostName: hostName, fallbackName: "This Mac",

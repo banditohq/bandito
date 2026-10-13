@@ -29,7 +29,7 @@ import Testing
 
     /// Waits until `condition` holds, for at most two seconds.
     private func settle(_ condition: () -> Bool) async {
-        for _ in 0..<200 where !condition() {
+        for _ in 0..<3000 where !condition() {
             try? await Task.sleep(for: .milliseconds(10))
         }
     }

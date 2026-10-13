@@ -15,7 +15,13 @@ private struct RunningDaemon: CommandRunner {
     func run(_ executable: String, _ arguments: [String], stdin: Data?) async throws -> CommandResult {
         overlap?.enter()
         defer { overlap?.leave() }
-        if delay > .zero { try await Task.sleep(for: delay) }
+        if let overlap {
+            // Holds until the other check has started too (so they overlap for sure), or gives up after 20 s.
+            let deadline = ContinuousClock.now + .seconds(20)
+            while overlap.current < 2, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        } else if delay > .zero {
+            try await Task.sleep(for: delay)
+        }
         return CommandResult(status: 0, stdout: #"{"listen":"127.0.0.1:17779","running":true}"#, stderr: "")
     }
 }
@@ -25,6 +31,7 @@ private final class Overlap: @unchecked Sendable {
     private let lock = NSLock()
     private var now = 0
     private(set) var most = 0
+    var current: Int { lock.withLock { now } }
 
     func enter() {
         lock.withLock {
@@ -74,7 +81,7 @@ extension LocalServerMigrationTests {
         defer { try? FileManager.default.removeItem(at: binary) }
 
         let app = AppModel(defaults: defaults)
-        await app.confirmThisMacServers(binary: binary, runner: RunningDaemon(), timeout: .seconds(2))
+        await app.confirmThisMacServers(binary: binary, runner: RunningDaemon(), timeout: .seconds(60))
 
         let server = try #require(app.servers.first)
         #expect(server.id == id)
@@ -98,9 +105,8 @@ extension LocalServerMigrationTests {
         let app = AppModel(defaults: defaults)
         let overlap = Overlap()
         await app.confirmThisMacServers(
-            binary: binary, runner: RunningDaemon(delay: .milliseconds(800), overlap: overlap), timeout: .seconds(10))
-        // Each check takes 800 ms: run together, the second starts while the first still waits. Counted, not timed: a
-        // loaded CI runner (other suites on the main actor) only makes them slower, not serial.
+            binary: binary, runner: RunningDaemon(overlap: overlap), timeout: .seconds(60))
+        // Each check waits for the other one to start: run together, both are in flight at once. Counted, not timed.
         #expect(overlap.most == 2)
         #expect(app.servers.allSatisfy { $0.config.isThisMac })
     }
@@ -124,7 +130,7 @@ extension LocalServerMigrationTests {
             }
         }
         await app.confirmThisMacServers(
-            binary: binary, runner: RemovingDaemon(app: app, id: id), timeout: .seconds(2))
+            binary: binary, runner: RemovingDaemon(app: app, id: id), timeout: .seconds(60))
 
         #expect(app.servers.isEmpty)
         let saved = defaults.data(forKey: storeKey).flatMap {

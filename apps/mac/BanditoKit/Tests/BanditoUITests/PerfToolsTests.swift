@@ -78,7 +78,8 @@ import BanditoL10n
         HangMonitor.note(action: "test.freeze")
         try await Task.sleep(for: .milliseconds(300))
         usleep(300_000)
-        try await Task.sleep(for: .seconds(2))
+        // Waits for the monitor's background timer to report it; a starved CI runner can be late by seconds.
+        for _ in 0..<2000 where tally.count < 1 { try await Task.sleep(for: .milliseconds(10)) }
         #expect(tally.count >= 1)
         #expect(tally.longest >= HangTracker.threshold)
     }

@@ -15,7 +15,7 @@ private struct UnreachableSignInService: SignInService {
 }
 
 /// The sign-in sheets (service in the browser, service with a code, GitHub), each in the states with the longest text.
-extension LayoutAuditSnapshots {
+extension ScreenWorkSuites.LayoutAuditSnapshots {
     private static let longFailure = UserFacingMessage(
         text: "The service did not accept the sign-in. Check that the account has access to the workspace and try again.",
         technical: "invalid_grant: the authorization code was already used or has expired (request 0f3a9c1e)",
@@ -126,7 +126,7 @@ extension LayoutAuditSnapshots {
 }
 
 /// The install row under a runtime card of the New agent sheet, at the width of one card in the narrowest sheet.
-extension LayoutAuditSnapshots {
+extension ScreenWorkSuites.LayoutAuditSnapshots {
     private static func installRow(_ prepare: @MainActor (RuntimeInstaller) -> Void) -> AnyView {
         let installer = RuntimeInstaller()
         installer.offeredForAudit = [.claude]
