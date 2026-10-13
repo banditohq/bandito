@@ -1,5 +1,5 @@
 {
-  "version": "0.1.17",
+  "version": "0.1.18",
   "date": "2026-10-14",
   "items": [
     {
@@ -100,6 +100,31 @@
         "ko": "Bandito 배경 화면과 브라우저, 터미널, 파일, 시계가 있는 독. 브라우저가 다시 사이트를 열고, 달 버튼으로 화면을 잠재울 수 있습니다.",
         "pt-BR": "Um papel de parede do Bandito e um dock com Navegador, Terminal, Arquivos e relógio. O navegador volta a abrir sites, e o botão da lua põe a tela para dormir.",
         "zh-Hans": "Bandito 壁纸，以及带浏览器、终端、文件和时钟的程序坞。浏览器又能打开网站了，月亮按钮可让屏幕休眠。"
+      }
+    },
+    {
+      "icon": "checkmark.seal.fill",
+      "title": {
+        "en": "Updates that arrive reliably",
+        "ru": "Обновления приходят надёжнее",
+        "de": "Updates kommen zuverlässiger an",
+        "es": "Actualizaciones más fiables",
+        "fr": "Des mises à jour plus fiables",
+        "ja": "アップデートがより確実に",
+        "ko": "더 안정적인 업데이트",
+        "pt-BR": "Atualizações mais confiáveis",
+        "zh-Hans": "更新更可靠"
+      },
+      "text": {
+        "en": "Updates now wait for Apple's notarization ticket instead of giving up, and the app builds faster.",
+        "ru": "Обновления теперь дожидаются подтверждения нотаризации Apple, а не сдаются, и приложение собирается быстрее.",
+        "de": "Updates warten jetzt auf Apples Notarisierungsticket, statt aufzugeben, und die App wird schneller gebaut.",
+        "es": "Las actualizaciones ahora esperan el ticket de notarización de Apple en lugar de rendirse, y la app se compila más rápido.",
+        "fr": "Les mises à jour attendent désormais le ticket de notarisation d’Apple au lieu d’abandonner, et l’app se compile plus vite.",
+        "ja": "アップデートは途中であきらめず Apple の公証チケットを待つようになり、アプリのビルドも速くなりました。",
+        "ko": "업데이트가 이제 포기하지 않고 Apple 공증 티켓을 기다리며, 앱 빌드도 더 빨라졌습니다.",
+        "pt-BR": "As atualizações agora esperam o ticket de notarização da Apple em vez de desistir, e o app é compilado mais rápido.",
+        "zh-Hans": "更新现在会等待 Apple 公证票据而不再放弃，应用构建也更快了。"
       }
     }
   ]
