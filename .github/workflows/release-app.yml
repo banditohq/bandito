@@ -257,41 +257,27 @@ jobs:
           if [ -z "$pr" ]; then
             url="$(gh pr create --repo banditohq/platform --base "$base" --head "$BRANCH" \
               --title "Add Bandito $VERSION to the appcast" \
-              --body "Appcast item for Bandito $VERSION ($CHANNEL), built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Merged automatically when the checks of this repository pass.")"
+              --body "Appcast item for Bandito $VERSION ($CHANNEL), built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Merged by the appcast-merge workflow of this repository when its ci passes.")"
             pr="${url##*/}"
           fi
           echo "Appcast PR: banditohq/platform#$pr"
-          # Wait for the PR's checks and for merge state CLEAN (the repo has no auto-merge): they register a little after the push, so an empty
-          # list is waited out for 45 minutes (checks of a PR opened by an App took over 15 minutes to appear for 0.1.15), then treated as a problem rather than merged unchecked.
+          # banditohq/platform merges this PR itself once its own ci passed on it (.github/workflows/appcast-merge.yml there):
+          # the bot's token cannot read that repository's checks. Here we only wait for the merge, up to 45 minutes.
           waited=0
           while :; do
-            checks="$(gh pr checks "$pr" --repo banditohq/platform --json bucket --jq '[.[].bucket] | join(" ")' 2>/dev/null || true)"
-            if [ -z "$checks" ]; then
-              if [ "$waited" -ge 2700 ]; then
-                echo "::error::banditohq/platform#$pr has no checks after 45 minutes; merge it by hand (docs/RELEASING.md)"
-                exit 1
-              fi
-            elif grep -Eqw 'fail|cancel' <<< "$checks"; then
-              echo "::error::checks failed on banditohq/platform#$pr; fix it there and merge by hand (docs/RELEASING.md)"
+            state="$(gh pr view "$pr" --repo banditohq/platform --json state --jq .state 2>/dev/null || true)"
+            [ "$state" != MERGED ] || break
+            if [ "$state" = CLOSED ]; then
+              echo "::error::banditohq/platform#$pr was closed without a merge; see its checks (docs/RELEASING.md)"
               exit 1
-            elif ! grep -qw pending <<< "$checks"; then
-              # Green checks are not enough: GitHub must also call the PR mergeable (no conflict, nothing blocking).
-              state="$(gh pr view "$pr" --repo banditohq/platform --json mergeStateStatus --jq .mergeStateStatus)"
-              [ "$state" != CLEAN ] || break
-              if [ "$state" = DIRTY ]; then
-                echo "::error::banditohq/platform#$pr has a merge conflict; resolve it by hand (docs/RELEASING.md)"
-                exit 1
-              fi
-              echo "checks are green, merge state is $state; waiting"
             fi
-            if [ "$waited" -ge 1800 ]; then
-              echo "::error::banditohq/platform#$pr is not mergeable after 30 minutes (checks: ${checks:-none})"
+            if [ "$waited" -ge 2700 ]; then
+              echo "::error::banditohq/platform#$pr is not merged after 45 minutes; check its ci run and merge it by hand (docs/RELEASING.md)"
               exit 1
             fi
             sleep 20
             waited=$((waited + 20))
           done
-          gh pr merge "$pr" --repo banditohq/platform --squash --delete-branch
           echo "Merged banditohq/platform#$pr: the appcast item for $VERSION is on the default branch." | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Remove the signing keychain and the keys
