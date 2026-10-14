@@ -26,6 +26,11 @@ final class ChatDictation {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var onEnd: (() -> Void)?
+    /// Whether a tap is on the microphone's input. Kept apart from the engine's state: an engine that failed to start
+    /// still has its tap, and a second `installTap` on the same bus raises an exception.
+    private var tapInstalled = false
+    /// Counts the sessions. A recognition callback of an earlier session must not act on the one that runs now.
+    private var generation = 0
 
     /// Starts listening. `onPartial` gets the whole text recognised so far each time it grows.
     func start(onPartial: @escaping (String) -> Void, onEnd: @escaping () -> Void = {}) async -> Outcome {
@@ -36,18 +41,21 @@ final class ChatDictation {
         guard let recognizer, recognizer.isAvailable else { return .unavailable }
         stop()
         self.onEnd = onEnd
+        generation &+= 1
+        let session = generation
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         self.request = request
-        let session = AVAudioSession.sharedInstance()
+        let audio = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            try audio.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audio.setActive(true, options: .notifyOthersOnDeactivation)
             let input = engine.inputNode
             let format = input.outputFormat(forBus: 0)
             let sink = BufferSink(request)
             input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in sink.append(buffer) }
+            tapInstalled = true
             engine.prepare()
             try engine.start()
         } catch {
@@ -58,7 +66,7 @@ final class ChatDictation {
             let text = result?.bestTranscription.formattedString
             let final = result?.isFinal ?? false
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.generation == session else { return }
                 if let text, self.isListening { onPartial(text) }
                 if final || error != nil { self.finish() }
             }
@@ -80,9 +88,12 @@ final class ChatDictation {
     }
 
     private func teardown() {
-        if engine.isRunning {
-            engine.stop()
+        // Ends the session: callbacks still in flight from it are ignored (see `start`).
+        generation &+= 1
+        if engine.isRunning { engine.stop() }
+        if tapInstalled {
             engine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
         }
         task?.cancel()
         task = nil
