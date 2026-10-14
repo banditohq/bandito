@@ -154,19 +154,19 @@ public final class AccountHub {
         return result
     }
 
-    /// The first device of an account: makes the sync key (if there is none) and writes the first, empty blob.
-    public func createFirstBlob() async throws {
-        let hadKey = hasSyncKey
-        _ = try SyncKey.loadOrCreate(from: keys)
-        do {
-            try await syncStore?.push(SyncPayload())
-        } catch {
-            // Nothing was written: a key made for this attempt is not the account's key.
-            if !hadKey { try? keys.save(nil, account: SyncKey.keychainAccount) }
-            throw error
+    /// The first device of an account: makes the sync key (if there is none) and writes the first, empty blob. If another
+    /// device won the race for the first blob, this Mac asks to be approved and the answer is `.waitForApproval`
+    /// (`FirstBlob`); otherwise `.firstDevice`.
+    @discardableResult
+    public func createFirstBlob() async throws -> AccountRoute {
+        let client = try await prepare()
+        guard let store = syncStore else { throw AccountHubError.notReady }
+        switch try await FirstBlob.write(store: store, client: client, keys: keys) {
+        case .written, .deferred:
+            return .firstDevice
+        case .lostRace:
+            return .waitForApproval
         }
-        // A new history: a key parked from an earlier sign-in is not needed any more.
-        try ParkedSyncKey.clearParked(in: keys)
     }
 
     /// The reset path: the server forgets the sync data and the other devices, then this Mac has a fresh key.

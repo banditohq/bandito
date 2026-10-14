@@ -106,9 +106,9 @@ struct AccountSignInView: View {
         hub.markSignedIn()
         setupError = nil
         do {
-            let (route, _) = try await hub.inspect()
+            var (route, _) = try await hub.inspect()
             if route == .firstDevice {
-                try await hub.createFirstBlob()
+                route = try await hub.createFirstBlob()
             }
             onFinished(route)
         } catch {

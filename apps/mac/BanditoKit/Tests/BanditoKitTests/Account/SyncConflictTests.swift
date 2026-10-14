@@ -13,6 +13,8 @@ private final class FakeSyncServer: HTTPClient, @unchecked Sendable {
     private var blob: String?
     private var puts = 0
     var beforePut: (@Sendable (FakeSyncServer, Int) -> Void)?
+    private var keyRequests = 0
+    var keyRequestCount: Int { lock.withLock { keyRequests } }
 
     init(version: Int = 0, blob: String? = nil) {
         self.version = version
@@ -36,6 +38,10 @@ private final class FakeSyncServer: HTTPClient, @unchecked Sendable {
         let url = try #require(request.url)
         func reply(_ status: Int, _ body: String) -> (Data, HTTPURLResponse) {
             (Data(body.utf8), HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
+        }
+        if url.path.hasSuffix("/devices/me/request-key") {
+            lock.withLock { keyRequests += 1 }
+            return reply(200, #"{"ok":true}"#)
         }
         guard url.path.hasSuffix("/sync") else { throw URLError(.cannotConnectToHost) }
         if request.httpMethod == "GET" {
@@ -191,5 +197,48 @@ private final class FakeSyncServer: HTTPClient, @unchecked Sendable {
         try await store.update { _ in }
 
         #expect(http.putCount == 0)
+    }
+
+    @Test func theLoserOfARaceForTheFirstBlobAsksToBeApprovedAndTheWinnersDataStays() async throws {
+        let http = FakeSyncServer(version: 0, blob: nil)
+        // The winner (key `key`) stores its blob between the loser's GET and PUT.
+        let winnerPayload = SyncPayload(servers: [server(1)])
+        http.beforePut = { [self] fake, n in
+            guard n == 1 else { return }
+            fake.storeFromAnotherDevice((try? seal(winnerPayload, version: 1)) ?? "")
+        }
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok")
+        let loserKeys = MemorySecretStore()
+        let client = try AccountClient(
+            identity: try makeIdentity(), sessions: sessions, http: http,
+            device: DeviceDescriptor(name: "Phone", platform: "ios"), retryDelay: .zero)
+        let store = SyncStore(
+            account: client, keys: loserKeys, defaults: UserDefaults(suiteName: "race-\(UUID().uuidString)")!, pause: {})
+
+        let outcome = try await FirstBlob.write(store: store, client: client, keys: loserKeys)
+
+        #expect(outcome == .lostRace)
+        #expect(http.keyRequestCount == 1)
+        #expect(try SyncKey.load(from: loserKeys) == nil, "the loser's own key is gone")
+        let (version, blob) = http.current
+        #expect(try open(try #require(blob), version: version) == winnerPayload, "the winner's data is whole")
+    }
+
+    @Test func aFirstBlobWithNoRivalIsWritten() async throws {
+        let http = FakeSyncServer(version: 3, blob: nil)
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok")
+        let keys = MemorySecretStore()
+        let client = try AccountClient(
+            identity: try makeIdentity(), sessions: sessions, http: http,
+            device: DeviceDescriptor(name: "Mac", platform: "macos"), retryDelay: .zero)
+        let store = SyncStore(
+            account: client, keys: keys, defaults: UserDefaults(suiteName: "first-\(UUID().uuidString)")!, pause: {})
+
+        #expect(try await FirstBlob.write(store: store, client: client, keys: keys) == .written)
+        #expect(http.keyRequestCount == 0)
+        #expect(try SyncKey.load(from: keys) != nil)
+        #expect(http.current.version == 4)
     }
 }

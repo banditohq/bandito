@@ -221,6 +221,13 @@ public actor AccountClient {
         try checkOK(reply)
     }
 
+    /// This device is approved but has no sync key (it lost the race to write the first blob): asks the account to make it
+    /// pending, so another device can approve it the usual way (`POST /devices/me/request-key`).
+    public func requestKey() async throws {
+        let reply = try await send("POST", "/devices/me/request-key", authenticated: true)
+        try checkOK(reply)
+    }
+
     // MARK: sync
 
     /// The encrypted sync blob, or nil when the account has none yet.

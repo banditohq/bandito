@@ -295,25 +295,22 @@ final class IOSAccount {
             clearError()
             switch result.route {
             case .firstDevice:
-                let hadKey = (try? SyncKey.load(from: keys)) != nil
-                _ = try SyncKey.loadOrCreate(from: keys)
-                do {
-                    try await syncStore?.push(SyncPayload())
-                    try ParkedSyncKey.clearParked(in: keys)
-                } catch let failure where !(syncStore?.isQuietConflict(failure) ?? false) {
-                    // Nothing was written: a key made for this attempt is not the account's key.
-                    if !hadKey { try? keys.save(nil, account: SyncKey.keychainAccount) }
-                    throw failure
-                } catch {
-                    // Other devices wrote under every attempt. The account is probably not empty any more, so read it
-                    // again (once), whether the key was here before or not. If it is still the same, the screen is ready
-                    // and the next write goes through `SyncStore.update`.
-                    if !hadKey { try? keys.save(nil, account: SyncKey.keychainAccount) }
+                guard let store = syncStore else { return }
+                switch try await FirstBlob.write(store: store, client: client, keys: keys) {
+                case .written:
+                    break
+                case .lostRace:
+                    // Another device made the first blob: this iPhone asked to be approved, so the route is now
+                    // "waiting for approval" (with the code to compare).
+                    await refresh(firstBlobRetry: false)
+                    return
+                case .deferred:
+                    // Other devices wrote under every attempt: read the account again (once), then be ready; the next write
+                    // goes through `SyncStore.update`.
                     if firstBlobRetry {
                         await refresh(firstBlobRetry: false)
                         return
                     }
-                    if !hadKey { throw error }
                 }
                 becomeReady()
             case .ready:
