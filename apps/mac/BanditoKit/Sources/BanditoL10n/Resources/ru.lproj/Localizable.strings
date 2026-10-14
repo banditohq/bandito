@@ -1047,7 +1047,7 @@
 "ios.connect.paste.action" = "Вставить ссылку";
 "ios.connect.paste.hint" = "Или вставьте ссылку с Mac";
 "ios.connect.placeholder" = "Подключение сервера с iPhone появится скоро.";
-"ios.connect.scan.hint" = "На Mac: Настройки → Серверы → ваш сервер → iPhone → Подключить iPhone.";
+"ios.connect.scan.hint" = "На Mac нажмите на свой профиль внизу слева → «Подключить iPhone». Или войдите здесь в свой аккаунт Bandito — серверы появятся сами.";
 "ios.connect.scan.noCamera" = "На этом устройстве нет камеры. Вставьте ссылку или введите адрес.";
 "ios.connect.scan.title" = "Отсканируйте код с Mac";
 "ios.connect.trust.action" = "Совпадают, подключить";
@@ -1096,7 +1096,7 @@
 "ios.notifications.ask.body" = "Bandito может сообщать, когда агент просит одобрения, задаёт вопрос или падает с ошибкой. Больше ничего. Это можно изменить в Настройках.";
 "ios.notifications.ask.later" = "Не сейчас";
 "ios.notifications.ask.title" = "Хотите знать, когда вы нужны команде?";
-"ios.onboarding.connect.hint" = "На Mac: Настройки → Серверы → Подключить iPhone";
+"ios.onboarding.connect.hint" = "На Mac: нажмите профиль внизу слева → «Подключить iPhone»";
 "ios.onboarding.connect.paste" = "Вставить ссылку";
 "ios.onboarding.connect.scan" = "Сканировать код с Mac";
 "ios.onboarding.connect.title" = "Где живёт команда";

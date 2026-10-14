@@ -8,6 +8,12 @@ enum PhoneAccessRules {
     /// The UserDefaults key of the "iPhone app (beta)" switch in General. Off by default.
     static let betaStorageKey = "iphoneBeta.enabled"
 
+    /// Turns the switch on. Whoever opens "Connect iPhone" or turns the cloud on for a server is setting up an iPhone,
+    /// and the iPhone app's hints point to the iPhone block, so it has to show.
+    static func turnOnIPhoneBlock(in defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: betaStorageKey)
+    }
+
     /// Whether this build is a debug build (QA), which always shows the iPhone block.
     static var isDebugBuild: Bool {
         #if DEBUG

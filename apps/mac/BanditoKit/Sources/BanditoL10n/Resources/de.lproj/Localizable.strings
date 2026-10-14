@@ -1047,7 +1047,7 @@
 "ios.connect.paste.action" = "Link einfügen";
 "ios.connect.paste.hint" = "Oder füge den Link vom Mac ein";
 "ios.connect.placeholder" = "Das Verbinden eines Servers vom iPhone kommt bald.";
-"ios.connect.scan.hint" = "Auf dem Mac: Einstellungen → Server → dein Server → iPhone → iPhone verbinden.";
+"ios.connect.scan.hint" = "Auf dem Mac auf dein Profil unten links klicken → iPhone verbinden. Oder melde dich hier in deinem Bandito-Konto an, dann erscheinen deine Server von selbst.";
 "ios.connect.scan.noCamera" = "Dieses Gerät hat keine Kamera. Füge stattdessen den Link ein oder tippe die Adresse.";
 "ios.connect.scan.title" = "Scanne den Code von deinem Mac";
 "ios.connect.trust.action" = "Sie stimmen überein, verbinden";
@@ -1096,7 +1096,7 @@
 "ios.notifications.ask.body" = "Bandito kann dir sagen, wenn ein Agent um Freigabe bittet, eine Frage hat oder scheitert. Sonst nichts. Du kannst das in den Einstellungen ändern.";
 "ios.notifications.ask.later" = "Nicht jetzt";
 "ios.notifications.ask.title" = "Möchtest du wissen, wann dich dein Team braucht?";
-"ios.onboarding.connect.hint" = "Auf dem Mac: Einstellungen → Server → iPhone verbinden";
+"ios.onboarding.connect.hint" = "Auf dem Mac: unten links auf dein Profil klicken → iPhone verbinden";
 "ios.onboarding.connect.paste" = "Link einfügen";
 "ios.onboarding.connect.scan" = "Code vom Mac scannen";
 "ios.onboarding.connect.title" = "Wo Ihr Team lebt";
