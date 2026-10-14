@@ -103,7 +103,7 @@ private final class FakeSyncServer: HTTPClient, @unchecked Sendable {
         // Another device writes between this device's GET and PUT, the first two times.
         http.beforePut = { [self] fake, n in
             guard n <= 2 else { return }
-            let other = SyncPayload(servers: [server(1), server(UInt8(10 + n))])
+            let other = SyncPayload(servers: [server(1)] + (11...UInt8(10 + n)).map { server($0) })
             let next = fake.current.version + 1
             fake.storeFromAnotherDevice((try? seal(other, version: next)) ?? "")
         }
