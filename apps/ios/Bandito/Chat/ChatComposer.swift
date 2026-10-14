@@ -93,6 +93,15 @@ final class ChatComposerView: UIView, UITextViewDelegate {
 
     private func build() {
         backgroundColor = UIColor.Bandito.bg
+        // The box is as tall as its content and never stretched: the list above takes the rest of the screen. Without
+        // this, Auto Layout may give the free space to the box (an empty thread showed the box at the top, the rest black).
+        setContentHuggingPriority(.required, for: .vertical)
+        setContentCompressionResistancePriority(.required, for: .vertical)
+        quickBar.onReply = { [weak self] shown in
+            self?.invalidateIntrinsicContentSize()
+            self?.onQuickReply?(shown)
+        }
+        // The quick bar hides itself after a tap; it is not the composer's own state, so the reply path above covers it.
         hairline.backgroundColor = UIColor.Bandito.line
         hairline.translatesAutoresizingMaskIntoConstraints = false
         addSubview(hairline)
@@ -150,7 +159,6 @@ final class ChatComposerView: UIView, UITextViewDelegate {
         sendButton.accessibilityIdentifier = "chat.send"
         sendButton.translatesAutoresizingMaskIntoConstraints = false
 
-        quickBar.onReply = { [weak self] shown in self?.onQuickReply?(shown) }
         quickBar.onLink = { [weak self] url in self?.onQuickLink?(url) }
         tray.onRemove = { [weak self] id in self?.remove(id) }
         tray.isHidden = true
@@ -182,7 +190,7 @@ final class ChatComposerView: UIView, UITextViewDelegate {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
             attachButton.widthAnchor.constraint(equalToConstant: 34),
-            attachButton.heightAnchor.constraint(equalToConstant: 38),
+            attachButton.heightAnchor.constraint(equalToConstant: Self.attachHeight),
             sendButton.widthAnchor.constraint(equalToConstant: 36),
             sendButton.heightAnchor.constraint(equalToConstant: 36),
             field.topAnchor.constraint(equalTo: box.topAnchor),
@@ -226,7 +234,21 @@ final class ChatComposerView: UIView, UITextViewDelegate {
     func setQuickReplies(_ replies: QuickReplies?) {
         quickBar.configure(replies)
         quickBar.isHidden = !quickBar.hasContent
+        invalidateIntrinsicContentSize()
     }
+
+    /// The height the box needs: the shown rows (quick replies, attachments) and the input row, whose height is the
+    /// field's or the attach button's, whichever is taller. The list above takes whatever is left of the screen.
+    override var intrinsicContentSize: CGSize {
+        var height: CGFloat = 8 + 8 + max(Self.attachHeight, heightConstraint.constant)
+        for part in [quickBar, tray] where !part.isHidden {
+            height += part.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height + 6
+        }
+        return CGSize(width: UIView.noIntrinsicMetric, height: height)
+    }
+
+    /// The attach button's height (the input row is never shorter).
+    private static let attachHeight: CGFloat = 38
 
     /// The microphone is listening.
     func setDictating(_ on: Bool) {
@@ -292,6 +314,7 @@ final class ChatComposerView: UIView, UITextViewDelegate {
         if field.isScrollEnabled != scrolls { field.isScrollEnabled = scrolls }
         if abs(heightConstraint.constant - height) > 0.5 {
             heightConstraint.constant = height
+            invalidateIntrinsicContentSize()
             superview?.setNeedsLayout()
         }
         if scrolls, let range = field.selectedTextRange {
@@ -335,6 +358,7 @@ final class ChatComposerView: UIView, UITextViewDelegate {
         files = []
         tray.configure(files)
         tray.isHidden = true
+        invalidateIntrinsicContentSize()
         textChanged()
         updateButtons()
     }
@@ -366,6 +390,7 @@ final class ChatComposerView: UIView, UITextViewDelegate {
     private func refreshTray() {
         tray.configure(files)
         tray.isHidden = files.isEmpty
+        invalidateIntrinsicContentSize()
         updateButtons()
     }
 }
