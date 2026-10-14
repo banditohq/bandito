@@ -30,17 +30,53 @@ public final class SyncStore {
     /// The blob version this device last read or wrote. 0 when the account has none.
     public private(set) var knownVersion = 0
 
+    /// How many times a write is tried when the version moved on under it.
+    public static let maxAttempts = 5
+    /// A conflict that outlasts this many seconds is no longer treated as passing: it is shown to the person.
+    public static let persistentConflictAfter: TimeInterval = 120
+
     private let account: AccountClient
     private let keys: SecretStore
     private let defaults: UserDefaults
+    private let pause: @MainActor () async throws -> Void
+    private let now: () -> Date
+    /// When the writes started to fail with a conflict without a single success in between. Nil while they succeed.
+    private var conflictingSince: Date?
 
     /// - Parameters:
     ///   - keys: the store holding the sync key (the app's account store).
     ///   - defaults: where the newest seen version per account is kept. Tests pass a private suite.
-    public init(account: AccountClient, keys: SecretStore, defaults: UserDefaults = .standard) {
+    ///   - pause: the wait between two attempts of a write. Default: a random 100 to 800 ms, so two devices that collided
+    ///     do not collide again in step. Tests pass a no-op.
+    ///   - now: the clock, for the "conflict lasts more than two minutes" rule.
+    public init(
+        account: AccountClient, keys: SecretStore, defaults: UserDefaults = .standard,
+        pause: @escaping @MainActor () async throws -> Void = SyncStore.randomPause,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.account = account
         self.keys = keys
         self.defaults = defaults
+        self.pause = pause
+        self.now = now
+    }
+
+    /// The default wait between two attempts: 100 to 800 ms, random.
+    @MainActor public static func randomPause() async throws {
+        try await Task.sleep(for: .milliseconds(Int.random(in: 100...800)))
+    }
+
+    /// True when writes have lost to other devices for more than two minutes in a row. Only then is a conflict an error
+    /// for the person; before that it is quietly left for the next round.
+    public var hasPersistentConflict: Bool {
+        guard let since = conflictingSince else { return false }
+        return now().timeIntervalSince(since) > Self.persistentConflictAfter
+    }
+
+    /// Whether `error` is a version conflict that may stay unseen: the write is tried again by the next round.
+    public func isQuietConflict(_ error: Error) -> Bool {
+        if case AccountError.conflict = error { return !hasPersistentConflict }
+        return false
     }
 
     /// Fetches and decrypts the account's payload. Nil when the account has no data yet.
@@ -57,27 +93,11 @@ public final class SyncStore {
         }
     }
 
-    /// Encrypts and stores `payload`, and returns what was stored.
-    ///
-    /// Optimistic: writes at the version this device knows. On a conflict it pulls the newer blob, merges
-    /// it with `payload` (see `merge`), and writes once more. A second conflict is thrown.
+    /// Merges `payload` into the newest copy and stores the result, and returns what was stored. A shortcut for
+    /// `update` with `merge`: the same read-merge-write path with retries.
     @discardableResult
     public func push(_ payload: SyncPayload) async throws -> SyncPayload {
-        state = .syncing
-        do {
-            let stored: SyncPayload
-            do {
-                stored = try await write(payload)
-            } catch AccountError.conflict(_) {
-                let remote = try await fetch() ?? SyncPayload()
-                stored = try await write(Self.merge(local: payload, remote: remote))
-            }
-            state = .idle
-            return stored
-        } catch {
-            state = .error(Self.message(for: error))
-            throw error
-        }
+        try await update { remote in remote = Self.merge(local: payload, remote: remote) }
     }
 
     /// Resets the signed-in account on the server and forgets this device's version history for it. This is the
@@ -107,32 +127,49 @@ public final class SyncStore {
         SyncPayload.merged(local: local, remote: remote, now: now)
     }
 
-    /// Reads the newest payload, lets `mutate` change it, and writes the result. On a version conflict the payload is
-    /// read again and `mutate` runs again on it, up to three times: a change such as removing an answered request is
-    /// applied to the newest copy, so a merge cannot bring the removed entry back. The last conflict is thrown.
-    /// An account with no blob starts from an empty payload.
+    /// The one way to write the blob. Reads the newest payload (an account with no blob starts from an empty one), lets
+    /// `mutate` change it, and writes the result at the version just read. When the version moved on (HTTP 409) the
+    /// payload is read again and `mutate` runs again on it, up to `maxAttempts` times with a short random pause: a change
+    /// such as removing an answered request is applied to the newest copy, so nothing another device wrote is lost and
+    /// a removed entry does not come back. A change that leaves the payload as it was writes nothing.
+    ///
+    /// If every attempt loses, `AccountError.conflict` is thrown, but `state` stays out of `.error` until the conflict has
+    /// lasted two minutes (`hasPersistentConflict`): callers leave the write to their next round (`isQuietConflict`).
     @discardableResult
     public func update(_ mutate: (inout SyncPayload) -> Void) async throws -> SyncPayload {
         state = .syncing
-        var attempt = 1
-        while true {
+        var lastConflict = 0
+        for attempt in 1...Self.maxAttempts {
             do {
-                var payload = try await fetch() ?? SyncPayload()
+                let fetched = try await fetch()
+                var payload = fetched ?? SyncPayload()
                 mutate(&payload)
-                let stored = try await write(payload)
+                let stored: SyncPayload
+                if let fetched, fetched == payload {
+                    stored = payload
+                } else {
+                    stored = try await write(payload)
+                }
+                conflictingSince = nil
                 state = .idle
                 return stored
             } catch AccountError.conflict(let current) {
-                if attempt >= 3 {
-                    state = .error(Self.message(for: AccountError.conflict(current: current)))
-                    throw AccountError.conflict(current: current)
+                lastConflict = current
+                if attempt < Self.maxAttempts {
+                    do { try await pause() } catch {
+                        state = .idle
+                        throw error
+                    }
                 }
-                attempt += 1
             } catch {
-                state = .error(Self.message(for: error))
+                state = error is CancellationError ? .idle : .error(Self.message(for: error))
                 throw error
             }
         }
+        if conflictingSince == nil { conflictingSince = now() }
+        let failure = AccountError.conflict(current: lastConflict)
+        state = hasPersistentConflict ? .error(Self.message(for: failure)) : .idle
+        throw failure
     }
 
     static func versionKey(accountID: String) -> String {
@@ -156,13 +193,16 @@ public final class SyncStore {
 
     private func fetch() async throws -> SyncPayload? {
         let accountID = try await currentAccountID()
-        guard let blob = try await account.getSync() else {
-            knownVersion = 0
-            return nil
-        }
+        let head = try await account.syncHead()
         let seen = maxSeenVersion(accountID: accountID)
-        guard blob.version >= seen else {
-            throw SyncStoreError.rollback(seen: seen, got: blob.version)
+        guard head.version >= seen else {
+            throw SyncStoreError.rollback(seen: seen, got: head.version)
+        }
+        // No blob, but the version may be above 0 (it never goes back after a reset): the next write names it.
+        guard let blob = head.blob else {
+            knownVersion = head.version
+            remember(version: head.version, accountID: accountID)
+            return nil
         }
         guard let key = try SyncKey.load(from: keys) else { throw SyncStoreError.keyMissing }
         let associatedData = SyncKey.blobAssociatedData(accountID: accountID, version: blob.version)

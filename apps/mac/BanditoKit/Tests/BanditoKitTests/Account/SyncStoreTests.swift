@@ -26,7 +26,7 @@ import Testing
         let sessions = MemorySecretStore()
         try seedSession(sessions, token: "tok_9")
         let client = try makeClient(http: http, sessions: sessions)
-        return SyncStore(account: client, keys: keys, defaults: defaults)
+        return SyncStore(account: client, keys: keys, defaults: defaults, pause: {})
     }
 
     /// The encrypted blob of `payload` stored at `version`, as another device would store it.
@@ -118,7 +118,7 @@ import Testing
         #expect(store.state != .idle)
     }
 
-    @Test func conflictPullsMergesAndWritesOnce() async throws {
+    @Test func conflictReadsAgainMergesAndWritesOnce() async throws {
         let keys = MemorySecretStore()
         let key = SymmetricKey(size: .bits256)
         try SyncKey.save(key, to: keys)
@@ -134,7 +134,7 @@ import Testing
 
         let stored = try await store.push(SyncPayload(servers: [serverB]))
 
-        #expect(http.keys == ["PUT /sync", "GET /sync", "PUT /sync"])
+        #expect(http.keys == ["GET /sync", "PUT /sync", "GET /sync", "PUT /sync"])
         let retry = try #require(http.requests.last)
         #expect(try jsonBody(retry)["version"] as? Int == 5)
         #expect(try payload(in: retry, key: key).servers.map(\.id) == [serverA.id, serverB.id])
@@ -180,7 +180,7 @@ import Testing
         #expect(store.state == .idle)
     }
 
-    @Test func secondConflictGivesUpAfterOneRetry() async throws {
+    @Test func conflictsThatNeverClearGiveUpAfterFiveAttemptsWithoutShowingAnError() async throws {
         let keys = MemorySecretStore()
         let key = SymmetricKey(size: .bits256)
         try SyncKey.save(key, to: keys)
@@ -196,12 +196,13 @@ import Testing
 
         do {
             _ = try await store.push(SyncPayload(servers: [serverB]))
-            Issue.record("expected conflict after one retry")
+            Issue.record("expected conflict after the attempts")
         } catch let error as AccountError {
             #expect(error == .conflict(current: 6))
         }
-        #expect(http.keys.filter { $0 == "PUT /sync" }.count == 2)
-        if case .error = store.state {} else { Issue.record("expected the error state") }
+        #expect(http.keys.filter { $0 == "PUT /sync" }.count == SyncStore.maxAttempts)
+        #expect(store.state == .idle)
+        #expect(!store.hasPersistentConflict)
     }
 
     @Test func mergeKeepsTheLocalCopyOfAServerAndAddsTheRest() {

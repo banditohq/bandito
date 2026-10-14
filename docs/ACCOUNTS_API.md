@@ -250,6 +250,8 @@ Request: `{ "version": 3, "blob": "<base64, at most 262144 characters>" }`.
 
 `version` must equal the stored version (`0` for an account without data). On match the server stores the blob with version + 1 and returns `{ "ok": true, "version": 4 }`. On mismatch: `409` with `{ "ok": false, "error": "conflict", "version": <current> }`. The client fetches, merges and retries.
 
+Client rule: every write goes through one path, `SyncStore.update` (read, decrypt, apply the change to the fresh copy, `PUT` at the version just read). On `409` it reads again and re-applies the change, up to 5 attempts with a random pause of 100 to 800 ms. If all attempts lose, the write is left for the next round and no error is shown; a conflict that lasts more than 2 minutes in a row is shown. `PUT` names the version from `GET`, also when the blob is `null` but the version is above 0 (after a reset).
+
 ## Encryption model
 
 - The server stores only ciphertext (`sync.blob`) and envelopes (`key_envelopes.envelope`). It cannot read synced content **as long as both comparisons below are made**. Without them the server can read the sync key: it could replace a pending device's `public_key`, or replace an envelope with one sealed by itself.

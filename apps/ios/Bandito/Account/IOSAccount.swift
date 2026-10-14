@@ -72,6 +72,7 @@ final class IOSAccount {
     @ObservationIgnored private(set) var client: AccountClient?
     @ObservationIgnored private var identity: DeviceIdentity?
     @ObservationIgnored private var syncStore: SyncStore?
+    @ObservationIgnored private let syncPause: @MainActor () async throws -> Void
     @ObservationIgnored private var requester: AccessRequester?
     @ObservationIgnored private var preparing: Task<AccountClient, Error>?
     @ObservationIgnored private var pending: PendingSyncKey?
@@ -88,7 +89,8 @@ final class IOSAccount {
         dismissed: DismissedServers = DismissedServers(),
         http: HTTPClient = BackgroundHTTPClient(URLSessionHTTPClient(configuration: URLSessionHTTPClient.accountConfiguration())), baseURL: URL = AccountClient.defaultBaseURL,
         deviceName: String = IOSAccount.currentDeviceName(), defaults: UserDefaults = .standard,
-        pollInterval: Duration = .seconds(3), retryDelay: Duration = .milliseconds(1500)
+        pollInterval: Duration = .seconds(3), retryDelay: Duration = .milliseconds(1500),
+        syncPause: @escaping @MainActor () async throws -> Void = SyncStore.randomPause
     ) {
         self.keys = keys
         self.identities = identities
@@ -103,6 +105,7 @@ final class IOSAccount {
         self.defaults = defaults
         self.pollInterval = pollInterval
         self.retryDelay = retryDelay
+        self.syncPause = syncPause
         stage = ((try? keys.load(account: AccountClient.sessionAccount)) ?? nil) != nil ? .loading : .signedOut
     }
 
@@ -199,7 +202,7 @@ final class IOSAccount {
         let client = try AccountClient(
             identity: identity, sessions: keys, http: http, baseURL: baseURL,
             device: DeviceDescriptor(name: deviceName, platform: "ios"), retryDelay: retryDelay)
-        let store = SyncStore(account: client, keys: keys, defaults: defaults)
+        let store = SyncStore(account: client, keys: keys, defaults: defaults, pause: syncPause)
         self.identity = identity
         self.client = client
         syncStore = store
@@ -280,7 +283,7 @@ final class IOSAccount {
     // MARK: account
 
     /// Reads the account and moves to the stage it is in. A session the server no longer knows signs this iPhone out here.
-    func refresh() async {
+    func refresh(firstBlobRetry: Bool = true) async {
         guard let client else { return }
         refreshing += 1
         defer { refreshing -= 1 }
@@ -292,9 +295,27 @@ final class IOSAccount {
             clearError()
             switch result.route {
             case .firstDevice:
+                let hadKey = (try? SyncKey.load(from: keys)) != nil
                 _ = try SyncKey.loadOrCreate(from: keys)
-                try await syncStore?.push(SyncPayload())
-                try ParkedSyncKey.clearParked(in: keys)
+                do {
+                    try await syncStore?.push(SyncPayload())
+                    try ParkedSyncKey.clearParked(in: keys)
+                } catch let failure where !(syncStore?.isQuietConflict(failure) ?? false) {
+                    // Nothing was written: a key made for this attempt is not the account's key.
+                    if !hadKey { try? keys.save(nil, account: SyncKey.keychainAccount) }
+                    throw failure
+                } catch {
+                    // Other devices wrote under every attempt. This account is no longer empty, so read it again, unless the
+                    // key was here before: then the screen is ready and the next write goes through `SyncStore.update`.
+                    if !hadKey {
+                        try? keys.save(nil, account: SyncKey.keychainAccount)
+                        if firstBlobRetry {
+                            await refresh(firstBlobRetry: false)
+                            return
+                        }
+                        throw error
+                    }
+                }
                 becomeReady()
             case .ready:
                 becomeReady()

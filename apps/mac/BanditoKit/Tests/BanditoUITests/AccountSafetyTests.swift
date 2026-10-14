@@ -191,31 +191,6 @@ struct UnreadableStore: SecretStore {
         #expect(try SyncKey.load(from: inner) != nil)
     }
 
-    @Test func publishingRetriesAfterAConflict() async throws {
-        var writes = 0
-        _ = try await ServerPublishing.publish(
-            local: SyncPayload(), fetch: { nil },
-            write: { payload in
-                writes += 1
-                if writes < 3 { throw AccountError.conflict(current: writes) }
-                return payload
-            })
-        #expect(writes == 3)
-    }
-
-    @Test func publishingGivesUpAfterThreeConflicts() async throws {
-        var writes = 0
-        await #expect(throws: AccountError.conflict(current: 9)) {
-            _ = try await ServerPublishing.publish(
-                local: SyncPayload(), fetch: { nil },
-                write: { _ in
-                    writes += 1
-                    throw AccountError.conflict(current: 9)
-                })
-        }
-        #expect(writes == 3)
-    }
-
     @Test func mergeKeepsTheRemoteServersAndReplacesTheSameId() {
         let shared = UUID()
         let remoteOnly = UUID()

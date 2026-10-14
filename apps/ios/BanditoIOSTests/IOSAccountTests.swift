@@ -72,7 +72,7 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
             keys: keys, identities: identities,
             sink: AccountAccessSink(secrets: MemorySecretStore(), file: sinkFile),
             noiseKeys: ServerNoiseKeyStore(secrets: MemorySecretStore()), http: server, deviceName: "iPhone",
-            defaults: defaults, pollInterval: .milliseconds(5))
+            defaults: defaults, pollInterval: .milliseconds(5), syncPause: {})
         return Rig(
             account: account, server: server, keys: keys, phone: phone, mac: mac, syncKey: SymmetricKey(size: .bits256),
             defaults: defaults)
@@ -204,5 +204,37 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
         #expect(rig.account.stage == .signedOut)
         await rig.account.start()
         #expect(rig.server.requests.isEmpty)
+    }
+
+    @Test func aResetAccountWithVersionAboveZeroStillGetsItsFirstBlobAndTheScreenIsReady() async throws {
+        // The reset left no blob but kept version 4: a write at version 0 would conflict for ever.
+        let rig = try await makeRig()
+        rig.server.set("GET /me", me(approved: true))
+        rig.server.set("GET /sync", #"{"ok":true,"version":4,"blob":null}"#)
+        rig.server.set("PUT /sync", #"{"ok":true,"version":5}"#)
+
+        await rig.account.start()
+
+        #expect(rig.account.stage == .ready)
+        #expect(rig.account.errorText == nil)
+        let put = try #require(rig.server.requests.last { $0.key == "PUT /sync" })
+        let body = try #require(try JSONSerialization.jsonObject(with: try #require(put.body)) as? [String: Any])
+        #expect(body["version"] as? Int == 4)
+    }
+
+    @Test func aConflictOnTheFirstWriteShowsNoErrorAndTheScreenStaysReady() async throws {
+        // A parked key was restored, the account has no blob yet, and every write loses to another device.
+        let rig = try await makeRig()
+        try SyncKey.save(rig.syncKey, to: rig.keys)
+        rig.server.set("GET /me", me(approved: true))
+        rig.server.set("GET /sync", #"{"ok":true,"version":0,"blob":null}"#)
+        rig.server.set("PUT /sync", #"{"ok":false,"error":"conflict","version":1}"#, status: 409)
+
+        await rig.account.start()
+
+        #expect(rig.account.stage == .ready)
+        #expect(rig.account.errorText == nil)
+        #expect(rig.account.errorDetails == nil)
+        #expect(try SyncKey.load(from: rig.keys) != nil)
     }
 }
