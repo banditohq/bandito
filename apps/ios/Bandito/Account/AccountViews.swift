@@ -21,10 +21,7 @@ struct AccountScreen: View {
             VStack(alignment: .leading, spacing: BanditoSpace.s5) {
                 content
                 if let text = account.errorText {
-                    Text(text)
-                        .font(BanditoFont.text(size: 13))
-                        .foregroundStyle(Color.Bandito.danger)
-                        .fixedSize(horizontal: false, vertical: true)
+                    AccountErrorBlock(text: text, details: account.errorDetails)
                         .accessibilityIdentifier("account.error")
                 }
             }
@@ -166,8 +163,10 @@ struct AccountScreen: View {
 
     private var loading: some View {
         VStack(alignment: .leading, spacing: BanditoSpace.s4) {
-            progress(L10n.Onboarding.Account.checking)
-            if account.errorText != nil {
+            switch AccountLoadingPresentation.of(refreshing: account.refreshing > 0, hasError: account.errorText != nil) {
+            case .checking:
+                progress(L10n.Onboarding.Account.checking)
+            case .retry:
                 Button(L10n.Onboarding.Account.Github.retry) { Task { await account.start() } }
                     .buttonStyle(OnboardingLinkStyle())
             }
@@ -425,11 +424,8 @@ private struct EmailFields: View {
                     }
                 }
             }
-            if let text = model.errorText {
-                Text(text)
-                    .font(BanditoFont.text(size: 13))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .fixedSize(horizontal: false, vertical: true)
+            if let text = model.errorText, !model.isBusy {
+                AccountErrorBlock(text: text, details: model.errorDetails)
             }
         }
     }
@@ -490,5 +486,59 @@ struct AccountSettingsRow: View {
         case .ready: L10n.Ios.Settings.Account.ready
         case .loading, .rejected, .recoverRequired: L10n.Ios.Settings.Account.attention
         }
+    }
+}
+
+/// What the loading page shows: a spinner while the account is being read, else the retry button. Never both: a
+/// spinner next to an error that has already ended the attempt says the app is still working when it is not.
+enum AccountLoadingPresentation: Equatable {
+    case checking
+    case retry
+
+    static func of(refreshing: Bool, hasError: Bool) -> AccountLoadingPresentation {
+        refreshing || !hasError ? .checking : .retry
+    }
+}
+
+/// The message of a failure, and under it a small line with its technical code and a button that copies it, so a person
+/// can send the reason.
+struct AccountErrorBlock: View {
+    let text: String
+    var details: String?
+
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: BanditoSpace.s2) {
+            Text(text)
+                .font(BanditoFont.text(size: 13))
+                .foregroundStyle(Color.Bandito.danger)
+                .fixedSize(horizontal: false, vertical: true)
+            if let details {
+                HStack(spacing: BanditoSpace.s3) {
+                    Text("\(L10n.Ios.Account.Error.details): \(details)")
+                        .font(BanditoFont.mono(size: 11, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                    Button(copied ? L10n.Ios.Account.Error.copied : L10n.Ios.Account.Error.copy) {
+                        UIPasteboard.general.string = Self.report(details)
+                        copied = true
+                    }
+                    .font(BanditoFont.text(size: 12, weight: 500))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.Bandito.text2)
+                    .accessibilityIdentifier("account.error.copy")
+                }
+            }
+        }
+    }
+
+    /// What is copied: the code, the app's version and the system's. Nothing about the person.
+    static func report(_ details: String) -> String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(details) | Bandito \(version) (\(build)) | iOS \(UIDevice.current.systemVersion)"
     }
 }

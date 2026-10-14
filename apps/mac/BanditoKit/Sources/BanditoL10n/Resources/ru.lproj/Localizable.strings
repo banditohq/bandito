@@ -936,6 +936,11 @@
 "ios.account.approval.codeLabel" = "Код этого iPhone";
 "ios.account.approval.text" = "Вход выполнен. Откройте Bandito на вашем Mac: там появится запрос. Сверьте код на его экране с кодом ниже.";
 "ios.account.approval.title" = "Подтвердите этот iPhone на Mac";
+"ios.account.error.copied" = "Скопировано";
+"ios.account.error.copy" = "Скопировать";
+"ios.account.error.details" = "Подробнее";
+"ios.account.error.keychain" = "Не удалось прочитать или сохранить защищённые данные этого iPhone. Перезапустите приложение и попробуйте снова.";
+"ios.account.error.unconfirmed" = "Связь оборвалась, пока проверялся ваш код. Запросите новый код и попробуйте снова.";
 "ios.account.recover.text" = "У этого iPhone нет ключа синхронизации, и ни одно из ваших устройств не может его передать. Выйдите здесь, удалите этот iPhone из аккаунта на Mac и войдите снова.";
 "ios.account.sender.codeLabel" = "Код одобрившего устройства";
 "ios.account.sender.title" = "Одобрено одним из ваших устройств. Совпадает ли код на его экране с кодом ниже?";

@@ -8,10 +8,19 @@ import Testing
 struct ScriptedReply: Sendable {
     var status: Int
     var body: String
+    /// When set, the request fails with this transport error instead of being answered.
+    var failure: URLError.Code?
 
     init(_ body: String, status: Int = 200) {
         self.body = body
         self.status = status
+    }
+
+    /// A request that dies on the way (a dropped connection, a timeout).
+    static func fail(_ code: URLError.Code) -> ScriptedReply {
+        var reply = ScriptedReply("")
+        reply.failure = code
+        return reply
     }
 }
 
@@ -42,6 +51,7 @@ final class ScriptedHTTP: HTTPClient, @unchecked Sendable {
         guard let reply, let url = request.url else {
             throw URLError(.cannotConnectToHost)
         }
+        if let code = reply.failure { throw URLError(code) }
         let response = HTTPURLResponse(url: url, statusCode: reply.status, httpVersion: nil, headerFields: nil)!
         return (Data(reply.body.utf8), response)
     }
@@ -96,7 +106,8 @@ func makeClient(
         identity: try identity ?? makeIdentity(),
         sessions: sessions,
         http: http,
-        device: DeviceDescriptor(name: "Test Mac", platform: "macos"))
+        device: DeviceDescriptor(name: "Test Mac", platform: "macos"),
+        retryDelay: .zero)
 }
 
 /// A session response body, as `/auth/email/verify` and `/auth/github/poll` send it.

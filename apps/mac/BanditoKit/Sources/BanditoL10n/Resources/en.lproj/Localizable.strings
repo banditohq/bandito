@@ -936,6 +936,11 @@
 "ios.account.approval.codeLabel" = "This iPhone's code";
 "ios.account.approval.text" = "You are signed in. Open Bandito on your Mac: a request appears there. Compare the code on its screen with the one below.";
 "ios.account.approval.title" = "Approve this iPhone on your Mac";
+"ios.account.error.copied" = "Copied";
+"ios.account.error.copy" = "Copy";
+"ios.account.error.details" = "Details";
+"ios.account.error.keychain" = "Could not read or save this iPhone's secure data. Restart the app and try again.";
+"ios.account.error.unconfirmed" = "The connection dropped while your code was being checked. Request a new code and try again.";
 "ios.account.recover.text" = "This iPhone has no sync key, and none of your other devices can hand it over. Sign out here, remove this iPhone from the account on your Mac, then sign in again.";
 "ios.account.sender.codeLabel" = "Code of the approving device";
 "ios.account.sender.title" = "Approved by one of your devices. Does the code on its screen match the one below?";

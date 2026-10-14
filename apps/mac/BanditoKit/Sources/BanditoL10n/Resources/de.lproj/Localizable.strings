@@ -936,6 +936,11 @@
 "ios.account.approval.codeLabel" = "Code dieses iPhone";
 "ios.account.approval.text" = "Sie sind angemeldet. Öffnen Sie Bandito auf Ihrem Mac: Dort erscheint eine Anfrage. Vergleichen Sie den Code auf dem Bildschirm mit dem unten.";
 "ios.account.approval.title" = "Bestätigen Sie dieses iPhone an Ihrem Mac";
+"ios.account.error.copied" = "Kopiert";
+"ios.account.error.copy" = "Kopieren";
+"ios.account.error.details" = "Details";
+"ios.account.error.keychain" = "Die geschützten Daten dieses iPhone konnten nicht gelesen oder gespeichert werden. Starten Sie die App neu und versuchen Sie es erneut.";
+"ios.account.error.unconfirmed" = "Die Verbindung wurde unterbrochen, während Ihr Code geprüft wurde. Fordern Sie einen neuen Code an und versuchen Sie es erneut.";
 "ios.account.recover.text" = "Dieses iPhone hat keinen Synchronisierungsschlüssel, und kein anderes Ihrer Geräte kann ihn übergeben. Melden Sie sich hier ab, entfernen Sie dieses iPhone an Ihrem Mac aus dem Konto und melden Sie sich erneut an.";
 "ios.account.sender.codeLabel" = "Code des bestätigenden Geräts";
 "ios.account.sender.title" = "Von einem Ihrer Geräte bestätigt. Stimmt der Code auf dessen Bildschirm mit dem unten überein?";

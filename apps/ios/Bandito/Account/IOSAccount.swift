@@ -40,6 +40,10 @@ final class IOSAccount {
     private(set) var servers: [AccessServerState] = []
     /// The message of the last failure the person should see; cleared by the next action.
     private(set) var errorText: String?
+    /// A short technical line for `errorText` (an error domain and code, never an address or a name), to send to support.
+    private(set) var errorDetails: String?
+    /// Reads of the account that are running. The loading screen shows a spinner only while this is above zero.
+    private(set) var refreshing = 0
     private(set) var github: PhoneGitHubSignIn?
     private(set) var email: PhoneEmailSignIn?
 
@@ -63,6 +67,7 @@ final class IOSAccount {
     @ObservationIgnored private let noiseKeys: ServerNoiseKeyStore
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let pollInterval: Duration
+    @ObservationIgnored private let retryDelay: Duration
 
     @ObservationIgnored private(set) var client: AccountClient?
     @ObservationIgnored private var identity: DeviceIdentity?
@@ -81,9 +86,9 @@ final class IOSAccount {
         keys: SecretStore, identities: DeviceIdentityStore, sink: ServerAccessSink, noiseKeys: ServerNoiseKeyStore,
         connectedServers: @escaping @MainActor () -> [ServerModel] = { [] }, ledger: AccessLedger = AccessLedger(),
         dismissed: DismissedServers = DismissedServers(),
-        http: HTTPClient = URLSessionHTTPClient(), baseURL: URL = AccountClient.defaultBaseURL,
+        http: HTTPClient = BackgroundHTTPClient(URLSessionHTTPClient(configuration: URLSessionHTTPClient.accountConfiguration())), baseURL: URL = AccountClient.defaultBaseURL,
         deviceName: String = IOSAccount.currentDeviceName(), defaults: UserDefaults = .standard,
-        pollInterval: Duration = .seconds(3)
+        pollInterval: Duration = .seconds(3), retryDelay: Duration = .milliseconds(1500)
     ) {
         self.keys = keys
         self.identities = identities
@@ -97,6 +102,7 @@ final class IOSAccount {
         self.deviceName = deviceName
         self.defaults = defaults
         self.pollInterval = pollInterval
+        self.retryDelay = retryDelay
         stage = ((try? keys.load(account: AccountClient.sessionAccount)) ?? nil) != nil ? .loading : .signedOut
     }
 
@@ -139,6 +145,18 @@ final class IOSAccount {
 
     var signedIn: Bool { stage != .signedOut }
 
+    /// Shows `error` as the screen's message, with its details, and writes its code to the log.
+    private func fail(_ error: Error, at place: String = #function) {
+        errorText = PhoneAccountMessages.text(for: error)
+        errorDetails = PhoneAccountMessages.details(for: error)
+        PhoneAccountMessages.record(error, at: place)
+    }
+
+    private func clearError() {
+        errorText = nil
+        errorDetails = nil
+    }
+
     /// Who is signed in, for a line of text: the e-mail, else `@login`, else the name.
     var who: String {
         guard let user = me?.user else { return "" }
@@ -153,11 +171,14 @@ final class IOSAccount {
     /// refreshes, a failure is shown and the next call tries again.
     func start() async {
         guard !inert, stage != .signedOut, stage != .rejected else { return }
+        refreshing += 1
+        defer { refreshing -= 1 }
+        clearError()
         do {
             _ = try await prepare()
             await refresh()
         } catch {
-            errorText = PhoneAccountMessages.text(for: error)
+            fail(error)
         }
     }
 
@@ -177,7 +198,7 @@ final class IOSAccount {
         let identity = try await identities.load()
         let client = try AccountClient(
             identity: identity, sessions: keys, http: http, baseURL: baseURL,
-            device: DeviceDescriptor(name: deviceName, platform: "ios"))
+            device: DeviceDescriptor(name: deviceName, platform: "ios"), retryDelay: retryDelay)
         let store = SyncStore(account: client, keys: keys, defaults: defaults)
         self.identity = identity
         self.client = client
@@ -195,11 +216,11 @@ final class IOSAccount {
 
     /// Starts the GitHub flow, and moves on when it signs in.
     func startGitHub() async {
-        errorText = nil
+        clearError()
         do {
             _ = try await prepare()
         } catch {
-            errorText = PhoneAccountMessages.text(for: error)
+            fail(error)
             return
         }
         github?.start()
@@ -212,11 +233,11 @@ final class IOSAccount {
 
     /// Sends a code to the typed address.
     func sendEmailCode() async {
-        errorText = nil
+        clearError()
         do {
             _ = try await prepare()
         } catch {
-            errorText = PhoneAccountMessages.text(for: error)
+            fail(error)
             return
         }
         await email?.sendCode()
@@ -252,7 +273,7 @@ final class IOSAccount {
     private func finishSignIn() async {
         email?.finish()
         stage = .loading
-        errorText = nil
+        clearError()
         await refresh()
     }
 
@@ -261,12 +282,14 @@ final class IOSAccount {
     /// Reads the account and moves to the stage it is in. A session the server no longer knows signs this iPhone out here.
     func refresh() async {
         guard let client else { return }
+        refreshing += 1
+        defer { refreshing -= 1 }
         do {
             let result = try await AccountInspector.inspect(
                 client: client, keys: keys, isSigningOut: { [weak self] in self?.signingOut ?? true })
             me = result.me
             flushQueuedDismissals()
-            errorText = nil
+            clearError()
             switch result.route {
             case .firstDevice:
                 _ = try SyncKey.loadOrCreate(from: keys)
@@ -286,7 +309,7 @@ final class IOSAccount {
         } catch AccountError.api(let code, _) where code == "unauthorized" {
             await dropSession()
         } catch {
-            errorText = PhoneAccountMessages.text(for: error)
+            fail(error)
         }
     }
 
@@ -331,7 +354,7 @@ final class IOSAccount {
             return true
         } catch {
             if Task.isCancelled { return false }
-            errorText = PhoneAccountMessages.text(for: error)
+            fail(error)
             return true
         }
     }
@@ -343,11 +366,11 @@ final class IOSAccount {
             let key = try pending.accept(confirmedFingerprint: code)
             try SyncKey.save(key, to: keys)
             self.pending = nil
-            errorText = nil
+            clearError()
             stage = .loading
             await refresh()
         } catch {
-            errorText = PhoneAccountMessages.text(for: error)
+            fail(error)
         }
     }
 
@@ -358,9 +381,10 @@ final class IOSAccount {
         do {
             try await client.deleteDevice(id: deviceID, force: false)
             stage = .rejected
-            errorText = nil
+            clearError()
         } catch {
             errorText = PhoneAccountMessages.refuseFailed
+            errorDetails = nil
         }
     }
 
@@ -470,7 +494,7 @@ final class IOSAccount {
                 log: { accountLog.error("\($0, privacy: .public)") })
             reset()
         } catch {
-            errorText = PhoneAccountMessages.text(for: error)
+            fail(error)
             if case .ready = stage { setActive(true) }
         }
     }
@@ -492,7 +516,7 @@ final class IOSAccount {
         stage = .signedOut
         me = nil
         servers = []
-        errorText = nil
+        clearError()
         github?.cancel()
         email?.finish()
     }
