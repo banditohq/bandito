@@ -936,6 +936,11 @@
 "ios.account.approval.codeLabel" = "这台 iPhone 的代码";
 "ios.account.approval.text" = "你已登录。请在 Mac 上打开 Bandito，那里会出现一个请求。请核对它屏幕上的代码与下方的代码。";
 "ios.account.approval.title" = "请在你的 Mac 上批准这台 iPhone";
+"ios.account.error.copied" = "已拷贝";
+"ios.account.error.copy" = "拷贝";
+"ios.account.error.details" = "详情";
+"ios.account.error.keychain" = "无法读取或保存这台 iPhone 的受保护数据。请重新启动应用后再试。";
+"ios.account.error.unconfirmed" = "验证你的验证码时连接中断了。请重新获取验证码后再试。";
 "ios.account.recover.text" = "这台 iPhone 没有同步密钥，你的其他设备也无法传给它。请在此退出，在 Mac 上把这台 iPhone 从账户中移除，然后重新登录。";
 "ios.account.sender.codeLabel" = "批准设备的代码";
 "ios.account.sender.title" = "已由你的某台设备批准。它屏幕上的代码与下方的代码一致吗？";

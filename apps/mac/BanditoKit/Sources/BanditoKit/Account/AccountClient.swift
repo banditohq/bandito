@@ -13,6 +13,7 @@ public actor AccountClient {
     private let http: HTTPClient
     private let baseURL: URL
     private let device: DeviceDescriptor
+    private let retryDelay: Duration
 
     /// - Throws: `AccountError.insecureBaseURL` unless `baseURL` is `validate(baseURL:)`-clean.
     public init(
@@ -20,7 +21,8 @@ public actor AccountClient {
         sessions: SecretStore,
         http: HTTPClient = URLSessionHTTPClient(),
         baseURL: URL = AccountClient.defaultBaseURL,
-        device: DeviceDescriptor = .current
+        device: DeviceDescriptor = .current,
+        retryDelay: Duration = .milliseconds(1500)
     ) throws {
         try Self.validate(baseURL: baseURL)
         self.identity = identity
@@ -28,7 +30,11 @@ public actor AccountClient {
         self.http = http
         self.baseURL = baseURL
         self.device = device
+        self.retryDelay = retryDelay
     }
+
+    /// Extra attempts after a transport failure (two retries, three tries in all).
+    static let maxRetries = 2
 
     /// The base URL must be `https://bandito.dev` with no port or port 443, and no user info. Plain `http` is
     /// allowed only to a loopback host on any port (local development, `wrangler dev`), also without user info.
@@ -56,7 +62,7 @@ public actor AccountClient {
     /// A fresh single-use nonce for a device-signed request.
     public func challenge() async throws -> String {
         struct Wire: Decodable { var nonce: String }
-        let reply = try await send("POST", "/auth/challenge", body: EmptyBody())
+        let reply = try await send("POST", "/auth/challenge", body: EmptyBody(), retry: .always)
         return try decodeOK(Wire.self, reply).nonce
     }
 
@@ -99,13 +105,37 @@ public actor AccountClient {
     }
 
     /// Checks the code and signs in. On success the session is stored.
+    ///
+    /// A connection that drops mid-request is tried again with a fresh signed challenge (a nonce is single use). If the
+    /// first try may have reached the server and the retry is then told the code is wrong, the code was probably spent
+    /// by the first try and its answer was lost: `AccountError.api(code: "verify_unconfirmed", status: 0)`.
     public func emailVerify(email: String, code: String) async throws -> Session {
-        let body = EmailVerifyBody(email: email, code: code, device: try await signedDevice())
-        let reply = try await send("POST", "/auth/email/verify", body: body)
-        let session = try decodeOK(Session.self, reply)
-        try storeSession(session)
-        return session
+        var maybeDelivered = false
+        var attempt = 0
+        while true {
+            let body = EmailVerifyBody(email: email, code: code, device: try await signedDevice())
+            let request = try makeRequest("POST", "/auth/email/verify", body: body)
+            do {
+                let reply = try await transmit(request)
+                if maybeDelivered, reply.status == 401 || reply.status == 429 {
+                    throw AccountError.api(code: Self.verifyUnconfirmed, status: 0)
+                }
+                let session = try decodeOK(Session.self, reply)
+                try storeSession(session)
+                return session
+            } catch let failure as TransportFailure {
+                guard attempt < Self.maxRetries, !Task.isCancelled, RetryScope.always.allows(failure.underlying) else {
+                    throw AccountError.network(Self.detail(of: failure.underlying))
+                }
+                if !RetryScope.beforeSend.allows(failure.underlying) { maybeDelivered = true }
+                attempt += 1
+                try await Task.sleep(for: retryDelay)
+            }
+        }
     }
+
+    /// The `api` code of a verify whose answer was lost and whose code the retry then found spent.
+    public static let verifyUnconfirmed = "verify_unconfirmed"
 
     /// The signed-in user, this device, and every device of the account. Works before approval too.
     public func me() async throws -> Me {
@@ -345,14 +375,41 @@ public actor AccountClient {
         return session
     }
 
-    private func send(
-        _ method: String, _ path: String, body: (any Encodable)? = nil, authenticated: Bool = false,
-        token explicitToken: String? = nil
-    ) async throws -> Reply {
-        var token: String? = explicitToken
-        if authenticated, token == nil {
-            token = try requireSession().token
+    /// Which transport failures a request may be tried again after.
+    enum RetryScope {
+        /// A request that can be repeated without harm (a read, a fresh challenge): any dropped connection or timeout.
+        case always
+        /// Anything else: only failures where the request cannot have left the phone.
+        case beforeSend
+
+        func allows(_ error: Error) -> Bool {
+            guard let code = (error as? URLError)?.code else { return false }
+            switch code {
+            case .notConnectedToInternet, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
+                .internationalRoamingOff, .dataNotAllowed:
+                return true
+            case .networkConnectionLost, .timedOut:
+                return self == .always
+            default:
+                return false
+            }
         }
+    }
+
+    /// A failure of the transport, kept apart from `AccountError` until the retries are used up.
+    struct TransportFailure: Error {
+        var underlying: Error
+    }
+
+    /// "NSURLErrorDomain -1005": what the screen's details line shows. No address, no text of the request.
+    static func detail(of error: Error) -> String {
+        let ns = error as NSError
+        return "\(ns.domain) \(ns.code)"
+    }
+
+    private func makeRequest(
+        _ method: String, _ path: String, body: (any Encodable)? = nil, token: String? = nil
+    ) throws -> URLRequest {
         var request = URLRequest(url: try url(for: path))
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -363,13 +420,50 @@ public actor AccountClient {
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        return request
+    }
+
+    /// One try. A failure that is not an `AccountError` is a `TransportFailure`.
+    private func transmit(_ request: URLRequest) async throws -> Reply {
         do {
             let (data, response) = try await http.send(request)
             return Reply(status: response.statusCode, data: data)
         } catch let error as AccountError {
             throw error
         } catch {
-            throw AccountError.network(error.localizedDescription)
+            throw TransportFailure(underlying: error)
+        }
+    }
+
+    private func send(
+        _ method: String, _ path: String, body: (any Encodable)? = nil, authenticated: Bool = false,
+        token explicitToken: String? = nil, retry: RetryScope? = nil
+    ) async throws -> Reply {
+        var token: String? = explicitToken
+        if authenticated, token == nil {
+            token = try requireSession().token
+        }
+        let request = try makeRequest(method, path, body: body, token: token)
+        // Reads can always be repeated; everything else only when the request cannot have been sent.
+        let scope = retry ?? (method == "GET" ? .always : .beforeSend)
+        var attempt = 0
+        while true {
+            do {
+                let reply = try await transmit(request)
+                // A gateway that is briefly down answers 502/503/504 to a read: try again.
+                if scope == .always, [502, 503, 504].contains(reply.status), attempt < Self.maxRetries, !Task.isCancelled {
+                    attempt += 1
+                    try await Task.sleep(for: retryDelay)
+                    continue
+                }
+                return reply
+            } catch let failure as TransportFailure {
+                guard attempt < Self.maxRetries, !Task.isCancelled, scope.allows(failure.underlying) else {
+                    throw AccountError.network(Self.detail(of: failure.underlying))
+                }
+                attempt += 1
+                try await Task.sleep(for: retryDelay)
+            }
         }
     }
 

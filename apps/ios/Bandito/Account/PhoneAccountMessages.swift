@@ -1,6 +1,7 @@
 import BanditoKit
 import BanditoL10n
 import Foundation
+import OSLog
 
 /// The text shown for an error in the account screens. Every string is the app's own translation; the Kit's English
 /// descriptions are never shown. (The Mac has the same table in `SignInMessages`.)
@@ -9,12 +10,44 @@ enum PhoneAccountMessages {
         switch error {
         case let error as AccountError: return accountText(error)
         case is DeviceIdentityError, is SecretStoreError, is SyncKeyError, is DeviceTokenSealError:
-            return L10n.Onboarding.Account.keyUnavailable
+            return L10n.Ios.Account.Error.keychain
         case let error as SyncStoreError:
             if case .keyMissing = error { return L10n.Ios.Account.Recover.text }
             return L10n.Onboarding.Account.errorGeneric
         default: return L10n.Onboarding.Account.errorGeneric
         }
+    }
+
+    /// A short technical line for the error: kind, domain and code. Never an address, a name or a token.
+    static func details(for error: Error) -> String {
+        let line: String
+        switch error {
+        case let error as AccountError:
+            switch error {
+            case .network(let detail): line = "network \(detail)"
+            case .api(let code, let status): line = "api \(code) \(status)"
+            case .conflict: line = "conflict"
+            case .notSignedIn: line = "not signed in"
+            case .badResponse: line = "bad response"
+            case .fingerprintMismatch: line = "fingerprint mismatch"
+            case .insecureBaseURL: line = "insecure base url"
+            case .invalidIdentifier: line = "invalid identifier"
+            }
+        case let error as SecretStoreError:
+            if case .keychain(let status) = error { line = "keychain \(status)" } else { line = "keychain" }
+        default:
+            let ns = error as NSError
+            line = "\(String(describing: type(of: error))) \(ns.domain) \(ns.code)"
+        }
+        return String(line.prefix(80))
+    }
+
+    private static let log = Logger(subsystem: "dev.bandito", category: "account")
+
+    /// Writes the error to the unified log: the code is public, the system's own description stays private.
+    static func record(_ error: Error, at place: String) {
+        log.error(
+            "\(place, privacy: .public) failed: \(details(for: error), privacy: .public) (\(error.localizedDescription, privacy: .private))")
     }
 
     /// Shown when the refusal could not remove this iPhone from the account.
@@ -59,6 +92,9 @@ enum PhoneAccountMessages {
         case "github_unavailable": return L10n.Onboarding.Failure.githubUnavailable
         case "too_large": return L10n.Onboarding.Failure.tooLarge
         case "server": return L10n.Onboarding.Failure.server
+        case AccountClient.verifyUnconfirmed: return L10n.Ios.Account.Error.unconfirmed
+        // A gateway or origin failure (`http_502`, ...): the server side, not the phone's network.
+        case _ where code.hasPrefix("http_5"): return L10n.Onboarding.Failure.server
         default: return L10n.Onboarding.Account.errorGeneric
         }
     }

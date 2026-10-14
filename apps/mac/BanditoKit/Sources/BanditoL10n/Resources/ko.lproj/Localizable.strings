@@ -936,6 +936,11 @@
 "ios.account.approval.codeLabel" = "이 iPhone의 코드";
 "ios.account.approval.text" = "로그인했습니다. Mac에서 Bandito를 열면 요청이 나타납니다. 그 화면의 코드와 아래 코드를 대조하세요.";
 "ios.account.approval.title" = "Mac에서 이 iPhone을 승인하세요";
+"ios.account.error.copied" = "복사됨";
+"ios.account.error.copy" = "복사";
+"ios.account.error.details" = "자세히";
+"ios.account.error.keychain" = "이 iPhone의 보호된 데이터를 읽거나 저장하지 못했습니다. 앱을 다시 시작한 뒤 다시 시도하세요.";
+"ios.account.error.unconfirmed" = "코드를 확인하는 동안 연결이 끊겼습니다. 새 코드를 요청한 뒤 다시 시도하세요.";
 "ios.account.recover.text" = "이 iPhone에는 동기화 키가 없고 다른 기기도 키를 전달할 수 없습니다. 여기서 로그아웃하고 Mac에서 계정의 이 iPhone을 제거한 뒤 다시 로그인하세요.";
 "ios.account.sender.codeLabel" = "승인한 기기의 코드";
 "ios.account.sender.title" = "사용 중인 기기 중 하나가 승인했습니다. 그 기기 화면의 코드가 아래 코드와 일치하나요?";
