@@ -221,17 +221,30 @@ public actor AccountClient {
         try checkOK(reply)
     }
 
+    /// This device is approved but has no sync key (it lost the race to write the first blob): asks the account to make it
+    /// pending, so another device can approve it the usual way (`POST /devices/me/request-key`).
+    public func requestKey() async throws {
+        let reply = try await send("POST", "/devices/me/request-key", authenticated: true)
+        try checkOK(reply)
+    }
+
     // MARK: sync
 
     /// The encrypted sync blob, or nil when the account has none yet.
     public func getSync() async throws -> SyncBlob? {
+        try await syncHead().blob
+    }
+
+    /// The server's version of the sync blob and the blob itself (nil when the account has none). The version is kept
+    /// after a reset, so it can be above 0 while the blob is nil: a write must name it, not 0.
+    public func syncHead() async throws -> (version: Int, blob: SyncBlob?) {
         struct Wire: Decodable {
             var version: Int
             var blob: String?
         }
         let wire = try decodeOK(Wire.self, try await send("GET", "/sync", authenticated: true))
-        guard let blob = wire.blob else { return nil }
-        return SyncBlob(version: wire.version, blob: blob)
+        guard let blob = wire.blob else { return (wire.version, nil) }
+        return (wire.version, SyncBlob(version: wire.version, blob: blob))
     }
 
     /// Stores `blob` if the server is still at `version`. Returns the new version.

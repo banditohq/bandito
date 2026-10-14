@@ -10,31 +10,6 @@ extension Logger {
     static let account = Logger(subsystem: "dev.bandito", category: "account")
 }
 
-/// Publishes this Mac's servers into the sync blob. Fetch, merge, write; on a version conflict the blob is fetched
-/// again and merged again, up to `maxAttempts` times. The last conflict is thrown to the caller.
-@MainActor
-enum ServerPublishing {
-    static let maxAttempts = 3
-
-    /// Returns the payload the server stored (the merge of both sides).
-    static func publish(
-        local: SyncPayload,
-        fetch: () async throws -> SyncPayload?,
-        write: (SyncPayload) async throws -> SyncPayload
-    ) async throws -> SyncPayload {
-        var attempt = 1
-        while true {
-            let remote = try await fetch() ?? SyncPayload()
-            do {
-                return try await write(ServerSyncPayload.merge(local: local, remote: remote))
-            } catch AccountError.conflict(let current) {
-                if attempt >= maxAttempts { throw AccountError.conflict(current: current) }
-                attempt += 1
-            }
-        }
-    }
-}
-
 /// Failures of the account hub that are not from the server.
 enum AccountHubError: Error, Equatable, LocalizedError {
     /// A screen used the hub before `prepare` ran.
@@ -179,12 +154,19 @@ public final class AccountHub {
         return result
     }
 
-    /// The first device of an account: makes the sync key (if there is none) and writes the first, empty blob.
-    public func createFirstBlob() async throws {
-        _ = try SyncKey.loadOrCreate(from: keys)
-        try await syncStore?.push(SyncPayload())
-        // A new history: a key parked from an earlier sign-in is not needed any more.
-        try ParkedSyncKey.clearParked(in: keys)
+    /// The first device of an account: makes the sync key (if there is none) and writes the first, empty blob. If another
+    /// device won the race for the first blob, this Mac asks to be approved and the answer is `.waitForApproval`
+    /// (`FirstBlob`); otherwise `.firstDevice`.
+    @discardableResult
+    public func createFirstBlob() async throws -> AccountRoute {
+        let client = try await prepare()
+        guard let store = syncStore else { throw AccountHubError.notReady }
+        switch try await FirstBlob.write(store: store, client: client, keys: keys) {
+        case .written, .deferred:
+            return .firstDevice
+        case .lostRace:
+            return .waitForApproval
+        }
     }
 
     /// The reset path: the server forgets the sync data and the other devices, then this Mac has a fresh key.
@@ -247,17 +229,21 @@ public final class AccountHub {
     }
 
     /// Writes this Mac's ssh servers into the account's sync blob, keeping the other servers and retrying on
-    /// conflicts (see `ServerPublishing`). Errors reach the caller.
+    /// conflicts (`SyncStore.update`). A conflict that does not clear is left for the next round; other errors reach the caller.
     public func publishServers(_ configs: [ServerConfig], phones: [UUID: SyncedPhone]? = nil) async throws {
         _ = try await prepare()
         guard let store = syncStore else { throw AccountHubError.notReady }
         let records = phones ?? publishedPhones
         var local = ServerSyncPayload.payload(for: configs, phones: records, localDeviceID: me?.device.id)
         local.profile = await avatar.currentSyncedProfile()
-        let stored = try await ServerPublishing.publish(
-            local: local,
-            fetch: { try await store.pull() },
-            write: { payload in try await store.push(payload) })
+        let stored: SyncPayload
+        do {
+            stored = try await store.update { payload in payload = ServerSyncPayload.merge(local: local, remote: payload) }
+        } catch where store.isQuietConflict(error) {
+            // Other devices keep writing: the next round tries again (`publishedPhones` is not updated, so it does).
+            Logger.account.notice("Publish servers: the blob changed under every attempt, left for the next round.")
+            return
+        }
         try await avatar.apply(stored.profile)
         if let phones { publishedPhones = phones }
     }
@@ -347,10 +333,15 @@ public final class AccountHub {
         guard let store = syncStore else { throw AccountHubError.notReady }
         let remote = try await store.pull()
         if let local = await avatar.currentSyncedProfile(), local.updatedAt > (remote?.profile?.updatedAt ?? 0) {
-            let stored = try await ServerPublishing.publish(
-                local: SyncPayload(profile: local),
-                fetch: { try await store.pull() },
-                write: { payload in try await store.push(payload) })
+            let stored: SyncPayload
+            do {
+                stored = try await store.update { payload in
+                    payload = ServerSyncPayload.merge(local: SyncPayload(profile: local), remote: payload)
+                }
+            } catch where store.isQuietConflict(error) {
+                Logger.account.notice("Profile picture: the blob changed under every attempt, left for the next round.")
+                return
+            }
             try await avatar.apply(stored.profile)
         } else {
             try await avatar.apply(remote?.profile)

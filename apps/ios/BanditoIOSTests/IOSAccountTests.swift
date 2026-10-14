@@ -12,8 +12,15 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
     private var routes: [String: (status: Int, body: String)] = [:]
     private var recorded: [(key: String, body: Data?)] = []
 
+    private var later: [String: (trigger: String, status: Int, body: String)] = [:]
+
     func set(_ key: String, _ body: String, status: Int = 200) {
         lock.withLock { routes[key] = (status, body) }
+    }
+
+    /// From the first request to `trigger` on, `key` answers with `body`.
+    func set(_ key: String, after trigger: String, _ body: String, status: Int = 200) {
+        lock.withLock { later[key] = (trigger, status, body) }
     }
 
     var requests: [(key: String, body: Data?)] { lock.withLock { recorded } }
@@ -23,6 +30,7 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
         let key = "\(request.httpMethod ?? "GET") \(path)"
         let route: (status: Int, body: String)? = lock.withLock {
             recorded.append((key, request.httpBody))
+            if let next = later[key], recorded.contains(where: { $0.key == next.trigger }) { return (next.status, next.body) }
             return routes[key]
         }
         guard let route, let url = request.url else { throw URLError(.cannotConnectToHost) }
@@ -72,7 +80,7 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
             keys: keys, identities: identities,
             sink: AccountAccessSink(secrets: MemorySecretStore(), file: sinkFile),
             noiseKeys: ServerNoiseKeyStore(secrets: MemorySecretStore()), http: server, deviceName: "iPhone",
-            defaults: defaults, pollInterval: .milliseconds(5))
+            defaults: defaults, pollInterval: .milliseconds(5), syncPause: {})
         return Rig(
             account: account, server: server, keys: keys, phone: phone, mac: mac, syncKey: SymmetricKey(size: .bits256),
             defaults: defaults)
@@ -204,5 +212,57 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
         #expect(rig.account.stage == .signedOut)
         await rig.account.start()
         #expect(rig.server.requests.isEmpty)
+    }
+
+    @Test func aResetAccountWithVersionAboveZeroStillGetsItsFirstBlobAndTheScreenIsReady() async throws {
+        // The reset left no blob but kept version 4: a write at version 0 would conflict for ever.
+        let rig = try await makeRig()
+        rig.server.set("GET /me", me(approved: true))
+        rig.server.set("GET /sync", #"{"ok":true,"version":4,"blob":null}"#)
+        rig.server.set("PUT /sync", #"{"ok":true,"version":5}"#)
+
+        await rig.account.start()
+
+        #expect(rig.account.stage == .ready)
+        #expect(rig.account.errorText == nil)
+        let put = try #require(rig.server.requests.last { $0.key == "PUT /sync" })
+        let raw = try #require(put.body)
+        let body = try #require(try JSONSerialization.jsonObject(with: raw) as? [String: Any])
+        #expect(body["version"] as? Int == 4)
+    }
+
+    @Test func aConflictOnTheFirstWriteShowsNoErrorAndTheScreenStaysReady() async throws {
+        // A parked key was restored, the account has no blob yet, and every write loses to another device.
+        let rig = try await makeRig()
+        try SyncKey.save(rig.syncKey, to: rig.keys)
+        rig.server.set("GET /me", me(approved: true))
+        rig.server.set("GET /sync", #"{"ok":true,"version":0,"blob":null}"#)
+        rig.server.set("PUT /sync", #"{"ok":false,"error":"conflict","version":1}"#, status: 409)
+
+        await rig.account.start()
+
+        #expect(rig.account.stage == .ready)
+        #expect(rig.account.errorText == nil)
+        #expect(rig.account.errorDetails == nil)
+        #expect(try SyncKey.load(from: rig.keys) != nil)
+        #expect(rig.server.requests.filter { $0.key == "GET /me" }.count == 2, "the route was read again once")
+    }
+
+    @Test func theLoserOfARaceForTheFirstBlobWaitsForApprovalAndAsksForTheKey() async throws {
+        let rig = try await makeRig()
+        rig.server.set("GET /me", me(approved: true))
+        // The account has no blob, this iPhone writes the first one, but the Mac's blob wins in between.
+        rig.server.set("GET /sync", #"{"ok":true,"version":0,"blob":null}"#)
+        rig.server.set("GET /sync", after: "PUT /sync", #"{"ok":true,"version":1,"blob":"\#(try blob(rig, version: 1))"}"#)
+        rig.server.set("PUT /sync", #"{"ok":false,"error":"conflict","version":1}"#, status: 409)
+        rig.server.set("POST /devices/me/request-key", #"{"ok":true}"#)
+        rig.server.set("GET /me", after: "POST /devices/me/request-key", me(approved: false))
+
+        await rig.account.start()
+
+        #expect(rig.account.stage == .waitingForApproval(code: rig.phone.fingerprint))
+        #expect(rig.account.errorText == nil)
+        #expect(try SyncKey.load(from: rig.keys) == nil, "the iPhone's own key is gone")
+        #expect(rig.server.requests.filter { $0.key == "POST /devices/me/request-key" }.count == 1)
     }
 }

@@ -204,6 +204,15 @@ Used by a pending device after approval to fetch its envelope:
 
 Returns `404 not_yet` until another device approves this one.
 
+### `POST /devices/me/request-key` (any valid session)
+
+For an approved device that has no sync key, for example one that lost a race to create the first blob and cannot open the winner's blob. No body. It sets the calling device to pending (`approved = 0`), so another approved device can approve it the usual way (fingerprints compared, envelope sent). Response: `{ "ok": true }`.
+
+- Only the calling device. Idempotent: a device that is already pending gets `{ "ok": true }`.
+- `409 no_blob`: the account has no sync blob. `409 has_key`: the device already has an envelope. `409 last_device`: no other approved device exists, so the account would be left without one.
+- Limit: 20 per device per hour (`429 rate`).
+- Clients (`FirstBlob.write`): a device that made a key for its first write and finds another device's blob deletes its own key, calls this, and shows the waiting-for-approval screen.
+
 ### `DELETE /devices/:id`
 
 - A device can always remove itself.
@@ -249,6 +258,8 @@ For an account without data: `{ "ok": true, "version": 0, "blob": null }`. After
 Request: `{ "version": 3, "blob": "<base64, at most 262144 characters>" }`.
 
 `version` must equal the stored version (`0` for an account without data). On match the server stores the blob with version + 1 and returns `{ "ok": true, "version": 4 }`. On mismatch: `409` with `{ "ok": false, "error": "conflict", "version": <current> }`. The client fetches, merges and retries.
+
+Client rule: every write goes through one path, `SyncStore.update` (read, decrypt, apply the change to the fresh copy, `PUT` at the version just read). On `409` it reads again and re-applies the change, up to 5 attempts with a random pause of 100 to 800 ms. If all attempts lose, the write is left for the next round and no error is shown; a conflict that lasts more than 2 minutes in a row is shown. `PUT` names the version from `GET`, also when the blob is `null` but the version is above 0 (after a reset).
 
 ## Encryption model
 
