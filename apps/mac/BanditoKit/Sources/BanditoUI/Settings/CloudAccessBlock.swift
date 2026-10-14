@@ -78,7 +78,12 @@ struct CloudAccessBlock: View {
             set: { on in
                 guard let cloud else { return }
                 Task {
-                    if on { await cloud.enable() } else { await cloud.disable() }
+                    if on {
+                        PhoneAccessRules.turnOnIPhoneBlock()
+                        await cloud.enable()
+                    } else {
+                        await cloud.disable()
+                    }
                     onChanged()
                 }
             })

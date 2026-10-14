@@ -1047,7 +1047,7 @@
 "ios.connect.paste.action" = "リンクを貼り付け";
 "ios.connect.paste.hint" = "または Mac のリンクを貼り付け";
 "ios.connect.placeholder" = "iPhone からのサーバー接続は近日対応予定です。";
-"ios.connect.scan.hint" = "Mac で「設定」→「サーバー」→ 対象のサーバー → iPhone →「iPhone を接続」を開きます。";
+"ios.connect.scan.hint" = "Mac で左下のプロフィールをクリック →「iPhone を接続」。またはこちらで Bandito アカウントにサインインすると、サーバーが自動的に表示されます。";
 "ios.connect.scan.noCamera" = "このデバイスにはカメラがありません。リンクを貼り付けるか、アドレスを入力してください。";
 "ios.connect.scan.title" = "Mac のコードをスキャン";
 "ios.connect.trust.action" = "一致しています。接続";
@@ -1096,7 +1096,7 @@
 "ios.notifications.ask.body" = "エージェントが承認を求めたとき、質問があるとき、失敗したときに Bandito がお知らせします。それ以外は通知しません。設定でいつでも変更できます。";
 "ios.notifications.ask.later" = "今はしない";
 "ios.notifications.ask.title" = "チームがあなたを必要とするときに知りたいですか？";
-"ios.onboarding.connect.hint" = "Mac で: 設定 → サーバー → iPhone を接続";
+"ios.onboarding.connect.hint" = "Mac で左下のプロフィールをクリック →「iPhone を接続」";
 "ios.onboarding.connect.paste" = "リンクを貼り付け";
 "ios.onboarding.connect.scan" = "Mac のコードを読み取る";
 "ios.onboarding.connect.title" = "チームの置き場所";

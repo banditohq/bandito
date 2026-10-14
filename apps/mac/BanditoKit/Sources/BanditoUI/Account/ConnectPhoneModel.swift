@@ -50,6 +50,7 @@ final class ConnectPhoneModel {
     private(set) var chosen: (any PhoneWizardServer)?
     @ObservationIgnored private let candidates: [any PhoneWizardServer]
     @ObservationIgnored private let makeController: @MainActor (any PhoneWizardServer) -> RelayController
+    @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let pollInterval: Duration
     @ObservationIgnored private var controller: RelayController?
     @ObservationIgnored private var run: Task<Void, Never>?
@@ -60,10 +61,12 @@ final class ConnectPhoneModel {
 
     init(
         candidates: [any PhoneWizardServer], pollInterval: Duration = .seconds(2),
+        defaults: UserDefaults = .standard,
         makeController: @escaping @MainActor (any PhoneWizardServer) -> RelayController
     ) {
         self.candidates = candidates
         self.pollInterval = pollInterval
+        self.defaults = defaults
         self.makeController = makeController
         step = .preparing(detail: .enabling)
     }
@@ -74,6 +77,8 @@ final class ConnectPhoneModel {
     }
 
     func start() {
+        // Opening the wizard means an iPhone is being set up: the iPhone block of the servers' settings turns on.
+        PhoneAccessRules.turnOnIPhoneBlock(in: defaults)
         guard run == nil, chosen == nil else { return }
         servers = Self.eligible(candidates)
         switch servers.count {

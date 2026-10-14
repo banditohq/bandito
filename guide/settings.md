@@ -57,7 +57,7 @@ Starts Bandito when you sign in to this Mac. It uses the macOS login items; the 
 <!-- id: set-iphone-beta; covers: setting:iphoneBeta.enabled -->
 Shows the iPhone block on the settings page of each server: access from a phone and the QR code that connects an iPhone. The iPhone app is in closed testing for now, so the switch is off by default. Turn it off to hide the block again; a server that already allows access from a phone keeps the block, so that access can be turned off.
 Где: Settings (⌘,) → General (Общие) → iPhone app (beta) (iPhone-приложение (бета))
-1. Turn the switch on to see the iPhone block: on each server's page, Settings → Servers → the server → iPhone.
+1. Turn the switch on to see the iPhone block: on each server's page, Settings → Servers → the server → iPhone. Connect iPhone in the account sheet (see [account.md](account.md)) turns the switch on by itself.
 
 ## Check for updates automatically (Проверять обновления автоматически)
 

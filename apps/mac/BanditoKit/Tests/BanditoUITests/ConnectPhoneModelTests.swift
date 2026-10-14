@@ -52,9 +52,17 @@ actor WizardRegistrar: RelayRegistrar {
 
 @MainActor
 @Suite struct ConnectPhoneModelTests {
+    /// Defaults of their own, so a test never writes the iPhone switch of the app's settings.
+    static func scratchDefaults() -> UserDefaults {
+        let name = "ConnectPhoneModelTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
+
     func model(_ servers: [WizardServer], signedIn: Bool = true) -> ConnectPhoneModel {
         ConnectPhoneModel(
-            candidates: servers, pollInterval: .milliseconds(20),
+            candidates: servers, pollInterval: .milliseconds(20), defaults: Self.scratchDefaults(),
             makeController: { server in
                 RelayController(
                     host: server, registrar: { signedIn ? WizardRegistrar() : nil }, connectTimeout: .milliseconds(300),
@@ -68,6 +76,24 @@ actor WizardRegistrar: RelayRegistrar {
             try? await Task.sleep(for: .milliseconds(10))
         }
         return false
+    }
+
+    @Test func openingTheWizardTurnsTheIPhoneBlockOnWithOrWithoutAServer() {
+        let withServer = Self.scratchDefaults()
+        let made = ConnectPhoneModel(
+            candidates: [WizardServer(name: "Studio")], pollInterval: .milliseconds(20), defaults: withServer,
+            makeController: { server in RelayController(host: server, registrar: { nil }) })
+        #expect(!withServer.bool(forKey: PhoneAccessRules.betaStorageKey), "off before the wizard opens")
+        made.start()
+        #expect(withServer.bool(forKey: PhoneAccessRules.betaStorageKey))
+        made.cancel()
+
+        let withoutServer = Self.scratchDefaults()
+        let none = ConnectPhoneModel(
+            candidates: [], pollInterval: .milliseconds(20), defaults: withoutServer,
+            makeController: { server in RelayController(host: server, registrar: { nil }) })
+        none.start()
+        #expect(withoutServer.bool(forKey: PhoneAccessRules.betaStorageKey), "the wizard says what is missing, the switch is on")
     }
 
     @Test func oneServerSkipsThePickerAndGoesStraightToTheQRCode() async {

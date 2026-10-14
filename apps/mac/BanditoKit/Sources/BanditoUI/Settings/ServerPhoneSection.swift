@@ -168,10 +168,20 @@ struct ServerPhoneSection: View {
             if CloudAccessRules.showsTailscaleHelper(mode: settings.phoneAccess, status: model.snapshot?.phone) {
                 TailscaleHelper(
                     os: server.info?.os, onRecheck: { Task { await model.recheckPhoneAccess() } },
-                    onUseCloud: server.supportsRelay && cloud != nil ? { Task { await cloud?.enable() } } : nil)
+                    onUseCloud: cloudAction)
             } else {
                 note(L10n.ServerSettings.Phone.error(reason: reason), color: Color.Bandito.danger)
             }
+        }
+    }
+
+    /// The Tailscale helper's way to the cloud, when the server can use it: the same as the switch, so the iPhone block
+    /// stays on.
+    private var cloudAction: (() -> Void)? {
+        guard server.supportsRelay, let cloud else { return nil }
+        return {
+            PhoneAccessRules.turnOnIPhoneBlock()
+            Task { await cloud.enable() }
         }
     }
 

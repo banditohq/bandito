@@ -1047,7 +1047,7 @@
 "ios.connect.paste.action" = "粘贴链接";
 "ios.connect.paste.hint" = "或粘贴 Mac 上的链接";
 "ios.connect.placeholder" = "从 iPhone 连接服务器的功能即将推出。";
-"ios.connect.scan.hint" = "在 Mac 上：设置 → 服务器 → 你的服务器 → iPhone → 连接 iPhone。";
+"ios.connect.scan.hint" = "在 Mac 上点击左下角的个人头像 → 连接 iPhone。或在此登录你的 Bandito 账户，服务器会自动出现。";
 "ios.connect.scan.noCamera" = "此设备没有摄像头。请粘贴链接或输入地址。";
 "ios.connect.scan.title" = "扫描 Mac 上的二维码";
 "ios.connect.trust.action" = "一致，连接";
@@ -1096,7 +1096,7 @@
 "ios.notifications.ask.body" = "当智能体请求批准、提出问题或失败时，Bandito 可以通知你，仅此而已。你可以在设置中更改。";
 "ios.notifications.ask.later" = "暂不";
 "ios.notifications.ask.title" = "想在团队需要你时收到通知吗？";
-"ios.onboarding.connect.hint" = "在 Mac 上：设置 → 服务器 → 连接 iPhone";
+"ios.onboarding.connect.hint" = "在 Mac 上：点击左下角的个人头像 → 连接 iPhone";
 "ios.onboarding.connect.paste" = "粘贴链接";
 "ios.onboarding.connect.scan" = "扫描 Mac 上的二维码";
 "ios.onboarding.connect.title" = "你的团队住在哪里";

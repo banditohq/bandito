@@ -1047,7 +1047,7 @@
 "ios.connect.paste.action" = "Paste a link";
 "ios.connect.paste.hint" = "Or paste the link from the Mac";
 "ios.connect.placeholder" = "Connecting a server from the iPhone is coming soon.";
-"ios.connect.scan.hint" = "On the Mac: Settings → Servers → your server → iPhone → Connect iPhone.";
+"ios.connect.scan.hint" = "On the Mac, click your profile at the bottom left → Connect iPhone. Or sign in to your Bandito account here, and your servers will appear by themselves.";
 "ios.connect.scan.noCamera" = "This device has no camera. Paste the link or type the address instead.";
 "ios.connect.scan.title" = "Scan the code from your Mac";
 "ios.connect.trust.action" = "They match, connect";
@@ -1096,7 +1096,7 @@
 "ios.notifications.ask.body" = "Bandito can tell you when an agent asks for approval, has a question or fails. Nothing else. You can change this in Settings.";
 "ios.notifications.ask.later" = "Not now";
 "ios.notifications.ask.title" = "Want to know when your crew needs you?";
-"ios.onboarding.connect.hint" = "On your Mac: Settings → Servers → Connect iPhone";
+"ios.onboarding.connect.hint" = "On your Mac: click your profile at the bottom left → Connect iPhone";
 "ios.onboarding.connect.paste" = "Paste a link";
 "ios.onboarding.connect.scan" = "Scan the code from your Mac";
 "ios.onboarding.connect.title" = "Where your crew lives";
