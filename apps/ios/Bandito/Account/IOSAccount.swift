@@ -86,7 +86,7 @@ final class IOSAccount {
         keys: SecretStore, identities: DeviceIdentityStore, sink: ServerAccessSink, noiseKeys: ServerNoiseKeyStore,
         connectedServers: @escaping @MainActor () -> [ServerModel] = { [] }, ledger: AccessLedger = AccessLedger(),
         dismissed: DismissedServers = DismissedServers(),
-        http: HTTPClient = BackgroundHTTPClient(URLSessionHTTPClient()), baseURL: URL = AccountClient.defaultBaseURL,
+        http: HTTPClient = BackgroundHTTPClient(URLSessionHTTPClient(configuration: URLSessionHTTPClient.accountConfiguration())), baseURL: URL = AccountClient.defaultBaseURL,
         deviceName: String = IOSAccount.currentDeviceName(), defaults: UserDefaults = .standard,
         pollInterval: Duration = .seconds(3), retryDelay: Duration = .milliseconds(1500)
     ) {
