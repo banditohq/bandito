@@ -305,16 +305,15 @@ final class IOSAccount {
                     if !hadKey { try? keys.save(nil, account: SyncKey.keychainAccount) }
                     throw failure
                 } catch {
-                    // Other devices wrote under every attempt. This account is no longer empty, so read it again, unless the
-                    // key was here before: then the screen is ready and the next write goes through `SyncStore.update`.
-                    if !hadKey {
-                        try? keys.save(nil, account: SyncKey.keychainAccount)
-                        if firstBlobRetry {
-                            await refresh(firstBlobRetry: false)
-                            return
-                        }
-                        throw error
+                    // Other devices wrote under every attempt. The account is probably not empty any more, so read it
+                    // again (once), whether the key was here before or not. If it is still the same, the screen is ready
+                    // and the next write goes through `SyncStore.update`.
+                    if !hadKey { try? keys.save(nil, account: SyncKey.keychainAccount) }
+                    if firstBlobRetry {
+                        await refresh(firstBlobRetry: false)
+                        return
                     }
+                    if !hadKey { throw error }
                 }
                 becomeReady()
             case .ready:

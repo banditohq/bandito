@@ -237,5 +237,6 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
         #expect(rig.account.errorText == nil)
         #expect(rig.account.errorDetails == nil)
         #expect(try SyncKey.load(from: rig.keys) != nil)
+        #expect(rig.server.requests.filter { $0.key == "GET /me" }.count == 2, "the route was read again once")
     }
 }

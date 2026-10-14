@@ -101,8 +101,9 @@ public final class SyncStore {
     }
 
     /// Resets the signed-in account on the server and forgets this device's version history for it. This is the
-    /// only supported way to reset: the UI must not call `AccountClient.reset()` itself. The server then starts a
-    /// new blob history at version 1, and the old high-water mark would refuse it as a rollback.
+    /// only supported way to reset: the UI must not call `AccountClient.reset()` itself. The server keeps the
+    /// account's version after a reset (it never goes back, `GET /sync` answers `blob: null` with that version), so the
+    /// next write names it. The old high-water mark is dropped because this device starts a new history.
     /// If the server refuses the reset, the history is kept.
     public func resetAccount() async throws -> DeviceRef {
         let accountID = try await currentAccountID()
