@@ -202,6 +202,8 @@ final class PhoneEmailSignIn {
     }
     private(set) var phase: Phase = .address
     private(set) var errorText: String?
+    /// The technical line for `errorText` (see `PhoneAccountMessages.details`).
+    private(set) var errorDetails: String?
     private(set) var isBusy = false
     private(set) var signedIn: Session?
     private(set) var cooldown = ResendCooldown()
@@ -217,10 +219,11 @@ final class PhoneEmailSignIn {
         let address = email.trimmingCharacters(in: .whitespaces)
         guard EmailAddressCheck.isPlausible(address) else {
             errorText = L10n.Onboarding.Account.invalidEmail
+            errorDetails = nil
             return
         }
         isBusy = true
-        errorText = nil
+        clearError()
         defer { isBusy = false }
         do {
             try await service.emailStart(email: address)
@@ -229,7 +232,7 @@ final class PhoneEmailSignIn {
             code = ""
             cooldown.markSent(at: now)
         } catch {
-            errorText = PhoneAccountMessages.text(for: error)
+            fail(error)
         }
     }
 
@@ -242,26 +245,37 @@ final class PhoneEmailSignIn {
     func verify() async {
         guard phase == .code, !isBusy, signedIn == nil, code.count == 6 else { return }
         isBusy = true
-        errorText = nil
+        clearError()
         defer { isBusy = false }
         do {
             signedIn = try await service.emailVerify(email: email, code: code)
         } catch {
             code = ""
-            errorText = PhoneAccountMessages.text(for: error)
+            fail(error)
         }
+    }
+
+    private func fail(_ error: Error, at place: String = #function) {
+        errorText = PhoneAccountMessages.text(for: error)
+        errorDetails = PhoneAccountMessages.details(for: error)
+        PhoneAccountMessages.record(error, at: place)
+    }
+
+    private func clearError() {
+        errorText = nil
+        errorDetails = nil
     }
 
     func changeEmail() {
         phase = .address
         code = ""
-        errorText = nil
+        clearError()
     }
 
     func finish() {
         signedIn = nil
         phase = .address
         code = ""
-        errorText = nil
+        clearError()
     }
 }

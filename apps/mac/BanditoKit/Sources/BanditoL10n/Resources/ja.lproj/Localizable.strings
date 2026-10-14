@@ -936,6 +936,11 @@
 "ios.account.approval.codeLabel" = "この iPhone のコード";
 "ios.account.approval.text" = "サインインしました。Mac で Bandito を開くとリクエストが表示されます。その画面のコードと下のコードを照合してください。";
 "ios.account.approval.title" = "この iPhone を Mac で承認してください";
+"ios.account.error.copied" = "コピーしました";
+"ios.account.error.copy" = "コピー";
+"ios.account.error.details" = "詳細";
+"ios.account.error.keychain" = "この iPhone の保護されたデータを読み書きできませんでした。アプリを再起動してもう一度お試しください。";
+"ios.account.error.unconfirmed" = "コードの確認中に接続が切れました。新しいコードをリクエストして、もう一度お試しください。";
 "ios.account.recover.text" = "この iPhone には同期キーがなく、ほかのデバイスからも渡せません。ここでサインアウトし、Mac のアカウントからこの iPhone を削除して、もう一度サインインしてください。";
 "ios.account.sender.codeLabel" = "承認したデバイスのコード";
 "ios.account.sender.title" = "お使いのデバイスのひとつが承認しました。そのデバイスの画面のコードは、下のコードと一致していますか？";

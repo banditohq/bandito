@@ -1361,6 +1361,14 @@ public enum L10n {
                 public static var title: String { L10n.tr("ios.account.approval.title") }
             }
 
+            public enum Error {
+                public static var copied: String { L10n.tr("ios.account.error.copied") }
+                public static var copy: String { L10n.tr("ios.account.error.copy") }
+                public static var details: String { L10n.tr("ios.account.error.details") }
+                public static var keychain: String { L10n.tr("ios.account.error.keychain") }
+                public static var unconfirmed: String { L10n.tr("ios.account.error.unconfirmed") }
+            }
+
             public enum Recover {
                 public static var text: String { L10n.tr("ios.account.recover.text") }
             }

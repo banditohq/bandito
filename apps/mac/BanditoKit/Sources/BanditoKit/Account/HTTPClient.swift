@@ -12,7 +12,19 @@ public protocol HTTPClient: Sendable {
 public struct URLSessionHTTPClient: HTTPClient {
     private let session: URLSession
 
-    public init(configuration: URLSessionConfiguration = .ephemeral) {
+    /// The session for account requests: no cache or cookies, and a request waits (up to 30 s in all) for the network
+    /// to come back instead of failing at once, as it must after the app returns from the background or while the
+    /// radio wakes up. A phone whose IPv6 does not work is served by the system's Happy Eyeballs; nothing here forces
+    /// an address family.
+    public static func accountConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 30
+        return configuration
+    }
+
+    public init(configuration: URLSessionConfiguration = URLSessionHTTPClient.accountConfiguration()) {
         self.session = URLSession(configuration: configuration, delegate: RedirectRefusal(), delegateQueue: nil)
     }
 

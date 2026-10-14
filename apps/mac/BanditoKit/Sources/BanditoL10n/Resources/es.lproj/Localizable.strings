@@ -936,6 +936,11 @@
 "ios.account.approval.codeLabel" = "Código de este iPhone";
 "ios.account.approval.text" = "Ha iniciado sesión. Abra Bandito en su Mac: allí aparecerá una solicitud. Compare el código de su pantalla con el de abajo.";
 "ios.account.approval.title" = "Apruebe este iPhone en su Mac";
+"ios.account.error.copied" = "Copiado";
+"ios.account.error.copy" = "Copiar";
+"ios.account.error.details" = "Detalles";
+"ios.account.error.keychain" = "No se pudieron leer o guardar los datos protegidos de este iPhone. Reinicie la app e inténtelo de nuevo.";
+"ios.account.error.unconfirmed" = "Se cortó la conexión mientras se comprobaba su código. Solicite un código nuevo e inténtelo de nuevo.";
 "ios.account.recover.text" = "Este iPhone no tiene clave de sincronización y ninguno de sus otros dispositivos puede entregársela. Cierre sesión aquí, quite este iPhone de la cuenta en su Mac e inicie sesión de nuevo.";
 "ios.account.sender.codeLabel" = "Código del dispositivo que aprobó";
 "ios.account.sender.title" = "Aprobado por uno de sus dispositivos. ¿Coincide el código de su pantalla con el de abajo?";
