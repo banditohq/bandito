@@ -218,7 +218,8 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
         #expect(rig.account.stage == .ready)
         #expect(rig.account.errorText == nil)
         let put = try #require(rig.server.requests.last { $0.key == "PUT /sync" })
-        let body = try #require(try JSONSerialization.jsonObject(with: try #require(put.body)) as? [String: Any])
+        let raw = try #require(put.body)
+        let body = try #require(try JSONSerialization.jsonObject(with: raw) as? [String: Any])
         #expect(body["version"] as? Int == 4)
     }
 
