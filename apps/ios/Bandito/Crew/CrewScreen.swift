@@ -140,7 +140,7 @@ struct CrewFocus: Equatable {
     let request: UUID
 
     /// Whether the focus's agent is listed on its server now. A link that arrives before the servers are connected is not.
-    func isListed(in servers: [ServerModel]) -> Bool {
+    @MainActor func isListed(in servers: [ServerModel]) -> Bool {
         servers.contains { server in
             server.id == serverID && server.agents.contains { $0.id == agentID }
         }
