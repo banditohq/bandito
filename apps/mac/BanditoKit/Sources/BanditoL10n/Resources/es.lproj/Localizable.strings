@@ -987,6 +987,7 @@
 "ios.chat.attach.files" = "Archivos";
 "ios.chat.attach.noPreview" = "Sin vista previa en esta conexión";
 "ios.chat.attach.photos" = "Fototeca";
+"ios.chat.attachmentPlaceholder" = "📎 Adjunto";
 "ios.chat.camera.denied" = "Bandito no puede usar la cámara. Permítelo en Ajustes de iOS → Bandito.";
 "ios.chat.changes.failed" = "No se pudieron cargar los cambios.";
 "ios.chat.connection.offline" = "Sin conexión. Los mensajes nuevos esperan aquí hasta que vuelva.";
@@ -1007,12 +1008,19 @@
 "ios.chat.header.offline" = "Sin conexión";
 "ios.chat.header.waiting" = "Te espera";
 "ios.chat.header.working" = "Trabajando…";
+"ios.chat.loadFailed.message" = "No se pudo leer el historial de %1$@. Revisa la conexión e inténtalo de nuevo.";
+"ios.chat.loadFailed.title" = "No se pudo cargar el chat";
+"ios.chat.loading" = "Cargando el chat";
 "ios.chat.loadingOlder" = "Cargando mensajes anteriores…";
 "ios.chat.notSent" = "No enviado";
 "ios.chat.openInSafari" = "Abrir en Safari";
 "ios.chat.openSettings" = "Abrir Ajustes";
+"ios.chat.reactFailed" = "La reacción no se envió. Inténtalo de nuevo.";
+"ios.chat.reply.cancel" = "Cancelar respuesta";
 "ios.chat.retry" = "Reintentar";
+"ios.chat.selectText.done" = "Hecho";
 "ios.chat.sending" = "Enviando…";
+"ios.chat.share" = "Compartir";
 "ios.chat.stopFailed" = "No se pudo detener: no hay conexión con el servidor. Inténtalo de nuevo cuando vuelva la conexión.";
 "ios.chat.stopFailedOther" = "No se pudo detener. Inténtalo de nuevo.";
 "ios.chat.tools.hide" = "Ocultar los comandos";

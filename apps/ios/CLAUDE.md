@@ -88,6 +88,41 @@ The screen every day. Read the rules before changing it; each came from the Mac'
   (more messages with its text than when the attempt began) before it is sent again.
 - Budgets (`ChatSpeedTests`, counted not timed): a stream of 100 pieces sets up one cell and measures one row per update;
   typing touches no row; scrolling 500 messages measures each row once. `ChatCounters` has the numbers.
+- The list and the box are placed by frames, never by constraints between them (`ChatFrameRules.frames`, pure and tested):
+  the box is on the bottom edge (above the home indicator), or on the keyboard's top, and the list has the rest, with a floor
+  (`min(120, a quarter of the room)`), so an empty or loading list can never hand the free space to the box and a keyboard
+  frame the system reports wrongly for a moment (a screenshot, a trait change) cannot carry the box up; the box is never
+  higher than the keyboard's top (an invariant of `ChatFrameRules`). The keyboard's top is the frame of the last
+  `keyboardWillShow/WillChangeFrame` notification (converted to the view; `keyboardWillHide/DidHide` forget it); the hidden
+  `keyboardLayoutGuide` view is trusted only while the person drags the keyboard (interactive dismiss) and is below that
+  frame. The box moves with the notification's duration and curve. It only counts while the box's field is first responder.
+  The box's height is `composer.fittingHeight(width:)`. Screenshots and `didBecomeActive` lay the screen out again at once and 0.4 s later.
+  Do not put the list or the box back on Auto Layout against each other.
+- What stands in the list's place (`updateOverlays`): a spinner while the history is read (after 0.3 s, so a quick read does
+  not flash it), "Couldn't load the chat" with "Try again" (`chat.loadFailed`, `chat.retryLoad`; `ChatModel.retryLoad`) when
+  it could not be read and nothing is saved, the empty chat's invitation only when there is truly nothing (not loading, no
+  error). A history whose newest page shows no row (only tool calls) reads older pages (up to 10 that came empty) before saying "empty";
+  a failed older page is the same failure screen with "Try again" (`ChatModel.olderFailed`), not a spinner. The offline banner
+  (`ChatBannerLabel`) wraps to two lines. A message that was only a file is saved as "📎 Attachment".
+- Saved history (`ChatHistoryCache`): the last 200 items per (server, agent) as JSON in
+  `Application Support/ChatCache/<server uuid>/<agent>.json`, `completeUntilFirstUserAuthentication`, out of the iCloud backup.
+  Text and metadata only (no files, no tool calls, no cards that wait for an answer, no stream; a message is cut at 20 000
+  characters). `ChatModel` draws it while `summary.loaded` is false and replaces it with the server's thread (never a merge);
+  it writes 1.5 s after the thread settles, when the screen goes away and when the app goes to the background. Synthetic
+  (demo) agents are never saved. It is removed with the server (`ServerSession.remove/forget/reset`), with the agent
+  (`AgentDetailModel.delete`) and pruned to the agents a server lists (`saveAgentCaches`, only for a server whose list was read).
+- Long press on a message (`ChatMessageMenu`, pure): the preview is the bubble itself (`UITargetedPreview` with the bubble's
+  path), above the menu a palette of the Mac's 16 quick reactions (`ReactionRules.common`, two rows; the person's own is marked
+  and a second tap takes it off), then Reply (a quote above the box; `QueuedSend.replyTo` goes out as `replyTo`), Copy, Copy
+  Markdown (only when it differs), Select text (`ChatSelectTextController`, a sheet), Share, Send again, Try again / Delete for a
+  message still on the phone. A message without a `seq` (a stream, a teammate's, still on the phone) or a server without the
+  feature (`reactions`, `attachments`) offers no reaction/reply. Reactions are drawn under the bubble as capsules and show at
+  once (`ChatModel.react`, the daemon's event lets the stand-in go; a refusal takes it back with an error buzz and an alert).
+  A tap on a quote jumps to the original (older pages are read, up to 12). A tap of the Taptic Engine opens the menu.
+- Read marks: `markReadIfSeen` (`ChatSeenRules`) asks `ThreadSummary.markRead()` whenever the end can have come into view and
+  the screen is visible in an active app: on appearing, on every applied update, on scrolling to the bottom, on
+  `didBecomeActive`, after the history is read. A short list that fits counts as at its end; a chat opened from Activity
+  (`focusRowID`) counts as looked at wherever it opens.
 - Debug launch arguments: `-chat <agent>` (Crew), `-chat-draft <text>`, `-chat-send <text>`, `-chat-top`, `-chat-row <id part>`.
   The demo agents answer (`Demo/DemoChatScript.swift`: commands, a streamed reply, an approval for Forge, two buttons).
 
@@ -155,7 +190,7 @@ The screen every day. Read the rules before changing it; each came from the Mac'
 ## Known gaps before a release
 
 - `bandito://pair…` opens the connect sheet (shown and confirmed before anything is sent); the other `bandito://` links (`inbox`, `crew`, `agent/<server>/<agent>`) are read by `BanditoLink` (`Shared/WidgetSnapshot.swift`) and opened in `RootView`: the tab switches, and an agent opens its chat in the Crew (`CrewFocus`). A notification's press and the Inbox sheet's chat button take the same way.
-- Not in the chat yet: reactions, reply quotes and mentions (the Mac has them), pictures that other clients sent (the daemon's file route is not reachable over `.direct`, so only pictures this phone sent show; others are a tile with the name), and a thread cache for a cold start without a connection (threads live in memory).
+- Not in the chat yet: mentions (the Mac has them), reading a message aloud, and pictures that other clients sent (the daemon's file route is not reachable over `.direct`, so only pictures this phone sent show; others are a tile with the name).
 - The agent card (`Agent/AgentDetailView.swift`) and the creation sheet (`Agent/NewAgentSheet.swift`, `OneAgentForm.swift`)
   are built. The rules they use (`NewAgentModelRules`, `NewAgentFolderRules`, `ReadyTeamsLogic`, `AgentCapability`,
   `BotScheduleWords`) live in BanditoKit; `Agent/AgentForms.swift` holds only the form glue.

@@ -25,7 +25,11 @@ struct AgentDetailView: View {
     init(server: ServerModel, agentID: String) {
         self.server = server
         self.agentID = agentID
-        _model = State(initialValue: AgentDetailModel(server: server, agentID: agentID))
+        let serverID = server.id
+        _model = State(
+            initialValue: AgentDetailModel(
+                server: server, agentID: agentID,
+                forget: { ChatHistoryCache.shared.remove(serverID: serverID, agentID: $0) }))
     }
 
     /// The agent as the server model holds it now; nil once it is deleted.

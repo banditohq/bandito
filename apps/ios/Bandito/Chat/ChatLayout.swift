@@ -44,6 +44,11 @@ struct ChatFonts: @unchecked Sendable {
     let lineMono: UIFont
     let card: UIFont
     let cardStrong: UIFont
+    /// The emoji of a reaction chip.
+    let chip: UIFont
+    /// The name and the words of the message a reply quotes.
+    let quoteName: UIFont
+    let quoteText: UIFont
 
     init(category: UIContentSizeCategory) {
         body = BanditoFont.uiText(size: 15.5, weight: 400, category: category)
@@ -61,6 +66,9 @@ struct ChatFonts: @unchecked Sendable {
         lineMono = BanditoFont.uiMono(size: 12, weight: 400, category: category)
         card = BanditoFont.uiText(size: 14.5, weight: 450, category: category)
         cardStrong = BanditoFont.uiDisplay(size: 14, weight: 600, category: category)
+        chip = BanditoFont.uiText(size: 14, weight: 400, category: category)
+        quoteName = BanditoFont.uiText(size: 12, weight: 600, category: category)
+        quoteText = BanditoFont.uiText(size: 13, weight: 400, category: category)
     }
 }
 
@@ -89,6 +97,12 @@ struct ChatFileItem: Sendable {
     var frame: CGRect
 }
 
+/// A reaction chip under a bubble, with the place it is drawn and touched at (in the cell's coordinates).
+struct ChatChipItem: Sendable {
+    var chip: ChatReactionChip
+    var frame: CGRect
+}
+
 /// What a message cell places.
 struct ChatMessageLayout: @unchecked Sendable {
     enum Block: @unchecked Sendable {
@@ -97,6 +111,8 @@ struct ChatMessageLayout: @unchecked Sendable {
         case rule(CGRect)
         /// The bar left of a quote.
         case bar(CGRect)
+        /// The quiet plate behind the quote of a reply.
+        case panel(CGRect)
     }
 
     var isMine: Bool
@@ -110,6 +126,11 @@ struct ChatMessageLayout: @unchecked Sendable {
     var spoken: String
     /// The plain text, for Copy.
     var plain: String
+    /// The quote of a reply: where a tap goes to the original (in the cell's coordinates), and which message that is.
+    var quote: CGRect?
+    var quoteSeq: Int64?
+    /// The reactions under the bubble.
+    var chips: [ChatChipItem] = []
 }
 
 struct ChatLineLayout: @unchecked Sendable {

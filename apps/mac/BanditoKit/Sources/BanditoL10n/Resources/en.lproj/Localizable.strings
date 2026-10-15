@@ -987,6 +987,7 @@
 "ios.chat.attach.files" = "Files";
 "ios.chat.attach.noPreview" = "No preview over this connection";
 "ios.chat.attach.photos" = "Photo library";
+"ios.chat.attachmentPlaceholder" = "📎 Attachment";
 "ios.chat.camera.denied" = "Bandito can’t use the camera. Allow it in iOS Settings → Bandito.";
 "ios.chat.changes.failed" = "Could not load the changes.";
 "ios.chat.connection.offline" = "No connection. New messages wait here until it is back.";
@@ -1007,12 +1008,19 @@
 "ios.chat.header.offline" = "No connection";
 "ios.chat.header.waiting" = "Waiting for you";
 "ios.chat.header.working" = "Working…";
+"ios.chat.loadFailed.message" = "The history of %1$@ could not be read. Check the connection and try again.";
+"ios.chat.loadFailed.title" = "Could not load the chat";
+"ios.chat.loading" = "Loading the chat";
 "ios.chat.loadingOlder" = "Loading earlier messages…";
 "ios.chat.notSent" = "Not sent";
 "ios.chat.openInSafari" = "Open in Safari";
 "ios.chat.openSettings" = "Open Settings";
+"ios.chat.reactFailed" = "The reaction did not go through. Try again.";
+"ios.chat.reply.cancel" = "Cancel reply";
 "ios.chat.retry" = "Try again";
+"ios.chat.selectText.done" = "Done";
 "ios.chat.sending" = "Sending…";
+"ios.chat.share" = "Share";
 "ios.chat.stopFailed" = "Couldn't stop: no connection to the server. Try again when it's back.";
 "ios.chat.stopFailedOther" = "Couldn't stop. Try again.";
 "ios.chat.tools.hide" = "Hide the commands";

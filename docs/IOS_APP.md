@@ -74,9 +74,19 @@ and Activity) opens the composer with an agent picker (last used first).
   replies above the box, lines for scheduled runs and quiet turns, the working row with what the agent does and for how long.
 - The box: grows to six lines, a button for photos, the camera and files (uploaded at once, shown as tiles), dictation
   (Apple's speech recognition, permission asked in place after a line of explanation), send and stop. A draft is kept per agent.
-- Offline: a message written without a connection waits and goes out in order, once, when the connection is back.
-- Haptics: light on send, success on an allowed request, warning on a refusal or a stop.
-- Not yet: reactions, reply quotes, mentions, and the pictures other clients sent (see `apps/ios/CLAUDE.md`).
+- Offline: a message written without a connection waits and goes out in order, once, when the connection is back. The last 200
+  items of each chat are kept on the phone (text only, behind the first unlock, out of the iCloud backup), so a chat opens with
+  its history while the connection is made or missing, and the server's history replaces it when it arrives. If the history
+  cannot be read and nothing is saved, the chat says so and offers "Try again" (never a blank screen).
+- Long press on a message: the bubble lifts, a row of quick reactions (the Mac's) is over the menu (Reply, Copy, Select text,
+  Share; Send again for an undelivered one). Reactions sit under the bubble; a reply quotes the original above the box and in the
+  bubble, and a tap on the quote goes to it.
+- Read: a chat opened (a short one that fits, the end of a long one, an Activity entry), or one that is open when the app comes
+  back or the history is read, is marked read, so the badge on Activity and the unread dots go away.
+- The message box is always on the bottom edge (or on the keyboard); the list has the rest, in every state.
+- Haptics: light on send, medium when the message menu opens, success on an allowed request, warning on a refusal or a stop,
+  error when a reaction is refused.
+- Not yet: mentions, reading aloud, and the pictures other clients sent (see `apps/ios/CLAUDE.md`).
 
 ### The account (built)
 

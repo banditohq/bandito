@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import Foundation
 import Testing
 
@@ -222,5 +223,86 @@ import Testing
             return nil
         }
         #expect(captions == [.uncertain(id: uncertain.id), .notSent(id: failed.id, why: .key)])
+    }
+
+    // MARK: reactions and replies
+
+    func messages(_ rows: [ChatRow]) -> [ChatMessage] {
+        rows.compactMap { row -> ChatMessage? in
+            if case .message(let message) = row.content { return message }
+            return nil
+        }
+    }
+
+    func conversation() -> [ThreadItem] {
+        [
+            .user(id: "s1", text: "Can you fix the build?", source: .user, from: nil, ts: ts),
+            .assistant(id: "s2", text: "Yes, on it.", ts: ts + 1),
+            .user(id: "s3", text: "Thanks", source: .user, from: nil, ts: ts + 2),
+        ]
+    }
+
+    @Test func reactionsShowUnderTheirMessageWhenTheServerTakesThem() {
+        var built = input(conversation())
+        built.reactionsOn = true
+        built.reactions = [2: [ChatReactionChip(emoji: "👍", byUser: true, byAgent: false)]]
+        let found = messages(ChatRowBuilder.build(built))
+        #expect(found[1].reactions == [ChatReactionChip(emoji: "👍", byUser: true, byAgent: false)])
+        #expect(found[1].canReact)
+        #expect(found[0].reactions.isEmpty)
+    }
+
+    @Test func aMessageWithReactionsIsARowThatChanged() {
+        var plain = input(conversation())
+        plain.reactionsOn = true
+        var reacted = plain
+        reacted.reactions = [2: [ChatReactionChip(emoji: "🔥", byUser: false, byAgent: true)]]
+        let before = ChatRowBuilder.build(plain).first { $0.id == "s2" }
+        let after = ChatRowBuilder.build(reacted).first { $0.id == "s2" }
+        #expect(before?.version != after?.version)
+    }
+
+    @Test func aServerWithoutTheFeaturesOffersNeitherReactionNorReply() {
+        let found = messages(ChatRowBuilder.build(input(conversation())))
+        #expect(found.allSatisfy { !$0.canReact && !$0.canReply })
+    }
+
+    @Test func aReplyQuotesTheMessageItAnswers() {
+        var built = input(conversation())
+        built.repliesOn = true
+        built.replies = [3: 2]
+        let found = messages(ChatRowBuilder.build(built))
+        #expect(found[2].reply == ChatReplyQuote(seq: 2, name: "Forge", excerpt: "Yes, on it."))
+        #expect(found[1].reply == nil)
+    }
+
+    @Test func aReplyToTheOwnMessageIsQuotedAsYou() {
+        var built = input(conversation())
+        built.repliesOn = true
+        built.replies = [2: 1]
+        let quote = messages(ChatRowBuilder.build(built))[1].reply
+        #expect(quote?.seq == 1)
+        #expect(quote?.excerpt == "Can you fix the build?")
+        #expect(quote?.name == L10n.Reply.you)
+    }
+
+    @Test func aReplyToAMessageNotLoadedStillShowsAQuoteWithoutWords() {
+        var built = input([.user(id: "s9", text: "Answering something old", source: .user, from: nil, ts: ts)])
+        built.repliesOn = true
+        built.replies = [9: 3]
+        let quote = messages(ChatRowBuilder.build(built)).first?.reply
+        #expect(quote?.seq == 3)
+        #expect(quote?.excerpt == nil)
+    }
+
+    @Test func aMessageWrittenOnThisPhoneAsAReplyShowsItsQuoteBeforeItIsSent() {
+        let queued = QueuedSend(serverID: UUID(), agentID: "a", text: "On my way", createdAt: ts + 5, replyTo: 2)
+        var built = input(conversation(), queued: [queued])
+        built.repliesOn = true
+        let pending = messages(ChatRowBuilder.build(built)).last
+        #expect(pending?.text == "On my way")
+        #expect(pending?.reply?.seq == 2)
+        #expect(pending?.reply?.excerpt == "Yes, on it.")
+        #expect(pending?.canReact == false)
     }
 }

@@ -55,12 +55,16 @@ final class ServerSession {
 
     /// The last agent list of each server, shown at a start without a connection.
     @ObservationIgnored private let cache: AgentListCache
+    /// The last messages of each chat, kept for opening a chat without a connection; they go with their server or agent.
+    @ObservationIgnored private let chatHistory: ChatHistoryCache
 
     init(
         store: ServerStore = ServerStore(), secrets: SecretStore = ServerSession.deviceSecrets(),
-        connect: (@MainActor (ServerModel) -> Void)? = nil, cache: AgentListCache = AgentListCache()
+        connect: (@MainActor (ServerModel) -> Void)? = nil, cache: AgentListCache = AgentListCache(),
+        chatHistory: ChatHistoryCache = .shared
     ) {
         self.cache = cache
+        self.chatHistory = chatHistory
         self.store = store
         self.secrets = secrets
         self.connectOverride = connect
@@ -233,6 +237,7 @@ final class ServerSession {
         drop(id)
         forgetCursor(id)
         cache.remove(serverID: id)
+        chatHistory.remove(serverID: id)
         save()
         onForgotten?(config)
         return .removed(revokedOnServer: revoked)
@@ -251,6 +256,7 @@ final class ServerSession {
         try? secrets.save(nil, account: Self.noiseAccount(id))
         forgetCursor(id)
         cache.remove(serverID: id)
+        chatHistory.remove(serverID: id)
         if let removed { onForgotten?(removed) }
         // What was written to this server and not sent stays with it no longer.
         ChatOutbox.shared.forget(serverID: id)
@@ -278,12 +284,16 @@ final class ServerSession {
             try? secrets.save(nil, account: config.id.uuidString)
             try? secrets.save(nil, account: Self.noiseAccount(config.id))
             cache.remove(serverID: config.id)
+            chatHistory.remove(serverID: config.id)
         }
         for server in servers {
             ChatOutbox.shared.forget(serverID: server.id)
             Task { await server.disconnect() }
         }
-        for server in servers { cache.remove(serverID: server.id) }
+        for server in servers {
+            cache.remove(serverID: server.id)
+            chatHistory.remove(serverID: server.id)
+        }
         servers = []
         store.clear()
     }
@@ -328,6 +338,8 @@ final class ServerSession {
     func saveAgentCaches() {
         for server in servers where server.agentsListedAt != nil {
             cache.save(server.agents, serverID: server.id)
+            // The agent list is the server's own: the saved chat of an agent that is not in it any more goes.
+            chatHistory.prune(serverID: server.id, keeping: Set(server.agents.map(\.id)))
         }
     }
 

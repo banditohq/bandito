@@ -1446,14 +1446,18 @@ public enum L10n {
         }
 
         public enum Chat {
+            public static var attachmentPlaceholder: String { L10n.tr("ios.chat.attachmentPlaceholder") }
             public static var copyLink: String { L10n.tr("ios.chat.copyLink") }
             public static var discard: String { L10n.tr("ios.chat.discard") }
+            public static var loading: String { L10n.tr("ios.chat.loading") }
             public static var loadingOlder: String { L10n.tr("ios.chat.loadingOlder") }
             public static var notSent: String { L10n.tr("ios.chat.notSent") }
             public static var openInSafari: String { L10n.tr("ios.chat.openInSafari") }
             public static var openSettings: String { L10n.tr("ios.chat.openSettings") }
+            public static var reactFailed: String { L10n.tr("ios.chat.reactFailed") }
             public static var retry: String { L10n.tr("ios.chat.retry") }
             public static var sending: String { L10n.tr("ios.chat.sending") }
+            public static var share: String { L10n.tr("ios.chat.share") }
             public static var stopFailed: String { L10n.tr("ios.chat.stopFailed") }
             public static var stopFailedOther: String { L10n.tr("ios.chat.stopFailedOther") }
             public static var uncertain: String { L10n.tr("ios.chat.uncertain") }
@@ -1512,6 +1516,19 @@ public enum L10n {
                 public static var offline: String { L10n.tr("ios.chat.header.offline") }
                 public static var waiting: String { L10n.tr("ios.chat.header.waiting") }
                 public static var working: String { L10n.tr("ios.chat.header.working") }
+            }
+
+            public enum LoadFailed {
+                public static func message(name: String) -> String { L10n.tr("ios.chat.loadFailed.message", name) }
+                public static var title: String { L10n.tr("ios.chat.loadFailed.title") }
+            }
+
+            public enum Reply {
+                public static var cancel: String { L10n.tr("ios.chat.reply.cancel") }
+            }
+
+            public enum SelectText {
+                public static var done: String { L10n.tr("ios.chat.selectText.done") }
             }
 
             public enum Tools {

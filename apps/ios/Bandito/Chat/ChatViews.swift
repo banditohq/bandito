@@ -57,6 +57,29 @@ final class ChatTextView: UIView {
     }
 }
 
+/// The outline of a bubble: 16 pt corners and a 6 pt tail corner on the speaker's side (the bubble view draws it, and the
+/// long press lifts exactly this shape).
+enum ChatBubbleShape {
+    static func path(in r: CGRect, mine: Bool, tail: Bool) -> UIBezierPath {
+        let big: CGFloat = 16
+        let small: CGFloat = tail ? 6 : 16
+        let bl = mine ? big : small
+        let br = mine ? small : big
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: r.minX + big, y: r.minY))
+        path.addLine(to: CGPoint(x: r.maxX - big, y: r.minY))
+        path.addArc(withCenter: CGPoint(x: r.maxX - big, y: r.minY + big), radius: big, startAngle: -.pi / 2, endAngle: 0, clockwise: true)
+        path.addLine(to: CGPoint(x: r.maxX, y: r.maxY - br))
+        path.addArc(withCenter: CGPoint(x: r.maxX - br, y: r.maxY - br), radius: br, startAngle: 0, endAngle: .pi / 2, clockwise: true)
+        path.addLine(to: CGPoint(x: r.minX + bl, y: r.maxY))
+        path.addArc(withCenter: CGPoint(x: r.minX + bl, y: r.maxY - bl), radius: bl, startAngle: .pi / 2, endAngle: .pi, clockwise: true)
+        path.addLine(to: CGPoint(x: r.minX, y: r.minY + big))
+        path.addArc(withCenter: CGPoint(x: r.minX + big, y: r.minY + big), radius: big, startAngle: .pi, endAngle: -.pi / 2, clockwise: true)
+        path.close()
+        return path
+    }
+}
+
 /// The bubble behind a message: 16 pt corners and a 6 pt tail corner on the speaker's side, as the Mac draws it. One
 /// shape layer: a fill and an edge, no shadow.
 final class ChatBubbleView: UIView {
@@ -95,23 +118,7 @@ final class ChatBubbleView: UIView {
 
 
     private func updatePath() {
-        let r = bounds
-        let big: CGFloat = 16
-        let small: CGFloat = hasTail ? 6 : 16
-        let bl = isMine ? big : small
-        let br = isMine ? small : big
-        let path = UIBezierPath()
-        path.move(to: CGPoint(x: r.minX + big, y: r.minY))
-        path.addLine(to: CGPoint(x: r.maxX - big, y: r.minY))
-        path.addArc(withCenter: CGPoint(x: r.maxX - big, y: r.minY + big), radius: big, startAngle: -.pi / 2, endAngle: 0, clockwise: true)
-        path.addLine(to: CGPoint(x: r.maxX, y: r.maxY - br))
-        path.addArc(withCenter: CGPoint(x: r.maxX - br, y: r.maxY - br), radius: br, startAngle: 0, endAngle: .pi / 2, clockwise: true)
-        path.addLine(to: CGPoint(x: r.minX + bl, y: r.maxY))
-        path.addArc(withCenter: CGPoint(x: r.minX + bl, y: r.maxY - bl), radius: bl, startAngle: .pi / 2, endAngle: .pi, clockwise: true)
-        path.addLine(to: CGPoint(x: r.minX, y: r.minY + big))
-        path.addArc(withCenter: CGPoint(x: r.minX + big, y: r.minY + big), radius: big, startAngle: .pi, endAngle: -.pi / 2, clockwise: true)
-        path.close()
-        let cg = path.cgPath
+        let cg = ChatBubbleShape.path(in: bounds, mine: isMine, tail: hasTail).cgPath
         for shape in [fill, tint, edge] {
             shape.frame = bounds
             shape.path = cg
@@ -128,6 +135,60 @@ final class ChatBubbleView: UIView {
             fill.fillColor = UIColor.Bandito.surface1.resolvedColor(with: traits).cgColor
             tint.fillColor = nil
             edge.strokeColor = UIColor.Bandito.text.withAlphaComponent(0.06).resolvedColor(with: traits).cgColor
+        }
+    }
+}
+
+/// A reaction under a bubble: a capsule with the emoji, lit when it is the person's own, with a small pair of people when
+/// the agent put the same one there.
+final class ChatReactionChipView: UIView {
+    private let label = UILabel()
+    private let both = UIImageView()
+    private var chip: ChatReactionChip?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: ChatReactionChipView, _) in
+            view.updateColors()
+        }
+        layer.cornerCurve = .continuous
+        layer.borderWidth = 1
+        label.font = BanditoFont.uiText(size: 14, weight: 400)
+        label.textAlignment = .center
+        both.image = UIImage(systemName: "person.2.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 8, weight: .regular))
+        both.tintColor = UIColor.Bandito.text3
+        both.contentMode = .scaleAspectFit
+        addSubview(label)
+        addSubview(both)
+        isAccessibilityElement = false
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func configure(_ chip: ChatReactionChip) {
+        self.chip = chip
+        label.text = chip.emoji
+        both.isHidden = !(chip.byUser && chip.byAgent)
+        setNeedsLayout()
+        updateColors()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2
+        let extra: CGFloat = both.isHidden ? 0 : 12
+        label.frame = CGRect(x: 9, y: 0, width: bounds.width - 18 - extra, height: bounds.height)
+        both.frame = CGRect(x: bounds.width - 9 - 10, y: (bounds.height - 10) / 2, width: 10, height: 10)
+    }
+
+    private func updateColors() {
+        let traits = traitCollection
+        if chip?.byUser == true {
+            backgroundColor = UIColor.Bandito.signal.withAlphaComponent(0.12).resolvedColor(with: traits)
+            layer.borderColor = UIColor.Bandito.signal.withAlphaComponent(0.3).resolvedColor(with: traits).cgColor
+        } else {
+            backgroundColor = UIColor.Bandito.text.withAlphaComponent(0.05).resolvedColor(with: traits)
+            layer.borderColor = UIColor.Bandito.line.resolvedColor(with: traits).cgColor
         }
     }
 }

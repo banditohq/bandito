@@ -987,6 +987,7 @@
 "ios.chat.attach.files" = "Файлы";
 "ios.chat.attach.noPreview" = "Предпросмотр недоступен при этом подключении";
 "ios.chat.attach.photos" = "Фото из библиотеки";
+"ios.chat.attachmentPlaceholder" = "📎 Вложение";
 "ios.chat.camera.denied" = "Bandito не может пользоваться камерой. Разрешите это в Настройках iOS → Bandito.";
 "ios.chat.changes.failed" = "Не удалось загрузить изменения.";
 "ios.chat.connection.offline" = "Нет связи. Новые сообщения подождут и уйдут, когда она появится.";
@@ -1007,12 +1008,19 @@
 "ios.chat.header.offline" = "Нет связи";
 "ios.chat.header.waiting" = "Ждёт вас";
 "ios.chat.header.working" = "Работает…";
+"ios.chat.loadFailed.message" = "Историю %1$@ прочитать не удалось. Проверьте связь и повторите.";
+"ios.chat.loadFailed.title" = "Не удалось загрузить чат";
+"ios.chat.loading" = "Загружается чат";
 "ios.chat.loadingOlder" = "Загружаем прежние сообщения…";
 "ios.chat.notSent" = "Не отправлено";
 "ios.chat.openInSafari" = "Открыть в Safari";
 "ios.chat.openSettings" = "Открыть настройки";
+"ios.chat.reactFailed" = "Реакция не отправилась. Попробуйте ещё раз.";
+"ios.chat.reply.cancel" = "Отменить ответ";
 "ios.chat.retry" = "Повторить";
+"ios.chat.selectText.done" = "Готово";
 "ios.chat.sending" = "Отправляется…";
+"ios.chat.share" = "Поделиться";
 "ios.chat.stopFailed" = "Не получилось остановить: нет связи с сервером. Попробуйте ещё раз, когда связь вернётся.";
 "ios.chat.stopFailedOther" = "Не получилось остановить. Попробуйте ещё раз.";
 "ios.chat.tools.hide" = "Скрыть команды";

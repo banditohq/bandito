@@ -253,4 +253,17 @@ import Testing
         queue.retry(two.id)
         #expect(!queue.items[1].maybeDelivered)
     }
+
+    @Test func aReplyKeepsItsOriginalThroughTheFile() throws {
+        let reply = QueuedSend(serverID: server, agentID: "a1", text: "yes", createdAt: 1, replyTo: 42)
+        let data = try JSONEncoder().encode(reply)
+        #expect(try JSONDecoder().decode(QueuedSend.self, from: data).replyTo == 42)
+        // A file written before replies existed has none.
+        let old = try JSONEncoder().encode(item("plain"))
+        let json = try #require(try JSONSerialization.jsonObject(with: old) as? [String: Any])
+        var stripped = json
+        stripped.removeValue(forKey: "replyTo")
+        let legacy = try JSONSerialization.data(withJSONObject: stripped)
+        #expect(try JSONDecoder().decode(QueuedSend.self, from: legacy).replyTo == nil)
+    }
 }
