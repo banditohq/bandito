@@ -51,4 +51,16 @@ final class LinksAndNewTaskUITests: XCTestCase {
         XCTAssertTrue(send.waitForExistence(timeout: 5), "the next short tap is not swallowed")
         app.terminate()
     }
+
+    func testAnAnswerFromTheCrewCardSaysWhatItDid() {
+        continueAfterFailure = false
+        let app = launchDemo()
+        let deny = app.buttons["crew.card.deny"].firstMatch
+        XCTAssertTrue(deny.waitForExistence(timeout: 10), "an approval waits on the Crew")
+        deny.tap()
+        let toast = app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Denied'")).firstMatch
+        XCTAssertTrue(toast.waitForExistence(timeout: 5), "the toast says the answer went")
+        XCTAssertTrue(toast.waitForNonExistence(timeout: 6), "and leaves by itself")
+        app.terminate()
+    }
 }
