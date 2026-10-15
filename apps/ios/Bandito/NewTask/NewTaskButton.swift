@@ -41,7 +41,7 @@ struct NewTaskButton: View {
                 .offset(x: 17, y: -17)
         }
         .frame(width: 56, height: 56)
-        .shadow(color: Color.Bandito.bg.opacity(0.35), radius: 12, x: 0, y: 4)
+        .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 4)
         .scaleEffect(pressing && !reduceMotion ? 0.92 : 1)
         .animation(reduceMotion ? nil : BanditoMotion.ease, value: pressing)
         .contentShape(Circle())
