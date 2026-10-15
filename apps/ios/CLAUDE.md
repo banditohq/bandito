@@ -13,7 +13,7 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
   `~/.cache/bandito-ios/<checkout>`; the log of a failed build is there too.
 - Tests: `xcodebuild -project apps/ios/BanditoIOS.xcodeproj -scheme BanditoIOS -destination 'platform=iOS Simulator,id=<udid>' -derivedDataPath ~/.cache/bandito-ios/<checkout> -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO "BUILD_DIR=<same>/Build/Products" "OBJROOT=<same>/Build/Intermediates.noindex" test`. Swift Testing, hosted in the app (`@testable import Bandito`: the module is named after the product).
 - Screenshots: `bash apps/ios/scripts/shot.sh <out.png> [launch args]` boots the shared simulator headless, installs, launches, and writes `<out>.png` and `<out>_s.png` (800 px). `-demo` shows the demo team.
-- The simulator is one, shared: `D7E3834B-1BA6-4071-9131-9FDEDE135C81` (iPhone 17 Pro). Do not create others. Never boot or shut down a simulator another agent may use: `simctl shutdown all` only when nobody else is working.
+- Simulators: agents use `C6387D27-7A6C-4B71-8312-98CFE8C73EFE` ("Bandito iPhone 2", one agent at a time: check `pgrep -fl "xcodebuild.*C6387D27"` first). `D7E3834B-1BA6-4071-9131-9FDEDE135C81` (iPhone 17 Pro) is the owner's: never run, install, boot or shut down anything on it. Do not create others. Never `simctl shutdown all`.
 - The owner's Mac may be asleep: never touch `~/.bandito`, `/Applications/Bandito.app` or anything outside the simulator.
   Interaction with the simulator is through XCUITest; screenshots through `xcrun simctl io`. Close Simulator.app when done.
 - After a Swift build: `git checkout -- apps/mac/BanditoKit/Package.resolved` (the build rewrites it).
