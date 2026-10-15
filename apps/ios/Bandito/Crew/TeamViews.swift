@@ -88,13 +88,24 @@ struct AnswerPair: View {
         Button(quiet, action: quietAction)
             .buttonStyle(QuietButtonStyle(fullWidth: fullWidth))
             .disabled(disabled)
-            .accessibilityIdentifier(quietID ?? quiet)
+            .optionalAccessibilityIdentifier(quietID)
     }
 
     private func mainButton(fullWidth: Bool) -> some View {
         Button(main, action: mainAction)
             .buttonStyle(SignalButtonStyle(fullWidth: fullWidth))
             .disabled(disabled)
-            .accessibilityIdentifier(mainID ?? main)
+            .optionalAccessibilityIdentifier(mainID)
+    }
+}
+
+private extension View {
+    /// The identifier when one is given (the UI tests find a button by it); none otherwise, never the title.
+    @ViewBuilder func optionalAccessibilityIdentifier(_ id: String?) -> some View {
+        if let id {
+            accessibilityIdentifier(id)
+        } else {
+            self
+        }
     }
 }

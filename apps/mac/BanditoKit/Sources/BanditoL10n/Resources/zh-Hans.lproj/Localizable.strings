@@ -1002,6 +1002,7 @@
 "ios.chat.retry" = "重试";
 "ios.chat.sending" = "正在发送…";
 "ios.chat.stopFailed" = "无法停止：与服务器没有连接。连接恢复后请再试一次。";
+"ios.chat.stopFailedOther" = "无法停止。请再试一次。";
 "ios.chat.tools.hide" = "隐藏命令";
 "ios.chat.tools.show" = "显示命令";
 "ios.chat.uncertain" = "不确定是否送达";

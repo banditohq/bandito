@@ -67,7 +67,7 @@ public enum MessageBlocks {
     }
 
     private static func plainLine(_ line: String) -> String {
-        var line = line
+        var line = withoutBlockMarks(line)
         let trimmed = line.drop(while: { $0 == " " })
         let hashes = trimmed.prefix(while: { $0 == "#" }).count
         if (1...6).contains(hashes), trimmed.dropFirst(hashes).first == " " {
@@ -78,6 +78,27 @@ public enum MessageBlocks {
                 markdown: line, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))
         else { return line }
         return String(rendered.characters)
+    }
+
+    /// The mark that starts a quote or a list item, left out of the plain text: `>` (repeated), `- `, `* `, `+ `,
+    /// `1. `, `1) `. A line with none is returned as it is.
+    private static func withoutBlockMarks(_ line: String) -> String {
+        var rest = line.drop(while: { $0 == " " })
+        var marked = false
+        while rest.first == ">" {
+            rest = rest.dropFirst().drop(while: { $0 == " " })
+            marked = true
+        }
+        if let first = rest.first, "-*+".contains(first), rest.dropFirst().first == " " {
+            return String(rest.dropFirst(2))
+        }
+        let digits = rest.prefix(while: { $0.isASCII && $0.isNumber }).count
+        if digits > 0, let mark = rest.dropFirst(digits).first, mark == "." || mark == ")",
+           rest.dropFirst(digits + 1).first == " "
+        {
+            return String(rest.dropFirst(digits + 2))
+        }
+        return marked ? String(rest) : line
     }
 
     /// The first `limit` characters of a message for a quote or a reply bar, on one line, with an ellipsis when cut.

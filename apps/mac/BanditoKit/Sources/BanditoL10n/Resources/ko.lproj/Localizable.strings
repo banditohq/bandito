@@ -1002,6 +1002,7 @@
 "ios.chat.retry" = "다시 시도";
 "ios.chat.sending" = "보내는 중…";
 "ios.chat.stopFailed" = "중지하지 못했어요: 서버와 연결되어 있지 않아요. 연결이 돌아오면 다시 시도해 주세요.";
+"ios.chat.stopFailedOther" = "중지하지 못했어요. 다시 시도해 주세요.";
 "ios.chat.tools.hide" = "명령 숨기기";
 "ios.chat.tools.show" = "명령 보기";
 "ios.chat.uncertain" = "도착했는지 확실하지 않음";

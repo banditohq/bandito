@@ -46,9 +46,12 @@ import UIKit
 
         let before = CrewCounters.rowBodies
         // In the app's own scene, so that the list is laid out and its rows are built (a window outside a scene is not).
+        // The list is lazy: a row below the fold is not built, so it would not count. The window is tall enough for the
+        // whole team (the waiting cards and their line take room above it), so every row is on screen.
+        let frame = CGRect(x: 0, y: 0, width: 390, height: 2400)
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: frame)
+        window.frame = frame
         window.rootViewController = UIHostingController(rootView: CrewScreen(servers: [server], settings: IOSSettings(), onConnect: {}, onShowInbox: {}))
         window.makeKeyAndVisible()
         window.layoutIfNeeded()

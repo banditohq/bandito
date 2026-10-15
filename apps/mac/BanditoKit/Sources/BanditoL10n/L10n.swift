@@ -1434,6 +1434,7 @@ public enum L10n {
             public static var retry: String { L10n.tr("ios.chat.retry") }
             public static var sending: String { L10n.tr("ios.chat.sending") }
             public static var stopFailed: String { L10n.tr("ios.chat.stopFailed") }
+            public static var stopFailedOther: String { L10n.tr("ios.chat.stopFailedOther") }
             public static var uncertain: String { L10n.tr("ios.chat.uncertain") }
             public static var waitingForConnection: String { L10n.tr("ios.chat.waitingForConnection") }
 

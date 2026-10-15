@@ -33,6 +33,8 @@ enum CrewWaiting: Equatable {
     case approval(title: String)
     /// A form the agent asked the person to fill in.
     case form
+    /// A service the agent asks to connect (the Inbox's request), by its name.
+    case connect(service: String)
     /// Something else that needs the person (a status "needs you" with nothing else pending): the question, as one
     /// line, nil when the agent has said nothing in text.
     case answer(question: String?)
@@ -136,8 +138,28 @@ enum CrewPins {
 enum CrewPreview {
     static func line(_ text: String?) -> String? {
         guard let text else { return nil }
-        let collapsed = MessageBlocks.plainText(text).split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return collapsed.isEmpty ? nil : collapsed
+        let words = MessageBlocks.plainText(text)
+            .split(whereSeparator: \.isWhitespace)
+            .map(withoutHangingMarks)
+            .filter { !$0.isEmpty }
+        return words.isEmpty ? nil : words.joined(separator: " ")
+    }
+
+    /// The emphasis and code marks left at the ends of a word by a cut in the middle of `**bold` (the head of a message
+    /// is cut at a length): taken off, so the preview shows no stray stars.
+    private static func withoutHangingMarks(_ word: Substring) -> Substring {
+        let marks: Set<Character> = ["*", "_", "`"]
+        var word = word
+        while let first = word.first, marks.contains(first) { word = word.dropFirst() }
+        while let last = word.last, marks.contains(last) { word = word.dropLast() }
+        return word
+    }
+}
+
+/// The waiting agents of the Crew: the first `limit` are cards, the rest are counted (the "Ещё N" line).
+enum CrewWaitingSplit {
+    static func split<T>(_ waiting: [T], limit: Int = 2) -> (shown: [T], more: Int) {
+        (Array(waiting.prefix(limit)), max(0, waiting.count - limit))
     }
 }
 
@@ -148,6 +170,9 @@ enum CrewFacts {
         let pins = Set(pinned)
         let lead = server.leadAgentID
         let agents = CrewOrder.ordered(server.sortedAgents, id: \.id, lead: lead, pinned: pins)
+        // What waits for the person is the Inbox's own list: an agent waits exactly when it has an item there.
+        let waitingItems = Dictionary(
+            InboxRules.items(in: [server]).map { ($0.agentID, $0) }, uniquingKeysWith: { first, _ in first })
         return agents.map { agent in
             let summary = server.threadSummary(for: agent.id)
             let status = server.status(of: agent.id)
@@ -164,8 +189,7 @@ enum CrewFacts {
                 isLead: agent.id == lead,
                 isPinned: pins.contains(agent.id),
                 isPaused: agent.paused,
-                waiting: waiting(
-                    needsPerson: server.needsPerson(agent.id), summary: summary, lastText: agent.lastMessage?.text))
+                waiting: waiting(waitingItems[agent.id]))
         }
     }
 
@@ -175,13 +199,14 @@ enum CrewFacts {
         [lastItemTimestamp, agent.lastMessage?.ts].compactMap { $0 }.max() ?? agent.lastTurnAt ?? agent.updatedAt
     }
 
-    /// What the agent waits for, from the thread's summary; nil when nothing waits for the person. An open approval or
-    /// form counts even when the status is not "needs you" (an agent in error with a form still open is waiting too).
-    /// `lastText` is the agent's last message, used for the question when the summary has no head yet.
-    static func waiting(needsPerson: Bool, summary: AgentThreadState, lastText: String? = nil) -> CrewWaiting? {
-        if let title = summary.firstPendingApprovalTitle { return .approval(title: title) }
-        if !summary.pendingForms.isEmpty { return .form }
-        guard needsPerson else { return nil }
-        return .answer(question: CrewPreview.line(summary.lastMessageHead ?? lastText))
+    /// What the agent waits for: the kind of its Inbox item, nil when it has none (it waits for nothing).
+    static func waiting(_ item: InboxItem?) -> CrewWaiting? {
+        guard let item else { return nil }
+        switch item.kind {
+        case .approval(let row): return .approval(title: row.title)
+        case .form: return .form
+        case .connect(let row): return .connect(service: row.service)
+        case .question: return .answer(question: item.questionLine)
+        }
     }
 }
