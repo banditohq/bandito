@@ -394,6 +394,57 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
         #expect(rig.account.joinProblem == nil)
     }
 
+    @Test func twoScansOfTheSameCodeRedeemOnceAndTheSecondDoesNotResetTheStage() async throws {
+        let rig = try await makeRig(signedIn: false)
+        setRedeem(rig)
+        rig.server.set("GET /me", me(approved: false))
+        let ticket = try makeTicket(for: rig.mac)
+
+        let account = rig.account
+        let first = Task { @MainActor in await account.join(ticket) }
+        let second = Task { @MainActor in await account.join(ticket) }
+        let results = [await first.value, await second.value]
+
+        #expect(results.filter { $0 == .joining }.count == 1)
+        #expect(results.filter { $0 == .ignored }.count == 1)
+        #expect(rig.server.requests.filter { $0.key == "POST /auth/ticket/redeem" }.count == 1)
+        #expect(rig.account.stage == .waitingForApproval(code: rig.phone.fingerprint))
+        #expect(rig.account.joinMacName == "Studio 🦝")
+        // The flag is free again: a later scan (after the sign-in failed, say) is not shut out.
+        setRedeem(rig, #"{"ok":false,"error":"ticket_invalid"}"#, status: 404)
+        #expect(await rig.account.join(ticket) == .joining)
+    }
+
+    @Test func aScanDuringTheStartupReadIsNotRacedByASecondOne() async throws {
+        // A stored session that is still being read (`.loading`): the first call waits for the read, the second is turned away
+        // at once, not let in while the first is suspended.
+        let rig = try await makeRig()
+        rig.server.set("GET /me", me(approved: true))
+        rig.server.set("GET /sync", #"{"ok":true,"version":1,"blob":"\#(try blob(rig, version: 1, asked: true))"}"#)
+        rig.server.set("PUT /sync", #"{"ok":true,"version":2}"#)
+        try SyncKey.save(rig.syncKey, to: rig.keys)
+        #expect(rig.account.stage == .loading)
+        let ticket = try makeTicket(for: rig.mac)
+
+        let account = rig.account
+        let first = Task { @MainActor in await account.join(ticket) }
+        let second = Task { @MainActor in await account.join(ticket) }
+        let results = [await first.value, await second.value]
+
+        #expect(results.sorted { "\($0)" < "\($1)" } == [.alreadySignedIn, .ignored])
+        #expect(!rig.server.requests.contains { $0.key == "POST /auth/ticket/redeem" })
+        #expect(rig.account.stage == .ready)
+    }
+
+    @Test func aKeyThatArrivesAfterThePhoneLeftTheWaitIsNotKeptAndTheScreenSaysSo() async throws {
+        let rig = try await makeRig(signedIn: false)
+        #expect(rig.account.stage == .signedOut)
+        await rig.account.acceptJoined()
+        #expect(rig.account.errorText == L10n.Onboarding.Account.errorGeneric)
+        #expect(rig.account.joinMacName == nil && rig.account.joinProblem == nil)
+        #expect(try SyncKey.load(from: rig.keys) == nil)
+    }
+
     @Test func aPhoneThatIsInTheAccountIsNotSignedInAgain() async throws {
         let (rig, _) = try await readyRig()
         await rig.account.start()

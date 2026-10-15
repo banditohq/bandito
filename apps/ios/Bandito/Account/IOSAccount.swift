@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import Foundation
 import Observation
 import OSLog
@@ -503,15 +504,16 @@ final class IOSAccount {
     /// no network) are in `errorText`; the screen follows `stage`, `joinMacName` and `joinProblem`.
     @discardableResult
     func join(_ ticket: JoinTicket) async -> JoinResult {
+        // Taken before the first suspension: a second call (the camera sees a code many times) finds it set.
         guard !inert, !joinInFlight else { return .ignored }
+        joinInFlight = true
+        defer { joinInFlight = false }
         // A link that started the app finds the stored session not read yet: read it first.
         if stage == .loading { await start() }
         if stage == .ready {
             openFastWindow()
             return .alreadySignedIn
         }
-        joinInFlight = true
-        defer { joinInFlight = false }
         clearError()
         joinProblem = nil
         let before = stage
@@ -544,8 +546,15 @@ final class IOSAccount {
     }
 
     /// The key came from the Mac of the code: it is kept, and the account is read again.
-    private func acceptJoined() async {
-        guard let pending, case .waitingForApproval = stage else { return }
+    func acceptJoined() async {
+        guard let pending, case .waitingForApproval = stage else {
+            // The phone left the wait (signed out, refused) while the key was on its way: say so, do not keep it.
+            endJoin()
+            pending = nil
+            errorText = L10n.Onboarding.Account.errorGeneric
+            errorDetails = "join: not waiting"
+            return
+        }
         do {
             let key = try pending.accept(confirmedFingerprint: pending.senderFingerprint)
             try SyncKey.save(key, to: keys)

@@ -44,6 +44,8 @@ final class PairModel {
     private(set) var phase: Phase
     /// A Mac's sign-in code (`bandito://join`) was scanned or pasted here: it is not a server, so the account takes it.
     var onJoin: (@MainActor (JoinTicket) -> Void)?
+    /// A sign-in code was handed on: the camera sees it many times a second, and it is handed on once.
+    private var joinHandled = false
     let session: ServerSession
     private let redeem: @Sendable (PairRequest, String?, String) async throws -> PairedDevice
     private let probe: @Sendable (DirectHost) async -> String?
@@ -81,6 +83,8 @@ final class PairModel {
         case .confirmLink, .trust, .working, .done: return
         }
         if let ticket = JoinTicket.find(in: text), let onJoin {
+            guard !joinHandled else { return }
+            joinHandled = true
             onJoin(ticket)
             return
         }
