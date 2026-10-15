@@ -52,6 +52,8 @@ struct RootView: View {
     @State private var answerToast = AnswerToastCenter()
     /// A `bandito://share/<id>` link that waits for Face ID: the task is sent and its chat opens once the app is open.
     @State private var pendingShare: UUID?
+    /// A `bandito://join` code that waits for Face ID: the sign-in starts once the app is open.
+    @State private var pendingJoin: JoinTicket?
     /// Toasts about shared tasks that were dropped while Face ID covered the app: shown once it is open.
     @State private var pendingNotices: [ShareNotice] = []
     /// The first run's progress; the flow covers the app until a server is paired (docs/IOS_APP.md, Onboarding).
@@ -148,6 +150,7 @@ struct RootView: View {
                 runPendingQuickAction()
                 answerToast.showInTurn(pendingNotices.map { AnswerToastMessage(text: $0.text, allowed: false) })
                 pendingNotices = []
+                if let ticket = pendingJoin { openJoin(ticket) }
                 if let id = pendingShare { openShared(id) } else { importSharedTasks() }
             }
         }
@@ -156,6 +159,13 @@ struct RootView: View {
                 // A pairing link: the connect sheet shows it and asks before anything is sent.
                 incomingLink = url.absoluteString
                 connect = ConnectRequest(mode: .scanCode)
+            } else if url.scheme?.lowercased() == "bandito", url.host?.lowercased() == "join" {
+                // A code from a Mac, read by the camera app: this iPhone signs in with it, or says the code is no good.
+                if let ticket = JoinTicket.parse(url) {
+                    openJoin(ticket)
+                } else {
+                    answerToast.show(AnswerToastMessage(text: L10n.Ios.Join.expired, allowed: false))
+                }
             } else if let link = BanditoLink(url: url) {
                 if case .share(let id) = link {
                     openShared(id)
@@ -251,6 +261,7 @@ struct RootView: View {
                     signsInAfterConnect = true
                     connect = nil
                 },
+                onJoin: { openJoin($0) },
                 onClose: { connect = nil })
                 .preferredColorScheme(settings.theme.colorScheme ?? shownScheme)
         }
@@ -353,6 +364,35 @@ struct RootView: View {
     private func openChat(serverID: UUID, agentID: String) {
         tab = .crew
         crewFocus = CrewFocus(serverID: serverID, agentID: agentID, request: UUID())
+    }
+
+    /// "Sign in with a Mac": a code was read (by the camera app, the connect sheet's scanner or a paste). A phone that is
+    /// signed in already is not signed in again: it says so and asks for its servers. Otherwise the account screen shows
+    /// the sign-in. Behind the lock the code waits for Face ID.
+    private func openJoin(_ ticket: JoinTicket) {
+        guard !appLock.isLocked else {
+            pendingJoin = ticket
+            return
+        }
+        pendingJoin = nil
+        Task {
+            // A link that started the app finds the stored session not read yet.
+            if account.stage == .loading { await account.start() }
+            if account.stage == .ready {
+                connect = nil
+                account.openFastWindow()
+                answerToast.show(AnswerToastMessage(text: L10n.Ios.Join.already, allowed: true))
+                return
+            }
+            // Two sheets cannot be open at once: the account sheet follows when the connect sheet has closed.
+            if connect != nil {
+                signsInAfterConnect = true
+                connect = nil
+            } else {
+                showsAccount = true
+            }
+            await account.join(ticket)
+        }
     }
 
     /// Opens the connect sheet on the camera (the Crew's and Settings' "Connect a server").

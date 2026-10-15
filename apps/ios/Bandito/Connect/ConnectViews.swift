@@ -21,7 +21,7 @@ struct ConnectServerView: View {
 
     init(
         session: ServerSession, incomingLink: Binding<String?>, start: OnboardingConnectMode = .scanCode,
-        onSignIn: (() -> Void)? = nil, onClose: @escaping () -> Void
+        onSignIn: (() -> Void)? = nil, onJoin: (@MainActor (JoinTicket) -> Void)? = nil, onClose: @escaping () -> Void
     ) {
         self.session = session
         _incomingLink = incomingLink
@@ -29,7 +29,9 @@ struct ConnectServerView: View {
         self.onSignIn = onSignIn
         self.onClose = onClose
         // "Type an address" on the onboarding opens the sheet on the form itself.
-        _model = State(initialValue: PairModel(session: session, startsOnTypedForm: start == .typeAddress && incomingLink.wrappedValue == nil))
+        let model = PairModel(session: session, startsOnTypedForm: start == .typeAddress && incomingLink.wrappedValue == nil)
+        model.onJoin = onJoin
+        _model = State(initialValue: model)
     }
 
     var body: some View {
@@ -90,8 +92,6 @@ struct ConnectServerView: View {
 private struct ChooseStep: View {
     let model: PairModel
     let onSignIn: (() -> Void)?
-    @State private var access = CameraPermission.current()
-    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ScrollView {
@@ -107,7 +107,12 @@ private struct ChooseStep: View {
                         .multilineTextAlignment(.center)
                 }
                 .fixedSize(horizontal: false, vertical: true)
-                scanner
+                ScannerBox { text in
+                    let isLink = PairInput.containsLink(text) || JoinTicket.find(in: text) != nil
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(isLink ? .success : .warning)
+                    model.submitLink(text, origin: .scan)
+                }
                 VStack(spacing: BanditoSpace.s3) {
                     Text(L10n.Ios.Connect.Paste.hint)
                         .font(BanditoFont.text(size: 13))
@@ -131,24 +136,23 @@ private struct ChooseStep: View {
             }
             .padding(BanditoSpace.s5)
         }
-        .onChange(of: scenePhase) { _, phase in
-            // Coming back from Settings with the camera allowed.
-            if phase == .active { access = CameraPermission.current() }
-        }
     }
+}
 
-    @ViewBuilder private var scanner: some View {
+/// The camera box: the live picture with a viewfinder, or the reason it is not there (not asked yet, off, no camera).
+/// Shared by the connect sheet and the sign-in scanner.
+struct ScannerBox: View {
+    var onCode: @MainActor (String) -> Void
+    @State private var access = CameraPermission.current()
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color.Bandito.surface1)
             switch access {
             case .allowed:
-                QRScannerView(isActive: true) { text in
-                    let isLink = PairInput.containsLink(text)
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(isLink ? .success : .warning)
-                    model.submitLink(text, origin: .scan)
-                }
+                QRScannerView(isActive: true, onCode: onCode)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 ViewfinderFrame()
             case .notAsked:
@@ -174,6 +178,10 @@ private struct ChooseStep: View {
         .frame(maxWidth: 340)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.Ios.Connect.Scan.title)
+        .onChange(of: scenePhase) { _, phase in
+            // Coming back from Settings with the camera allowed.
+            if phase == .active { access = CameraPermission.current() }
+        }
     }
 
     private func explain<Action: View>(text: String, symbol: String, @ViewBuilder action: () -> Action) -> some View {

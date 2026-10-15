@@ -35,6 +35,7 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
   notifications, the background check, widgets, App Intents and Spotlight all read `session.current`. The saved list is a
   file in Application Support, left out of backups (`ServerStore`). A server name is cleaned (`ServerNameRules`) wherever
   it comes from or is typed. Notifications are asked once, after the first server, with the reason (`NotificationAsk`).
+- Sign in with a Mac (`IOSAccount.join`, `Account/JoinScanner.swift`): a `bandito://join` code (scanner, connect sheet, `onOpenURL`) redeems a ticket; the envelope is accepted without a question only when `JoinTicket.isFromMac` says that Mac sealed it, else the old code comparison (`compareManually`). A signed-in phone is not signed in again (toast and `openFastWindow`). A debug build takes `-accountBaseURL <loopback url>` for a local cloud.
 - A `.sheet(isPresented:)` that reads other state sees the old value of it: open the connect sheet with `.sheet(item:)`
   (`ConnectRequest`).
 - UI tests of the flow: target `BanditoIOSPairing` (fake TLS daemon on the Simulator's loopback, `-resetServers`);
