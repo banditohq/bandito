@@ -7,7 +7,7 @@ set -euo pipefail
 out="${1:?usage: shot.sh <out.png> [launch arguments...]}"
 shift
 here="$(cd "$(dirname "$0")/.." && pwd)"
-device="${BANDITO_IOS_SIM:-D7E3834B-1BA6-4071-9131-9FDEDE135C81}"
+device="${BANDITO_IOS_SIM:-C6387D27-7A6C-4B71-8312-98CFE8C73EFE}"
 bundle="dev.bandito.ios"
 
 app="$(bash "$here/scripts/build.sh")"
