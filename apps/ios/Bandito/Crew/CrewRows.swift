@@ -4,14 +4,17 @@ import BanditoL10n
 import SwiftUI
 
 /// Counts the bodies of the Crew rows that were evaluated: the speed test reads it (a streamed reply makes its row one
-/// or two times at most, not one per token). Counted in every build; it is one increment.
+/// or two times at most, not one per token). Counted in every build; it is one increment. Also counted per agent: the
+/// test checks the streaming agent's own row, which a layout pass of the whole list (on a slow machine) does not blur.
 @MainActor
 enum CrewCounters {
     static var rowBodies = 0
+    static var rowBodiesByAgent: [String: Int] = [:]
 
     /// Called from a row's body: one more evaluation.
-    static func rowBodyRan() {
+    static func rowBodyRan(agentID: String) {
         rowBodies += 1
+        rowBodiesByAgent[agentID, default: 0] += 1
     }
 }
 
@@ -40,7 +43,7 @@ struct CrewAgentRow: View, Equatable {
     }
 
     var body: some View {
-        let _ = CrewCounters.rowBodyRan()
+        let _ = CrewCounters.rowBodyRan(agentID: facts.id)
         AdaptiveRowLayout {
             CrewAvatar(name: facts.name, look: facts.look, mood: facts.mood, size: 44)
                 .overlay(alignment: .bottomTrailing) {
