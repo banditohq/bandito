@@ -44,6 +44,7 @@ struct CrewScreen: View {
                     WelcomeView(onConnect: onConnect)
                 }
             }
+            .newTaskButton()
             .navigationTitle(L10n.Ios.Tab.crew)
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.hidden, for: .navigationBar)

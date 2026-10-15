@@ -28,6 +28,7 @@ struct ActivityScreen: View {
     var body: some View {
         NavigationStack(path: $path) {
             ActivityList(servers: servers, filter: $filter)
+                .newTaskButton()
                 .navigationTitle(L10n.Ios.Tab.activity)
                 .navigationBarTitleDisplayMode(.large)
                 .toolbarBackground(.hidden, for: .navigationBar)

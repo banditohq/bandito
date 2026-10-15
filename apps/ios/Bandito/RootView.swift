@@ -55,26 +55,22 @@ struct RootView: View {
         let showsOnboarding = onboarding.shows(hasServers: !servers.isEmpty)
         ZStack {
             TabView(selection: $tab) {
-                withNewTaskButton(
-                    CrewScreen(
-                        servers: servers, settings: settings, onConnect: openConnect, onShowInbox: { tab = .inbox },
-                        focus: crewFocus)
-                        .id(dynamicTypeSize),
-                    shown: !servers.isEmpty
-                )
-                .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
+                CrewScreen(
+                    servers: servers, settings: settings, onConnect: openConnect, onShowInbox: { tab = .inbox },
+                    focus: crewFocus)
+                    .id(dynamicTypeSize)
+                    .environment(\.newTaskAction, newTaskAction(for: servers))
+                    .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
                 .tag(AppTab.crew)
                 InboxScreen(servers: servers, settings: settings, focus: $inboxFocus, openChat: openChat)
                     .id(dynamicTypeSize)
                     .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
                     .badge(InboxRules.badge(of: servers))
                     .tag(AppTab.inbox)
-                withNewTaskButton(
-                    ActivityScreen(servers: servers, settings: settings)
-                        .id(dynamicTypeSize),
-                    shown: !servers.isEmpty
-                )
-                .badge(ActivityFacts.unreadCount(servers: servers))
+                ActivityScreen(servers: servers, settings: settings)
+                    .id(dynamicTypeSize)
+                    .environment(\.newTaskAction, newTaskAction(for: servers))
+                    .badge(ActivityFacts.unreadCount(servers: servers))
                 .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
                 .tag(AppTab.activity)
                 SettingsTab(
@@ -226,17 +222,10 @@ struct RootView: View {
 
     /// The floating New task button at the bottom right, above the tab bar. It is an inset of the tab's screen, so the
     /// last row of its list scrolls above the button. Shown only when a server is connected.
-    private func withNewTaskButton<Content: View>(_ content: Content, shown: Bool) -> some View {
-        content.safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
-            if shown {
-                NewTaskButton(
-                    onTap: { openNewTask(dictate: false) },
-                    onLongPress: { openNewTask(dictate: true) }
-                )
-                .padding(.trailing, BanditoSpace.s4)
-                .padding(.bottom, BanditoSpace.s2)
-            }
-        }
+    /// The floating button's action, only when some server has an agent to give a task to.
+    private func newTaskAction(for servers: [ServerModel]) -> NewTaskAction? {
+        guard servers.contains(where: { !$0.agents.isEmpty }) else { return nil }
+        return NewTaskAction(open: { openNewTask(dictate: $0) })
     }
 
     /// Opens the new-task sheet, or the dictation on it. Nothing opens while the lock screen covers the app.

@@ -88,3 +88,34 @@ struct NewTaskButton: View {
         pressing = false
     }
 }
+
+/// What the floating button does; set by RootView only while there is an agent to give a task to.
+struct NewTaskAction {
+    let open: @MainActor (_ dictate: Bool) -> Void
+}
+
+extension EnvironmentValues {
+    @Entry var newTaskAction: NewTaskAction?
+}
+
+extension View {
+    /// The floating New task button at the bottom right. Put on the root of a tab's navigation stack, so the pushed
+    /// screens (the chat with its own box, an agent's card) never show it.
+    func newTaskButton() -> some View {
+        modifier(NewTaskButtonPlacement())
+    }
+}
+
+private struct NewTaskButtonPlacement: ViewModifier {
+    @Environment(\.newTaskAction) private var action
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
+            if let action {
+                NewTaskButton(onTap: { action.open(false) }, onLongPress: { action.open(true) })
+                    .padding(.trailing, BanditoSpace.s4)
+                    .padding(.bottom, BanditoSpace.s2)
+            }
+        }
+    }
+}
