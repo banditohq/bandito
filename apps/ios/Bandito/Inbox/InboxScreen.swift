@@ -50,6 +50,7 @@ struct InboxScreen: View {
                 ) { action in
                     await act(item, action)
                 }
+                .banditoSheet()
             }
             .alert(L10n.Ios.Inbox.failed, isPresented: $failed) {
                 Button(L10n.Common.close, role: .cancel) {}

@@ -42,7 +42,8 @@ enum WidgetSnapshotBuilder {
     static func directory(servers: [ServerModel]) -> [WidgetSnapshot.Listing] {
         servers.flatMap { server in
             server.sortedAgents.map { agent in
-                WidgetSnapshot.Listing(server: server.id.uuidString, id: agent.id, name: agent.name, role: agent.role)
+                WidgetSnapshot.Listing(
+                    server: server.id.uuidString, id: agent.id, name: agent.name, role: AgentRoleText.visible(agent.role) ?? "")
             }
         }
         .prefix(WidgetSnapshot.directoryLimit)

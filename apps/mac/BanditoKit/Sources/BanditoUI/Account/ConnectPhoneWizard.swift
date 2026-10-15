@@ -3,8 +3,10 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// «Подключить iPhone» from the profile's Devices: picks the server (skipped when there is one), turns the cloud on by
-/// itself, shows the QR code, waits for the phone, and says it is done. No questions between.
+/// «Добавить iPhone или iPad» from the profile's Devices. When the account can sign a phone in, the join code shows at
+/// once, with no server to choose: the phone access is turned on in the background on every server that can take it,
+/// and one quiet line says what that did. Otherwise (or by «Использовать код подключения») it is the pairing path: pick
+/// the server (skipped when there is one), turn the cloud on, show the code, wait for the phone, and say it is done.
 struct ConnectPhoneWizard: View {
     @Environment(AppModel.self) private var app
     @Environment(AccountHub.self) private var hub
@@ -18,6 +20,11 @@ struct ConnectPhoneWizard: View {
     @State private var joinChecked = false
     @State private var useJoin = true
     @State private var joinModel: JoinQRModel?
+    /// The phone access turned on in the background for the join code (nil on the pairing path).
+    @State private var warmup: PhoneAccessWarmup?
+    /// One cloud controller per server for both paths, so the join path's background access and the pairing path never
+    /// register the same server twice.
+    @State private var relays = SharedRelayControllers()
     /// The wizard went away: a join model made after that is closed at once.
     @State private var disappeared = false
     /// The task that makes the join model; cancelled when the wizard goes away.
@@ -26,6 +33,8 @@ struct ConnectPhoneWizard: View {
     var previewJoin: JoinQRModel?
     /// A state to show without asking anybody (the layout audit and the screenshots).
     var preview: ConnectPhoneModel.Step?
+    /// The line under the join code to show without asking anybody (the screenshots).
+    var previewAccess: PhoneAccessWarmup.Summary?
     var previewServerName: String = ""
     var previewServers: [String] = []
 
@@ -45,42 +54,52 @@ struct ConnectPhoneWizard: View {
         .task { await begin() }
         .onChange(of: model?.step) { _, step in
             // The cloud is on and the code shows: tell the account at once, so the iPhone that signs in finds the server.
-            if case .scan = step {
-                hub.requestAccessCycle()
-                if joinAllowed, useJoin { startJoin() }
-            }
+            if case .scan = step { hub.requestAccessCycle() }
         }
         .animation(reduceMotion ? nil : BanditoMotion.ease, value: joinModel?.phase)
         .onDisappear {
             disappeared = true
             joinTask?.cancel()
+            warmup?.cancel()
             model?.cancel()
             joinModel?.close()
         }
     }
 
-    /// The model whose code is on screen, when the scan step shows the join code.
+    /// The model whose code is on screen, when the join code is the one shown.
     private var shownJoin: JoinQRModel? {
         if let previewJoin { return previewJoin }
         return joinAllowed && useJoin ? joinModel : nil
     }
 
+    /// The join code is what the wizard shows: a preview, or the account can sign a phone in and the pairing code was
+    /// not asked for.
+    private var isJoinShown: Bool {
+        previewJoin != nil || (joinChecked && joinAllowed && useJoin)
+    }
+
     private var step: ConnectPhoneModel.Step? { preview ?? model?.step }
 
     @ViewBuilder private var content: some View {
-        switch step {
-        case nil:
-            preparing(.enabling)
-        case .pickServer:
-            pick
-        case .preparing(let detail):
-            preparing(detail)
-        case .scan(let state):
-            scan(state)
-        case .done(let device):
-            done(device: device)
-        case .problem(let problem):
-            problemView(problem)
+        if isJoinShown {
+            joinScan
+        } else if !joinChecked, preview == nil {
+            preparing(.connecting)
+        } else {
+            switch step {
+            case nil:
+                preparing(.enabling)
+            case .pickServer:
+                pick
+            case .preparing(let detail):
+                preparing(detail)
+            case .scan(let state):
+                pairScan(state)
+            case .done(let device):
+                done(device: device)
+            case .problem(let problem):
+                problemView(problem)
+            }
         }
     }
 
@@ -152,17 +171,8 @@ struct ConnectPhoneWizard: View {
         }
     }
 
-    @ViewBuilder private func scan(_ state: PhoneAccessRules.PairState) -> some View {
-        if previewJoin != nil || (joinAllowed && useJoin) {
-            joinScan
-        } else if !joinChecked, preview == nil {
-            preparing(.connecting)
-        } else {
-            pairScan(state)
-        }
-    }
-
     /// The join code in place of the pairing code (the person is signed in here): the iPhone signs in by scanning it.
+    /// Under it, one quiet line about the phone access on the servers.
     @ViewBuilder private var joinScan: some View {
         VStack(spacing: 14) {
             if let shownJoin {
@@ -170,11 +180,44 @@ struct ConnectPhoneWizard: View {
             } else {
                 preparing(.connecting)
             }
+            accessLine
             if previewJoin == nil {
                 Button(L10n.PhoneWizard.usePairCode) { leaveJoin() }
                     .banditoButton(.link)
                     .font(BanditoFont.text(size: 12, weight: 400))
             }
+        }
+    }
+
+    /// What the phone access did on the servers: a failure says which, with "Try again" in the same line.
+    @ViewBuilder private var accessLine: some View {
+        if let summary = previewAccess ?? warmup?.summary {
+            let failed: Bool = {
+                if case .failed = summary { return true }
+                return false
+            }()
+            HStack(spacing: BanditoSpace.s2) {
+                Text(Self.accessText(summary))
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(failed ? Color.Bandito.danger : Color.Bandito.text3)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                if failed {
+                    Button(L10n.PhoneWizard.retry) { warmup?.retry() }
+                        .banditoButton(.link)
+                        .font(BanditoFont.text(size: 12, weight: 500))
+                        .fixedSize()
+                }
+            }
+        }
+    }
+
+    static func accessText(_ summary: PhoneAccessWarmup.Summary) -> String {
+        switch summary {
+        case .noServers: L10n.PhoneWizard.noServer
+        case .enabling: L10n.PhoneWizard.Access.enabling
+        case .ready(let names): L10n.PhoneWizard.Access.ready(names: names.joined(separator: ", "))
+        case .failed(let names): L10n.PhoneWizard.Access.failed(names: names.joined(separator: ", "))
         }
     }
 
@@ -225,6 +268,7 @@ struct ConnectPhoneWizard: View {
                 if joinAllowed {
                     Button(L10n.PhoneWizard.useAccount) {
                         useJoin = true
+                        startWarmup()
                         startJoin()
                     }
                     .banditoButton(.link)
@@ -296,11 +340,10 @@ struct ConnectPhoneWizard: View {
 
     @ViewBuilder private var actions: some View {
         ActionRow {
+            if isJoinShown, let shownJoin {
+                JoinQRButtons(model: shownJoin, close: { dismiss() })
+            } else {
             switch step {
-            case .scan where shownJoin != nil:
-                if let shownJoin {
-                    JoinQRButtons(model: shownJoin, close: { dismiss() })
-                }
             case .scan(let state):
                 if case .ready = state {
                     Button(L10n.ServerSettings.Phone.Pair.new) { model?.newCode() }
@@ -330,6 +373,7 @@ struct ConnectPhoneWizard: View {
                     .banditoButton(.quiet())
                     .fixedSize()
             }
+            }
         }
     }
 
@@ -348,8 +392,10 @@ struct ConnectPhoneWizard: View {
         guard joinAllowed, joinModel == nil, preview == nil else { return }
         let close = dismiss
         guard let made = try? await JoinQRFactory.make(hub: hub, onFinished: { close() }) else {
-            // The keys cannot be read: the pairing code stays.
+            // The keys cannot be read: the pairing path takes over, and the access turned on for the join stops.
             joinAllowed = false
+            warmup?.cancel()
+            startPairCode()
             return
         }
         // The person went back to the pairing code, or left, while the model was made: its ticket is taken back.
@@ -358,31 +404,91 @@ struct ConnectPhoneWizard: View {
         made.start()
     }
 
-    /// Back to the pairing code: the join ticket is cancelled.
+    /// Back to the pairing code: the join ticket is cancelled, and the background access stops (the pairing path turns
+    /// the cloud on for the server it picks).
     private func leaveJoin() {
         useJoin = false
         joinModel?.close()
         joinModel = nil
+        let warming = warmup
+        warmup?.cancel()
+        // An access that is being turned on finishes first: the pairing path then finds the server on and registers
+        // nothing a second time.
+        Task { @MainActor in
+            await warming?.settle()
+            startPairCode()
+        }
+    }
+
+    /// The first path: the join code now, the access on every server in the background.
+    private func startJoinFirst() {
+        if warmup == nil {
+            let hub = hub
+            let relays = relays
+            warmup = PhoneAccessWarmup { server in
+                let ready = await relays.enable(relays.controller(for: server, hub: hub))
+                if ready { hub.requestAccessCycle() }
+                return ready
+            }
+        }
+        startWarmup()
+        startJoin()
+    }
+
+    private func startWarmup() {
+        warmup?.start(app.servers)
+    }
+
+    /// The pairing path: the server is picked (or taken when there is one), the cloud turned on, the code shown.
+    private func startPairCode() {
+        guard model == nil, !disappeared else { return }
+        let hub = hub
+        let relays = relays
+        let made = ConnectPhoneModel(
+            candidates: app.servers,
+            makeController: { server in relays.controller(for: server, hub: hub) })
+        model = made
+        made.start()
     }
 
     private func begin() async {
-        guard preview == nil, model == nil else { return }
-        let hub = hub
-        let made = ConnectPhoneModel(
-            candidates: app.servers,
-            makeController: { server in
-                RelayController(
-                    host: server,
-                    registrar: { [hub] in
-                        guard await hub.signedIn else { return nil }
-                        return try await hub.prepare()
-                    })
-            })
-        model = made
-        made.start()
+        guard preview == nil, previewJoin == nil, model == nil, warmup == nil else { return }
         joinAllowed = await JoinQRFactory.blocker(of: hub) == nil
         joinChecked = true
-        // The cloud may have been ready already: the join code shows without waiting for another change of the step.
-        if joinAllowed, useJoin, !disappeared, case .scan = made.step { await enterJoin() }
+        guard !disappeared else { return }
+        switch PhoneWizardPath.path(accountReady: joinAllowed) {
+        case .joinFirst:
+            startJoinFirst()
+        case .pairCode:
+            startPairCode()
+        }
+    }
+}
+
+/// The cloud controllers of the wizard, one per server. A controller that is busy (the other path is turning the access
+/// on) is waited for instead of asked again: `RelayController.enable` answers false while it is busy.
+@MainActor
+final class SharedRelayControllers {
+    private var controllers: [UUID: RelayController] = [:]
+
+    func controller(for server: any PhoneWizardServer, hub: AccountHub) -> RelayController {
+        if let made = controllers[server.wizardID] { return made }
+        let made = RelayController(
+            host: server,
+            registrar: { [hub] in
+                guard await hub.signedIn else { return nil }
+                return try await hub.prepare()
+            })
+        controllers[server.wizardID] = made
+        return made
+    }
+
+    /// Turns the access on, or waits for the run already under way and reads its outcome.
+    func enable(_ controller: RelayController) async -> Bool {
+        guard controller.isBusy else { return await controller.enable() }
+        while controller.isBusy {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        return controller.isConnected
     }
 }

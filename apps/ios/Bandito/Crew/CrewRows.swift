@@ -63,7 +63,9 @@ struct CrewAgentRow: View, Equatable {
                             .foregroundStyle(Color.Bandito.text2)
                             .accessibilityHidden(true)
                     }
-                    RoleChip(text: facts.role)
+                    if !facts.role.isEmpty {
+                        RoleChip(text: facts.role)
+                    }
                 }
                 if let working = facts.working {
                     WorkingLine(activity: working.activity, since: working.since, size: lineSize)
@@ -95,7 +97,7 @@ struct CrewAgentRow: View, Equatable {
     /// Role, status word, what the turn does now, unread count: what a VoiceOver user hears after the name. The elapsed
     /// time is left out: it would be read out again every second.
     private var accessibilityValue: String {
-        var parts = [facts.role, facts.status.label]
+        var parts = [facts.role, facts.status.label].filter { !$0.isEmpty }
         if let working = facts.working { parts.append(working.activity.title) }
         if facts.unread > 0 { parts.append(L10n.Ios.Crew.unread(count: facts.unread)) }
         if facts.isLead { parts.append(L10n.Ios.Crew.lead) }

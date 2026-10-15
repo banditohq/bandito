@@ -72,7 +72,7 @@ struct SettingsTab: View {
             } message: {
                 Text(L10n.Ios.Settings.Servers.leftOnServerMessage)
             }
-            .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea() }
+            .sheet(item: $page) { SafariView(url: $0.url).ignoresSafeArea().banditoSheet() }
         }
     }
 
@@ -108,7 +108,10 @@ struct SettingsTab: View {
                 }
             }
             ForEach(session.current) { server in
-                ConnectedServerRow(facts: ServerRowFacts.make(server))
+                // Without an account every server here was connected by its code: the row says so, not the route.
+                ConnectedServerRow(
+                    facts: ServerRowFacts.make(server),
+                    tag: account.signedIn ? nil : L10n.Ios.Settings.Servers.byCode)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
                             pendingDisconnect = server
@@ -140,7 +143,7 @@ struct SettingsTab: View {
                 }
             }
         } header: {
-            sectionHeader(L10n.Ios.Settings.Header.servers)
+            sectionHeader(account.signedIn ? L10n.Ios.Settings.Header.servers : L10n.Ios.Settings.Header.serversOnPhone)
         }
     }
 
@@ -378,9 +381,11 @@ struct SettingsTab: View {
     }
 }
 
-/// One paired server: its name, a status dot with the word, how this iPhone reaches it, and its addresses.
+/// One paired server: its name, a status dot with the word, how this iPhone reaches it, and its addresses. `tag`
+/// replaces the route at the right (the Settings page uses it for "Connected by code").
 struct ConnectedServerRow: View {
     let facts: ServerRowFacts
+    var tag: String?
 
     var body: some View {
         HStack(spacing: BanditoSpace.s3) {
@@ -405,7 +410,7 @@ struct ConnectedServerRow: View {
                 }
             }
             Spacer(minLength: BanditoSpace.s2)
-            Text(facts.viaTitle)
+            Text(tag ?? facts.viaTitle)
                 .font(BanditoFont.text(size: 12, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
         }

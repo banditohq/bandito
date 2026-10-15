@@ -4,9 +4,9 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// The profile sheet (460 wide, as tall as its content): the photo, the nickname and e-mail, then one card with this
-/// Mac's code, the devices of the account and sync, the links to settings and help, and sign-out. Without a session the
-/// sheet shows the sign-in instead.
+/// The profile sheet (420 wide, as tall as its content): the photo and the name in one row, one card with the devices of
+/// the account, this Mac's code under it, the sync line, and sign-out and reset at the foot. Without a session the sheet
+/// shows the sign-in instead.
 struct AccountSheet: View {
     @Environment(AccountHub.self) private var hub
     @Environment(AppModel.self) private var app
@@ -23,7 +23,9 @@ struct AccountSheet: View {
     @State private var lastSynced: Date?
     @State private var syncing = false
     @State private var connectingPhone = false
-    @State private var joiningPhone: JoinQRRequest?
+    @State private var codeOpen = false
+    @State private var avatarHovered = false
+    @State private var photoOptionsOpen = false
     @FocusState private var nicknameFocused: Bool
     /// A photo picked for the profile, framed in the sheet until it is saved.
     @State private var photoFraming: CGImage?
@@ -31,7 +33,7 @@ struct AccountSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ProfileSheetLayout.groupSpacing) {
             content
-            if let errorText {
+            if let errorText, !showsErrorInPage {
                 UserFacingErrorView(message: errorText)
             }
         }
@@ -39,21 +41,11 @@ struct AccountSheet: View {
         .frame(width: ProfileSheetLayout.width, alignment: .leading)
         .background(Color.Bandito.surface2)
         .overlay(alignment: .topTrailing) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-            }
-            .banditoButton(.icon(size: 28, label: L10n.Common.close))
-            .help(L10n.Common.close)
-            .padding(12)
+            headerButtons
         }
         .task { await reload() }
         .banditoSheet(isPresented: $connectingPhone, dismissOnOutsideClick: false) {
             ConnectPhoneWizard()
-        }
-        .banditoSheet(item: $joiningPhone, dismissOnOutsideClick: false) { _ in
-            JoinQRSheet()
         }
         .confirmationDialog(
             L10n.Account.SignOut.title,
@@ -85,13 +77,23 @@ struct AccountSheet: View {
         }
     }
 
+    /// The approval step: this Mac waits for another device to confirm it.
+    private var isApprovalRoute: Bool {
+        route == .waitForApproval || route == .recoverRequired
+    }
+
+    /// The page with the account (header, devices, sync) shows its errors on the sync line; anything else shows below.
+    private var showsErrorInPage: Bool {
+        hub.signedIn && hub.me != nil && !isApprovalRoute
+    }
+
     @ViewBuilder
     private var content: some View {
         if !hub.signedIn {
             ProfileSignInBlock {
                 Task { await finishSignIn() }
             }
-        } else if let route, route == .waitForApproval || route == .recoverRequired {
+        } else if isApprovalRoute {
             DeviceApprovalStep {
                 Task { await reload() }
             } onNoAccess: {
@@ -102,8 +104,9 @@ struct AccountSheet: View {
             photoFramingBlock
             // While a photo is being framed the rest waits, so the sheet stays as tall as the screen allows.
             if photoFraming == nil {
-                groupsCard(me)
-                linksCard
+                devicesCard(me)
+                thisMacCode
+                syncLine
                 actions
             }
         } else if loading || errorText == nil {
@@ -111,62 +114,127 @@ struct AccountSheet: View {
             ProgressView()
                 .controlSize(.small)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
+                .padding(.vertical, BanditoSpace.s6)
         }
     }
 
     // MARK: - Header
 
-    /// The centred head of the profile: the photo with its camera button, the name, the e-mail, how the person signed
-    /// in, and either the colour choice (no photo) or the way to remove the photo.
-    private func identityHeader(_ me: Me) -> some View {
-        let name = ProfileNames.displayName(nickname: hub.profile.nickname, account: me.user)
-        return VStack(spacing: 10) {
-            photoButton(name: name)
-            if editingNickname {
-                nicknameEditor
-            } else {
-                nicknameLine(name: name, me: me)
+    /// The round «?» (help, a mail to the team) and the close cross, in the top right corner.
+    private var headerButtons: some View {
+        HStack(spacing: BanditoSpace.s2) {
+            if let help = URL(string: "mailto:hello@bandito.dev") {
+                roundButton("questionmark", label: L10n.Account.Links.help) {
+                    SystemActions.open(help)
+                }
             }
-            Text(me.user.email ?? me.user.githubLogin.map { "@\($0)" } ?? "")
-                .font(BanditoFont.text(size: 13, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            loginMethod(me)
-            if hub.avatar.image == nil {
-                colorChoice.padding(.top, 2)
-            } else {
-                Button(L10n.Account.Photo.remove) { removePhoto() }
-                    .banditoButton(.link)
-                    .font(BanditoFont.text(size: 12, weight: 500))
+            roundButton("xmark", label: L10n.Common.close) {
+                dismiss()
             }
         }
-        .frame(maxWidth: .infinity)
+        .padding(BanditoSpace.s3)
     }
 
-    /// The profile photo, 88 pt, with a small round camera button at its lower edge: a click picks a new photo.
-    private func photoButton(name: String?) -> some View {
+    private func roundButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(width: 28, height: 28)
+                .background(Color.Bandito.text.opacity(0.03), in: Circle())
+                .overlay(Circle().stroke(Color.Bandito.text.opacity(0.08), lineWidth: 1))
+        }
+        .banditoButton(.row(cornerRadius: 14, hoverOpacity: 0.08))
+        .help(label)
+        .accessibilityLabel(label)
+    }
+
+    /// One row: the photo on the left, the name with its pencil, the e-mail under it (with the GitHub mark when the
+    /// person signs in with GitHub), and the colour choice when there is no photo. The trailing space keeps the name
+    /// clear of the close button.
+    private func identityHeader(_ me: Me) -> some View {
+        let name = ProfileNames.displayName(nickname: hub.profile.nickname, account: me.user)
+        return HStack(alignment: .center, spacing: BanditoSpace.s4) {
+            avatarButton(name: name)
+            VStack(alignment: .leading, spacing: 3) {
+                if editingNickname {
+                    nicknameEditor
+                } else {
+                    nicknameLine(name: name, me: me)
+                }
+                emailLine(me)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.trailing, BanditoSpace.s8)
+    }
+
+    /// The profile photo, 56 pt. A click opens its options: choose a photo, remove the one there is, and, without a
+    /// photo, the colour of the letter. A camera badge shows while the pointer is over it.
+    private func avatarButton(name: String?) -> some View {
         let size = ProfileSheetLayout.avatarSize
-        return ProfileAvatar(
-            name: name, color: AvatarColor.at(hub.profile.colorIndex), picture: hub.avatar.image, size: size)
-            .overlay(alignment: .bottomTrailing) {
-                Button {
-                    pickPhoto()
-                } label: {
+        return Button {
+            photoOptionsOpen = true
+        } label: {
+            ProfileAvatar(
+                name: name, color: AvatarColor.at(hub.profile.colorIndex), picture: hub.avatar.image, size: size)
+                .overlay(alignment: .bottomTrailing) {
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Color.Bandito.text)
-                        .frame(width: 28, height: 28)
+                        .frame(width: 22, height: 22)
                         .background(Color.Bandito.surface3, in: Circle())
                         .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
-                        .overlay(Circle().stroke(Color.Bandito.surface2, lineWidth: 3).padding(-3))
+                        .offset(x: 2, y: 2)
+                        .opacity(avatarHovered ? 1 : 0)
+                        .banditoAnimation(BanditoMotion.ease, value: avatarHovered)
                 }
-                .banditoButton(.row(cornerRadius: 14, hoverOpacity: 0.12))
-                .help(L10n.Account.Photo.change)
-                .accessibilityLabel(L10n.Account.Photo.change)
-                .offset(x: 2, y: 2)
+        }
+        .banditoButton(.row(cornerRadius: size / 2, hoverOpacity: 0.05))
+        .onHover { avatarHovered = $0 }
+        .popover(isPresented: $photoOptionsOpen, arrowEdge: .bottom) {
+            photoOptions
+        }
+        .help(L10n.Account.Photo.change)
+        .accessibilityLabel(L10n.Account.Photo.change)
+    }
+
+    /// The photo's dialog: the colour choice (only without a photo: the letter is what it colours), then choose or
+    /// remove the photo.
+    private var photoOptions: some View {
+        VStack(alignment: .leading, spacing: BanditoSpace.s3) {
+            if hub.avatar.image == nil {
+                colorChoice
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                groupDivider
             }
+            photoOptionRow(L10n.Account.Photo.choose) {
+                photoOptionsOpen = false
+                pickPhoto()
+            }
+            if hub.avatar.image != nil {
+                photoOptionRow(L10n.Account.Photo.remove) {
+                    photoOptionsOpen = false
+                    removePhoto()
+                }
+            }
+        }
+        .padding(BanditoSpace.s3)
+        .frame(width: 240, alignment: .leading)
+    }
+
+    private func photoOptionRow(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(BanditoFont.text(size: 13, weight: 500))
+                .foregroundStyle(Color.Bandito.text)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, BanditoSpace.s2)
+                .padding(.vertical, BanditoSpace.s2)
+                .contentShape(Rectangle())
+        }
+        .banditoButton(.row(cornerRadius: 8))
     }
 
     /// The name; a click on it or on the pencil edits it in place.
@@ -175,7 +243,7 @@ struct AccountSheet: View {
             nicknameDraft = hub.profile.nickname.isEmpty ? (me.user.name ?? "") : hub.profile.nickname
             editingNickname = true
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: BanditoSpace.s2) {
                 Text(name ?? L10n.Account.title)
                     .font(BanditoFont.display(size: 18.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
@@ -185,7 +253,7 @@ struct AccountSheet: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.Bandito.text3)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, BanditoSpace.s2)
             .padding(.vertical, 3)
         }
         .banditoButton(.row(cornerRadius: 10, hoverOpacity: 0.06))
@@ -200,7 +268,7 @@ struct AccountSheet: View {
                 .banditoField()
                 .font(BanditoFont.text(size: 16, weight: 500))
                 .multilineTextAlignment(.center)
-                .frame(width: 240)
+                .frame(width: 220)
                 .focused($nicknameFocused)
                 .onSubmit { saveNickname() }
                 .onExitCommand { editingNickname = false }
@@ -226,26 +294,22 @@ struct AccountSheet: View {
         editingNickname = false
     }
 
-    /// A small badge: how this account signs in.
-    private func loginMethod(_ me: Me) -> some View {
-        HStack(spacing: 5) {
+    /// The e-mail, with the GitHub mark in front of it when the person signs in with GitHub.
+    private func emailLine(_ me: Me) -> some View {
+        HStack(spacing: 6) {
             if me.user.githubLogin != nil {
                 GitHubMark()
-                    .fill(Color.Bandito.text2)
+                    .fill(Color.Bandito.text3)
                     .frame(width: 11, height: 11)
-                Text(L10n.Account.Method.github)
-            } else {
-                Image(systemName: "envelope")
-                    .font(.system(size: 10))
-                Text(L10n.Account.Method.email)
+                    .help(L10n.Account.Method.github)
+                    .accessibilityLabel(L10n.Account.Method.github)
             }
+            Text(me.user.email ?? me.user.githubLogin.map { "@\($0)" } ?? "")
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
-        .font(BanditoFont.text(size: 11.5, weight: 500))
-        .foregroundStyle(Color.Bandito.text2)
-        .lineLimit(1)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 3)
-        .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 1))
     }
 
     private var colorChoice: some View {
@@ -297,23 +361,12 @@ struct AccountSheet: View {
                 side: ProfileSheetLayout.cropSide,
                 circular: true)
             .frame(maxWidth: .infinity)
-            .padding(16)
+            .padding(BanditoSpace.s4)
             .banditoCard()
         }
     }
 
-    // MARK: - Groups
-
-    private func groupsCard(_ me: Me) -> some View {
-        VStack(spacing: 0) {
-            thisMacGroup
-            groupDivider
-            devicesGroup(me)
-            groupDivider
-            syncGroup
-        }
-        .banditoCard()
-    }
+    // MARK: - Devices
 
     private var groupDivider: some View {
         Rectangle()
@@ -321,36 +374,124 @@ struct AccountSheet: View {
             .frame(height: 1)
     }
 
-    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(title)
-            content()
+    /// One card: the devices of the account, one line each, and the main action at its foot.
+    private func devicesCard(_ me: Me) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel(L10n.Account.Section.devices)
+                .padding(.horizontal, BanditoSpace.s4)
+                .padding(.top, BanditoSpace.s3)
+                .padding(.bottom, BanditoSpace.s2)
+            ForEach(Array(me.devices.enumerated()), id: \.element.id) { index, device in
+                if index > 0 { groupDivider }
+                deviceRow(device)
+            }
+            groupDivider
+            addIPhoneButton
+                .frame(maxWidth: .infinity)
+                .padding(BanditoSpace.s4)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .banditoCard()
     }
 
-    // MARK: This Mac
+    /// «Добавить iPhone или iPad»: the main action of the sheet, a cream pill. It opens the connect wizard, which turns
+    /// on the phone access by itself and shows the join QR code first when the account can sign a phone in.
+    private var addIPhoneButton: some View {
+        Button {
+            connectingPhone = true
+        } label: {
+            Label(L10n.Account.Devices.addIPhone, systemImage: "qrcode")
+        }
+        .banditoButton(.lightPill())
+    }
 
-    private var thisMacGroup: some View {
-        group(L10n.Account.Section.thisMac) {
-            HStack(spacing: 10) {
-                Image(systemName: "laptopcomputer")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .frame(width: 28, height: 28)
-                    .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(DeviceDescriptor.current.name)
+    private func deviceRow(_ device: AccountDevice) -> some View {
+        HStack(spacing: BanditoSpace.s3) {
+            Image(systemName: DeviceIcon.symbol(platform: device.platform, name: device.name))
+                .font(.system(size: 14))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(width: 28, height: 28)
+                .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: BanditoSpace.s2) {
+                    Text(device.name)
                         .font(BanditoFont.text(size: 13.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    HStack(spacing: 6) {
+                    if device.current {
+                        Chip(text: L10n.Account.Section.thisMac)
+                    }
+                }
+                if let status = deviceStatus(device) {
+                    Text(status)
+                        .font(BanditoFont.text(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: BanditoSpace.s2)
+            if !device.current {
+                deviceMoreButton(device)
+            }
+        }
+        .padding(.horizontal, BanditoSpace.s4)
+        .padding(.vertical, BanditoSpace.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The «…» of another device: a click asks to disconnect it, through the confirmation that says what happens.
+    private func deviceMoreButton(_ device: AccountDevice) -> some View {
+        Button {
+            removing = device
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .banditoButton(.icon(size: 28, label: L10n.Account.Device.menu))
+    }
+
+    /// What a device's line says: «в сети» or «был в сети …», from its last sign-in time.
+    private func deviceStatus(_ device: AccountDevice) -> String? {
+        switch DevicePresence.line(current: device.current, lastSeen: Self.date(from: device.lastSeenAt), now: Date()) {
+        case .online:
+            return L10n.Account.Device.online
+        case .lastSeen(let date):
+            return L10n.Account.Device.lastSeen(when: AccountTime.ago(date))
+        case .none:
+            return nil
+        }
+    }
+
+    // MARK: This Mac's code
+
+    /// «Код проверки этого Mac»: folded by default. Opened, it shows the code in mono, with a copy button and why it is
+    /// there.
+    private var thisMacCode: some View {
+        VStack(alignment: .leading, spacing: BanditoSpace.s3) {
+            Button {
+                codeOpen.toggle()
+            } label: {
+                HStack(spacing: BanditoSpace.s2) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .rotationEffect(.degrees(codeOpen ? 90 : 0))
+                        .frame(width: 12)
+                    Text(L10n.Account.Code.title)
+                        .font(BanditoFont.text(size: 12.5, weight: 500))
+                    Spacer(minLength: BanditoSpace.s2)
+                }
+                .foregroundStyle(Color.Bandito.text2)
+                .padding(.horizontal, BanditoSpace.s2)
+                .padding(.vertical, BanditoSpace.s1 + 2)
+                .contentShape(Rectangle())
+            }
+            .banditoButton(.row(cornerRadius: 8, hoverOpacity: 0.05))
+            if codeOpen {
+                VStack(alignment: .leading, spacing: BanditoSpace.s2) {
+                    HStack(spacing: BanditoSpace.s2) {
                         Text(hub.identity?.fingerprint ?? "")
-                            .font(BanditoFont.mono(size: 13, weight: 500))
-                            .foregroundStyle(Color.Bandito.text2)
+                            .font(BanditoFont.mono(size: 14, weight: 500))
+                            .foregroundStyle(Color.Bandito.text)
                             .textSelection(.enabled)
                             .lineLimit(1)
                             .fixedSize()
@@ -360,194 +501,90 @@ struct AccountSheet: View {
                             Image(systemName: "doc.on.doc")
                                 .font(.system(size: 11, weight: .medium))
                         }
-                        .banditoButton(.icon(size: 24, label: L10n.Account.copyCode))
+                        .banditoButton(.icon(size: 26, label: L10n.Account.copyCode))
                         .disabled(hub.identity == nil)
                     }
-                }
-                Spacer(minLength: 0)
-            }
-            Text(L10n.Account.ThisMac.hint)
-                .font(BanditoFont.text(size: 12, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    // MARK: Devices
-
-    private func devicesGroup(_ me: Me) -> some View {
-        group(L10n.Account.Section.devices) {
-            VStack(spacing: 10) {
-                ForEach(me.devices, id: \.id) { device in
-                    deviceRow(device)
-                }
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
-                        addIPhoneButton
-                        connectPhoneButton
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        addIPhoneButton
-                        connectPhoneButton
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    /// «Добавить iPhone или iPad»: the join QR code, the iPhone signs in with a scan.
-    private var addIPhoneButton: some View {
-        Button {
-            joiningPhone = JoinQRRequest()
-        } label: {
-            Label(L10n.Account.Devices.addIPhone, systemImage: "qrcode")
-                .font(BanditoFont.text(size: 12.5, weight: 500))
-        }
-        .banditoButton(.quiet())
-        .fixedSize()
-    }
-
-    private var connectPhoneButton: some View {
-        Button {
-            connectingPhone = true
-        } label: {
-            Label(L10n.Account.Devices.connectPhone, systemImage: "iphone.gen3")
-                .font(BanditoFont.text(size: 12.5, weight: 500))
-        }
-        .banditoButton(.quiet())
-        .fixedSize()
-    }
-
-    private func deviceRow(_ device: AccountDevice) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: DeviceIcon.symbol(platform: device.platform, name: device.name))
-                .font(.system(size: 14))
-                .foregroundStyle(Color.Bandito.text2)
-                .frame(width: 28, height: 28)
-                .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(device.name)
-                        .font(BanditoFont.text(size: 13.5, weight: 500))
-                        .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    if device.current {
-                        Text(L10n.Onboarding.Account.settingsThisDevice)
-                            .font(BanditoFont.text(size: 11.5, weight: 500))
-                            .foregroundStyle(Color.Bandito.signal)
-                            .lineLimit(1)
-                            .fixedSize()
-                    }
-                }
-                if !device.current, let seen = Self.date(from: device.lastSeenAt) {
-                    Text(L10n.Account.Device.lastSeen(when: seen.formatted(.relative(presentation: .named))))
+                    Text(L10n.Account.ThisMac.hint)
                         .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-            Spacer(minLength: 8)
-            if !device.current {
-                Button(L10n.Account.Device.disconnect) {
-                    removing = device
-                }
-                .banditoButton(.quiet())
-                .fixedSize()
+                .padding(.horizontal, BanditoSpace.s2)
+                .transition(.opacity)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .banditoAnimation(BanditoMotion.ease, value: codeOpen)
     }
 
     // MARK: Sync
 
-    private var syncGroup: some View {
-        group(L10n.Account.Section.sync) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(Color.Bandito.ok)
-                    .frame(width: 7, height: 7)
+    /// One quiet line: a green dot and «Синхронизировано · Синхронизировать сейчас». A failure turns the dot red and
+    /// shows its text in place of the line.
+    private var syncLine: some View {
+        HStack(spacing: BanditoSpace.s2) {
+            Circle()
+                .fill(errorText == nil ? Color.Bandito.ok : Color.Bandito.danger)
+                .frame(width: 7, height: 7)
+            if let errorText {
+                Text(errorText.text)
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                if errorText.canRetry {
+                    Button(L10n.Banner.retry) {
+                        Task { await syncNow() }
+                    }
+                    .banditoButton(.link)
+                    .font(BanditoFont.text(size: 12, weight: 500))
+                    .fixedSize()
+                    .disabled(syncing)
+                }
+            } else {
                 Group {
                     if let lastSynced {
-                        Text(L10n.Account.Sync.done(when: lastSynced.formatted(.relative(presentation: .named))))
+                        Text(L10n.Account.Sync.done(when: AccountTime.ago(lastSynced)))
                     } else {
-                        Text(L10n.Account.Sync.on)
+                        Text(L10n.Account.Sync.synced)
                     }
                 }
-                .font(BanditoFont.text(size: 13, weight: 500))
-                .foregroundStyle(Color.Bandito.text)
+                .font(BanditoFont.text(size: 12, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
                 .help(L10n.Account.Sync.what)
-                Spacer(minLength: 8)
+                Text("·")
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
                 Button(L10n.Account.Sync.now) {
                     Task { await syncNow() }
                 }
                 .banditoButton(.link)
-                .font(BanditoFont.text(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12, weight: 500))
                 .fixedSize()
                 .disabled(syncing)
             }
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Links and actions
+    // MARK: - Foot
 
-    private var linksCard: some View {
-        VStack(spacing: 0) {
-            Button {
-                dismiss()
-                WindowActions.showSettings()
-            } label: {
-                linkRow(icon: "gearshape", title: L10n.Account.Links.settings)
-            }
-            .banditoButton(.row(cornerRadius: 0))
-            if let help = URL(string: "mailto:hello@bandito.dev") {
-                groupDivider
-                Button {
-                    SystemActions.open(help)
-                } label: {
-                    linkRow(icon: "questionmark.circle", title: L10n.Account.Links.help)
-                }
-                .banditoButton(.row(cornerRadius: 0))
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: BanditoCardModifier.cornerRadius, style: .continuous))
-        .banditoCard()
-    }
-
-    private func linkRow(icon: String, title: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundStyle(Color.Bandito.text2)
-                .frame(width: 20)
-            Text(title)
-                .font(BanditoFont.text(size: 13.5, weight: 500))
-                .foregroundStyle(Color.Bandito.text)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.Bandito.text3)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-    }
-
+    /// Sign-out on the left, the reset (danger) on the right, both small. The Mac's Settings are in the application
+    /// menu (⌘,); help is the round «?» in the head of the sheet.
     private var actions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: BanditoSpace.s3) {
+            HStack(spacing: BanditoSpace.s4) {
                 Button(L10n.Onboarding.Account.signOutAction) {
                     confirmingSignOut = true
                 }
                 .banditoButton(.link)
-                .font(BanditoFont.text(size: 13, weight: 500))
-                Spacer(minLength: 8)
+                .font(BanditoFont.text(size: 12, weight: 500))
+                Spacer(minLength: BanditoSpace.s2)
                 Button(L10n.Onboarding.Account.resetAccountAction) {
                     resetting.toggle()
                 }
                 .banditoButton(.link)
-                .font(BanditoFont.text(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 12, weight: 500))
                 .foregroundStyle(Color.Bandito.danger)
             }
             if resetting {
@@ -686,5 +723,36 @@ struct AccountSheet: View {
         case .lilac: L10n.Account.Color.lilac
         case .cream: L10n.Account.Color.cream
         }
+    }
+}
+
+/// Times in the account's lines, in the app's language (`L10n.locale`), not the system's.
+enum AccountTime {
+    /// «6 days ago» / «6 дней назад» for a past moment.
+    static func ago(_ date: Date, now: Date = Date()) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = L10n.locale
+        formatter.dateTimeStyle = .named
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: now)
+    }
+}
+
+/// What a device's line in the account says about it. A device that was seen in the last five minutes is online; the
+/// one this Mac is always is. Otherwise the line says when it was last seen.
+enum DevicePresence {
+    /// How long after its last sign-in a device still counts as online.
+    static let onlineWindow: TimeInterval = 5 * 60
+
+    enum Line: Equatable {
+        case online
+        case lastSeen(Date)
+        case none
+    }
+
+    static func line(current: Bool, lastSeen: Date?, now: Date) -> Line {
+        if current { return .online }
+        guard let lastSeen else { return .none }
+        return now.timeIntervalSince(lastSeen) < onlineWindow ? .online : .lastSeen(lastSeen)
     }
 }

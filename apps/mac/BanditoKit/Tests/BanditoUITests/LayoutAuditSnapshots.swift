@@ -266,6 +266,23 @@ extension ScreenWorkSuites {
             macPublicKey: Curve25519.KeyAgreement.PrivateKey().publicKey, macName: "Anna’s MacBook Pro"
         ).link.absoluteString
 
+        /// The profile sheet of a signed-in person with two devices and a Mac waiting for approval.
+        @MainActor static func accountSignedIn(_ env: AuditEnvironment) -> AnyView {
+            let me = ##"""
+                {"user":{"id":"u1","email":"maria.wolfgang-schneider@example-company.com","name":"Maria Wolfgang-Schneider","github_login":"maria"},
+                 "device":{"id":"d1","approved":true},
+                 "devices":[
+                  {"id":"d1","name":"MacBook Pro of Maria Wolfgang-Schneider","platform":"macOS","approved":true,"created_at":"2026-09-01T10:00:00Z","last_seen_at":"2026-10-10T10:00:00Z","current":true},
+                  {"id":"d2","name":"iPhone","platform":"iOS","approved":true,"created_at":"2026-09-02T10:00:00Z","last_seen_at":"2026-10-09T10:00:00Z","current":false}]}
+                """##
+            let pending = ##"""
+                [{"id":"p1","name":"Mac mini in the office of the company","platform":"macOS","public_key":"AAAA","created_at":"2026-10-10T10:00:00Z"}]
+                """##
+            env.hub.me = try? JSONDecoder().decode(Me.self, from: Data(me.utf8))
+            env.hub.pending = (try? JSONDecoder().decode([PendingDevice].self, from: Data(pending.utf8))) ?? []
+            return AnyView(AccountSheet())
+        }
+
         static let cloudPairPreview = PhoneAccessRules.PairState.ready(
             link: PhonePairLink.make(
                 code: "otter-lava-mint-orbit-crane-fig", fingerprint: nil, name: "Studio", hosts: [],
@@ -436,19 +453,7 @@ extension ScreenWorkSuites {
                 AnyView(AccountSheet())
             },
             AuditCase(name: "sheet-account-signed-in", width: ProfileSheetLayout.width, selfSized: true, signedIn: true) { env in
-                let me = ##"""
-                    {"user":{"id":"u1","email":"maria.wolfgang-schneider@example-company.com","name":"Maria Wolfgang-Schneider","github_login":"maria"},
-                     "device":{"id":"d1","approved":true},
-                     "devices":[
-                      {"id":"d1","name":"MacBook Pro of Maria Wolfgang-Schneider","platform":"macOS","approved":true,"created_at":"2026-09-01T10:00:00Z","last_seen_at":"2026-10-10T10:00:00Z","current":true},
-                      {"id":"d2","name":"iPhone","platform":"iOS","approved":true,"created_at":"2026-09-02T10:00:00Z","last_seen_at":"2026-10-09T10:00:00Z","current":false}]}
-                    """##
-                let pending = ##"""
-                    [{"id":"p1","name":"Mac mini in the office of the company","platform":"macOS","public_key":"AAAA","created_at":"2026-10-10T10:00:00Z"}]
-                    """##
-                env.hub.me = try? JSONDecoder().decode(Me.self, from: Data(me.utf8))
-                env.hub.pending = (try? JSONDecoder().decode([PendingDevice].self, from: Data(pending.utf8))) ?? []
-                return AnyView(AccountSheet())
+                LayoutAuditSnapshots.accountSignedIn(env)
             },
         ]
 

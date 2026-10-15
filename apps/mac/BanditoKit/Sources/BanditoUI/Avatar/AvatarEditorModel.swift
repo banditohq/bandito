@@ -1,4 +1,5 @@
 import AppKit
+import BanditoDesign
 import BanditoL10n
 import CoreGraphics
 import Observation
@@ -34,10 +35,10 @@ enum AvatarEditorLayout {
 /// The profile sheet's measures. The photo is framed inside the sheet, under the avatar, never in a popover that could
 /// run past the sheet's edge, so the frame must fit the sheet's content width.
 enum ProfileSheetLayout {
-    static let width: CGFloat = 460
-    static let padding: CGFloat = 24
-    static let groupSpacing: CGFloat = 16
-    static let avatarSize: CGFloat = 88
+    static let width: CGFloat = 420
+    static let padding: CGFloat = BanditoSpace.s5
+    static let groupSpacing: CGFloat = BanditoSpace.s4
+    static let avatarSize: CGFloat = 56
     static var contentWidth: CGFloat { width - 2 * padding }
     /// The square the photo is framed in: as wide as the content, but not larger than 280.
     static var cropSide: CGFloat { min(contentWidth, 280) }

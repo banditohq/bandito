@@ -65,6 +65,17 @@ extension ScreenWorkSuites {
             try each("wizard-problem", width: 420) { _ in AnyView(ConnectPhoneWizard(preview: .problem(.noServer))) }
         }
 
+        /// The connect wizard on the join code: the phone access on two servers (turned on, and one that failed).
+        @Test(.enabled(if: RelaySnapshots.directory != nil)) func wizardJoin() throws {
+            let showing = JoinQRModel.preview(.showing(link: LayoutAuditSnapshots.joinPreviewLink, expiresAt: Date().addingTimeInterval(272)))
+            try each("wizard-join", width: 420) { _ in
+                AnyView(ConnectPhoneWizard(previewJoin: showing, previewAccess: .ready(["home", "my-home"])))
+            }
+            try each("wizard-join-failed", width: 420) { _ in
+                AnyView(ConnectPhoneWizard(previewJoin: showing, previewAccess: .failed(["my-home"])))
+            }
+        }
+
         @Test(.enabled(if: RelaySnapshots.directory != nil)) func joinSheet() throws {
             let link = LayoutAuditSnapshots.joinPreviewLink
             let phases: [(String, JoinQRModel.Phase)] = [
@@ -76,6 +87,12 @@ extension ScreenWorkSuites {
             for (name, phase) in phases {
                 try each(name, width: 420) { _ in AnyView(JoinQRSheet(preview: .preview(phase))) }
             }
+        }
+
+        /// The profile window of a signed-in person, at its own width (420), in the dark theme in Russian and the light theme
+        /// in English.
+        @Test(.enabled(if: RelaySnapshots.directory != nil)) func account() throws {
+            try each("account-sheet", width: ProfileSheetLayout.width) { env in LayoutAuditSnapshots.accountSignedIn(env) }
         }
 
         @Test(.enabled(if: RelaySnapshots.directory != nil)) func settings() throws {

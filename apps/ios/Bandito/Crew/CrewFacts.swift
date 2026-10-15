@@ -238,7 +238,7 @@ enum CrewFacts {
             return CrewAgentFacts(
                 id: agent.id,
                 name: agent.name,
-                role: agent.role,
+                role: AgentRoleText.visible(agent.role) ?? "",
                 status: status,
                 mood: AvatarMood.crew(status: status, turnRunning: summary.turnRunning, paused: agent.paused),
                 look: CrewLook(agent: agent),

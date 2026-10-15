@@ -95,6 +95,7 @@ struct CrewScreen: View {
         .sheet(item: $newAgent) { start in
             if let server = currentServer {
                 NewAgentSheet(server: server, tab: start.tab)
+                    .banditoSheet()
             }
         }
     }

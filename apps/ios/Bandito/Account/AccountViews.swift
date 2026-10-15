@@ -58,6 +58,7 @@ struct AccountScreen: View {
                 },
                 onClose: { scan = nil })
                 .preferredColorScheme(.dark)
+                .banditoSheet()
         }
         .task { await account.start() }
     }
@@ -557,7 +558,7 @@ struct AccountSettingsRow: View {
 
     private var subtitle: String {
         switch account.stage {
-        case .signedOut: L10n.Ios.Settings.Account.signInHint
+        case .signedOut: L10n.Ios.Settings.Account.signInThen
         case .waitingForApproval, .confirmSender: L10n.Ios.Settings.Account.waiting
         case .ready: L10n.Ios.Settings.Account.ready
         case .loading, .rejected, .recoverRequired: L10n.Ios.Settings.Account.attention
