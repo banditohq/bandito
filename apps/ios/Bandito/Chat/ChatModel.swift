@@ -46,13 +46,17 @@ final class ChatModel {
     private(set) var changes: ChatChangesSummary?
     /// Rows the person opened (a tool group, a scheduled run).
     private(set) var expanded: Set<String> = []
+    /// The history is being read (the first time, or after "Try again").
     private(set) var isLoading = true
+    /// The history could not be read and nothing else shows: the screen says so and offers "Try again".
     private(set) var loadFailed = false
     private(set) var loadingOlder = false
     /// Called with what changed. Set by the screen.
     var onUpdate: ((ChatUpdate) -> Void)?
     /// Called when the list has nothing to draw yet or no more: the empty state shows.
     var onEmptyChange: ((Bool) -> Void)?
+    /// Called when the load state changed (loading, failed, done): the screen shows or takes away what it says about it.
+    var onLoadStateChange: (() -> Void)?
 
     private(set) var metrics: ChatMetrics?
     private var updating = false
@@ -64,12 +68,41 @@ final class ChatModel {
     private let sizer = ChatHostedSizer()
     private var updateCount = 0
 
-    init(server: ServerModel, agentID: String, engine: ChatLayoutEngine = .shared, outbox: ChatOutbox = .shared) {
+    /// The copy of the chat kept on disk (nil: none is kept, as in most tests).
+    private let history: ChatHistoryCache?
+    /// The saved chat, drawn while the real one is not read.
+    private var saved: SavedChat?
+    private var cacheTask: Task<Void, Never>?
+    /// A reaction the person asked for, drawn before the daemon's event comes back; nil emoji: taken off.
+    private var wanted: [Int64: Wanted] = [:]
+    private var emptyPages = 0
+    /// The most older pages read to find a message when the newest page shows nothing.
+    static let emptyPageLimit = 10
+
+    struct Wanted: Equatable {
+        var emoji: String?
+    }
+
+    /// The saved chat as the builder wants it.
+    private struct SavedChat {
+        var thread: AgentThread
+        var replies: [Int64: Int64]
+        var reactions: [Int64: [ChatReactionChip]]
+    }
+
+    init(
+        server: ServerModel, agentID: String, engine: ChatLayoutEngine = .shared, outbox: ChatOutbox = .shared,
+        history: ChatHistoryCache? = .shared
+    ) {
         self.server = server
         self.agentID = agentID
         self.engine = engine
         self.outbox = outbox
+        self.history = history
     }
+
+    /// The screen shows the saved chat, not the server's: nothing has been read yet.
+    var showsSavedHistory: Bool { saved != nil && !summary.loaded }
 
     var agentName: String { server.agents.first { $0.id == agentID }?.name ?? "" }
     private var primaryRuntime: String { server.agents.first { $0.id == agentID }?.runtime.rawValue ?? "" }
@@ -80,41 +113,62 @@ final class ChatModel {
 
     // MARK: life
 
-    /// Loads the thread when it is not loaded, and starts following it.
+    /// Loads the thread when it is not loaded, and starts following it. The saved copy is read at the same time and
+    /// drawn until the real history is there.
     func start() {
         guard !started else { return }
         started = true
         track()
+        readSaved()
         Task { @MainActor in
-            if !summary.loaded || server.thread(for: agentID).items.isEmpty {
-                do {
-                    try await server.loadHistory(agentID)
-                } catch {
-                    loadFailed = !summary.loaded
-                }
-            }
-            isLoading = false
-            scheduleUpdate()
+            await load(initial: true)
             loadChanges()
         }
     }
 
-    /// Reads the thread again (it could not be read the first time).
-    private func reload() {
+    /// Reads the thread (the first time, or again). A thread that could not be read leaves `loadFailed`; one that is
+    /// read but shows nothing goes on to older pages.
+    private func load(initial: Bool) async {
+        guard !reloading else { return }
+        reloading = true
+        isLoading = true
         loadFailed = false
-        Task { @MainActor in
+        onLoadStateChange?()
+        if initial, summary.loaded, !server.thread(for: agentID).items.isEmpty {
+            // Already read by someone else (the Crew list): nothing to ask.
+        } else {
             do {
                 try await server.loadHistory(agentID)
             } catch {
                 loadFailed = !summary.loaded
             }
-            scheduleUpdate()
         }
+        reloading = false
+        isLoading = false
+        scheduleUpdate()
+        onLoadStateChange?()
+    }
+
+    private var reloading = false
+
+    /// "Try again" on the screen that says the history could not be read.
+    func retryLoad() {
+        guard !reloading else { return }
+        Task { @MainActor in await load(initial: false) }
+    }
+
+    /// Reads the thread again (it could not be read the first time).
+    private func reload() {
+        guard loadFailed, !reloading else { return }
+        Task { @MainActor in await load(initial: false) }
     }
 
     func stop() {
         started = false
         changesTask?.cancel()
+        cacheTask?.cancel()
+        cacheTask = nil
+        saveNow()
     }
 
     /// Follows the thread, the queue and the connection: one call per change, which asks for an update and arms itself
@@ -189,9 +243,25 @@ final class ChatModel {
     private func updateOnce(forceAll: Bool) async {
         guard let metrics else { return }
         outbox.releaseEchoes(serverID: server.id, agentID: agentID, thread: summaryThread)
+        // The server's thread, or the saved chat while nothing has been read.
+        let live = summaryThread
+        let useSaved = !summary.loaded && saved != nil
+        let thread = useSaved ? saved!.thread : live
+        let replies = useSaved ? saved!.replies : live.replies
+        var reactions: [Int64: [ChatReactionChip]] = useSaved ? saved!.reactions : live.reactions.mapValues { $0.chips.map(ChatReactionChip.init) }
+        // What the person asked for shows at once; it is let go when the thread shows it too.
+        for (seq, ask) in wanted {
+            if ChatReactionsRules.settled(ask.emoji, in: reactions[seq] ?? []) {
+                wanted[seq] = nil
+            } else {
+                reactions[seq] = ChatReactionsRules.applying(.some(ask.emoji), to: reactions[seq] ?? [])
+            }
+        }
         let input = ChatRowInput(
-            thread: summaryThread, agentName: agentName, primaryRuntime: primaryRuntime,
-            queued: outbox.items(serverID: server.id, agentID: agentID), expanded: expanded, changes: changes)
+            thread: thread, agentName: agentName, primaryRuntime: primaryRuntime,
+            queued: outbox.items(serverID: server.id, agentID: agentID), expanded: expanded, changes: changes,
+            replies: replies, reactions: reactions, reactionsOn: server.supports("reactions"),
+            repliesOn: server.supports("attachments"))
         let built = await Task.detached(priority: .userInitiated) { ChatRowBuilder.build(input) }.value
         // Measure what is new or changed off the main thread; the cards get their height here.
         let old = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
@@ -219,9 +289,23 @@ final class ChatModel {
         rows = built
         heights = newHeights
         updateCount += 1
+        findSomethingToShow(built.isEmpty)
         if !isLoading || !built.isEmpty { onUpdate?(update) }
         if wasEmpty != built.isEmpty { onEmptyChange?(built.isEmpty) }
         noteTurn()
+        if !useSaved, !built.isEmpty { scheduleSave() }
+    }
+
+    /// The newest page held nothing the list draws (only tool calls, say): older pages are read until something shows
+    /// (a few at most), so a long history never opens as an empty chat.
+    private func findSomethingToShow(_ nothingShows: Bool) {
+        guard nothingShows, !isLoading, summary.loaded, hasOlder, server.state == .connected, emptyPages < Self.emptyPageLimit
+        else {
+            if !nothingShows { emptyPages = 0 }
+            return
+        }
+        emptyPages += 1
+        loadOlder()
     }
 
     private var summaryThread: AgentThread { server.thread(for: agentID) }
@@ -274,11 +358,12 @@ final class ChatModel {
 
     /// Queues a message of the person. Returns false for a message with nothing in it.
     @discardableResult
-    func send(_ text: String, attachments: [AgentAttachment] = [], viaButton: Bool = false) -> Bool {
+    func send(_ text: String, attachments: [AgentAttachment] = [], viaButton: Bool = false, replyTo: Int64? = nil) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !attachments.isEmpty else { return false }
         outbox.enqueue(
-            serverID: server.id, agentID: agentID, text: trimmed, attachments: attachments, viaButton: viaButton)
+            serverID: server.id, agentID: agentID, text: trimmed, attachments: attachments, viaButton: viaButton,
+            replyTo: replyTo)
         return true
     }
 
@@ -306,13 +391,89 @@ final class ChatModel {
     func loadOlder() {
         guard !loadingOlder, server.hasMoreHistory[agentID] == true, server.state == .connected else { return }
         loadingOlder = true
+        onLoadStateChange?()
         Task { @MainActor in
-            defer { loadingOlder = false }
+            defer {
+                loadingOlder = false
+                onLoadStateChange?()
+            }
             try? await server.loadOlder(agentID)
         }
     }
 
     var hasOlder: Bool { server.hasMoreHistory[agentID] == true }
+
+    /// The history is being read, or older pages are being read to find something to show: the screen is not empty, it
+    /// is waiting.
+    var isBusy: Bool {
+        isLoading || loadingOlder
+            || (rows.isEmpty && emptyPages > 0 && emptyPages < Self.emptyPageLimit && hasOlder && server.state == .connected)
+    }
+
+    // MARK: reactions
+
+    /// Puts the emoji on a message (the person's own replaces the one before), or takes it off with nil. The screen shows
+    /// it at once; if the daemon refuses, it is taken back and false is returned.
+    func react(_ emoji: String?, seq: Int64) async -> Bool {
+        guard server.supports("reactions") else { return false }
+        let ask = Wanted(emoji: emoji)
+        wanted[seq] = ask
+        scheduleUpdate()
+        do {
+            try await server.react(emoji, toMessage: seq, of: agentID)
+        } catch {
+            if wanted[seq] == ask { wanted[seq] = nil }
+            scheduleUpdate()
+            return false
+        }
+        // The daemon's event normally lets the stand-in go; if it never comes the thread's own state is shown again.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            guard let self, self.wanted[seq] == ask else { return }
+            self.wanted[seq] = nil
+            self.scheduleUpdate()
+        }
+        return true
+    }
+
+    // MARK: the saved copy
+
+    /// Reads the saved chat off the main thread. It is drawn only while the real history is not read.
+    private func readSaved() {
+        guard let history, !server.isSynthetic(agentID) else { return }
+        let serverID = server.id
+        let agent = agentID
+        Task { @MainActor [weak self] in
+            let snapshot = await Task.detached(priority: .userInitiated) {
+                history.load(serverID: serverID, agentID: agent)
+            }.value
+            guard let self, let snapshot, !snapshot.items.isEmpty, !self.summary.loaded else { return }
+            self.saved = SavedChat(thread: snapshot.thread, replies: snapshot.replyMap, reactions: snapshot.reactionMap)
+            self.scheduleUpdate()
+        }
+    }
+
+    /// The copy is written a moment after the thread settles (not at every token of a stream).
+    private func scheduleSave() {
+        guard history != nil, summary.loaded, !server.isSynthetic(agentID) else { return }
+        cacheTask?.cancel()
+        cacheTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(1500))
+            guard !Task.isCancelled, let self else { return }
+            self.saveNow()
+        }
+    }
+
+    /// Writes the last items of the thread now, on the main actor and in order (200 items are a few milliseconds; a write left
+    /// to another task could be cut off when the app is suspended, or land after a newer one).
+    func saveNow() {
+        guard let history, summary.loaded, !server.isSynthetic(agentID) else { return }
+        let thread = summaryThread
+        guard !thread.items.isEmpty else { return }
+        history.save(
+            ChatHistorySnapshot(thread: thread, now: Int64(Date().timeIntervalSince1970 * 1000)), serverID: server.id,
+            agentID: agentID)
+    }
 
     // MARK: changes
 

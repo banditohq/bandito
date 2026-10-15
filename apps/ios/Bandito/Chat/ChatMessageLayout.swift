@@ -32,6 +32,41 @@ extension ChatLayoutEngine {
         var widest: CGFloat = 0
         var run: [Paragraph] = []
 
+        // The quote of a reply comes first, in a quiet plate; the plate is as wide as the bubble ends up (set below).
+        var panelIndex: Int?
+        if let reply = message.reply {
+            let barWidth: CGFloat = 3
+            let textX = metrics.padX + 10
+            let textWidth = max(40, inner - 10 - 8)
+            let name = NSAttributedString(
+                string: reply.name,
+                attributes: [.font: fonts.quoteName, .foregroundColor: UIColor.Bandito.text2, .paragraphStyle: truncating()])
+            let nameHeight = ceil(fonts.quoteName.lineHeight)
+            let words = reply.excerpt ?? L10n.Reply.earlier
+            let wordsStyle = NSMutableParagraphStyle()
+            wordsStyle.lineBreakMode = .byTruncatingTail
+            let excerpt = NSAttributedString(
+                string: words,
+                attributes: [.font: fonts.quoteText, .foregroundColor: UIColor.Bandito.text3, .paragraphStyle: wordsStyle])
+            let measured = Self.size(of: excerpt, width: textWidth)
+            let twoLines = ceil(fonts.quoteText.lineHeight) * 2
+            let wordsHeight = min(measured.height, twoLines)
+            let top = y + 6
+            let panelHeight = 6 + nameHeight + 2 + wordsHeight + 6
+            panelIndex = placed.count
+            placed.append(.panel(CGRect(x: metrics.padX, y: y, width: inner, height: panelHeight)))
+            placed.append(.bar(CGRect(x: metrics.padX, y: y + 4, width: barWidth, height: panelHeight - 8)))
+            let nameWidth = min(Self.size(of: name, width: textWidth).width, textWidth)
+            placed.append(.text(ChatTextItem(string: name, frame: CGRect(x: textX, y: top, width: textWidth, height: nameHeight))))
+            placed.append(
+                .text(
+                    ChatTextItem(
+                        string: excerpt,
+                        frame: CGRect(x: textX, y: top + nameHeight + 2, width: textWidth, height: wordsHeight))))
+            widest = max(widest, 10 + 8 + max(nameWidth, min(measured.width, textWidth)))
+            y += panelHeight
+        }
+
         func gap() {
             if !placed.isEmpty { y += 8 }
         }
@@ -98,6 +133,11 @@ extension ChatLayoutEngine {
         let hasBubble = !placed.isEmpty
         let bubbleWidth = hasBubble ? min(maxBubble, max(widest + metrics.padX * 2, 46)) : 0
         let bubbleHeight = hasBubble ? y + metrics.padY : 0
+        if let panelIndex, case .panel(var rect) = placed[panelIndex] {
+            rect.size.width = bubbleWidth - metrics.padX * 2
+            placed[panelIndex] = .panel(rect)
+            if case .bar(var bar) = placed[panelIndex + 1] { bar.size.width = 3; placed[panelIndex + 1] = .bar(bar) }
+        }
 
         // The cell: sender line, files, bubble, caption.
         var cellY: CGFloat = 0
@@ -120,6 +160,12 @@ extension ChatLayoutEngine {
         }
         let shifted = placed.map { shift($0, dx: originX, dy: bubble?.minY ?? 0) }
 
+        // The reactions, under the bubble on the speaker's side.
+        let chips = layoutChips(message.reactions, originY: &cellY, metrics: metrics, fonts: fonts, mine: isMine)
+
+        var quote: CGRect?
+        for block in shifted { if case .panel(let rect) = block { quote = rect } }
+
         var meta: ChatTextItem?
         if let string = metaString(message, fonts: fonts) {
             let size = Self.size(of: string, width: maxBubble)
@@ -132,8 +178,58 @@ extension ChatLayoutEngine {
         let plain = message.markdown ? MessageBlocks.plainText(message.text) : message.text
         let layout = ChatMessageLayout(
             isMine: isMine, tail: message.tail, bubble: bubble, blocks: shifted, sender: sender, files: files, meta: meta,
-            spoken: plain, plain: plain)
+            spoken: spokenText(message, plain: plain), plain: plain, quote: quote, quoteSeq: message.reply?.seq, chips: chips)
         return ChatRowLayout(height: ceil(cellY), payload: .message(layout))
+    }
+
+    /// What VoiceOver reads: the quote it answers (when there is one), the words, and the reactions.
+    private static func spokenText(_ message: ChatMessage, plain: String) -> String {
+        var parts: [String] = []
+        if let reply = message.reply {
+            parts.append(L10n.Thread.reply + " " + reply.name + ": " + (reply.excerpt ?? L10n.Reply.earlier) + ".")
+        }
+        parts.append(plain)
+        if !message.reactions.isEmpty {
+            parts.append(message.reactions.map { $0.emoji }.joined(separator: " "))
+        }
+        return parts.joined(separator: " ")
+    }
+
+    /// The chips of a message's reactions: a row of capsules 24 high, the person's first, on the speaker's side. A row
+    /// that does not fit the width goes on to the next line.
+    private static func layoutChips(
+        _ chips: [ChatReactionChip], originY: inout CGFloat, metrics: ChatMetrics, fonts: ChatFonts, mine: Bool
+    ) -> [ChatChipItem] {
+        guard !chips.isEmpty else { return [] }
+        let height: CGFloat = 24
+        let gap: CGFloat = 6
+        let available = metrics.width - metrics.side * 2
+        var widths: [CGFloat] = []
+        for chip in chips {
+            let emoji = NSAttributedString(string: chip.emoji, attributes: [.font: fonts.chip])
+            let text = Self.size(of: emoji, width: 200).width
+            widths.append(text + 18 + (chip.byUser && chip.byAgent ? 12 : 0))
+        }
+        var items: [ChatChipItem] = []
+        var top = originY + 4
+        var index = 0
+        while index < chips.count {
+            var end = index
+            var rowWidth: CGFloat = 0
+            while end < chips.count, rowWidth + widths[end] + (end > index ? gap : 0) <= available || end == index {
+                rowWidth += widths[end] + (end > index ? gap : 0)
+                end += 1
+            }
+            var x = mine ? metrics.width - metrics.side - rowWidth : metrics.side
+            for position in index..<end {
+                items.append(ChatChipItem(chip: chips[position], frame: CGRect(x: x, y: top, width: widths[position], height: height)))
+                x += widths[position] + gap
+            }
+            top += height + 4
+            index = end
+        }
+        originY = top - 4 + 0
+        return items
     }
 
     private static func shift(_ block: ChatMessageLayout.Block, dx: CGFloat, dy: CGFloat) -> ChatMessageLayout.Block {
@@ -147,6 +243,7 @@ extension ChatLayoutEngine {
             return .code(item)
         case .rule(let rect): return .rule(moved(rect))
         case .bar(let rect): return .bar(moved(rect))
+        case .panel(let rect): return .panel(moved(rect))
         }
     }
 

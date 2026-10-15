@@ -27,6 +27,9 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     let composer = ChatComposerView()
     private let jumpButton = UIButton(type: .system)
     private let banner = UILabel()
+    private let stateOverlay = ChatStateOverlay()
+    /// Follows the keyboard's guide for the box's frame (never constrained to: see `ChatFrameRules`).
+    private let keyboardTracker = UIView()
     private var emptyHost: UIHostingController<ChatEmptyView>?
     private var dataSource: UICollectionViewDiffableDataSource<Int, String>!
 
@@ -47,6 +50,25 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     /// Keeps the draft when the app leaves the screen for the background: a draft that is only saved when the screen
     /// goes away is lost if the system ends the app while it is in the background.
     private var backgroundObserver: NSObjectProtocol?
+    private var screenObservers: [NSObjectProtocol] = []
+    /// The keyboard is on its way down until this time: the box still follows it.
+    private var keyboardHideUntil = Date.distantPast
+    /// The message the next send answers.
+    private var replyTarget: ReplyTarget?
+    /// Messages whose reaction is on its way to the daemon (a second tap waits for the first).
+    private var reacting: Set<Int64> = []
+    /// The chat was opened at an entry (Activity): what is in it counts as seen.
+    private var openedAtEntry = false
+    /// An update after the real history was read has come: the entry's row is looked for no more.
+    private var focusLoadedSeen = false
+    private var relayoutTask: Task<Void, Never>?
+    private var reactNext: [Int64: PendingReaction] = [:]
+    /// Whether the app is in front (tests set it; the real answer is the application's).
+    var isAppActive: () -> Bool = { UIApplication.shared.applicationState == .active }
+    private var jumpTask: Task<Void, Never>?
+    private var spinnerTask: Task<Void, Never>?
+    private let menuImpact = UIImpactFeedbackGenerator(style: .medium)
+    private let selection = UISelectionFeedbackGenerator()
     private var dictation: ChatDictation?
     private var dictationBase = ""
     private let reduceMotion = { UIAccessibility.isReduceMotionEnabled }
@@ -56,7 +78,13 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     var onOpenChanges: (() -> Void)?
     /// A row to show at the top once the thread is on the screen (an Activity entry opens the chat at it); nil for the
     /// newest message. Used once.
-    var focusRowID: String?
+    var focusRowID: String? {
+        didSet { if focusRowID != nil { openedAtEntry = true } }
+    }
+
+    private struct PendingReaction {
+        var emoji: String?
+    }
 
     init(model: ChatModel, settings: IOSSettings, authenticator: any BiometricAuthenticating = DeviceAuthenticator()) {
         self.model = model
@@ -79,7 +107,6 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         collectionView.contentInsetAdjustmentBehavior = .never
         collectionView.alwaysBounceVertical = true
         collectionView.accessibilityIdentifier = "chat.list"
-        collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.register(ChatMessageCell.self, forCellWithReuseIdentifier: ChatMessageCell.reuse)
         collectionView.register(ChatLineCell.self, forCellWithReuseIdentifier: ChatLineCell.reuse)
         collectionView.register(ChatToolsCell.self, forCellWithReuseIdentifier: ChatToolsCell.reuse)
@@ -87,18 +114,23 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         collectionView.register(ChatWorkingCell.self, forCellWithReuseIdentifier: ChatWorkingCell.reuse)
         collectionView.register(ChatHostedCell.self, forCellWithReuseIdentifier: ChatHostedCell.reuse)
 
-        composer.translatesAutoresizingMaskIntoConstraints = false
+        // The list and the box are placed by frames in `viewDidLayoutSubviews` (`ChatFrameRules`), not by constraints between
+        // them; the keyboard's guide is followed through a view that is read, not a constraint on the box.
         view.addSubview(collectionView)
+        view.addSubview(stateOverlay)
         view.addSubview(composer)
+        keyboardTracker.isUserInteractionEnabled = false
+        keyboardTracker.isHidden = false
+        keyboardTracker.alpha = 0
+        keyboardTracker.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(keyboardTracker)
         NSLayoutConstraint.activate([
-            collectionView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: composer.topAnchor),
-            composer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            composer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            composer.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            keyboardTracker.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            keyboardTracker.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            keyboardTracker.topAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            keyboardTracker.heightAnchor.constraint(equalToConstant: 0),
         ])
+        stateOverlay.onRetry = { [weak self] in self?.model.retryLoad() }
         setUpJumpButton()
         setUpBanner()
         setUpComposer()
@@ -114,15 +146,21 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         }
         model.hostedContent = { [weak self] row in self?.hostedContent(row) ?? AnyView(EmptyView()) }
         model.onUpdate = { [weak self] update in self?.receive(update) }
-        model.onEmptyChange = { [weak self] _ in self?.updateEmpty() }
+        model.onEmptyChange = { [weak self] _ in self?.updateOverlays() }
+        model.onLoadStateChange = { [weak self] in self?.updateOverlays() }
         model.start()
+        updateOverlays()
         trackFrame()
         restoreDraft()
         backgroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.saveDraft() }
+            MainActor.assumeIsolated {
+                self?.saveDraft()
+                self?.model.saveNow()
+            }
         }
+        observeScreen()
         #if DEBUG
         ChatLaunchHooks.apply(to: self)
         #endif
@@ -132,6 +170,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         super.viewDidAppear(animated)
         visible = true
         ChatPresence.shared.enter(serverID: model.server.id, agentID: model.agentID)
+        view.setNeedsLayout()
         markReadIfSeen()
     }
 
@@ -147,6 +186,10 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         MainActor.assumeIsolated {
             model.stop()
             if let backgroundObserver { NotificationCenter.default.removeObserver(backgroundObserver) }
+            for observer in screenObservers { NotificationCenter.default.removeObserver(observer) }
+            jumpTask?.cancel()
+            spinnerTask?.cancel()
+            relayoutTask?.cancel()
         }
     }
 
@@ -154,6 +197,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        placeViews()
         let width = collectionView.bounds.width
         if width > 0 {
             model.setMetrics(ChatMetrics(width: width, category: traitCollection.preferredContentSizeCategory))
@@ -171,6 +215,63 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
             host.view.frame = area
         }
         layoutOverlay()
+    }
+
+    /// The list and the box by frames (`ChatFrameRules`): the box on the bottom edge, or on the keyboard's top, and the
+    /// list in the rest of the room.
+    private func placeViews() {
+        let frames = ChatFrameRules.frames(
+            size: view.bounds.size, safeTop: view.safeAreaInsets.top, safeBottom: view.safeAreaInsets.bottom,
+            keyboardTop: keyboardTop(), boxHeight: composer.fittingHeight(width: view.bounds.width))
+        if composer.frame != frames.box { composer.frame = frames.box }
+        if collectionView.frame != frames.list { collectionView.frame = frames.list }
+        if stateOverlay.frame != frames.list { stateOverlay.frame = frames.list }
+    }
+
+    /// The keyboard's top edge in the view, only while the message box has the keyboard (or it is on its way down). The
+    /// system's guide can report a keyboard that is not there for a moment (after a screenshot, after a trait change); a
+    /// box that has no keyboard to sit on never follows it.
+    private func keyboardTop() -> CGFloat? {
+        guard composer.textField.isFirstResponder || Date() < keyboardHideUntil else { return nil }
+        let top = keyboardTracker.frame.minY
+        return top.isFinite ? top : nil
+    }
+
+    private func observeScreen() {
+        let center = NotificationCenter.default
+        screenObservers.append(
+            center.addObserver(forName: UIApplication.userDidTakeScreenshotNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.relayoutSoon() }
+            })
+        screenObservers.append(
+            center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.relayoutSoon()
+                    self?.markReadIfSeen()
+                }
+            })
+        screenObservers.append(
+            center.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] note in
+                let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.35
+                MainActor.assumeIsolated {
+                    self?.keyboardHideUntil = Date().addingTimeInterval(max(0.1, duration) + 0.15)
+                    self?.view.setNeedsLayout()
+                }
+            })
+    }
+
+    /// A screenshot, or the app coming back: the picture of the screen is laid out again now and once more a moment
+    /// later (the system settles its own frames after it).
+    func relayoutSoon() {
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        relayoutTask?.cancel()
+        relayoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, let self else { return }
+            self.view.setNeedsLayout()
+            self.view.layoutIfNeeded()
+        }
     }
 
     private func rememberDistance() {
@@ -273,22 +374,28 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
             guard let self else { return }
             self.collectionView.layoutIfNeeded()
-            if let focus = self.focusRowID, update.initial, let index = self.order.firstIndex(of: focus), let frame = self.listLayout.frame(at: index) {
+            let focusOpen = update.initial || !self.focusLoadedSeen
+            if let focus = self.focusRowID, focusOpen, let index = self.order.firstIndex(of: focus), let frame = self.listLayout.frame(at: index) {
                 // Opened at an entry: that row is at the top, and the chat is not following the bottom.
                 self.focusRowID = nil
                 self.atBottom = false
                 self.collectionView.contentOffset = CGPoint(x: 0, y: max(0, min(frame.minY - 8, self.collectionView.contentSize.height - self.collectionView.bounds.height)))
+            } else if self.focusRowID != nil, self.model.summary.loaded, focusOpen {
+                // The entry's row is not in the history: the chat opens at the newest message, and counts as looked at.
+                self.focusRowID = nil
+                if following { self.scrollToBottom(animated: false) }
             } else if following {
                 self.scrollToBottom(animated: false)
             } else if let anchor, let index = self.order.firstIndex(of: anchor.rowID), let frame = self.listLayout.frame(at: index) {
                 let target = anchor.offset(rowMinY: Double(frame.minY))
                 self.collectionView.contentOffset = CGPoint(x: 0, y: CGFloat(target))
             }
+            if self.model.summary.loaded { self.focusLoadedSeen = true }
             if !following, addedMessages > 0, !update.initial { self.unseen += addedMessages }
             self.rememberDistance()
             self.updateJump()
-            self.updateEmpty()
             self.applying = false
+            self.updateOverlays()
             self.markReadIfSeen()
             if let next = self.pending {
                 self.pending = nil
@@ -363,9 +470,19 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
 
     private var lastSend = Date.distantPast
 
-    private func markReadIfSeen() {
-        guard visible, atBottom, UIApplication.shared.applicationState == .active else { return }
-        model.summary.markRead()
+    /// The chat is read when it is on the screen of an app in front and its end is in sight: a short list that fits, the
+    /// bottom of a long one, or (opened at an Activity entry) whatever is in it. It is asked again whenever one of those
+    /// can have changed: the screen appeared, the app came back, rows came in, the history was read.
+    func markReadIfSeen() {
+        let summary = model.summary
+        guard summary.loaded, !model.rows.isEmpty, !model.showsSavedHistory else { return }
+        let end = atBottom || ChatSeenRules.endIsVisible(
+            contentHeight: collectionView.contentSize.height, offset: collectionView.contentOffset.y,
+            viewport: collectionView.bounds.height)
+        guard ChatSeenRules.countsAsRead(visible: visible, appActive: isAppActive(), endVisible: end, openedAtEntry: openedAtEntry && focusRowID == nil)
+        else { return }
+        openedAtEntry = false
+        summary.markRead()
     }
 
     // MARK: jump button
@@ -453,8 +570,36 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         }
     }
 
-    private func updateEmpty() {
-        let empty = order.isEmpty && !model.isLoading && !model.loadFailed
+    /// What stands in the list's place: the spinner while the history is read, "Try again" when it could not be, the
+    /// invitation of a chat with nothing in it. A list with rows shows none of them.
+    func updateOverlays() {
+        let hasRows = !model.rows.isEmpty || !order.isEmpty
+        if !hasRows, model.loadFailed {
+            spinnerTask?.cancel()
+            spinnerTask = nil
+            stateOverlay.set(.failed(name: model.agentName))
+        } else if !hasRows, model.isBusy {
+            if stateOverlay.mode != .loading, spinnerTask == nil {
+                // Not at once: a history that comes in a blink does not flash a spinner.
+                spinnerTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard let self, !Task.isCancelled else { return }
+                    self.spinnerTask = nil
+                    if self.model.isBusy, self.model.rows.isEmpty, self.order.isEmpty, !self.model.loadFailed {
+                        self.stateOverlay.set(.loading)
+                    }
+                }
+            }
+        } else {
+            spinnerTask?.cancel()
+            spinnerTask = nil
+            if stateOverlay.mode != .none { stateOverlay.set(.none) }
+        }
+        updateEmpty(!hasRows && !model.isBusy && !model.loadFailed)
+        markReadIfSeen()
+    }
+
+    private func updateEmpty(_ empty: Bool) {
         if empty, emptyHost == nil {
             let agent = model.server.agents.first { $0.id == model.agentID }
             let suggestions = agent.map(ThreadEmptyRules.suggestions(for:)) ?? []
@@ -468,7 +613,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
                     }))
             host.view.backgroundColor = .clear
             addChild(host)
-            view.insertSubview(host.view, aboveSubview: collectionView)
+            view.insertSubview(host.view, aboveSubview: stateOverlay)
             host.didMove(toParent: self)
             host.view.frame = collectionView.frame
             emptyHost = host
@@ -479,6 +624,11 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
             emptyHost = nil
         }
     }
+
+    /// Whether the invitation of an empty chat is on the screen (tests).
+    var showsEmptyState: Bool { emptyHost != nil }
+    /// What the overlay says (tests).
+    var overlayMode: ChatStateOverlay.Mode { stateOverlay.mode }
 
     // MARK: frame state (the box, the banner)
 
@@ -536,6 +686,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         composer.onTakePhoto = { [weak self] in self?.takePhoto() }
         composer.onPickFile = { [weak self] in self?.pickFile() }
         composer.onMic = { [weak self] in self?.toggleDictation() }
+        composer.onCancelReply = { [weak self] in self?.setReplyTarget(nil) }
     }
 
     private func noteSend() {
@@ -556,7 +707,8 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
                 try? await model.server.answerForm(formID, in: model.agentID, action: .reply, message: text)
             }
         } else {
-            model.send(text, attachments: files)
+            model.send(text, attachments: files, replyTo: replyTarget?.seq)
+            setReplyTarget(nil)
         }
         noteSend()
         clearDraft()
@@ -670,6 +822,109 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
 
     func copy(_ text: String) {
         UIPasteboard.general.string = text
+    }
+
+    func setReplyTarget(_ target: ReplyTarget?) {
+        replyTarget = target
+        composer.setReply(target, agentName: model.agentName)
+        view.setNeedsLayout()
+    }
+
+    /// The message the next send answers (tests).
+    var currentReplyTarget: ReplyTarget? { replyTarget }
+
+    func reply(to target: ReplyTarget) {
+        setReplyTarget(target)
+        composer.textField.becomeFirstResponder()
+    }
+
+    func react(seq: Int64, emoji: String?) {
+        // A second tap on a message waits for the first to be answered, then the last of them goes.
+        if reacting.contains(seq) {
+            reactNext[seq] = PendingReaction(emoji: emoji)
+            return
+        }
+        reacting.insert(seq)
+        selection.selectionChanged()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            var ask = emoji
+            while true {
+                let sent = await self.model.react(ask, seq: seq)
+                if !sent {
+                    self.reactNext[seq] = nil
+                    self.explainReactFailed()
+                    break
+                }
+                guard let next = self.reactNext.removeValue(forKey: seq) else { break }
+                ask = next.emoji
+            }
+            self.reacting.remove(seq)
+        }
+    }
+
+    private func explainReactFailed() {
+        notifications.notificationOccurred(.error)
+        guard presentedViewController == nil else { return }
+        let alert = UIAlertController(title: nil, message: L10n.Ios.Chat.reactFailed, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: L10n.Common.close, style: .default))
+        present(alert, animated: !reduceMotion())
+    }
+
+    func selectText(_ text: String) {
+        present(ChatSelectTextController(text: text), animated: !reduceMotion())
+    }
+
+    func share(_ text: String) {
+        let sheet = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        sheet.popoverPresentationController?.sourceView = view
+        sheet.popoverPresentationController?.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+        present(sheet, animated: !reduceMotion())
+    }
+
+    func menuWillOpen() {
+        menuImpact.impactOccurred()
+    }
+
+    /// Goes to the message a reply quotes. An older one that is not loaded is read for (page by page, up to twelve).
+    func jump(toSeq seq: Int64) {
+        jumpTask?.cancel()
+        jumpTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for _ in 0..<12 {
+                if self.scrollToMessage(seq: seq) { return }
+                guard self.model.hasOlder else { return }
+                self.model.loadOlder()
+                guard self.model.loadingOlder else { return }
+                var waited = 0
+                while self.model.loadingOlder, waited < 200, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(40))
+                    waited += 1
+                }
+                await self.model.settle()
+                waited = 0
+                while self.applying || self.pending != nil, waited < 100, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(20))
+                    waited += 1
+                }
+                if Task.isCancelled { return }
+            }
+        }
+    }
+
+    /// Puts the message with this `seq` near the top; false when it is not in the list.
+    @discardableResult
+    func scrollToMessage(seq: Int64) -> Bool {
+        guard let id = order.first(where: {
+            if case .message(let message)? = rowsByID[$0]?.content { return message.seq == seq }
+            return false
+        }), let index = order.firstIndex(of: id), let frame = listLayout.frame(at: index) else { return false }
+        sendPinned = false
+        let limit = max(0, collectionView.contentSize.height - collectionView.bounds.height)
+        let y = max(0, min(frame.minY - 12, limit))
+        collectionView.setContentOffset(CGPoint(x: 0, y: y), animated: !reduceMotion())
+        selection.selectionChanged()
+        return true
     }
 
     func toggleFold(_ rowID: String) { model.toggle(rowID) }

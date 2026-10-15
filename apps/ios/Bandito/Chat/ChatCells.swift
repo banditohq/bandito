@@ -14,12 +14,25 @@ protocol ChatCellActions: AnyObject {
     func retry(queueID: String)
     func discard(queueID: String)
     func openChanges()
+    /// Puts the emoji on the message, or takes the person's reaction off with nil.
+    func react(seq: Int64, emoji: String?)
+    /// The person answers this message: the box shows its quote and the next send carries it.
+    func reply(to target: ReplyTarget)
+    /// Shows the text of a message in a sheet where a part of it can be selected.
+    func selectText(_ text: String)
+    func share(_ text: String)
+    /// Goes to the message a reply quotes.
+    func jump(toSeq seq: Int64)
+    /// The menu of a message is about to open (a tap of the Taptic Engine).
+    func menuWillOpen()
 }
 
 // MARK: - message
 
-/// A message: the bubble, the blocks in it (text, code, rules), the pictures and files above it and the small line under
-/// it. Views are kept per cell and reused for the next message; the frames come from the measured layout.
+/// A message: the bubble, the blocks in it (text, code, rules), the pictures and files above it, the reactions and the
+/// small line under it. Views are kept per cell and reused for the next message; the frames come from the measured
+/// layout. The parts that belong to the message itself live in `body`, which is what a long press lifts (the bubble
+/// alone has no text in it: the text is drawn by sibling views).
 final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDelegate {
     static let reuse = ChatCellID.message
 
@@ -29,6 +42,7 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
     private var layout: ChatMessageLayout?
 
     private let senderView = ChatTextView()
+    private let body = UIView()
     private let bubble = ChatBubbleView()
     private let metaView = ChatTextView()
     private var texts: [ChatTextView] = []
@@ -36,11 +50,15 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
     private var plains: [UIView] = []
     private var pictures: [ChatPictureView] = []
     private var chips: [ChatFileChipView] = []
+    private var reactionViews: [ChatReactionChipView] = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        body.frame = contentView.bounds
+        body.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         contentView.addSubview(senderView)
-        contentView.addSubview(bubble)
+        contentView.addSubview(body)
+        body.addSubview(bubble)
         contentView.addSubview(metaView)
         contentView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped(_:))))
         contentView.addInteraction(UIContextMenuInteraction(delegate: self))
@@ -89,6 +107,7 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
                 let view = take(&plains, plainIndex) { UIView() }
                 plainIndex += 1
                 view.frame = rect
+                view.layer.cornerRadius = 0
                 view.backgroundColor = UIColor.Bandito.line
             case .bar(let rect):
                 let view = take(&plains, plainIndex) { UIView() }
@@ -96,6 +115,13 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
                 view.frame = rect
                 view.layer.cornerRadius = 1.5
                 view.backgroundColor = UIColor.Bandito.lineStrong
+            case .panel(let rect):
+                let view = take(&plains, plainIndex) { UIView() }
+                plainIndex += 1
+                view.frame = rect
+                view.layer.cornerRadius = 8
+                view.layer.cornerCurve = .continuous
+                view.backgroundColor = UIColor.Bandito.text.withAlphaComponent(0.06)
             }
         }
         hide(texts, from: textIndex)
@@ -119,6 +145,13 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
         hide(pictures, from: pictureIndex)
         hide(chips, from: chipIndex)
 
+        for (index, item) in layout.chips.enumerated() {
+            let view = take(&reactionViews, index) { ChatReactionChipView() }
+            view.frame = item.frame
+            view.configure(item.chip)
+        }
+        hide(reactionViews, from: layout.chips.count)
+
         metaView.string = layout.meta?.string
         metaView.isHidden = layout.meta == nil
         if let meta = layout.meta { metaView.frame = meta.frame }
@@ -136,7 +169,7 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
         }
         let view = make()
         pool.append(view)
-        contentView.addSubview(view)
+        body.addSubview(view)
         return view
     }
 
@@ -146,33 +179,81 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
     }
 
     private func customActions(for message: ChatMessage) -> [UIAccessibilityCustomAction] {
-        var found = [
-            UIAccessibilityCustomAction(name: L10n.Thread.copy) { [weak self] _ in
-                guard let self, let layout = self.layout else { return false }
-                self.actions?.copy(layout.plain)
-                return true
+        var found: [UIAccessibilityCustomAction] = []
+        let items = ChatMessageMenu.items(for: message, link: nil, plain: layout?.plain ?? message.text)
+        let mine = ChatMessageMenu.mine(message)
+        for item in items {
+            switch item {
+            case .copy:
+                found.append(
+                    UIAccessibilityCustomAction(name: L10n.Thread.copy) { [weak self] _ in
+                        guard let self, let layout = self.layout else { return false }
+                        self.actions?.copy(layout.plain)
+                        return true
+                    })
+            case .reply:
+                guard let seq = message.seq else { continue }
+                let target = ReplyTarget(seq: seq, fromUser: message.isMine, text: message.text)
+                found.append(
+                    UIAccessibilityCustomAction(name: L10n.Thread.reply) { [weak self] _ in
+                        self?.actions?.reply(to: target)
+                        return true
+                    })
+            case .reactions:
+                guard let seq = message.seq, UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning else { continue }
+                for emoji in ReactionRules.common {
+                    found.append(
+                        UIAccessibilityCustomAction(name: "\(L10n.Message.react) \(emoji)") { [weak self] _ in
+                            self?.actions?.react(seq: seq, emoji: ChatMessageMenu.pick(emoji, mine: mine))
+                            return true
+                        })
+                }
+            case .selectText:
+                found.append(
+                    UIAccessibilityCustomAction(name: L10n.Message.selectText) { [weak self] _ in
+                        guard let self, let layout = self.layout else { return false }
+                        self.actions?.selectText(layout.plain)
+                        return true
+                    })
+            case .share:
+                found.append(
+                    UIAccessibilityCustomAction(name: L10n.Ios.Chat.share) { [weak self] _ in
+                        guard let self, let layout = self.layout else { return false }
+                        self.actions?.share(layout.plain)
+                        return true
+                    })
+            case .resend(let seq):
+                found.append(
+                    UIAccessibilityCustomAction(name: L10n.Message.resend) { [weak self] _ in
+                        self?.actions?.resend(seq: seq)
+                        return true
+                    })
+            case .retry(let id):
+                found.append(
+                    UIAccessibilityCustomAction(name: L10n.Ios.Chat.retry) { [weak self] _ in
+                        self?.actions?.retry(queueID: id)
+                        return true
+                    })
+            case .discard(let id):
+                found.append(
+                    UIAccessibilityCustomAction(name: L10n.Ios.Chat.discard) { [weak self] _ in
+                        self?.actions?.discard(queueID: id)
+                        return true
+                    })
+            case .copyMarkdown, .openLink, .copyLink:
+                continue
             }
-        ]
-        switch message.caption {
-        case .notDelivered(let seq)?:
-            found.append(
-                UIAccessibilityCustomAction(name: L10n.Message.resend) { [weak self] _ in
-                    self?.actions?.resend(seq: seq)
-                    return true
-                })
-        case .notSent(let id, _)?, .uncertain(let id)?:
-            found.append(
-                UIAccessibilityCustomAction(name: L10n.Ios.Chat.retry) { [weak self] _ in
-                    self?.actions?.retry(queueID: id)
-                    return true
-                })
-            found.append(
-                UIAccessibilityCustomAction(name: L10n.Ios.Chat.discard) { [weak self] _ in
-                    self?.actions?.discard(queueID: id)
-                    return true
-                })
-        default:
-            break
+        }
+        // A chip under the message is a button of its own for those who cannot touch it.
+        if let seq = message.seq {
+            for chip in message.reactions {
+                let name = chip.byUser ? L10n.Message.reactionMine : L10n.Message.reactionSame
+                found.append(
+                    UIAccessibilityCustomAction(name: "\(chip.emoji) \(name)") { [weak self] _ in
+                        self?.actions?.react(seq: seq, emoji: ChatMessageMenu.tap(chip))
+                        return true
+                    })
+            }
         }
         return found
     }
@@ -181,6 +262,14 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
 
     @objc private func tapped(_ gesture: UITapGestureRecognizer) {
         let point = gesture.location(in: contentView)
+        if let chip = reactionChip(at: point), let seq = message?.seq {
+            actions?.react(seq: seq, emoji: ChatMessageMenu.tap(chip))
+            return
+        }
+        if let quote = layout?.quote, let seq = layout?.quoteSeq, quote.contains(point) {
+            actions?.jump(toSeq: seq)
+            return
+        }
         if let url = link(at: point) {
             actions?.openLink(url)
             return
@@ -193,6 +282,13 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
         }
     }
 
+    /// The reaction chip under a point; the touch area is wider and taller than the 24 pt capsule.
+    private func reactionChip(at point: CGPoint) -> ChatReactionChip? {
+        guard let layout else { return nil }
+        for item in layout.chips where item.frame.insetBy(dx: -4, dy: -10).contains(point) { return item.chip }
+        return nil
+    }
+
     private func link(at point: CGPoint) -> URL? {
         for view in texts where !view.isHidden {
             if let url = view.link(at: contentView.convert(point, to: view)) { return url }
@@ -200,65 +296,156 @@ final class ChatMessageCell: UICollectionViewCell, UIContextMenuInteractionDeleg
         return nil
     }
 
+    // MARK: menu
+
+    /// The part of the row a long press can lift: the bubble and the files above it.
+    private var liftedFrames: [CGRect] {
+        guard let layout else { return [] }
+        var frames: [CGRect] = []
+        if let bubble = layout.bubble { frames.append(bubble) }
+        frames.append(contentsOf: layout.files.map(\.frame))
+        return frames
+    }
+
     func contextMenuInteraction(
         _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
     ) -> UIContextMenuConfiguration? {
         guard let message, let layout else { return nil }
-        switch message.caption {
-        case .notSent(let id, _)?, .uncertain(let id)?:
-            return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
-                UIMenu(children: [
-                    UIAction(title: L10n.Ios.Chat.retry, image: UIImage(systemName: "arrow.clockwise")) { _ in
-                        self?.actions?.retry(queueID: id)
-                    },
-                    UIAction(title: L10n.Ios.Chat.discard, image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
-                        self?.actions?.discard(queueID: id)
-                    },
-                    UIAction(title: L10n.Thread.copy, image: UIImage(systemName: "doc.on.doc")) { _ in
-                        self?.actions?.copy(layout.plain)
-                    },
-                ])
-            }
-        default: break
-        }
+        // Only on the message itself: a press on the empty part of the row opens nothing.
+        guard liftedFrames.contains(where: { $0.insetBy(dx: -6, dy: -6).contains(location) }) else { return nil }
         let url = link(at: location)
-        let body = message.text
-        let isMarkdown = message.markdown && body != layout.plain
+        let entries = ChatMessageMenu.items(for: message, link: url, plain: layout.plain)
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
-            var items: [UIMenuElement] = []
-            if let url {
-                items.append(
-                    UIAction(title: L10n.Ios.Chat.openInSafari, image: UIImage(systemName: "safari")) { _ in
+            guard let self else { return nil }
+            return self.menu(for: entries, message: message, layout: layout)
+        }
+    }
+
+    private func menu(for entries: [ChatMessageMenu.Item], message: ChatMessage, layout: ChatMessageLayout) -> UIMenu {
+        var top: [UIMenuElement] = []
+        var middle: [UIMenuElement] = []
+        var bottom: [UIMenuElement] = []
+        let mine = ChatMessageMenu.mine(message)
+        for entry in entries {
+            switch entry {
+            case .openLink(let url):
+                top.append(
+                    UIAction(title: L10n.Ios.Chat.openInSafari, image: UIImage(systemName: "safari")) { [weak self] _ in
                         self?.actions?.openLink(url)
                     })
-                items.append(
-                    UIAction(title: L10n.Ios.Chat.copyLink, image: UIImage(systemName: "link")) { _ in
+            case .copyLink(let url):
+                top.append(
+                    UIAction(title: L10n.Ios.Chat.copyLink, image: UIImage(systemName: "link")) { [weak self] _ in
                         self?.actions?.copy(url.absoluteString)
                     })
-            }
-            items.append(
-                UIAction(title: L10n.Thread.copy, image: UIImage(systemName: "doc.on.doc")) { _ in
-                    self?.actions?.copy(layout.plain)
-                })
-            if isMarkdown {
-                items.append(
-                    UIAction(title: L10n.Thread.copyMarkdown, image: UIImage(systemName: "text.alignleft")) { _ in
+            case .reactions:
+                guard let seq = message.seq else { continue }
+                top.append(contentsOf: reactionPalettes(seq: seq, mine: mine))
+            case .reply:
+                guard let seq = message.seq else { continue }
+                let target = ReplyTarget(seq: seq, fromUser: message.isMine, text: message.text)
+                middle.append(
+                    UIAction(title: L10n.Thread.reply, image: UIImage(systemName: "arrowshape.turn.up.left")) { [weak self] _ in
+                        self?.actions?.reply(to: target)
+                    })
+            case .resend(let seq):
+                middle.append(
+                    UIAction(title: L10n.Message.resend, image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+                        self?.actions?.resend(seq: seq)
+                    })
+            case .retry(let id):
+                middle.append(
+                    UIAction(title: L10n.Ios.Chat.retry, image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+                        self?.actions?.retry(queueID: id)
+                    })
+            case .discard(let id):
+                bottom.append(
+                    UIAction(title: L10n.Ios.Chat.discard, image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+                        self?.actions?.discard(queueID: id)
+                    })
+            case .copy:
+                middle.append(
+                    UIAction(title: L10n.Thread.copy, image: UIImage(systemName: "doc.on.doc")) { [weak self] _ in
+                        self?.actions?.copy(layout.plain)
+                    })
+            case .copyMarkdown:
+                let body = message.text
+                middle.append(
+                    UIAction(title: L10n.Thread.copyMarkdown, image: UIImage(systemName: "text.alignleft")) { [weak self] _ in
                         self?.actions?.copy(body)
                     })
+            case .selectText:
+                middle.append(
+                    UIAction(title: L10n.Message.selectText, image: UIImage(systemName: "text.cursor")) { [weak self] _ in
+                        self?.actions?.selectText(layout.plain)
+                    })
+            case .share:
+                middle.append(
+                    UIAction(title: L10n.Ios.Chat.share, image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
+                        self?.actions?.share(layout.plain)
+                    })
             }
-            return UIMenu(children: items)
         }
+        return UIMenu(children: top + middle + bottom)
+    }
+
+    /// The Mac's quick reactions as palettes at the top of the menu (`ChatMessageMenu.paletteRows`: the menu is about six small
+    /// buttons wide, and a longer row scrolls sideways, which hides what is at its end). The person's own is lit.
+    private func reactionPalettes(seq: Int64, mine: String?) -> [UIMenuElement] {
+        ChatMessageMenu.paletteRows().map { row in
+            let actions = row.map { emoji in
+                UIAction(
+                    title: emoji, image: ChatEmojiImages.image(emoji), state: emoji == mine ? .on : .off
+                ) { [weak self] _ in
+                    self?.actions?.react(seq: seq, emoji: ChatMessageMenu.pick(emoji, mine: mine))
+                }
+            }
+            let palette = UIMenu(title: "", options: [.displayInline, .displayAsPalette], children: actions)
+            palette.preferredElementSize = .small
+            return palette
+        }
+    }
+
+    func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration,
+        animator: UIContextMenuInteractionAnimating?
+    ) {
+        actions?.menuWillOpen()
     }
 
     func contextMenuInteraction(
         _ interaction: UIContextMenuInteraction, previewForHighlightingMenuWithConfiguration configuration: UIContextMenuConfiguration
     ) -> UITargetedPreview? {
-        guard let frame = layout?.bubble else { return nil }
+        preview()
+    }
+
+    func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction, previewForDismissingMenuWithConfiguration configuration: UIContextMenuConfiguration
+    ) -> UITargetedPreview? {
+        preview()
+    }
+
+    /// The message itself, as it is drawn: the bubble with its text, quote and code, and the files above it, cut to their
+    /// own outline (the corners and the tail), on nothing.
+    private func preview() -> UITargetedPreview? {
+        guard let layout, window != nil, !liftedFrames.isEmpty else { return nil }
+        let path = ChatMessageCell.liftedPath(layout)
         let parameters = UIPreviewParameters()
-        parameters.visiblePath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: frame.size), cornerRadius: 16)
-        let target = UIPreviewTarget(container: contentView, center: CGPoint(x: frame.midX, y: frame.midY))
-        let view = bubble
-        return UITargetedPreview(view: view, parameters: parameters, target: target)
+        parameters.visiblePath = path
+        parameters.backgroundColor = .clear
+        return UITargetedPreview(view: body, parameters: parameters)
+    }
+
+    /// The outline of what a long press lifts, in the cell's coordinates.
+    static func liftedPath(_ layout: ChatMessageLayout) -> UIBezierPath {
+        let path = UIBezierPath()
+        if let bubble = layout.bubble {
+            path.append(ChatBubbleShape.path(in: bubble, mine: layout.isMine, tail: layout.tail))
+        }
+        for item in layout.files {
+            path.append(UIBezierPath(roundedRect: item.frame, cornerRadius: item.isPicture ? 12 : 10))
+        }
+        return path
     }
 }
 

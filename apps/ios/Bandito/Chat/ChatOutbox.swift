@@ -24,7 +24,8 @@ struct ChatOutboxHooks: @unchecked Sendable {
         now: { Int64(Date().timeIntervalSince1970 * 1000) },
         sleep: { try? await Task.sleep(for: $0) },
         send: { server, item in
-            try await server.send(item.text, to: item.agentID, attachments: item.attachments, viaButton: item.viaButton)
+            try await server.send(
+                item.text, to: item.agentID, replyTo: item.replyTo, attachments: item.attachments, viaButton: item.viaButton)
         },
         readThread: { server, item in
             do {
@@ -148,12 +149,13 @@ final class ChatOutbox {
     }
 
     @discardableResult
-    func enqueue(serverID: UUID, agentID: String, text: String, attachments: [AgentAttachment] = [], viaButton: Bool = false)
-        -> QueuedSend
-    {
+    func enqueue(
+        serverID: UUID, agentID: String, text: String, attachments: [AgentAttachment] = [], viaButton: Bool = false,
+        replyTo: Int64? = nil
+    ) -> QueuedSend {
         let item = QueuedSend(
             serverID: serverID, agentID: agentID, text: text, attachments: attachments, viaButton: viaButton,
-            createdAt: hooks.now())
+            createdAt: hooks.now(), replyTo: replyTo)
         change { $0.enqueue(item) }
         pump(serverID: serverID, agentID: agentID)
         return item

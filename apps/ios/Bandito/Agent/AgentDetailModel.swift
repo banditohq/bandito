@@ -32,6 +32,8 @@ enum AgentArea: Hashable {
 final class AgentDetailModel {
     let agentID: String
     private let server: AgentEditingServer
+    /// Called once the agent is deleted: what the phone kept of it (its saved chat) goes too.
+    private let forget: @MainActor (String) -> Void
 
     /// The agent's schedules, as the daemon lists them. Empty until `loadSchedules` answers.
     private(set) var schedules: [Schedule] = []
@@ -48,9 +50,10 @@ final class AgentDetailModel {
     private var chipsInFlight = 0
     private var chipChain: Task<Void, Never>?
 
-    init(server: AgentEditingServer, agentID: String) {
+    init(server: AgentEditingServer, agentID: String, forget: @escaping @MainActor (String) -> Void = { _ in }) {
         self.server = server
         self.agentID = agentID
+        self.forget = forget
     }
 
     /// Takes the agent's list of rights as the server has it. The chips follow it unless a send is still in flight.
@@ -160,6 +163,7 @@ final class AgentDetailModel {
         do {
             try await server.deleteAgent(agentID)
             failures[.delete] = nil
+            forget(agentID)
             return true
         } catch {
             failures[.delete] = AgentForms.errorText(error)

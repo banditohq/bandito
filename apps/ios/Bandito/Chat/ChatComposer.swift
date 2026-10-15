@@ -45,6 +45,8 @@ final class ChatComposerView: UIView, UITextViewDelegate {
     var onQuickLink: ((URL) -> Void)?
     /// The box went from empty to something, or back.
     var onHasContentChange: ((Bool) -> Void)?
+    /// The person closed the quote of the message they are answering.
+    var onCancelReply: (() -> Void)?
 
     private let field = UITextView()
     private let placeholder = UILabel()
@@ -54,6 +56,7 @@ final class ChatComposerView: UIView, UITextViewDelegate {
     private let sendButton = UIButton(type: .system)
     private let quickBar = ChatQuickRepliesBar()
     private let tray = ChatAttachmentTray()
+    private let replyBar = ChatReplyBar()
     private let hairline = UIView()
     private var heightConstraint: NSLayoutConstraint!
     private(set) var hasText = false
@@ -93,8 +96,8 @@ final class ChatComposerView: UIView, UITextViewDelegate {
 
     private func build() {
         backgroundColor = UIColor.Bandito.bg
-        // The box is as tall as its content and never stretched: the list above takes the rest of the screen. Without
-        // this, Auto Layout may give the free space to the box (an empty thread showed the box at the top, the rest black).
+        // The screen sets this view's frame to `fittingHeight(width:)` (`ChatFrameRules`): Auto Layout between the list and
+        // the box once gave the free space to the box. The hugging stays, for any container that does use constraints.
         setContentHuggingPriority(.required, for: .vertical)
         setContentCompressionResistancePriority(.required, for: .vertical)
         quickBar.onReply = { [weak self] shown in
@@ -163,6 +166,8 @@ final class ChatComposerView: UIView, UITextViewDelegate {
         tray.onRemove = { [weak self] id in self?.remove(id) }
         tray.isHidden = true
         quickBar.isHidden = true
+        replyBar.isHidden = true
+        replyBar.onCancel = { [weak self] in self?.onCancelReply?() }
 
         box.addSubview(field)
         box.addSubview(placeholder)
@@ -173,13 +178,18 @@ final class ChatComposerView: UIView, UITextViewDelegate {
         row.axis = .horizontal
         row.alignment = .bottom
         row.spacing = 6
-        let stack = UIStackView(arrangedSubviews: [quickBar, tray, row])
+        let stack = UIStackView(arrangedSubviews: [replyBar, quickBar, tray, row])
         stack.axis = .vertical
         stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
         heightConstraint = field.heightAnchor.constraint(equalToConstant: minHeight)
+        // Not required: the frame the screen gives is the content's own height, but for the length of one layout pass (a
+        // row that just appeared) the content may be a little taller, and a required pin would then be a conflict that
+        // Auto Layout settles by breaking some other constraint.
+        let stackBottom = stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
+        stackBottom.priority = UILayoutPriority(999)
         NSLayoutConstraint.activate([
             hairline.topAnchor.constraint(equalTo: topAnchor),
             hairline.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -188,7 +198,7 @@ final class ChatComposerView: UIView, UITextViewDelegate {
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+            stackBottom,
             attachButton.widthAnchor.constraint(equalToConstant: 34),
             attachButton.heightAnchor.constraint(equalToConstant: Self.attachHeight),
             sendButton.widthAnchor.constraint(equalToConstant: 36),
@@ -237,15 +247,44 @@ final class ChatComposerView: UIView, UITextViewDelegate {
         invalidateIntrinsicContentSize()
     }
 
-    /// The height the box needs: the shown rows (quick replies, attachments) and the input row, whose height is the
+    /// The height the box needs: the shown rows (quote, quick replies, attachments) and the input row, whose height is the
     /// field's or the attach button's, whichever is taller. The list above takes whatever is left of the screen.
     override var intrinsicContentSize: CGSize {
+        CGSize(width: UIView.noIntrinsicMetric, height: contentHeight)
+    }
+
+    private var contentHeight: CGFloat {
         var height: CGFloat = 8 + 8 + max(Self.attachHeight, heightConstraint.constant)
-        for part in [quickBar, tray] where !part.isHidden {
+        for part in [replyBar, quickBar, tray] where !part.isHidden {
             height += part.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height + 6
         }
-        return CGSize(width: UIView.noIntrinsicMetric, height: height)
+        return height
     }
+
+    /// The height at `width`, from the same numbers the rows are laid out with (never from a stale frame).
+    func fittingHeight(width: CGFloat) -> CGFloat {
+        ceil(contentHeight)
+    }
+
+    /// The screen lays the box out by its frame: a change of its content asks for a new one.
+    override func invalidateIntrinsicContentSize() {
+        super.invalidateIntrinsicContentSize()
+        superview?.setNeedsLayout()
+    }
+
+    /// The quote of the message being answered above the box, or none.
+    func setReply(_ target: ReplyTarget?, agentName: String) {
+        if let target {
+            replyBar.configure(
+                title: target.fromUser ? L10n.Reply.toSelf : L10n.Reply.toAgent(name: agentName), excerpt: target.excerpt)
+            replyBar.isHidden = false
+        } else {
+            replyBar.isHidden = true
+        }
+        invalidateIntrinsicContentSize()
+    }
+
+    var hasReply: Bool { !replyBar.isHidden }
 
     /// The attach button's height (the input row is never shorter).
     private static let attachHeight: CGFloat = 38
@@ -392,6 +431,68 @@ final class ChatComposerView: UIView, UITextViewDelegate {
         tray.isHidden = files.isEmpty
         invalidateIntrinsicContentSize()
         updateButtons()
+    }
+}
+
+// MARK: - the quote of a reply
+
+/// "Reply to Forge" and the first words of the message, with a cross: above the box while the person answers a message.
+@MainActor
+final class ChatReplyBar: UIView {
+    var onCancel: (() -> Void)?
+
+    private let line = UIView()
+    private let title = UILabel()
+    private let excerpt = UILabel()
+    private let cancel = UIButton(type: .system)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: ChatReplyBar, _) in
+            view.updateColors()
+        }
+        layer.cornerRadius = 12
+        layer.cornerCurve = .continuous
+        line.layer.cornerRadius = 1.5
+        title.font = BanditoFont.uiText(size: 12, weight: 600)
+        title.textColor = UIColor.Bandito.text2
+        excerpt.font = BanditoFont.uiText(size: 13, weight: 400)
+        excerpt.textColor = UIColor.Bandito.text3
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .bold))
+        configuration.baseForegroundColor = UIColor.Bandito.text2
+        cancel.configuration = configuration
+        cancel.addAction(UIAction { [weak self] _ in self?.onCancel?() }, for: .touchUpInside)
+        cancel.accessibilityLabel = L10n.Ios.Chat.Reply.cancel
+        cancel.accessibilityIdentifier = "chat.reply.cancel"
+        for view in [line, title, excerpt, cancel] as [UIView] { addSubview(view) }
+        translatesAutoresizingMaskIntoConstraints = false
+        heightAnchor.constraint(equalToConstant: 44).isActive = true
+        accessibilityIdentifier = "chat.reply"
+        updateColors()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func configure(title: String, excerpt: String) {
+        self.title.text = title
+        self.excerpt.text = excerpt
+        accessibilityLabel = title + ": " + excerpt
+        isAccessibilityElement = false
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        line.frame = CGRect(x: 10, y: 8, width: 3, height: bounds.height - 16)
+        let right = bounds.width - 40
+        title.frame = CGRect(x: 22, y: 6, width: max(0, right - 22), height: 16)
+        excerpt.frame = CGRect(x: 22, y: 22, width: max(0, right - 22), height: 17)
+        cancel.frame = CGRect(x: bounds.width - 40, y: (bounds.height - 40) / 2, width: 40, height: 40)
+    }
+
+    private func updateColors() {
+        backgroundColor = UIColor.Bandito.text.withAlphaComponent(0.06).resolvedColor(with: traitCollection)
+        line.backgroundColor = UIColor.Bandito.lineStrong.resolvedColor(with: traitCollection)
     }
 }
 

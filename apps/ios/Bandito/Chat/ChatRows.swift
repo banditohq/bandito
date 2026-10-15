@@ -5,6 +5,33 @@ import Foundation
 // The rows of the chat's list: what each shows, as plain values. A row is `Equatable`, so the list can tell which rows
 // changed; `version` changes with the row's facts, and a row is measured once per (id, version, width).
 
+/// A reaction under a message: one emoji, put there by the person, the agent or both (the same chip as the Mac's).
+struct ChatReactionChip: Equatable, Hashable, Codable, Sendable {
+    var emoji: String
+    var byUser: Bool
+    var byAgent: Bool
+
+    init(emoji: String, byUser: Bool, byAgent: Bool) {
+        self.emoji = emoji
+        self.byUser = byUser
+        self.byAgent = byAgent
+    }
+
+    init(_ chip: ReactionChip) {
+        self.init(emoji: chip.emoji, byUser: chip.byUser, byAgent: chip.byAgent)
+    }
+}
+
+/// The message a reply answers, quoted at the top of the bubble.
+struct ChatReplyQuote: Equatable, Hashable, Sendable {
+    /// The `seq` of the original.
+    var seq: Int64
+    /// The name above the quote: the agent's, or "You".
+    var name: String
+    /// The first words of the original; nil while it is older than the history that is loaded.
+    var excerpt: String?
+}
+
 /// A message bubble.
 struct ChatMessage: Equatable, Sendable {
     enum Sender: Equatable, Sendable {
@@ -42,6 +69,14 @@ struct ChatMessage: Equatable, Sendable {
     /// The message is the last of a run of its sender's: it has the tail corner.
     var tail: Bool
     var seq: Int64?
+    /// The reactions under the bubble, the person's first.
+    var reactions: [ChatReactionChip] = []
+    /// What this message answers.
+    var reply: ChatReplyQuote?
+    /// The daemon takes a reaction on this message (it has a `seq` and the server has the feature).
+    var canReact = false
+    /// The daemon takes a reply to this message.
+    var canReply = false
 
     var isMine: Bool { sender == .me }
     var markdown: Bool { sender != .me }
@@ -177,6 +212,10 @@ struct ChatRow: Identifiable, Equatable, Sendable {
             hasher.combine(message.ts)
             hasher.combine(message.files)
             hasher.combine(message.caption.map { "\($0)" })
+            hasher.combine(message.reactions)
+            hasher.combine(message.reply)
+            hasher.combine(message.canReact)
+            hasher.combine(message.canReply)
         case .tools(let group): hasher.combine(group.tools); hasher.combine(group.open); hasher.combine(group.title)
         case .line(let line): hasher.combine(line.text); hasher.combine(line.tone == .error); hasher.combine(line.fold?.open)
         case .approval(let row): hasher.combine(row.approvalId); hasher.combine("\(row.state)")
@@ -197,6 +236,13 @@ struct ChatRowInput {
     var queued: [QueuedSend]
     var expanded: Set<String>
     var changes: ChatChangesSummary?
+    /// The message each reply answers: `seq` of the reply to `seq` of the original.
+    var replies: [Int64: Int64] = [:]
+    /// The reactions on each message, by its `seq`.
+    var reactions: [Int64: [ChatReactionChip]] = [:]
+    /// The server takes reactions (`reactions`) and replies (`attachments`).
+    var reactionsOn = false
+    var repliesOn = false
     var calendar: Calendar = .current
     var now: Date = Date()
 }
@@ -209,6 +255,7 @@ enum ChatRowBuilder {
         let thread = input.thread
         let waiting = thread.waitingSeqs
         let undelivered = thread.undeliveredSeqs
+        let originals = quotedOriginals(input)
 
         for row in ThreadRows.build(thread.items, calendar: input.calendar) {
             switch row {
@@ -227,7 +274,7 @@ enum ChatRowBuilder {
                 contents.append((row.id, .tools(toolGroup(tools, open: input.expanded.contains(key)))))
                 taken = probe
             case .item(let item):
-                if let content = content(of: item, input: input, waiting: waiting, undelivered: undelivered) {
+                if let content = content(of: item, input: input, waiting: waiting, undelivered: undelivered, originals: originals) {
                     contents.append((item.id, content))
                 }
             }
@@ -242,9 +289,10 @@ enum ChatRowBuilder {
                 case .failed: .notSent(id: item.id, why: item.failureKind)
                 case .uncertain: .uncertain(id: item.id)
                 }
-            let message = ChatMessage(
+            var message = ChatMessage(
                 sender: .me, text: item.text, streaming: false, ts: item.createdAt, showsTime: false, files: item.attachments,
                 caption: caption, tail: true, seq: nil)
+            if let target = item.replyTo { message.reply = quote(target, input: input, originals: originals) }
             contents.append(("pending-\(item.id)", .message(message)))
         }
 
@@ -300,8 +348,37 @@ enum ChatRowBuilder {
         return ChatToolGroup(tools: tools, open: open, title: ToolGroupTitle.text(oks: tools.map(\.ok)), status: status)
     }
 
+    /// The words of the messages that replies quote, by `seq`: found once per build, in the loaded history.
+    private static func quotedOriginals(_ input: ChatRowInput) -> [Int64: (text: String, fromMe: Bool)] {
+        var wanted = Set(input.replies.values)
+        for item in input.queued { if let target = item.replyTo { wanted.insert(target) } }
+        guard !wanted.isEmpty else { return [:] }
+        var found: [Int64: (text: String, fromMe: Bool)] = [:]
+        for item in input.thread.items {
+            guard let seq = item.messageSeq, wanted.contains(seq) else { continue }
+            switch item {
+            case .user(_, let text, _, _, _, _): found[seq] = (text, true)
+            case .assistant(_, let text, _): found[seq] = (text, false)
+            default: break
+            }
+        }
+        return found
+    }
+
+    /// The quote of a reply to the message with `seq`.
+    static func quote(_ seq: Int64, input: ChatRowInput, originals: [Int64: (text: String, fromMe: Bool)]) -> ChatReplyQuote {
+        guard let original = originals[seq] else {
+            return ChatReplyQuote(seq: seq, name: input.agentName, excerpt: nil)
+        }
+        let plain = original.fromMe ? original.text : MessageBlocks.plainText(original.text)
+        let excerpt = MessageBlocks.excerpt(plain, limit: ReplyQuote.barLimit)
+        return ChatReplyQuote(
+            seq: seq, name: original.fromMe ? L10n.Reply.you : input.agentName, excerpt: excerpt.isEmpty ? nil : excerpt)
+    }
+
     private static func content(
-        of item: ThreadItem, input: ChatRowInput, waiting: Set<Int64>, undelivered: Set<Int64>
+        of item: ThreadItem, input: ChatRowInput, waiting: Set<Int64>, undelivered: Set<Int64>,
+        originals: [Int64: (text: String, fromMe: Bool)]
     ) -> ChatRowContent? {
         let thread = input.thread
         switch item {
@@ -319,20 +396,22 @@ enum ChatRowBuilder {
                     }
                 }
                 guard !text.isEmpty || !files.isEmpty else { return nil }
-                return .message(
-                    ChatMessage(
-                        sender: .me, text: text, streaming: false, ts: ts, showsTime: false, files: files, caption: caption,
-                        tail: true, seq: seq))
+                var message = ChatMessage(
+                    sender: .me, text: text, streaming: false, ts: ts, showsTime: false, files: files, caption: caption,
+                    tail: true, seq: seq)
+                decorate(&message, seq: seq, input: input, originals: originals)
+                return .message(message)
             }
             return .message(
                 ChatMessage(
                     sender: .crew(from: from), text: text, streaming: false, ts: ts, showsTime: false, files: files,
                     caption: nil, tail: true, seq: nil))
         case .assistant(_, let text, let ts):
-            return .message(
-                ChatMessage(
-                    sender: .agent, text: text, streaming: false, ts: ts, showsTime: false, files: [], caption: nil,
-                    tail: true, seq: item.messageSeq))
+            var message = ChatMessage(
+                sender: .agent, text: text, streaming: false, ts: ts, showsTime: false, files: [], caption: nil,
+                tail: true, seq: item.messageSeq)
+            decorate(&message, seq: item.messageSeq, input: input, originals: originals)
+            return .message(message)
         case .streaming(let text):
             return .message(
                 ChatMessage(
@@ -379,6 +458,18 @@ enum ChatRowBuilder {
                     symbol: "moon.zzz", text: ScheduleRunLine.quiet(reason: reason), tone: .muted,
                     fold: detail.isEmpty ? nil : ChatLine.Fold(open: open, detail: detail)))
         }
+    }
+
+    /// What a message with a `seq` carries beyond its text: the reactions under it, the quote it answers, and whether the
+    /// person may react to it or answer it.
+    private static func decorate(
+        _ message: inout ChatMessage, seq: Int64?, input: ChatRowInput, originals: [Int64: (text: String, fromMe: Bool)]
+    ) {
+        guard let seq else { return }
+        message.reactions = input.reactions[seq] ?? []
+        if let target = input.replies[seq] { message.reply = quote(target, input: input, originals: originals) }
+        message.canReact = input.reactionsOn
+        message.canReply = input.repliesOn
     }
 
     private static func approvalSymbol(_ state: ApprovalState) -> String {
