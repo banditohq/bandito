@@ -201,6 +201,7 @@ final class TurnActivities {
         guard summary.turnRunning, let ms = summary.turnStartedAt else { return }
         let now = Date()
         let startedAt = Rules.clampedStart(Date(timeIntervalSince1970: Double(ms) / 1000), now: now)
+        makeRoom(for: key)
         let slot = slots[key]
         let action = Rules.startAction(
             elapsed: now.timeIntervalSince(startedAt), appActive: isForeground(), enabled: isEnabled(),
@@ -420,6 +421,20 @@ final class TurnActivities {
     /// The phase the rules see for a slot (`TurnActivityRules.effectivePhase`).
     private func existingPhase(_ slot: Slot) -> Phase {
         Rules.effectivePhase(shown: slot.state.phase, ended: slot.ended)
+    }
+
+    /// At the limit, the oldest ended activity of another agent leaves the screen at once: a finished card must not keep a
+    /// running turn off the lock screen for its 15 minutes (or an hour).
+    private func makeRoom(for key: Key) {
+        guard liveCount >= Rules.maxRunning else { return }
+        let oldest = slots
+            .filter { $0.key != key && $0.value.ended && !$0.value.isDemo }
+            .min { $0.value.turnStartedMs < $1.value.turnStartedMs }
+        guard let (oldKey, oldSlot) = oldest else { return }
+        oldSlot.trailing?.cancel()
+        oldSlot.watcher?.cancel()
+        slots[oldKey] = nil
+        removeNow(oldSlot.activity)
     }
 
     /// The activities on screen: running, waiting for the person, and ended ones the system has not removed yet.
