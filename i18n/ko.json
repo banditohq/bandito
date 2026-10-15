@@ -3502,5 +3502,10 @@
   "ios.connection.offlineTitle": "{name}에 연결할 수 없습니다",
   "ios.connection.offlineHint": "Mac이 켜져 있고 Bandito가 실행 중인지 확인하세요",
   "ios.connection.retry": "다시 시도",
-  "ios.connection.cachedLine": "오프라인 상태입니다. 이전 내용을 보여 드립니다"
+  "ios.connection.cachedLine": "오프라인 상태입니다. 이전 내용을 보여 드립니다",
+  "ios.accountServers.waiting": "Mac의 응답을 기다리는 중…",
+  "ios.accountServers.macOffline": "Mac이 오프라인입니다. 켜지면 서버가 나타납니다",
+  "ios.accountServers.noAccess": "휴대폰에서는 닫혀 있습니다. Mac에서: 설정 → 서버 → 해당 서버 → iPhone → “휴대폰에서 접속”",
+  "ios.accountServers.fetching": "계정의 서버를 가져오는 중…",
+  "ios.accountServers.title": "계정의 서버"
 }

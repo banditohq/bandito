@@ -65,7 +65,7 @@ struct RootView: View {
         ZStack {
             TabView(selection: $tab) {
                 CrewScreen(
-                    servers: servers, settings: settings, onConnect: openConnect, onShowInbox: { tab = .inbox },
+                    servers: servers, settings: settings, account: account, onConnect: openConnect, onShowInbox: { tab = .inbox },
                     focus: crewFocus)
                     .id(dynamicTypeSize)
                     .environment(\.newTaskAction, newTaskAction(for: servers))

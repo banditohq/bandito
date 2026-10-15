@@ -955,6 +955,11 @@
 "ios.account.signIn.text" = "Melden Sie sich an, um die Server Ihres Mac auf diesem iPhone zu sehen. Die Liste ist verschlüsselt: Der Schlüssel bleibt auf Ihren Geräten.";
 "ios.account.signOut.message" = "Bereits verbundene Server bleiben erhalten. Die erneute Anmeldung bei diesem Konto braucht keine Bestätigung.";
 "ios.account.signOut.title" = "Vom Konto abmelden?";
+"ios.accountServers.fetching" = "Server deines Kontos werden geladen …";
+"ios.accountServers.macOffline" = "Der Mac ist offline – der Server erscheint, sobald er an ist";
+"ios.accountServers.noAccess" = "Für Telefone gesperrt. Am Mac: Einstellungen → Server → Server → iPhone → „Zugriff vom Telefon“";
+"ios.accountServers.title" = "Server deines Kontos";
+"ios.accountServers.waiting" = "Warten auf die Antwort des Mac …";
 "ios.activity.emptyErrors" = "Keine Fehler.";
 "ios.activity.emptyMessage" = "Hier erscheinen abgeschlossene Antworten und geplante Läufe mit einer Meldung.";
 "ios.activity.emptyTitle" = "Bisher ruhig";

@@ -955,6 +955,11 @@
 "ios.account.signIn.text" = "Entre para ver os servidores do seu Mac neste iPhone. A lista é criptografada: a chave fica só nos seus dispositivos.";
 "ios.account.signOut.message" = "Os servidores já conectados permanecem. Entrar de novo nesta conta não exige aprovação.";
 "ios.account.signOut.title" = "Sair da sua conta?";
+"ios.accountServers.fetching" = "Buscando os servidores da sua conta…";
+"ios.accountServers.macOffline" = "O Mac está offline — o servidor aparecerá quando ele ligar";
+"ios.accountServers.noAccess" = "Fechado para telefones. No Mac: Configurações → Servidores → o servidor → iPhone → “Acesso pelo celular”";
+"ios.accountServers.title" = "Servidores da sua conta";
+"ios.accountServers.waiting" = "Aguardando a resposta do Mac…";
 "ios.activity.emptyErrors" = "Nenhum erro.";
 "ios.activity.emptyMessage" = "Aqui aparecem as respostas concluídas e as execuções agendadas que tiveram algo a dizer.";
 "ios.activity.emptyTitle" = "Tudo tranquilo por enquanto";

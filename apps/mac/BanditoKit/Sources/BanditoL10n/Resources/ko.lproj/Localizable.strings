@@ -955,6 +955,11 @@
 "ios.account.signIn.text" = "로그인하면 Mac의 서버를 이 iPhone에서 볼 수 있습니다. 목록은 암호화되며 키는 사용자의 기기에만 남습니다.";
 "ios.account.signOut.message" = "이미 연결된 서버는 그대로 유지됩니다. 같은 계정으로 다시 로그인할 때는 승인이 필요하지 않습니다.";
 "ios.account.signOut.title" = "계정에서 로그아웃할까요?";
+"ios.accountServers.fetching" = "계정의 서버를 가져오는 중…";
+"ios.accountServers.macOffline" = "Mac이 오프라인입니다. 켜지면 서버가 나타납니다";
+"ios.accountServers.noAccess" = "휴대폰에서는 닫혀 있습니다. Mac에서: 설정 → 서버 → 해당 서버 → iPhone → “휴대폰에서 접속”";
+"ios.accountServers.title" = "계정의 서버";
+"ios.accountServers.waiting" = "Mac의 응답을 기다리는 중…";
 "ios.activity.emptyErrors" = "오류가 없어요.";
 "ios.activity.emptyMessage" = "완료된 답변과 알릴 내용이 있었던 예약 실행이 여기에 표시돼요.";
 "ios.activity.emptyTitle" = "아직 조용해요";

@@ -955,6 +955,11 @@
 "ios.account.signIn.text" = "サインインすると、Mac のサーバーをこの iPhone で見られます。リストは暗号化され、鍵はお使いのデバイスにだけ残ります。";
 "ios.account.signOut.message" = "接続済みのサーバーはそのまま残ります。同じアカウントへの再サインインに承認は不要です。";
 "ios.account.signOut.title" = "アカウントからサインアウトしますか？";
+"ios.accountServers.fetching" = "アカウントのサーバーを取得しています…";
+"ios.accountServers.macOffline" = "Macがオフラインです。オンになるとサーバーが表示されます";
+"ios.accountServers.noAccess" = "スマートフォンからは使えません。Macで「設定」→「サーバー」→ サーバー → iPhone →「スマートフォンからのアクセス」";
+"ios.accountServers.title" = "アカウントのサーバー";
+"ios.accountServers.waiting" = "Macの応答を待っています…";
 "ios.activity.emptyErrors" = "エラーはありません。";
 "ios.activity.emptyMessage" = "完了した返信と、何か知らせたスケジュール実行がここに表示されます。";
 "ios.activity.emptyTitle" = "今のところ静かです";

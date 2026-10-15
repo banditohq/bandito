@@ -50,6 +50,12 @@ public final class AccessResponder {
         public var cooledDown = 0
         /// Requests another device answered first.
         public var answeredElsewhere = 0
+
+        /// The requests (`device|server|at`) for servers this device holds that the cycle left without an answer: the server
+        /// is not connected right now, or the answer failed. A request for a server another device holds is not here.
+        public var open: [String] = []
+        /// How many requests are in `open`: the caller polls fast for a while.
+        public var unanswered: Int { open.count }
     }
 
     /// The pause between two issues for one device and server.
@@ -137,6 +143,9 @@ public final class AccessResponder {
             }
             guard known.contains(request.serverID), let server = byServer[request.serverID], server.isReachable else {
                 outcome.waiting += 1
+                if known.contains(request.serverID), byServer[request.serverID] != nil {
+                    outcome.open.append("\(request.deviceID)|\(request.serverID)|\(request.at)")
+                }
                 continue
             }
             // The key the answer is sealed to is the one the account lists for that device id, and the request must
@@ -166,7 +175,7 @@ public final class AccessResponder {
             // How the asking device reaches this daemon is what the daemon says about itself now, not what the blob says:
             // any device of the account can write the blob. With no way in there is nothing to hand over, so no token.
             guard let phone = (try? await server.phoneInfo())?.synced, phone.isReachable else {
-                outcome.failed += 1
+                outcome.failed += 1; outcome.open.append("\(request.deviceID)|\(request.serverID)|\(request.at)")
                 continue
             }
             do {
@@ -180,7 +189,7 @@ public final class AccessResponder {
                         accountID: accountID, deviceID: request.deviceID, serverID: request.serverID)
                 } catch {
                     try? await server.revokeDeviceRow(issued.deviceId)
-                    outcome.failed += 1
+                    outcome.failed += 1; outcome.open.append("\(request.deviceID)|\(request.serverID)|\(request.at)")
                     continue
                 }
                 let grant = AccessGrant(
@@ -198,7 +207,7 @@ public final class AccessResponder {
                 dropped[key] = max(dropped[key] ?? 0, request.at)
                 outcome.failed += 1
             } catch {
-                outcome.failed += 1
+                outcome.failed += 1; outcome.open.append("\(request.deviceID)|\(request.serverID)|\(request.at)")
             }
         }
         // Requests and grants of devices that left the account are of no use any more.

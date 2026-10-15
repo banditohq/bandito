@@ -955,6 +955,11 @@
 "ios.account.signIn.text" = "Inicie sesión para ver los servidores de su Mac en este iPhone. La lista está cifrada: la clave solo está en sus dispositivos.";
 "ios.account.signOut.message" = "Los servidores ya conectados se conservan. Volver a iniciar sesión en esta cuenta no requiere aprobación.";
 "ios.account.signOut.title" = "¿Cerrar sesión en su cuenta?";
+"ios.accountServers.fetching" = "Obteniendo los servidores de tu cuenta…";
+"ios.accountServers.macOffline" = "El Mac no está en línea: el servidor aparecerá cuando se encienda";
+"ios.accountServers.noAccess" = "Cerrado a teléfonos. En el Mac: Ajustes → Servidores → el servidor → iPhone → «Acceso desde el teléfono»";
+"ios.accountServers.title" = "Servidores de tu cuenta";
+"ios.accountServers.waiting" = "Esperando la respuesta del Mac…";
 "ios.activity.emptyErrors" = "Sin errores.";
 "ios.activity.emptyMessage" = "Aquí aparecen las respuestas terminadas y las ejecuciones programadas que dijeron algo.";
 "ios.activity.emptyTitle" = "De momento, todo tranquilo";

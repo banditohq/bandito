@@ -955,6 +955,11 @@
 "ios.account.signIn.text" = "Войдите, чтобы увидеть серверы вашего Mac на этом iPhone. Список зашифрован: ключ остаётся только на ваших устройствах.";
 "ios.account.signOut.message" = "Уже подключённые серверы останутся. Войти в этот аккаунт снова можно без подтверждения.";
 "ios.account.signOut.title" = "Выйти из аккаунта?";
+"ios.accountServers.fetching" = "Получаем серверы вашего аккаунта…";
+"ios.accountServers.macOffline" = "Mac не в сети — серверы появятся, когда он включится";
+"ios.accountServers.noAccess" = "С телефона закрыт. На Mac: Настройки → Серверы → сервер → iPhone → «Доступ с телефона»";
+"ios.accountServers.title" = "Серверы вашего аккаунта";
+"ios.accountServers.waiting" = "Ждём ответа от Mac…";
 "ios.activity.emptyErrors" = "Ошибок нет.";
 "ios.activity.emptyMessage" = "Здесь появляются законченные ответы и запуски по расписанию, которые что-то сказали.";
 "ios.activity.emptyTitle" = "Пока тихо";

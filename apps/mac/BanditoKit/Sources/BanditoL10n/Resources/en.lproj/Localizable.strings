@@ -955,6 +955,11 @@
 "ios.account.signIn.text" = "Sign in to see your Mac's servers on this iPhone. The list is encrypted: the key stays on your devices.";
 "ios.account.signOut.message" = "Servers that are already connected stay. Signing in to this account again needs no approval.";
 "ios.account.signOut.title" = "Sign out of your account?";
+"ios.accountServers.fetching" = "Getting your account’s servers…";
+"ios.accountServers.macOffline" = "Mac is offline — the server will appear when it is on";
+"ios.accountServers.noAccess" = "Closed to phones. On the Mac: Settings → Servers → the server → iPhone → “Access from a phone”";
+"ios.accountServers.title" = "Servers of your account";
+"ios.accountServers.waiting" = "Waiting for the Mac to answer…";
 "ios.activity.emptyErrors" = "No errors.";
 "ios.activity.emptyMessage" = "Finished replies and scheduled runs that had something to say show up here.";
 "ios.activity.emptyTitle" = "All quiet for now";
