@@ -216,7 +216,7 @@ import Testing
         }
         await importer.drain()
         #expect(inbox.pending().isEmpty, "the fifth failure drops the task")
-        #expect(log.notices == [ShareNotice(kind: .failedForGood, agentName: "Forge", fallbackName: "forge")])
+        #expect(log.notices == [ShareNotice(kind: .failedForGood, agentName: "Forge")])
         #expect(log.queued.isEmpty)
     }
 
@@ -256,7 +256,7 @@ import Testing
         defer { try? FileManager.default.removeItem(at: base) }
         try inbox.save(task("pic", at: 10), images: [Data([1])])
         for _ in 1...5 { await importer.drain() }
-        #expect(log.notices == [ShareNotice(kind: .failedForGood, agentName: "Scout", fallbackName: "forge")])
+        #expect(log.notices == [ShareNotice(kind: .failedForGood, agentName: "Scout")])
     }
 
     @Test func waitingForTheConnectionIsNotAFailedTry() async throws {

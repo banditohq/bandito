@@ -145,7 +145,7 @@ struct RootView: View {
                 newTask = nil
             } else {
                 runPendingQuickAction()
-                for notice in pendingNotices { showShareNotice(notice) }
+                answerToast.showInTurn(pendingNotices.map { AnswerToastMessage(text: $0.text, allowed: false) })
                 pendingNotices = []
                 if let id = pendingShare { openShared(id) } else { importSharedTasks() }
             }

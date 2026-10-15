@@ -1831,6 +1831,7 @@ public enum L10n {
             public static var empty: String { L10n.tr("ios.share.empty") }
             public static var failed: String { L10n.tr("ios.share.failed") }
             public static func failedForGood(name: String) -> String { L10n.tr("ios.share.failedForGood", name) }
+            public static var failedForGoodUnnamed: String { L10n.tr("ios.share.failedForGoodUnnamed") }
             public static func notify(name: String) -> String { L10n.tr("ios.share.notify", name) }
             public static var picture: String { L10n.tr("ios.share.picture") }
             public static var title: String { L10n.tr("ios.share.title") }

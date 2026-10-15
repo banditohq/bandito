@@ -27,15 +27,13 @@ struct ShareNotice: Equatable {
     let kind: Kind
     /// The agent's name; nil when nothing tells it (an old task of an agent that is gone).
     let agentName: String?
-    /// What the notice says when there is no name: the agent's id.
-    var fallbackName = ""
 
     var text: String {
         switch kind {
         case .agentGone:
             agentName.map { L10n.Ios.Share.agentGone(name: $0) } ?? L10n.Ios.Share.agentGoneUnnamed
         case .failedForGood:
-            L10n.Ios.Share.failedForGood(name: agentName ?? fallbackName)
+            agentName.map { L10n.Ios.Share.failedForGood(name: $0) } ?? L10n.Ios.Share.failedForGoodUnnamed
         }
     }
 }
@@ -252,8 +250,7 @@ final class ShareImporter {
                 task.attempts += 1
                 if task.attempts >= SharedTask.maxAttempts {
                     onNotice?(
-                        ShareNotice(
-                            kind: .failedForGood, agentName: agentName(of: task, environment), fallbackName: task.agentID))
+                        ShareNotice(kind: .failedForGood, agentName: agentName(of: task, environment)))
                     finish(task, inbox: inbox, environment: environment)
                 } else {
                     inbox.update(task)

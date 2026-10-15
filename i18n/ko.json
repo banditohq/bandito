@@ -3493,6 +3493,7 @@
   "ios.share.picture": "첨부된 이미지",
   "ios.share.agentGone": "{name}이(가) 더 이상 없습니다. 메시지가 전송되지 않았습니다",
   "ios.share.failedForGood": "{name}에게 이미지를 보내지 못했습니다. 다시 시도하세요.",
+  "ios.share.failedForGoodUnnamed": "사진을 보내지 못했습니다. 다시 시도해 주세요.",
   "ios.share.notify": "앱을 열어 {name}에게 작업을 보내세요",
   "ios.share.doneButton": "완료",
   "ios.share.agentGoneUnnamed": "에이전트가 더 이상 없습니다. 메시지가 전송되지 않았습니다"

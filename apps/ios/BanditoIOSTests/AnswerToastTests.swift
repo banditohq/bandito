@@ -37,6 +37,26 @@ import Testing
         #expect(center.current == nil)
     }
 
+    @Test func messagesInTurnAreAllShownOneAfterTheOther() async {
+        let center = AnswerToastCenter()
+        let first = AnswerToastMessage(text: "one", allowed: false)
+        let second = AnswerToastMessage(text: "two", allowed: false)
+        center.showInTurn([first, second])
+        #expect(center.current == first)
+        var steps = 0
+        while center.current != second, steps < 50 {
+            try? await Task.sleep(for: .milliseconds(100))
+            steps += 1
+        }
+        #expect(center.current == second, "the second waited for the first instead of replacing it")
+    }
+
+    @Test func aFailedShareWithoutANameDoesNotShowTheAgentID() {
+        let text = ShareNotice(kind: .failedForGood, agentName: nil).text
+        #expect(!text.isEmpty)
+        #expect(!text.contains("3f2a"))
+    }
+
     @Test func russianStringsAreFilledAndNameTheAgent() {
         let texts = L10n.withLanguageForTests("ru") {
             [

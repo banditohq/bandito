@@ -1209,6 +1209,7 @@
 "ios.share.empty" = "Open Bandito and connect a server";
 "ios.share.failed" = "Could not save the message. Try again.";
 "ios.share.failedForGood" = "Couldn’t send the pictures to %1$@. Try again.";
+"ios.share.failedForGoodUnnamed" = "Couldn't send the pictures. Try again.";
 "ios.share.notify" = "Open to send the task to %1$@";
 "ios.share.picture" = "Attached picture";
 "ios.share.title" = "Send to Bandito";

@@ -1209,6 +1209,7 @@
 "ios.share.empty" = "Bandito를 열고 서버를 연결하세요";
 "ios.share.failed" = "메시지를 저장하지 못했습니다. 다시 시도하세요.";
 "ios.share.failedForGood" = "%1$@에게 이미지를 보내지 못했습니다. 다시 시도하세요.";
+"ios.share.failedForGoodUnnamed" = "사진을 보내지 못했습니다. 다시 시도해 주세요.";
 "ios.share.notify" = "앱을 열어 %1$@에게 작업을 보내세요";
 "ios.share.picture" = "첨부된 이미지";
 "ios.share.title" = "Bandito로 보내기";

@@ -3493,6 +3493,7 @@
   "ios.share.picture": "附带的图片",
   "ios.share.agentGone": "{name} 已不存在，消息未发送",
   "ios.share.failedForGood": "无法向 {name} 发送图片，请重试。",
+  "ios.share.failedForGoodUnnamed": "无法发送图片，请重试。",
   "ios.share.notify": "打开应用，将任务发送给 {name}",
   "ios.share.doneButton": "完成",
   "ios.share.agentGoneUnnamed": "该智能体已不存在，消息未发送"

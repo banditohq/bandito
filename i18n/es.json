@@ -3535,6 +3535,7 @@
   "ios.share.picture": "Imagen adjunta",
   "ios.share.agentGone": "{name} ya no existe: el mensaje no se envió",
   "ios.share.failedForGood": "No se pudieron enviar las imágenes a {name}. Inténtalo de nuevo.",
+  "ios.share.failedForGoodUnnamed": "No se pudieron enviar las imágenes. Inténtalo de nuevo.",
   "ios.share.notify": "Abre la app para enviar la tarea a {name}",
   "ios.share.doneButton": "Listo",
   "ios.share.agentGoneUnnamed": "El agente ya no existe: el mensaje no se envió"

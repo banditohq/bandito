@@ -902,32 +902,35 @@ public final class ServerModel: Identifiable {
 
     /// One `agents.list` at a time: a refresh asked for while one is in flight is asked again after it. A failed read
     /// is logged and asked again after `agentsRetryDelay`; its time counts as the last read, so the app coming back to
-    /// the front does not ask again at once.
-    private func runAgentsRefresh() async {
+    /// the front does not ask again at once. True only when this call read the list and set it.
+    @discardableResult
+    private func runAgentsRefresh() async -> Bool {
         agentsRefreshScheduled = false
-        guard !inSafeMode else { return }
+        guard !inSafeMode else { return false }
         guard !agentsRefreshing else {
             requestAgentsRefresh()
-            return
+            return false
         }
-        guard let c = client else { return }
+        guard let c = client else { return false }
         agentsRefreshing = true
         defer { agentsRefreshing = false }
         let generation = agentsGeneration
         do {
             let list = try await c.call("agents.list", NoParams(), as: [Agent].self)
-            guard client === c else { return }
+            guard client === c else { return false }
             guard agentsGeneration.accepts(generation) else {
                 // An agent was deleted while the answer was on its way: that answer may still list it.
                 requestAgentsRefresh()
-                return
+                return false
             }
             setAgents(list)
+            return true
         } catch {
-            guard client === c else { return }
+            guard client === c else { return false }
             Self.log.error("agents.list failed: \(String(describing: error), privacy: .public)")
             agentsReadAt = Date()
             scheduleAgentsRetry()
+            return false
         }
     }
 
@@ -945,17 +948,16 @@ public final class ServerModel: Identifiable {
     }
 
     /// Reads `agents.list` now. One read already in flight is waited for first (as long as it takes), so the answer is not
-    /// older than the call. True only when this call saw a successful read (`agentsListedAt` moved): false means the
+    /// older than the call. True only when this call read the list itself: false means the
     /// list may be out of date, whether the read failed, the link is down or the task was cancelled. For a screen that
     /// must know whether an agent exists.
     public func refreshAgentsNow() async -> Bool {
-        let before = agentsListedAt
         while agentsRefreshing {
             try? await Task.sleep(for: .milliseconds(100))
             if Task.isCancelled { return false }
         }
-        await runAgentsRefresh()
-        return agentsListedAt != before
+        // Only this call's own read counts: a read that ended while waiting may be older than the question.
+        return await runAgentsRefresh()
     }
 
     /// Called when the app comes back to the front. Re-reads the agents when the last read is older than

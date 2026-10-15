@@ -1209,6 +1209,7 @@
 "ios.share.empty" = "Откройте Bandito и подключите сервер";
 "ios.share.failed" = "Не удалось сохранить сообщение. Попробуйте ещё раз.";
 "ios.share.failedForGood" = "Не удалось отправить картинки для %1$@ — попробуйте ещё раз";
+"ios.share.failedForGoodUnnamed" = "Не удалось отправить картинки — попробуйте ещё раз";
 "ios.share.notify" = "Откройте, чтобы отправить задачу %1$@";
 "ios.share.picture" = "Прикреплённая картинка";
 "ios.share.title" = "Отправить в Bandito";

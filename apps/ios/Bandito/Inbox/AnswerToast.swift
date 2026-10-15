@@ -15,7 +15,10 @@ struct AnswerToastMessage: Equatable, Identifiable {
 @Observable @MainActor final class AnswerToastCenter {
     private(set) var current: AnswerToastMessage?
     @ObservationIgnored private var hideTask: Task<Void, Never>?
+    /// Messages that wait for their turn (`showInTurn`): each gets its own 2.5 s after the one before has left.
+    @ObservationIgnored private var queue: [AnswerToastMessage] = []
 
+    /// Shows the message at once, in place of the one on screen (an answer says what it did now).
     func show(_ message: AnswerToastMessage) {
         hideTask?.cancel()
         current = message
@@ -25,7 +28,19 @@ struct AnswerToastMessage: Equatable, Identifiable {
             try? await Task.sleep(for: .seconds(2.5))
             guard !Task.isCancelled, let self, self.current?.id == id else { return }
             self.current = nil
+            guard !self.queue.isEmpty else { return }
+            // A short gap, so the next one is seen to be another message.
+            try? await Task.sleep(for: .seconds(0.3))
+            guard !Task.isCancelled, self.current == nil, !self.queue.isEmpty else { return }
+            self.show(self.queue.removeFirst())
         }
+    }
+
+    /// Shows the messages one after the other (notices that waited behind the Face ID lock), none replacing another.
+    func showInTurn(_ messages: [AnswerToastMessage]) {
+        queue += messages
+        guard current == nil, !queue.isEmpty else { return }
+        show(queue.removeFirst())
     }
 }
 
