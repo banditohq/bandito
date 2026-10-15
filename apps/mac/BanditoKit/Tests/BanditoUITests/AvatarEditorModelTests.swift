@@ -128,7 +128,8 @@ import Testing
     }
 
     @Test func theProfilePhotoFrameFitsTheSheetWithItsCardPadding() {
-        #expect(ProfileSheetLayout.contentWidth == 412)
+        // 420 wide with 20 pt on each side.
+        #expect(ProfileSheetLayout.contentWidth == 380)
         #expect(ProfileSheetLayout.fits(ProfileSheetLayout.cropSide))
         // The frame sits in a card with 16 pt on each side.
         #expect(ProfileSheetLayout.fits(ProfileSheetLayout.cropSide + 32))

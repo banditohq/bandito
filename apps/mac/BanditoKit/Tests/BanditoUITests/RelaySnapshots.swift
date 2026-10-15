@@ -78,6 +78,12 @@ extension ScreenWorkSuites {
             }
         }
 
+        /// The profile window of a signed-in person, at its own width (420), in the dark theme in Russian and the light theme
+        /// in English.
+        @Test(.enabled(if: RelaySnapshots.directory != nil)) func account() throws {
+            try each("account-sheet", width: ProfileSheetLayout.width) { env in LayoutAuditSnapshots.accountSignedIn(env) }
+        }
+
         @Test(.enabled(if: RelaySnapshots.directory != nil)) func settings() throws {
             try each("settings-cloud-on", width: 560) { env in
                 env.serverInfo(features: ["server_settings", "phone_access", "pairing", "relay"])
