@@ -290,6 +290,11 @@ final class JoinQRModel {
         }
         guard isCurrent(mine) else { return true }
         guard let key = syncKey(), let code = try? DeviceFingerprint.code(publicKeyBase64: device.publicKey) else {
+            // The proof is good but there is nothing to hand over: the device is not left pending in the account, and
+            // the ticket is taken back.
+            _ = await removeDevice(device)
+            cancelCurrentTicket()
+            guard isCurrent(mine) else { return true }
             phase = .failed(UserFacingMessage(text: L10n.JoinQR.Blocked.noKey))
             return true
         }
@@ -321,11 +326,17 @@ final class JoinQRModel {
     /// The proof did not match: nobody who saw this code made the request. The device is removed, even if the sheet is
     /// closed meanwhile (the removal is its own task, a cancel does not cut it).
     private func refuse(_ device: ClaimedDevice, _ mine: Int) async {
-        let backend = backend
-        let id = device.id
-        let removed = await Task { (try? await backend.deleteDevice(id: id, force: false)) != nil }.value
+        let removed = await removeDevice(device)
         guard isCurrent(mine) else { return }
         phase = .badProof(removed: removed)
+    }
+
+    /// Removes the device from the account in a task of its own, so closing the sheet does not cut it. True when the cloud
+    /// removed it.
+    private func removeDevice(_ device: ClaimedDevice) async -> Bool {
+        let backend = backend
+        let id = device.id
+        return await Task { (try? await backend.deleteDevice(id: id, force: false)) != nil }.value
     }
 
     /// The sheet closes by itself a moment after "added".

@@ -18,6 +18,10 @@ struct ConnectPhoneWizard: View {
     @State private var joinChecked = false
     @State private var useJoin = true
     @State private var joinModel: JoinQRModel?
+    /// The wizard went away: a join model made after that is closed at once.
+    @State private var disappeared = false
+    /// The task that makes the join model; cancelled when the wizard goes away.
+    @State private var joinTask: Task<Void, Never>?
     /// The join model to show without asking anybody (the layout audit and the screenshots).
     var previewJoin: JoinQRModel?
     /// A state to show without asking anybody (the layout audit and the screenshots).
@@ -43,11 +47,13 @@ struct ConnectPhoneWizard: View {
             // The cloud is on and the code shows: tell the account at once, so the iPhone that signs in finds the server.
             if case .scan = step {
                 hub.requestAccessCycle()
-                if joinAllowed, useJoin { Task { await enterJoin() } }
+                if joinAllowed, useJoin { startJoin() }
             }
         }
         .animation(reduceMotion ? nil : BanditoMotion.ease, value: joinModel?.phase)
         .onDisappear {
+            disappeared = true
+            joinTask?.cancel()
             model?.cancel()
             joinModel?.close()
         }
@@ -219,7 +225,7 @@ struct ConnectPhoneWizard: View {
                 if joinAllowed {
                     Button(L10n.PhoneWizard.useAccount) {
                         useJoin = true
-                        Task { await enterJoin() }
+                        startJoin()
                     }
                     .banditoButton(.link)
                     .font(BanditoFont.text(size: 12, weight: 400))
@@ -332,6 +338,11 @@ struct ConnectPhoneWizard: View {
         let name: String
     }
 
+    private func startJoin() {
+        joinTask?.cancel()
+        joinTask = Task { await enterJoin() }
+    }
+
     /// Makes the join code (once) and starts it. Called when the scan step is reached or the person picks it.
     private func enterJoin() async {
         guard joinAllowed, joinModel == nil, preview == nil else { return }
@@ -341,8 +352,8 @@ struct ConnectPhoneWizard: View {
             joinAllowed = false
             return
         }
-        // The person went back to the pairing code, or left, while the model was made.
-        guard joinModel == nil, useJoin else { return }
+        // The person went back to the pairing code, or left, while the model was made: its ticket is taken back.
+        guard let made = JoinQRFactory.adopt(made, gone: joinModel != nil || !useJoin || disappeared) else { return }
         joinModel = made
         made.start()
     }
@@ -372,6 +383,6 @@ struct ConnectPhoneWizard: View {
         joinAllowed = await JoinQRFactory.blocker(of: hub) == nil
         joinChecked = true
         // The cloud may have been ready already: the join code shows without waiting for another change of the step.
-        if joinAllowed, useJoin, case .scan = made.step { await enterJoin() }
+        if joinAllowed, useJoin, !disappeared, case .scan = made.step { await enterJoin() }
     }
 }

@@ -240,7 +240,7 @@ actor FakeJoinBackend: JoinQRBackend {
         model.close()
     }
 
-    @Test func withoutTheSyncKeyAtTheLastMomentNothingIsApproved() async throws {
+    @Test func withoutTheSyncKeyAtTheLastMomentNothingIsApprovedTheDeviceIsRemovedAndTheTicketTakenBack() async throws {
         let backend = FakeJoinBackend()
         let model = make(backend, hasKey: false)
         model.start()
@@ -249,7 +249,40 @@ actor FakeJoinBackend: JoinQRBackend {
         await backend.setStatus(claimed(ticket))
         #expect(await wait(model) { if case .failed = $0 { true } else { false } })
         #expect(await backend.approvals.isEmpty)
+        #expect(await backend.deleted == ["phone-1"])
+        for _ in 0..<200 where await backend.cancelled.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(await backend.cancelled == ["ticket-1"])
         model.close()
+    }
+
+    @Test func aModelThatIsMadeAfterItsScreenWentAwayIsClosedAndNeverMakesATicket() async throws {
+        let backend = FakeJoinBackend()
+        let model = make(backend)
+        #expect(JoinQRFactory.adopt(model, gone: true) == nil)
+        model.start()
+        try await Task.sleep(for: .milliseconds(40))
+        #expect(await backend.created.isEmpty, "a closed model does not start")
+        #expect(model.phase == .preparing)
+
+        let kept = make(backend)
+        #expect(JoinQRFactory.adopt(kept, gone: false) === kept)
+        kept.start()
+        #expect(await wait(kept, isShowing))
+        kept.close()
+    }
+
+    @Test func aCancelledTaskDoesNotKeepTheModelEither() async throws {
+        let backend = FakeJoinBackend()
+        let model = make(backend)
+        let task = Task { @MainActor () -> JoinQRModel? in
+            while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(1)) }
+            return JoinQRFactory.adopt(model, gone: false)
+        }
+        task.cancel()
+        #expect(await task.value == nil)
+        model.start()
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(await backend.created.isEmpty)
     }
 
     @Test func aTicketThatRanOutIsReplacedUpToThreeTimesThenTheButtonShows() async {

@@ -28,6 +28,16 @@ enum JoinQRFactory {
             onFinished: onFinished)
     }
 
+    /// A model that was made while its screen went away is closed at once (it has made no ticket yet, and never will);
+    /// otherwise it is kept.
+    static func adopt(_ made: JoinQRModel, gone: Bool) -> JoinQRModel? {
+        if gone || Task.isCancelled {
+            made.close()
+            return nil
+        }
+        return made
+    }
+
     /// Whether this Mac can let a new device in: signed in, approved, and holding the sync key. The account is read
     /// again first, so an approval that happened a minute ago counts.
     static func blocker(of hub: AccountHub?) async -> JoinQRBlocker? {
@@ -53,6 +63,8 @@ struct JoinQRSheet: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var model: JoinQRModel?
     @State private var setupError: UserFacingMessage?
+    /// The sheet went away: a model that is made after that is closed at once (its ticket is taken back), not shown.
+    @State private var disappeared = false
     /// A model to show without asking anybody (the layout audit and the screenshots).
     var preview: JoinQRModel?
 
@@ -89,7 +101,10 @@ struct JoinQRSheet: View {
         .frame(width: 420)
         .background(Color.Bandito.surface2)
         .task { await begin() }
-        .onDisappear { model?.close() }
+        .onDisappear {
+            disappeared = true
+            model?.close()
+        }
     }
 
     private func begin() async {
@@ -97,6 +112,7 @@ struct JoinQRSheet: View {
         let close = dismiss
         do {
             let made = try await JoinQRFactory.make(hub: hub, onFinished: { close() })
+            guard let made = JoinQRFactory.adopt(made, gone: disappeared) else { return }
             model = made
             made.start()
         } catch {
