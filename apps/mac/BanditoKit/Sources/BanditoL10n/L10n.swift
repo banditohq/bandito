@@ -1646,6 +1646,14 @@ public enum L10n {
             public static var teamsEmpty: String { L10n.tr("ios.newAgent.teamsEmpty") }
         }
 
+        public enum NewTask {
+            public static var empty: String { L10n.tr("ios.newTask.empty") }
+            public static var offline: String { L10n.tr("ios.newTask.offline") }
+            public static var title: String { L10n.tr("ios.newTask.title") }
+            public static var to: String { L10n.tr("ios.newTask.to") }
+            public static var voiceHint: String { L10n.tr("ios.newTask.voiceHint") }
+        }
+
         public enum Notifications {
 
             public enum Ask {
@@ -1709,6 +1717,10 @@ public enum L10n {
                 public static var subtitle: String { L10n.tr("ios.onboarding.welcome.subtitle") }
                 public static var title: String { L10n.tr("ios.onboarding.welcome.title") }
             }
+        }
+
+        public enum QuickAction {
+            public static var newTask: String { L10n.tr("ios.quickAction.newTask") }
         }
 
         public enum Settings {

@@ -1098,6 +1098,11 @@
 "ios.newAgent.tabOne" = "Один агент";
 "ios.newAgent.tabTeams" = "Готовые команды";
 "ios.newAgent.teamsEmpty" = "На этом сервере пока нет готовых команд.";
+"ios.newTask.empty" = "Сначала добавьте агента. Когда он появится в команде, отправить ему задачу можно отсюда.";
+"ios.newTask.offline" = "Отправится, когда сервер будет в сети";
+"ios.newTask.title" = "Новая задача";
+"ios.newTask.to" = "Кому";
+"ios.newTask.voiceHint" = "Удерживайте, чтобы надиктовать";
 "ios.notifications.ask.body" = "Bandito может сообщать, когда агент просит одобрения, задаёт вопрос или падает с ошибкой. Больше ничего. Это можно изменить в Настройках.";
 "ios.notifications.ask.later" = "Не сейчас";
 "ios.notifications.ask.title" = "Хотите знать, когда вы нужны команде?";
@@ -1133,6 +1138,7 @@
 "ios.onboarding.welcome.start" = "Поехали";
 "ios.onboarding.welcome.subtitle" = "Агенты работают на вашем сервере, с ролями и расписанием. Вы решаете, что им можно.";
 "ios.onboarding.welcome.title" = "Ваша команда готова";
+"ios.quickAction.newTask" = "Новая задача";
 "ios.settings.about.docs" = "Документация";
 "ios.settings.about.privacy" = "Конфиденциальность";
 "ios.settings.about.report" = "Сообщить о проблеме";

@@ -1098,6 +1098,11 @@
 "ios.newAgent.tabOne" = "에이전트 하나";
 "ios.newAgent.tabTeams" = "바로 쓸 수 있는 팀";
 "ios.newAgent.teamsEmpty" = "이 서버에는 아직 준비된 팀이 없습니다.";
+"ios.newTask.empty" = "먼저 에이전트를 추가하세요. 팀에 에이전트가 있으면 여기서 작업을 보낼 수 있습니다.";
+"ios.newTask.offline" = "서버가 온라인이 되면 전송됩니다";
+"ios.newTask.title" = "새 작업";
+"ios.newTask.to" = "받는 사람";
+"ios.newTask.voiceHint" = "길게 눌러 받아쓰기";
 "ios.notifications.ask.body" = "에이전트가 승인을 요청하거나 질문하거나 실패할 때 Bandito가 알려 드립니다. 그 외에는 알리지 않습니다. 설정에서 바꿀 수 있습니다.";
 "ios.notifications.ask.later" = "나중에";
 "ios.notifications.ask.title" = "팀이 나를 필요로 할 때 알림을 받을까요?";
@@ -1133,6 +1138,7 @@
 "ios.onboarding.welcome.start" = "시작하기";
 "ios.onboarding.welcome.subtitle" = "에이전트는 사용자의 서버에서 역할과 일정에 따라 일해요. 무엇을 해도 되는지는 사용자가 정해요.";
 "ios.onboarding.welcome.title" = "팀이 준비됐어요";
+"ios.quickAction.newTask" = "새 작업";
 "ios.settings.about.docs" = "문서";
 "ios.settings.about.privacy" = "개인정보 처리방침";
 "ios.settings.about.report" = "문제 신고";

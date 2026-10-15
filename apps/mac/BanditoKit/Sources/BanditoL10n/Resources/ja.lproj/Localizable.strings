@@ -1098,6 +1098,11 @@
 "ios.newAgent.tabOne" = "エージェント1つ";
 "ios.newAgent.tabTeams" = "すぐに使えるチーム";
 "ios.newAgent.teamsEmpty" = "このサーバーにはまだ用意済みのチームがありません。";
+"ios.newTask.empty" = "まずエージェントを追加してください。チームにエージェントがいれば、ここからタスクを送れます。";
+"ios.newTask.offline" = "サーバーがオンラインになると送信されます";
+"ios.newTask.title" = "新しいタスク";
+"ios.newTask.to" = "宛先";
+"ios.newTask.voiceHint" = "長押しで音声入力";
 "ios.notifications.ask.body" = "エージェントが承認を求めたとき、質問があるとき、失敗したときに Bandito がお知らせします。それ以外は通知しません。設定でいつでも変更できます。";
 "ios.notifications.ask.later" = "今はしない";
 "ios.notifications.ask.title" = "チームがあなたを必要とするときに知りたいですか？";
@@ -1133,6 +1138,7 @@
 "ios.onboarding.welcome.start" = "はじめる";
 "ios.onboarding.welcome.subtitle" = "エージェントは自分のサーバーで、役割と予定を持って働きます。何をしてよいかは、あなたが決めます。";
 "ios.onboarding.welcome.title" = "チームの準備ができました";
+"ios.quickAction.newTask" = "新しいタスク";
 "ios.settings.about.docs" = "ドキュメント";
 "ios.settings.about.privacy" = "プライバシー";
 "ios.settings.about.report" = "問題を報告";

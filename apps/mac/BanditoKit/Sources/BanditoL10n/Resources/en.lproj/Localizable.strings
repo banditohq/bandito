@@ -1098,6 +1098,11 @@
 "ios.newAgent.tabOne" = "One agent";
 "ios.newAgent.tabTeams" = "Ready teams";
 "ios.newAgent.teamsEmpty" = "This server has no ready teams yet.";
+"ios.newTask.empty" = "Add an agent first. When an agent is in your team, you can send it a task from here.";
+"ios.newTask.offline" = "Sent when the server is online";
+"ios.newTask.title" = "New task";
+"ios.newTask.to" = "To";
+"ios.newTask.voiceHint" = "Hold to dictate";
 "ios.notifications.ask.body" = "Bandito can tell you when an agent asks for approval, has a question or fails. Nothing else. You can change this in Settings.";
 "ios.notifications.ask.later" = "Not now";
 "ios.notifications.ask.title" = "Want to know when your crew needs you?";
@@ -1133,6 +1138,7 @@
 "ios.onboarding.welcome.start" = "Let's go";
 "ios.onboarding.welcome.subtitle" = "Agents work on your own server, with roles and schedules. You decide what they may do.";
 "ios.onboarding.welcome.title" = "Your crew is ready";
+"ios.quickAction.newTask" = "New task";
 "ios.settings.about.docs" = "Documentation";
 "ios.settings.about.privacy" = "Privacy";
 "ios.settings.about.report" = "Report a problem";
