@@ -57,6 +57,10 @@ final class TurnActivities {
     private var dismissed: [Key: Int64] = [:]
     /// Updates and ends go to ActivityKit one after the other, in the order they were made.
     private var tail: Task<Void, Never>?
+    /// The servers of the last list (`serversChanged`).
+    private var seenServers: Set<UUID> = []
+    /// Orphans are looked for only after the servers had time to connect after the launch.
+    private var sweepAllowed = false
 
     // MARK: Launch and settings
 
@@ -69,6 +73,7 @@ final class TurnActivities {
         // The servers connect a moment after launch: only then is "this agent has no turn" known.
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(15))
+            self?.sweepAllowed = true
             self?.sweepOrphans()
         }
     }
@@ -82,18 +87,23 @@ final class TurnActivities {
         }
     }
 
-    /// The paired servers changed: the activities of a server that is gone end at once.
+    /// The paired servers changed: the activities of a server that is gone end at once. A server this run has not seen
+    /// yet is not "gone": the list is empty until the saved servers are read, and an activity of a turn that still runs
+    /// must survive the launch. The sweep (`sweepOrphans`) clears the rest once the servers are known.
     func serversChanged(ids: Set<UUID>) {
-        for (key, slot) in slots where !ids.contains(key.serverID) {
+        let removed = seenServers.subtracting(ids)
+        seenServers = ids
+        guard !removed.isEmpty else { return }
+        for (key, slot) in slots where removed.contains(key.serverID) {
             endNow(key, slot)
         }
-        for key in timers.keys where !ids.contains(key.serverID) {
+        for key in timers.keys where removed.contains(key.serverID) {
             timers[key]?.cancel()
             timers[key] = nil
         }
         // An activity the app lost track of (a second one of an agent, a server removed in an earlier run).
         for activity in Activity<TurnActivityAttributes>.activities
-        where !ids.contains(activity.attributes.serverID) && !slots.values.contains(where: { $0.activity.id == activity.id }) {
+        where removed.contains(activity.attributes.serverID) && !slots.values.contains(where: { $0.activity.id == activity.id }) {
             removeNow(activity)
         }
     }
@@ -320,6 +330,7 @@ final class TurnActivities {
 
     /// Ends what a killed run left: an activity whose agent has no turn any more.
     private func sweepOrphans() {
+        guard sweepAllowed else { return }
         for (key, slot) in slots where !slot.ended && !slot.isDemo {
             let server = server(key.serverID)
             let orphan = Rules.isOrphan(
@@ -408,8 +419,11 @@ final class TurnActivities {
     #if DEBUG
     static let demoArgument = "-live-demo"
 
-    /// `-live-demo` (with `-demo`): an activity for Forge, "Running tests", that turns into "Done" after 20 seconds.
-    func runDemo(servers: [ServerModel]) {
+    /// `-live-demo` (with `-demo`): an activity for Forge, "Running tests", that turns into "Done" after 20 seconds
+    /// (`-live-demo-seconds N` changes the time, for pictures that need longer).
+    func runDemo(servers: [ServerModel], arguments: [String]) {
+        let seconds = arguments.firstIndex(of: "-live-demo-seconds")
+            .flatMap { arguments.indices.contains($0 + 1) ? Double(arguments[$0 + 1]) : nil } ?? 20
         guard let server = servers.first, let agent = server.agents.first(where: { $0.name == "Forge" }) else { return }
         let key = Key(serverID: server.id, agentID: agent.id)
         if let old = slots[key] { endNow(key, old) }
@@ -417,7 +431,7 @@ final class TurnActivities {
         guard let slot = request(key, agent: agent, state: state, turnStartedMs: 0) else { return }
         slot.isDemo = true
         Task { [weak self, weak slot] in
-            try? await Task.sleep(for: .seconds(20))
+            try? await Task.sleep(for: .seconds(seconds))
             guard let self, let slot, !slot.ended else { return }
             self.finish(slot, phase: .done)
         }

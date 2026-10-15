@@ -160,7 +160,7 @@ struct RootView: View {
                 session.installDemo(await IOSDemo.startServers(withTeam: !IOSDemo.isEmptyRequested(in: arguments)))
                 #if DEBUG
                 if arguments.contains(TurnActivities.demoArgument) {
-                    TurnActivities.shared.runDemo(servers: session.current)
+                    TurnActivities.shared.runDemo(servers: session.current, arguments: arguments)
                 }
                 #endif
                 return

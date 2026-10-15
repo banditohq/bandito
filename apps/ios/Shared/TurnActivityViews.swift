@@ -73,7 +73,10 @@ struct TurnTrailing: View {
     var body: some View {
         if state.phase == .running {
             Text(timerInterval: state.startedAt...Date.distantFuture, pauseTime: nil, countsDown: false, showsHours: false)
-                .font(BanditoFont.mono(size: fontSize, weight: 500))
+                // The system's monospaced font, not `BanditoFont.mono`: the system archives a timer text to draw it on the lock
+                // screen and in the island, and the archive of a brand font (a `CTFont` with a variation axis) crashes the
+                // extension (`KEY_TYPE_OF_DICTIONARY_VIOLATES_HASHABLE_REQUIREMENTS`, found on the Simulator).
+                .font(.system(size: fontSize, weight: .medium, design: .monospaced))
                 .monospacedDigit()
                 .foregroundStyle(Color.Bandito.text)
                 .multilineTextAlignment(.trailing)
