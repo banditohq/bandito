@@ -45,6 +45,9 @@ public final class AccessRequester {
     private let defaults: UserDefaults
     private let now: () -> Date
     private var running = false
+    /// True when the last finished `run()` wrote requests for servers this device lacks (the Mac has not seen them yet, so
+    /// the caller polls fast for a while).
+    public private(set) var lastRunWroteRequests = false
 
     /// After a grant that would not open, the same server is not asked for again for this long.
     static let badGrantBackoffMs: Int64 = 10 * 60 * 1000
@@ -77,6 +80,7 @@ public final class AccessRequester {
         guard !running else { return [] }
         running = true
         defer { running = false }
+        lastRunWroteRequests = false
 
         guard let session = try await account.restoreSession() else { return [] }
         let me = try await account.me()
@@ -182,6 +186,7 @@ public final class AccessRequester {
                 payload.accessRequests.append(request)
             }
         }
+        lastRunWroteRequests = !additions.isEmpty
         return states
     }
 }

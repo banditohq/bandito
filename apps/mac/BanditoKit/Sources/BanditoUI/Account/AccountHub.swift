@@ -85,6 +85,20 @@ public final class AccountHub {
     var ownPhoneRecords: [UUID: SyncedPhone] { publishedPhones }
     @ObservationIgnored private let accessLedger = AccessLedger()
     @ObservationIgnored private var watchTask: Task<Void, Never>?
+    /// The sleep between two ticks of the watch task; cancelled to wake the task when the fast window opens.
+    @ObservationIgnored private var watchSleeper: Task<Void, Never>?
+    /// While open, the access cycle runs every `fastAnswerInterval` instead of every `idleInterval`: a device was just
+    /// approved, or a request waits, and the person is looking at the other screen.
+    @ObservationIgnored private var fastAnswer = FastPollWindow(length: 3 * 60, limit: 10 * 60)
+    /// When a request that was left unanswered last opened the window; it opens again no sooner than `signalCooldown`.
+    @ObservationIgnored private var lastSignalOpen: Date?
+    @ObservationIgnored private var accessCycleRunning = false
+    /// How many access cycles started (tests).
+    @ObservationIgnored private(set) var accessCycleRuns = 0
+    /// Seconds between ticks of the watch task; tests shorten them.
+    nonisolated(unsafe) static var fastAnswerInterval: Duration = .seconds(4)
+    nonisolated(unsafe) static var idleInterval: Duration = .seconds(30)
+    static let signalCooldown: TimeInterval = 20 * 60
     /// The first `prepare` in progress. Calls that come meanwhile wait for it, so the device identity is read once.
     @ObservationIgnored private var preparing: Task<AccountClient, Error>?
     /// Reads this device's identity. The app reads the Keychain; tests pass their own.
@@ -253,6 +267,11 @@ public final class AccountHub {
     /// next round tries again. Does nothing without a session, a sync key or `accessServers`.
     public func runAccessCycle(configs: [ServerConfig]) async {
         guard signedIn, hasSyncKey, let provider = accessServers else { return }
+        // Two rounds at once (the tick, the fast window, an approval) would read and write the blob twice.
+        guard !accessCycleRunning else { return }
+        accessCycleRunning = true
+        accessCycleRuns += 1
+        defer { accessCycleRunning = false }
         do {
             _ = try await prepare()
             guard let store = syncStore, let client, let identity else { return }
@@ -265,6 +284,7 @@ public final class AccountHub {
                 sync: store, account: client, identity: identity, ledger: accessLedger)
             self.responder = responder
             let outcome = try await responder.run(servers: servers)
+            noteUnanswered(outcome.unanswered)
             if outcome.updateNeeded > 0 {
                 Logger.account.notice("Access: \(outcome.updateNeeded) request(s) wait: bandito.dev does not list device keys yet, update the account service.")
             }
@@ -319,6 +339,35 @@ public final class AccountHub {
         Task { await runAccessCycle(configs: configs) }
     }
 
+    /// Whether the access cycle is in its fast stretch.
+    var fastAnswerOpen: Bool { fastAnswer.isOpen(at: Date()) }
+
+    /// Opens (or lengthens) the fast stretch and wakes the watch task, so the next tick is not 30 seconds away.
+    public func openFastAnswerWindow() {
+        fastAnswer.open(at: Date())
+        watchSleeper?.cancel()
+    }
+
+    /// A device was approved on this Mac: it will ask for its servers within seconds. Runs a round now and keeps the cycle
+    /// fast for a while.
+    public func deviceApproved() async {
+        await refreshPending()
+        openFastAnswerWindow()
+        requestAccessCycle()
+    }
+
+    /// A round left requests without an answer: the fast stretch starts (once in `signalCooldown`) or, if it runs, goes on.
+    private func noteUnanswered(_ count: Int) {
+        guard count > 0 else { return }
+        let now = Date()
+        if fastAnswer.isOpen(at: now) {
+            fastAnswer.extendIfOpen(at: now)
+        } else if lastSignalOpen.map({ now.timeIntervalSince($0) >= Self.signalCooldown }) ?? true {
+            lastSignalOpen = now
+            fastAnswer.open(at: now)
+        }
+    }
+
     /// A device left the account: runs a round now, which revokes the rows this Mac issued to it (the round compares what
     /// this Mac issued with the account's device list, so a removal from another device is handled the same way).
     public func revokeAccess(of device: AccountDevice) async {
@@ -365,7 +414,8 @@ public final class AccountHub {
         }
     }
 
-    /// Refreshes the pending list every 30 seconds until stopped. The Task holds the hub weakly.
+    /// Refreshes the pending list and runs the access cycle every 30 seconds (every 4 while the fast window is open) until
+    /// stopped. The Task holds the hub weakly.
     /// Does nothing without a session: nobody can ask for pending devices then.
     public func startWatchingPending() {
         guard watchTask == nil, signedIn else { return }
@@ -377,13 +427,24 @@ public final class AccountHub {
                 if let hub = self, let configs = hub.accessServers?().map(\.config) {
                     await hub.runAccessCycle(configs: configs)
                 }
-                try? await Task.sleep(for: .seconds(30))
+                guard let sleeper = self?.beginSleep() else { return }
+                await withTaskCancellationHandler { await sleeper.value } onCancel: { sleeper.cancel() }
             }
         }
+    }
+
+    private func beginSleep() -> Task<Void, Never> {
+        let interval = fastAnswer.isOpen(at: Date()) ? Self.fastAnswerInterval : Self.idleInterval
+        let sleeper = Task<Void, Never> { try? await Task.sleep(for: interval) }
+        watchSleeper = sleeper
+        return sleeper
     }
 
     public func stopWatchingPending() {
         watchTask?.cancel()
         watchTask = nil
+        watchSleeper?.cancel()
+        watchSleeper = nil
+        fastAnswer.close()
     }
 }

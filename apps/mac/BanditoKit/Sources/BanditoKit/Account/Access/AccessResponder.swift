@@ -50,6 +50,10 @@ public final class AccessResponder {
         public var cooledDown = 0
         /// Requests another device answered first.
         public var answeredElsewhere = 0
+
+        /// Requests of other devices that this cycle left without an answer that it could give soon: the server is not
+        /// connected here yet, or the answer failed. The caller polls fast for a while.
+        public var unanswered: Int { waiting + failed }
     }
 
     /// The pause between two issues for one device and server.

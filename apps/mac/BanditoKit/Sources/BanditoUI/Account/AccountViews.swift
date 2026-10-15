@@ -354,7 +354,7 @@ struct ApproveDeviceSheet: View {
                     Task {
                         await model?.approve()
                         if model?.approved == true {
-                            await hub.refreshPending()
+                            await hub.deviceApproved()
                             close()
                         }
                     }
