@@ -1196,8 +1196,8 @@
 "ios.settings.servers.removeFailed" = "Não foi possível desconectar o servidor. Tente de novo.";
 "ios.settings.servers.rename" = "Renomear";
 "ios.settings.servers.renameTitle" = "Renomear servidor";
-"ios.settings.servers.via.cloud" = "Nuvem do Bandito";
-"ios.settings.servers.via.lan" = "LAN";
+"ios.settings.servers.via.cloud" = "Pela nuvem do Bandito";
+"ios.settings.servers.via.lan" = "Rede local";
 "ios.settings.servers.via.tailscale" = "Tailscale";
 "ios.tab.activity" = "Atividade";
 "ios.tab.comingSoon" = "Em breve";

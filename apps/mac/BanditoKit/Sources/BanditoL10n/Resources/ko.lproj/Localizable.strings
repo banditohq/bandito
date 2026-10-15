@@ -1196,8 +1196,8 @@
 "ios.settings.servers.removeFailed" = "서버를 제거하지 못했어요. 다시 시도하세요.";
 "ios.settings.servers.rename" = "이름 변경";
 "ios.settings.servers.renameTitle" = "서버 이름 변경";
-"ios.settings.servers.via.cloud" = "Bandito 클라우드";
-"ios.settings.servers.via.lan" = "LAN";
+"ios.settings.servers.via.cloud" = "Bandito 클라우드 경유";
+"ios.settings.servers.via.lan" = "로컬 네트워크";
 "ios.settings.servers.via.tailscale" = "Tailscale";
 "ios.tab.activity" = "활동";
 "ios.tab.comingSoon" = "곧 제공";

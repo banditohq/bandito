@@ -29,15 +29,22 @@ struct NewTaskButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Image(systemName: "square.and.pencil")
-            .font(.system(size: 22, weight: .semibold))
-            .foregroundStyle(Color.Bandito.onSignal)
-            .frame(width: 56, height: 56)
-            .background(Circle().fill(Color.Bandito.signal))
-            .shadow(color: Color.Bandito.signalGlow.opacity(0.35), radius: 10, x: 0, y: 4)
-            .scaleEffect(pressing && !reduceMotion ? 0.92 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: pressing)
-            .contentShape(Circle())
+        ZStack {
+            Circle().fill(Color.Bandito.text)
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Color.Bandito.bg)
+            // The one orange mark: a dot in the top right, as on the cream primary button (a signal dot, never a fill).
+            Circle()
+                .fill(Color.Bandito.signalFill)
+                .frame(width: 8, height: 8)
+                .offset(x: 17, y: -17)
+        }
+        .frame(width: 56, height: 56)
+        .shadow(color: Color.Bandito.bg.opacity(0.35), radius: 12, x: 0, y: 4)
+        .scaleEffect(pressing && !reduceMotion ? 0.92 : 1)
+        .animation(reduceMotion ? nil : BanditoMotion.ease, value: pressing)
+        .contentShape(Circle())
             .onChange(of: touching) { _, down in
                 guard !down else { return }
                 cancelPress()

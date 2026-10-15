@@ -1196,7 +1196,7 @@
 "ios.settings.servers.removeFailed" = "无法断开服务器，请重试。";
 "ios.settings.servers.rename" = "重命名";
 "ios.settings.servers.renameTitle" = "重命名服务器";
-"ios.settings.servers.via.cloud" = "Bandito 云";
+"ios.settings.servers.via.cloud" = "通过 Bandito 云";
 "ios.settings.servers.via.lan" = "局域网";
 "ios.settings.servers.via.tailscale" = "Tailscale";
 "ios.tab.activity" = "动态";

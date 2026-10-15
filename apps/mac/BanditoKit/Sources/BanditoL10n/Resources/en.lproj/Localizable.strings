@@ -1196,8 +1196,8 @@
 "ios.settings.servers.removeFailed" = "Could not remove the server. Try again.";
 "ios.settings.servers.rename" = "Rename";
 "ios.settings.servers.renameTitle" = "Rename server";
-"ios.settings.servers.via.cloud" = "Bandito cloud";
-"ios.settings.servers.via.lan" = "LAN";
+"ios.settings.servers.via.cloud" = "Via Bandito cloud";
+"ios.settings.servers.via.lan" = "Local network";
 "ios.settings.servers.via.tailscale" = "Tailscale";
 "ios.tab.activity" = "Activity";
 "ios.tab.comingSoon" = "Coming soon";

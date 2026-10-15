@@ -334,7 +334,7 @@ private struct AgentChip: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: BanditoRadius.md, style: .continuous)
-                    .stroke(selected ? Color.Bandito.signal : Color.clear, lineWidth: 2)
+                    .stroke(selected ? Color.Bandito.text.opacity(0.45) : Color.clear, lineWidth: 1.5)
             )
         }
         .buttonStyle(.plain)

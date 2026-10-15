@@ -30,10 +30,13 @@ struct InboxScreen: View {
             Group {
                 if items.isEmpty {
                     emptyState
+                        .transition(.opacity)
                 } else {
                     list(items)
                 }
             }
+            // Rows that come in or go out (an answer, a new approval) and the empty state animate on the list's ids.
+            .animation(reduceMotion ? nil : BanditoMotion.ease, value: items.map(\.id))
             .navigationTitle(L10n.Ios.Tab.inbox)
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -82,6 +85,7 @@ struct InboxScreen: View {
                 Section {
                     ForEach(section.items) { item in
                         row(item)
+                            .transition(.opacity.combined(with: .move(edge: .trailing)))
                     }
                 } header: {
                     if let title = section.title {
@@ -164,8 +168,8 @@ struct InboxScreen: View {
         if outcome == .failed { failed = true }
     }
 
-    /// Sends the person's answer to the item's server. A sent answer hides the item (with the brand's ease, none with
-    /// Reduce Motion) and gives a haptic: success for an answer that lets the agent go on, warning for a refusal.
+    /// Sends the person's answer to the item's server. A sent answer hides the item (the list animates its removal) and
+    /// gives a haptic: success for an answer that lets the agent go on, warning for a refusal.
     @discardableResult
     private func act(_ item: InboxItem, _ action: InboxAct) async -> InboxAnswer.Outcome {
         guard let server = servers.first(where: { $0.id == item.serverID }) else { return .failed }
@@ -197,9 +201,7 @@ struct InboxScreen: View {
             } else {
                 generator.notificationOccurred(.success)
             }
-            withAnimation(reduceMotion ? nil : BanditoMotion.ease) {
-                _ = answered.insert(item.id)
-            }
+            _ = answered.insert(item.id)
             return .sent
         } catch {
             return .failed

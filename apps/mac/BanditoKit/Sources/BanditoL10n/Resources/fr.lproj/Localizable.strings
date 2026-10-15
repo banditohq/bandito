@@ -1196,8 +1196,8 @@
 "ios.settings.servers.removeFailed" = "Impossible de déconnecter le serveur. Réessayez.";
 "ios.settings.servers.rename" = "Renommer";
 "ios.settings.servers.renameTitle" = "Renommer le serveur";
-"ios.settings.servers.via.cloud" = "Cloud Bandito";
-"ios.settings.servers.via.lan" = "LAN";
+"ios.settings.servers.via.cloud" = "Via le cloud Bandito";
+"ios.settings.servers.via.lan" = "Réseau local";
 "ios.settings.servers.via.tailscale" = "Tailscale";
 "ios.tab.activity" = "Activité";
 "ios.tab.comingSoon" = "Bientôt disponible";

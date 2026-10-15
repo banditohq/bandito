@@ -1196,8 +1196,8 @@
 "ios.settings.servers.removeFailed" = "Не удалось отключить сервер. Попробуйте ещё раз.";
 "ios.settings.servers.rename" = "Переименовать";
 "ios.settings.servers.renameTitle" = "Переименовать сервер";
-"ios.settings.servers.via.cloud" = "Облако Bandito";
-"ios.settings.servers.via.lan" = "LAN";
+"ios.settings.servers.via.cloud" = "Через облако Bandito";
+"ios.settings.servers.via.lan" = "Локальная сеть";
 "ios.settings.servers.via.tailscale" = "Tailscale";
 "ios.tab.activity" = "Активность";
 "ios.tab.comingSoon" = "Скоро";

@@ -1196,8 +1196,8 @@
 "ios.settings.servers.removeFailed" = "Der Server konnte nicht getrennt werden. Versuchen Sie es noch einmal.";
 "ios.settings.servers.rename" = "Umbenennen";
 "ios.settings.servers.renameTitle" = "Server umbenennen";
-"ios.settings.servers.via.cloud" = "Bandito-Cloud";
-"ios.settings.servers.via.lan" = "LAN";
+"ios.settings.servers.via.cloud" = "Über die Bandito-Cloud";
+"ios.settings.servers.via.lan" = "Lokales Netzwerk";
 "ios.settings.servers.via.tailscale" = "Tailscale";
 "ios.tab.activity" = "Aktivität";
 "ios.tab.comingSoon" = "Demnächst";

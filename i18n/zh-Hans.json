@@ -3435,7 +3435,7 @@
   "failure.reason.relayLimit": "已达到 Bandito 云的月流量上限。请通过 Tailscale 或同一网络连接，或等到下个月。",
   "failure.reason.relayBusy": "云连接过多。请等待一分钟后重试。",
   "failure.reason.relayKeyMismatch": "这不是此设备信任的服务器：密钥不同。如果服务器被重装过，请重新连接 iPhone。",
-  "ios.settings.servers.via.cloud": "Bandito 云",
+  "ios.settings.servers.via.cloud": "通过 Bandito 云",
   "ios.connect.confirm.bodyCloud": "此链接想通过 Bandito 云将这台 iPhone 连接到服务器。仅当它是您自己创建的才继续。",
   "ios.connect.confirm.bodyScanCloud": "扫描的二维码将通过 Bandito 云把这台 iPhone 连接到服务器。仅当它是您自己的二维码才继续。",
   "ios.connect.done.viaCloud": "已通过 Bandito 云连接。",
