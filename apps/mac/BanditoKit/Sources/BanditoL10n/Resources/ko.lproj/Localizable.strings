@@ -1186,9 +1186,10 @@
 "ios.settings.notifications.allow" = "알림 허용";
 "ios.settings.notifications.answers" = "준비된 답변";
 "ios.settings.notifications.approvals" = "승인 및 질문";
-"ios.settings.notifications.background" = "앱이 닫혀 있는 동안 Bandito는 가끔 확인해요. 즉시 알림은 향후 업데이트와 함께 나와요.";
+"ios.settings.notifications.background" = "앱이 닫혀 있어도 알림은 Bandito 클라우드를 통해 도착합니다. 푸시를 지원하지 않는 서버는 가끔 확인합니다.";
 "ios.settings.notifications.denied" = "Bandito 알림이 iOS 설정에서 꺼져 있어요.";
 "ios.settings.notifications.errors" = "오류";
+"ios.settings.notifications.pushUnavailable" = "푸시를 사용할 수 없습니다. 앱을 열면 알림이 도착합니다.";
 "ios.settings.openSettings" = "iOS 설정 열기";
 "ios.settings.security.enableReason" = "Face ID 잠금 켜기";
 "ios.settings.security.faceIDLock" = "Face ID 잠금";

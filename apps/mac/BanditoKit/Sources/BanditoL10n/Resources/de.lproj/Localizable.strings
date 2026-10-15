@@ -1186,9 +1186,10 @@
 "ios.settings.notifications.allow" = "Mitteilungen erlauben";
 "ios.settings.notifications.answers" = "Fertige Antworten";
 "ios.settings.notifications.approvals" = "Genehmigungen und Fragen";
-"ios.settings.notifications.background" = "Während die App geschlossen ist, prüft Bandito von Zeit zu Zeit. Sofortige Mitteilungen kommen mit einem späteren Update.";
+"ios.settings.notifications.background" = "Bei geschlossener App kommen Mitteilungen über die Bandito-Cloud. Ein Server ohne Push wird von Zeit zu Zeit geprüft.";
 "ios.settings.notifications.denied" = "Mitteilungen für Bandito sind in den iOS-Einstellungen aus.";
 "ios.settings.notifications.errors" = "Fehler";
+"ios.settings.notifications.pushUnavailable" = "Push ist nicht verfügbar. Mitteilungen kommen, wenn die App geöffnet wird.";
 "ios.settings.openSettings" = "iOS-Einstellungen öffnen";
 "ios.settings.security.enableReason" = "Face-ID-Sperre einschalten";
 "ios.settings.security.faceIDLock" = "Face-ID-Sperre";

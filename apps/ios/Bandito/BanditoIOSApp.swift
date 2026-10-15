@@ -13,6 +13,8 @@ struct BanditoIOSApp: App {
         // The background check and the notification categories are registered before the first screen (Apple's rule).
         BackgroundRefresh.register()
         IOSNotifications.shared.start()
+        // A press on a notification's button can wake the app with no screen: its servers come from the session.
+        IOSNotifications.shared.source = SessionNotificationSource(session: .shared)
         // The Stop button of a Live Activity runs in this process, possibly woken by it alone.
         TurnStopRelay.handler = { serverID, agentID in
             await TurnActivities.shared.stop(serverID: serverID, agentID: agentID)

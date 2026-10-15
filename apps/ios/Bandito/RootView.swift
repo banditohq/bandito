@@ -125,6 +125,7 @@ struct RootView: View {
             account.setActive(phase == .active)
             if phase == .background { session.saveAgentCaches() }
             if phase == .active { TurnActivities.shared.appBecameActive() }
+            if phase == .active { PushCoordinator.shared.appBecameActive() }
         }
         // An account that is ready ends the onboarding: the servers of the account come to this iPhone without pairing.
         .onChange(of: account.stage == .ready) { _, isReady in
@@ -231,6 +232,8 @@ struct RootView: View {
                 return
             }
             session.loadIfNeeded()
+            // Push: a token from Apple for the cloud, and each connected server told where to send (docs/IOS_APP.md, Push).
+            PushCoordinator.shared.start(session: session, settings: settings)
             if PairingLaunchHooks.opensConnect() {
                 incomingLink = PairingLaunchHooks.link()
                 connect = ConnectRequest(mode: .scanCode)

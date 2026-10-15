@@ -295,13 +295,19 @@ extension AgentNotice {
     @MainActor
     public static func notice(for event: Event, in server: ServerModel) -> AgentNotice? {
         let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
+        return notice(for: event, agentName: name, quietTurn: { server.thread(for: event.agentId).quietTurn })
+    }
+
+    /// The same rules without a server: the agent's name is given, and `quietTurn` says (only when asked, for a finished
+    /// turn) whether the turn was quiet. The iPhone's push extension has the event and the name from the push alone.
+    public static func notice(for event: Event, agentName name: String, quietTurn: () -> Bool) -> AgentNotice? {
         switch event.body {
         case .approvalRequested(let approvalID, _, let tool, let title, let command, _, _, _):
             return .approval(
                 agentID: event.agentId, agentName: name, approvalID: approvalID, title: title, command: command,
                 reviewOnly: tool == AgentCreateSummary.tool)
         case .turnCompleted(_, .ok, _, _):
-            if server.thread(for: event.agentId).quietTurn { return nil }
+            if quietTurn() { return nil }
             return .finished(agentID: event.agentId, agentName: name)
         case .error(let message):
             return .failed(agentID: event.agentId, agentName: name, message: message)

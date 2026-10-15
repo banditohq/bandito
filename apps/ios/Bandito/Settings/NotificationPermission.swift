@@ -25,6 +25,9 @@ enum SystemNotifications {
 
     static func requestPermission() async -> NotificationPermission {
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
-        return await permission()
+        let result = await permission()
+        // Allowed just now: the phone asks Apple for a push token and tells the servers.
+        if result == .allowed { await PushCoordinator.shared.permissionGranted() }
+        return result
     }
 }
