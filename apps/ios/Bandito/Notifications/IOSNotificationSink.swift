@@ -105,6 +105,33 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
         }
     }
 
+    /// The chat was read on another device: the delivered notices of that chat go, the ones that wait for an answer stay.
+    func removeDelivered(agentID: String, serverID: UUID) {
+        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+            let identifiers = delivered
+                .filter {
+                    Self.clearsWhenRead(
+                        threadID: $0.request.content.threadIdentifier, userInfo: $0.request.content.userInfo,
+                        agentID: agentID, serverID: serverID)
+                }
+                .map(\.request.identifier)
+            guard !identifiers.isEmpty else { return }
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
+        }
+    }
+
+    /// Whether a delivered notice goes when its chat is read on another device. It must belong to that chat (its thread
+    /// is the agent, and its server is that server when it names one). An approval or a question stays: the person still
+    /// has to answer it.
+    nonisolated static func clearsWhenRead(
+        threadID: String, userInfo: [AnyHashable: Any], agentID: String, serverID: UUID
+    ) -> Bool {
+        guard threadID == agentID else { return false }
+        if let server = userInfo["server"] as? String, server != serverID.uuidString { return false }
+        let waiting = ["approvalID", "formID"].contains { !((userInfo[$0] as? String) ?? "").isEmpty }
+        return !waiting
+    }
+
     /// The app is open: the change shows in the app, so no banner. A push (`UNPushNotificationTrigger`) is held back the same
     /// way as a local notice: the app makes its own for what the person should see, and a push that came meanwhile is not shown.
     nonisolated func userNotificationCenter(

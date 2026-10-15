@@ -167,6 +167,9 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     /// The status from the agent's newest `agent.status` event; `nil` before any, or when the daemon predates the field.
     /// Live `agent.status` events keep it current.
     public var status: AgentStatus?
+    /// The seq the owner's chat with this agent was read to on any of the owner's devices (`read_seq`); `nil` when none
+    /// has read it, or the daemon predates the field. It moves the unread count here, and is not sent back.
+    public var readSeq: Int64?
     /// Approvals of this agent that wait for an answer, as a count (`pending_approvals`). Only a daemon from before
     /// `pending_approval_ids` sends it; see `pendingApprovalIds`.
     public var pendingApprovals: Int
@@ -190,6 +193,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         paused: Bool = false,
         lastMessage: LastMessage? = nil,
         status: AgentStatus? = nil,
+        readSeq: Int64? = nil,
         pendingApprovals: Int = 0,
         pendingApprovalIds: Set<String> = [],
         reportsPendingApprovalIds: Bool = false,
@@ -234,6 +238,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         self.paused = paused
         self.lastMessage = lastMessage
         self.status = status
+        self.readSeq = readSeq
         self.pendingApprovals = pendingApprovals
         self.pendingApprovalIds = pendingApprovalIds
         self.reportsPendingApprovalIds = reportsPendingApprovalIds
@@ -276,6 +281,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         migratedTo = try c.decodeIfPresent(String.self, forKey: .migratedTo)
         migratedAt = try c.decodeIfPresent(Int64.self, forKey: .migratedAt)
         status = try c.decodeIfPresent(AgentStatus.self, forKey: .status)
+        readSeq = try c.decodeIfPresent(Int64.self, forKey: .readSeq)
         pendingApprovals = try c.decodeIfPresent(Int.self, forKey: .pendingApprovals) ?? 0
         pendingApprovalIds = Set(try c.decodeIfPresent([String].self, forKey: .pendingApprovalIds) ?? [])
         reportsPendingApprovalIds = c.contains(.pendingApprovalIds)
@@ -502,6 +508,9 @@ public enum EventBody: Sendable, Hashable {
     case agentCreatedBy(byAgentId: String, byName: String, approvedBy: DecidedBy)
     /// A reaction on the message with that `seq`; no `emoji` means it was taken off.
     case reaction(seq: Int64, emoji: String?, by: ReactionBy)
+    /// The owner read the chat to `seq` on another device. Transient (seq 0): it moves this device's unread count, and
+    /// nothing is sent back (see `AgentThreadState.applyRemoteRead`).
+    case readMark(seq: Int64)
     /// The Telegram bot or its linked chats changed (`telegram.changed`, no data). Read `telegram.status` again.
     case telegramChanged
     /// The relay's status changed (`relay.changed`, no data). Read `relay.status` again.
@@ -560,6 +569,7 @@ extension Event: Decodable {
         var requestId: String; var status: ConnectStatus; var integration: String?
     }
     private struct ReactionP: Decodable { var seq: Int64; var emoji: String?; var by: ReactionBy }
+    private struct ReadMarkP: Decodable { var seq: Int64 }
     private struct QuickRepliesP: Decodable {
         var buttons: [QuickReplyButton]; var link: QuickReplyLink?; var progress: QuickReplyProgress?
     }
@@ -662,6 +672,8 @@ extension Event: Decodable {
             body = .integrationRequestEnded(requestId: x.requestId, status: x.status, integration: x.integration)
         case "reaction":
             let x = try p(ReactionP.self); body = .reaction(seq: x.seq, emoji: x.emoji, by: x.by)
+        case "read_mark":
+            body = .readMark(seq: try p(ReadMarkP.self).seq)
         // A kind newer than the app is never allowed to break a page of history: one that does not read is unknown.
         case "agent.quick_replies":
             if let x = try? p(QuickRepliesP.self) {

@@ -404,6 +404,10 @@ public final class ServerModel: Identifiable {
                 }
             }
         self.reconnectDelay = reconnectDelay ?? { ServerModel.backoff(attempt: $0) }
+        threads.readSync.send = { [weak self] agentID, seq in
+            guard let self else { return }
+            try await self.sendReadMark(agentID: agentID, seq: seq)
+        }
     }
 
     /// 1, 2, 4, 8, 16, then 30 seconds between reconnect attempts.
@@ -553,6 +557,7 @@ public final class ServerModel: Identifiable {
             try checkCurrent(attempt)
             connectionRoute = await (current as? RouteReporting)?.connectedRoute
             client = c
+            threads.readSync.resume()
             pump = startPump(c)
             notificationPump = startNotificationPump(c)
             let daemon = try await c.call("daemon.info", NoParams(), as: DaemonInfo.self)
@@ -746,6 +751,11 @@ public final class ServerModel: Identifiable {
     /// Fold one event into the model (also used by tests).
     public func apply(_ e: Event) {
         if e.seq > lastSeq { lastSeq = e.seq }
+        // Another device read the chat: its unread count follows, and nothing goes back to the daemon.
+        if case .readMark(let seq) = e.body {
+            if threads.box(e.agentId).applyRemoteRead(seq) { onRemoteRead?(e.agentId) }
+            return
+        }
         if case .telegramChanged = e.body {
             telegramRevision &+= 1
             return
@@ -871,7 +881,20 @@ public final class ServerModel: Identifiable {
         agentsReadAt = Date()
         agentsListedAt = Date()
         agentsFromCache = false
+        applyReadSeqs(list)
     }
+
+    /// The read marks the daemon holds (`read_seq` of `agents.list`): each chat moves to its mark, as a mark of another
+    /// device does (`AgentThreadState.applyRemoteRead`).
+    func applyReadSeqs(_ list: [Agent]) {
+        for agent in list {
+            if let seq = agent.readSeq, threads.box(agent.id).applyRemoteRead(seq) { onRemoteRead?(agent.id) }
+        }
+    }
+
+    /// Called when another device moved the read mark of an agent's chat (a `read_mark` event, or the list after a
+    /// reconnect moved one): the app takes the chat's notices away, as the person has read them on that device.
+    public var onRemoteRead: ((_ agentID: String) -> Void)?
 
     /// Agents that exist only in the app, for the performance scenarios (the QA command `perf` and the smoothness
     /// check of the Help menu, which runs on a demo daemon): a thread built in memory, no daemon behind it.

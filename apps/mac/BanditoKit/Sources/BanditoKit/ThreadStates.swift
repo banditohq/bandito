@@ -63,25 +63,46 @@ public final class AgentThreadState {
     /// The seq the chat was read to (see `markRead`); nil until a loaded thread is seen. Not observed: only the count is.
     @ObservationIgnored private var readSeq: Int64?
     @ObservationIgnored private var readMarks: ReadMarks?
+    /// The sending of this server's marks to the daemon; shared by the boxes of the server.
+    @ObservationIgnored private var readSync: ReadMarkSync?
     @ObservationIgnored private var agentID: String?
     /// What `activity` was built from (`refreshActivity`).
     @ObservationIgnored private var activityKey: ActivityKey?
 
     nonisolated init() {}
 
-    /// Set by `ThreadStates` when the box is made: where its read mark is kept, and for which agent.
-    func attach(readMarks: ReadMarks?, agentID: String) {
+    /// Set by `ThreadStates` when the box is made: where its read mark is kept, for which agent, and how the mark
+    /// reaches the other devices.
+    func attach(readMarks: ReadMarks?, agentID: String, readSync: ReadMarkSync?) {
         self.readMarks = readMarks
         self.agentID = agentID
+        self.readSync = readSync
     }
 
     /// The chat was looked at: its window is active, it is on screen and follows the newest message. Every reply
-    /// shown so far is read now. Writes only when the mark moves.
+    /// shown so far is read now. Writes only when the mark moves, and only a move is sent to the daemon.
     public func markRead() {
         guard loaded, let current = resolveReadSeq(), thread.lastSeq > current else { return }
         moveRead(to: thread.lastSeq)
         recount()
         refreshActivity()
+        if let agentID { readSync?.schedule(agentID: agentID, seq: thread.lastSeq) }
+    }
+
+    /// The chat was read to `seq` on another device (a `read_mark` event, or the `read_seq` of `agents.list`). The mark
+    /// moves here as a local read would, but nothing goes back to the daemon: the other device has it. A mark never
+    /// moves back, and a loaded thread cuts it to its newest seq (the daemon cuts it too).
+    /// Returns whether the mark moved.
+    @discardableResult
+    public func applyRemoteRead(_ seq: Int64) -> Bool {
+        let stored = agentID.flatMap { readMarks?.seq(for: $0) }
+        let current = resolveReadSeq() ?? stored
+        let target = loaded ? min(seq, thread.lastSeq) : seq
+        guard target > (current ?? 0) else { return false }
+        moveRead(to: target)
+        recount()
+        refreshActivity()
+        return true
     }
 
     /// The seq the chat was read to. The first time a loaded thread is seen with no stored mark, all of it counts as read.
@@ -212,6 +233,9 @@ public final class ThreadStates {
     private var boxes: [String: AgentThreadState] = [:]
     /// Where the read marks of the chats are kept; nil keeps them in memory only (tests).
     private let readMarks: ReadMarks?
+    /// Sends the marks of this server's chats to its daemon. The server sets its `send` (see `ServerModel`); until
+    /// then a read is kept on this device only.
+    public let readSync = ReadMarkSync()
 
     init(readMarks: ReadMarks? = nil) {
         self.readMarks = readMarks
@@ -221,7 +245,7 @@ public final class ThreadStates {
     public func box(_ agentId: String) -> AgentThreadState {
         if let box = boxes[agentId] { return box }
         let box = AgentThreadState()
-        box.attach(readMarks: readMarks, agentID: agentId)
+        box.attach(readMarks: readMarks, agentID: agentId, readSync: readSync)
         boxes[agentId] = box
         return box
     }
