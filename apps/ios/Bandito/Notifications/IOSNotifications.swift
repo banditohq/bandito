@@ -95,6 +95,9 @@ final class IOSNotifications {
     /// One event of a server (live, or read by the background check): shows its notice when there is one. The cursor
     /// moves past every event, so a background check never repeats one.
     func ingest(_ event: Event, from server: ServerModel) {
+        // Every event can change what waits in the Inbox (an approval answered on the Mac makes no notice), so the badge
+        // follows each one, not only the ones that show a notice.
+        defer { updateBadge() }
         cursor.advance(serverID: server.id, to: event.seq)
         if case .approvalResolved(let approvalID, _, _, _) = event.body {
             service.approvalSettled(approvalID)
@@ -103,7 +106,6 @@ final class IOSNotifications {
         guard !isViewingAgent(server: server, agent: event.agentId) else { return }
         service.handle(
             made.notice, serverID: server.id, key: Self.key(serverID: server.id, seq: event.seq), risky: made.risky)
-        updateBadge()
     }
 
     /// Whether the person is looking at this agent's chat now (the chat is open on the screen): its notifications are
@@ -114,7 +116,11 @@ final class IOSNotifications {
 
     /// The badge of the app icon: the number of things waiting in the Inbox.
     func updateBadge() {
-        let count = InboxRules.badge(of: source.servers)
+        setBadge(InboxRules.badge(of: source.servers))
+    }
+
+    /// Sends the number to the system. A property so a test can read what the badge would show.
+    var setBadge: (Int) -> Void = { count in
         UNUserNotificationCenter.current().setBadgeCount(count) { _ in }
     }
 
