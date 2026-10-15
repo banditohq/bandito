@@ -155,14 +155,14 @@ Proof, sent by the new device: `base64url(HMAC-SHA256(tMac, "bandito-join-proof:
 
 Request: `{ "ticket_hash": "<64 lower-case hex>" }`. Response: `{ "ok": true, "ticket_id": "...", "expires_at": 1760572800 }`.
 
-`expires_at` is Unix seconds, an integer. The ticket lives 5 minutes. A `ticket_hash` that already exists is `409 conflict`. Limits: 10 creations per hour per device, at most 3 open tickets per user. Over a limit: `429 rate`.
+`expires_at` is Unix seconds, an integer. The ticket lives 5 minutes. A `ticket_hash` that already exists is `409 conflict`. Limits: 10 creations per hour per device (over it: `429 rate`). An account keeps at most 3 unused, unexpired tickets: a fourth is not refused, the cloud deletes the oldest one (so a code that was shown earlier and is replaced stops working).
 
 ### `GET /auth/ticket/:id` (signed in)
 
 Response: `{ "ok": true, "status": "open" | "claiming" | "expired" | "claimed", "device"?: { id, name, platform, public_key, signing_key }, "proof"?: "<b64url>" }`.
 
 - `open`: nobody has scanned it yet.
-- `claiming`: just redeemed; the device is being linked. The Mac keeps waiting.
+- `claiming`: just redeemed; the device is being linked. The Mac keeps waiting. If the sign-in fails on the cloud's side it reads `expired` after 30 seconds, and the Mac makes a new code.
 - `expired`: the time ran out.
 - `claimed`: `device` and `proof` are set. The Mac checks the proof.
 

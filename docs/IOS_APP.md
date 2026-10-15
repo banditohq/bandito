@@ -84,7 +84,11 @@ email code, the same Kit logic as the Mac. A new iPhone shows its own code and w
 codes, then the iPhone shows the Mac's code to confirm before it keeps the sync key. Then the servers of the account are
 listed with their state: "Waiting for the Mac…" while a request is open, "Connected" once the Mac issued this iPhone a
 token (docs/RELAY.md, "One account on every device"). Sign out parks the sync key, so signing in again needs no approval.
-Code: `apps/ios/Bandito/Account/`.
+"Sign in with a Mac" is the first button of the sign-in screen: the Mac shows a QR code (profile → Devices → "Add iPhone or
+iPad", or the Connect iPhone wizard), the iPhone scans it (the in-app scanner, the connect sheet's scanner, or the system
+camera, which opens `bandito://join`), redeems the ticket and takes the key from that Mac without a code to compare: the key
+counts only when its sender is the Mac of the code. A phone that is signed in already says so and asks for its servers
+(docs/ACCOUNTS_API.md, "Sign in with a Mac"). Code: `apps/ios/Bandito/Account/`.
 
 ## iOS-native extras (phase order)
 
