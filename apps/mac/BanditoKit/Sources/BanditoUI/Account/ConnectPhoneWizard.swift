@@ -22,6 +22,9 @@ struct ConnectPhoneWizard: View {
     @State private var joinModel: JoinQRModel?
     /// The phone access turned on in the background for the join code (nil on the pairing path).
     @State private var warmup: PhoneAccessWarmup?
+    /// One cloud controller per server for both paths, so the join path's background access and the pairing path never
+    /// register the same server twice.
+    @State private var relays = SharedRelayControllers()
     /// The wizard went away: a join model made after that is closed at once.
     @State private var disappeared = false
     /// The task that makes the join model; cancelled when the wizard goes away.
@@ -407,22 +410,23 @@ struct ConnectPhoneWizard: View {
         useJoin = false
         joinModel?.close()
         joinModel = nil
+        let warming = warmup
         warmup?.cancel()
-        startPairCode()
+        // An access that is being turned on finishes first: the pairing path then finds the server on and registers
+        // nothing a second time.
+        Task { @MainActor in
+            await warming?.settle()
+            startPairCode()
+        }
     }
 
     /// The first path: the join code now, the access on every server in the background.
     private func startJoinFirst() {
         if warmup == nil {
             let hub = hub
+            let relays = relays
             warmup = PhoneAccessWarmup { server in
-                let controller = RelayController(
-                    host: server,
-                    registrar: { [hub] in
-                        guard await hub.signedIn else { return nil }
-                        return try await hub.prepare()
-                    })
-                let ready = await controller.enable()
+                let ready = await relays.enable(relays.controller(for: server, hub: hub))
                 if ready { hub.requestAccessCycle() }
                 return ready
             }
@@ -439,16 +443,10 @@ struct ConnectPhoneWizard: View {
     private func startPairCode() {
         guard model == nil, !disappeared else { return }
         let hub = hub
+        let relays = relays
         let made = ConnectPhoneModel(
             candidates: app.servers,
-            makeController: { server in
-                RelayController(
-                    host: server,
-                    registrar: { [hub] in
-                        guard await hub.signedIn else { return nil }
-                        return try await hub.prepare()
-                    })
-            })
+            makeController: { server in relays.controller(for: server, hub: hub) })
         model = made
         made.start()
     }
@@ -464,5 +462,33 @@ struct ConnectPhoneWizard: View {
         case .pairCode:
             startPairCode()
         }
+    }
+}
+
+/// The cloud controllers of the wizard, one per server. A controller that is busy (the other path is turning the access
+/// on) is waited for instead of asked again: `RelayController.enable` answers false while it is busy.
+@MainActor
+final class SharedRelayControllers {
+    private var controllers: [UUID: RelayController] = [:]
+
+    func controller(for server: any PhoneWizardServer, hub: AccountHub) -> RelayController {
+        if let made = controllers[server.wizardID] { return made }
+        let made = RelayController(
+            host: server,
+            registrar: { [hub] in
+                guard await hub.signedIn else { return nil }
+                return try await hub.prepare()
+            })
+        controllers[server.wizardID] = made
+        return made
+    }
+
+    /// Turns the access on, or waits for the run already under way and reads its outcome.
+    func enable(_ controller: RelayController) async -> Bool {
+        guard controller.isBusy else { return await controller.enable() }
+        while controller.isBusy {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        return controller.isConnected
     }
 }

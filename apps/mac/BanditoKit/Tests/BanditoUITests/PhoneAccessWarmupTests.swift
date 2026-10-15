@@ -108,4 +108,43 @@ import Testing
         warmup.start([first, second])
         #expect(await settle(warmup) { $0 == .failed(["home", "my-home"]) })
     }
+
+    @Test func closingTheJoinCodeLetsTheEnableFinishAndSettleWaitsForIt() async {
+        let server = offServer("home")
+        let warmup = warmup()
+        warmup.start([server])
+        for _ in 0..<400 where !warmup.hasEnableUnderWay {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(warmup.hasEnableUnderWay)
+        warmup.cancel()
+        // The lines go with the join code; the registration already asked for is not cut off half-way.
+        #expect(warmup.rows.isEmpty)
+        await warmup.settle()
+        #expect(!warmup.hasEnableUnderWay)
+        #expect(server.enableCalls == 1)
+        #expect(server.status.enabled == true)
+    }
+
+    @Test func tryAgainWhileAServerIsStillAskedDoesNothing() async {
+        let server = offServer("home")
+        let warmup = warmup()
+        warmup.start([server])
+        warmup.retry()
+        #expect(await settle(warmup) { $0 == .ready(["home"]) })
+        #expect(server.enableCalls == 1)
+    }
+
+    @Test func twoPathsAskingOneServerRegisterItOnce() async {
+        let server = offServer("home")
+        let controller = RelayController(
+            host: server, registrar: { WizardRegistrar() }, connectTimeout: .milliseconds(300),
+            pollInterval: .milliseconds(10))
+        let relays = SharedRelayControllers()
+        async let first = relays.enable(controller)
+        async let second = relays.enable(controller)
+        let answers = await [first, second]
+        #expect(answers == [true, true])
+        #expect(server.enableCalls == 1)
+    }
 }

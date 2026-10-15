@@ -238,7 +238,7 @@ struct QuickOpenPalette: View {
                 agentID: entry.agent.id,
                 title: entry.agent.name,
                 ranges: ranked.match.ranges,
-                subtitle: [entry.agent.role, entry.agent.runtime.rawValue, folder].filter { !$0.isEmpty }
+                subtitle: [AgentRoleText.visible(entry.agent.role) ?? "", entry.agent.runtime.rawValue, folder].filter { !$0.isEmpty }
                     .joined(separator: " · "),
                 monoSubtitle: false,
                 leading: AnyView(AgentAvatarView(agent: entry.agent, server: entry.server, size: 32, mood: .idle)),

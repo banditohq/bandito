@@ -47,6 +47,9 @@ final class PhoneAccessWarmup {
     @ObservationIgnored private var targets: [any PhoneWizardServer] = []
     @ObservationIgnored private let enable: @MainActor (any PhoneWizardServer) async -> Bool
     @ObservationIgnored private var run: Task<Void, Never>?
+    /// The enable under way for each server. It is not cancelled with the wizard: a registration is never left
+    /// half-way, and the pairing path waits for it (`settle`).
+    @ObservationIgnored private var inFlight: [UUID: Task<Bool, Never>] = [:]
 
     init(enable: @escaping @MainActor (any PhoneWizardServer) async -> Bool) {
         self.enable = enable
@@ -70,6 +73,8 @@ final class PhoneAccessWarmup {
 
     /// Asks again for the servers that failed; the others keep their state.
     func retry() {
+        // A run still asking would be cut off, and its servers left "turning on".
+        guard !rows.contains(where: { $0.status == .enabling }) else { return }
         let failedIDs = Set(rows.filter { $0.status == .failed }.map(\.id))
         let failed = targets.filter { failedIDs.contains($0.wizardID) }
         guard !failed.isEmpty else { return }
@@ -79,9 +84,21 @@ final class PhoneAccessWarmup {
         go(failed)
     }
 
+    /// Stops asking further servers and forgets the lines. An enable already sent finishes on its own (`settle`).
     func cancel() {
         run?.cancel()
         run = nil
+        rows = []
+    }
+
+    /// Whether an enable was sent and has not answered yet.
+    var hasEnableUnderWay: Bool { !inFlight.isEmpty }
+
+    /// Waits until no enable is under way.
+    func settle() async {
+        for task in Array(inFlight.values) {
+            _ = await task.value
+        }
     }
 
     /// Asks the servers one after another: each answer shows as it comes.
@@ -90,11 +107,26 @@ final class PhoneAccessWarmup {
         run = Task { [weak self] in
             for server in servers {
                 guard let self, !Task.isCancelled else { return }
-                let ok = await self.enable(server)
+                let ok = await self.enableOnce(server)
                 guard !Task.isCancelled else { return }
                 self.set(server.wizardID, ok ? .ready : .failed)
             }
         }
+    }
+
+    /// One enable per server at a time: a second ask waits for the first and takes its answer.
+    private func enableOnce(_ server: any PhoneWizardServer) async -> Bool {
+        let id = server.wizardID
+        if let running = inFlight[id] { return await running.value }
+        let enable = enable
+        // The task clears its own entry, so whoever awaits it (`settle`) finds nothing under way afterwards.
+        let task = Task { @MainActor [weak self] in
+            let ok = await enable(server)
+            self?.inFlight[id] = nil
+            return ok
+        }
+        inFlight[id] = task
+        return await task.value
     }
 
     private func set(_ id: UUID, _ status: Status) {
