@@ -66,3 +66,95 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/daemon/target
         run: apps/mac/scripts/build.sh
+
+  # The iPhone app (apps/ios) builds for the Simulator and runs its unit tests. Runs in parallel with build-macos;
+  # ci.yml's `apple` job reports the result of both. No signing: the simulator build is unsigned.
+  build-ios:
+    name: build-ios
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select the newest Xcode
+        run: |
+          set -euo pipefail
+          xcode="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+
+      - name: Xcode version
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bandito-ios
+          key: ios-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/mac/BanditoKit/Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            ios-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/mac/BanditoKit/Package.resolved') }}-
+            ios-${{ runner.os }}-
+
+      - name: Build folder for the build and the tests
+        # build.sh reads BANDITO_IOS_DERIVED_DATA; the test step below uses the same folder, so it reuses the build.
+        run: |
+          set -euo pipefail
+          echo "BANDITO_IOS_DERIVED_DATA=$HOME/.cache/bandito-ios/ci" >> "$GITHUB_ENV"
+
+      - name: Build the iPhone app (Simulator, unsigned)
+        run: |
+          set -euo pipefail
+          bash apps/ios/scripts/build.sh
+
+      - name: Pick an iPhone simulator
+        # The newest iOS runtime that has an iPhone; the first iPhone in its list.
+        run: |
+          set -euo pipefail
+          python3 > "$RUNNER_TEMP/udid.txt" <<'PY'
+          import json, subprocess, sys
+          data = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))
+          best = None
+          for runtime, devices in data["devices"].items():
+              if "SimRuntime.iOS-" not in runtime:
+                  continue
+              version = tuple(int(p) for p in runtime.rsplit("iOS-", 1)[1].split("-") if p.isdigit())
+              for device in devices:
+                  if device["name"].startswith("iPhone"):
+                      if best is None or version > best[0]:
+                          best = (version, device["name"], device["udid"], runtime)
+                      break
+          if best is None:
+              sys.exit(0)
+          _, name, udid, runtime = best
+          print(udid)
+          print(f"simulator: {name} ({runtime.rsplit('.', 1)[-1]}) {udid}", file=sys.stderr)
+          PY
+          udid="$(cat "$RUNNER_TEMP/udid.txt")"
+          if [ -z "$udid" ]; then
+            echo "error: no iPhone simulator"
+            exit 1
+          fi
+          echo "UDID=$udid" >> "$GITHUB_ENV"
+
+      - name: Unit tests of the iPhone app
+        # UI test targets (BanditoIOSScreenshots, BanditoIOSPairing) are not run here.
+        run: |
+          set -euo pipefail
+          derived="$BANDITO_IOS_DERIVED_DATA"
+          log="$derived/test.log"
+          mkdir -p "$derived"
+          if ! xcodebuild -project apps/ios/BanditoIOS.xcodeproj -scheme BanditoIOS \
+              -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$derived" \
+              -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO \
+              "BUILD_DIR=$derived/Build/Products" "OBJROOT=$derived/Build/Intermediates.noindex" \
+              -only-testing:BanditoIOSTests test >"$log" 2>&1; then
+            grep -E "error:|✘|failed" "$log" | head -60 >&2 || true
+            echo "error: tests failed, full log: $log" >&2
+            exit 1
+          fi
+          grep -E "Test run with|Executed [0-9]+ tests?|\*\* TEST SUCCEEDED" "$log" || true
