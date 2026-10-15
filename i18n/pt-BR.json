@@ -3527,5 +3527,10 @@
   "ios.live.stopNoConnection": "Não foi possível parar: sem conexão",
   "ios.live.stopFailed": "Não foi possível parar. Tente no aplicativo.",
   "ios.live.setting": "Atividades ao vivo na tela de bloqueio",
-  "ios.live.settingHint": "Mostra uma tarefa que dura mais de 30 segundos, com um botão Parar."
+  "ios.live.settingHint": "Mostra uma tarefa que dura mais de 30 segundos, com um botão Parar.",
+  "ios.share.title": "Enviar para o Bandito",
+  "ios.share.empty": "Abra o Bandito e conecte um servidor",
+  "ios.share.done": "Pronto. Abra o Bandito e a mensagem será enviada sozinha",
+  "ios.share.failed": "Não foi possível salvar a mensagem. Tente novamente.",
+  "ios.share.picture": "Imagem anexada"
 }

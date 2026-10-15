@@ -1202,6 +1202,11 @@
 "ios.settings.servers.via.cloud" = "Über die Bandito-Cloud";
 "ios.settings.servers.via.lan" = "Lokales Netzwerk";
 "ios.settings.servers.via.tailscale" = "Tailscale";
+"ios.share.done" = "Fertig. Öffne Bandito, dann wird die Nachricht von selbst gesendet";
+"ios.share.empty" = "Öffne Bandito und verbinde einen Server";
+"ios.share.failed" = "Die Nachricht konnte nicht gespeichert werden. Versuche es noch einmal.";
+"ios.share.picture" = "Angehängtes Bild";
+"ios.share.title" = "An Bandito senden";
 "ios.tab.activity" = "Aktivität";
 "ios.tab.comingSoon" = "Demnächst";
 "ios.tab.crew" = "Crew";

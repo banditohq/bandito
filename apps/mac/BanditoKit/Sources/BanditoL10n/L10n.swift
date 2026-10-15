@@ -1823,6 +1823,14 @@ public enum L10n {
             }
         }
 
+        public enum Share {
+            public static var done: String { L10n.tr("ios.share.done") }
+            public static var empty: String { L10n.tr("ios.share.empty") }
+            public static var failed: String { L10n.tr("ios.share.failed") }
+            public static var picture: String { L10n.tr("ios.share.picture") }
+            public static var title: String { L10n.tr("ios.share.title") }
+        }
+
         public enum Tab {
             public static var activity: String { L10n.tr("ios.tab.activity") }
             public static var comingSoon: String { L10n.tr("ios.tab.comingSoon") }

@@ -15,6 +15,9 @@ targets:
     sources:
       - Bandito
       - Shared
+      # The share sheet's view and model, so `-share-preview` can show the sheet inside the app (DEBUG).
+      - path: BanditoShare
+        includes: [ShareView.swift, ShareModel.swift]
     dependencies:
       - package: BanditoKit
         product: BanditoKit
@@ -23,6 +26,7 @@ targets:
       - package: BanditoKit
         product: BanditoL10n
       - target: BanditoWidgets
+      - target: BanditoShare
     entitlements:
       path: Bandito/Bandito.entitlements
       properties:
@@ -112,6 +116,52 @@ targets:
         SKIP_INSTALL: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 74Q24ZMD7A
+  # The share sheet (docs/IOS_APP.md, Share extension). It never reaches a server: it leaves the task in the App Group
+  # (`Shared/ShareInbox.swift`) and opens the app, which sends it.
+  BanditoShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - BanditoShare
+      - Shared
+    dependencies:
+      - package: BanditoKit
+        product: BanditoDesign
+      - package: BanditoKit
+        product: BanditoL10n
+    info:
+      path: BanditoShare/Info.plist
+      properties:
+        CFBundleDisplayName: Bandito
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsImageWithMaxCount: 4
+    entitlements:
+      path: BanditoShare/BanditoShare.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.bandito.ios
+    settings:
+      base:
+        PRODUCT_NAME: BanditoShare
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.ios.share
+        MARKETING_VERSION: 0.1.18
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: NO
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SKIP_INSTALL: YES
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 74Q24ZMD7A
   BanditoIOSTests:
     type: bundle.unit-test
     platform: iOS
@@ -165,6 +215,7 @@ schemes:
         BanditoIOSScreenshots: [test]
         BanditoIOSPairing: [test]
         BanditoWidgets: all
+        BanditoShare: all
     test:
       targets:
         - BanditoIOSTests

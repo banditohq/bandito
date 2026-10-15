@@ -3485,5 +3485,10 @@
   "ios.live.stopNoConnection": "无法停止：没有网络连接",
   "ios.live.stopFailed": "无法停止。请在应用中重试。",
   "ios.live.setting": "锁屏上的实时活动",
-  "ios.live.settingHint": "显示耗时超过 30 秒的任务，并带有停止按钮。"
+  "ios.live.settingHint": "显示耗时超过 30 秒的任务，并带有停止按钮。",
+  "ios.share.title": "发送到 Bandito",
+  "ios.share.empty": "请打开 Bandito 并连接服务器",
+  "ios.share.done": "完成。打开 Bandito，消息会自动发送。",
+  "ios.share.failed": "无法保存消息，请重试。",
+  "ios.share.picture": "附带的图片"
 }

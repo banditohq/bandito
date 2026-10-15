@@ -3527,5 +3527,10 @@
   "ios.live.stopNoConnection": "Could not stop: no connection",
   "ios.live.stopFailed": "Couldn't stop. Try in the app.",
   "ios.live.setting": "Live Activities on the lock screen",
-  "ios.live.settingHint": "Shows a task that runs longer than 30 seconds, with a Stop button."
+  "ios.live.settingHint": "Shows a task that runs longer than 30 seconds, with a Stop button.",
+  "ios.share.title": "Send to Bandito",
+  "ios.share.empty": "Open Bandito and connect a server",
+  "ios.share.done": "Done. Open Bandito and the message will be sent on its own",
+  "ios.share.failed": "Could not save the message. Try again.",
+  "ios.share.picture": "Attached picture"
 }

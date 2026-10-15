@@ -3527,5 +3527,10 @@
   "ios.live.stopNoConnection": "No se pudo detener: sin conexión",
   "ios.live.stopFailed": "No se pudo detener. Inténtalo en la app.",
   "ios.live.setting": "Actividades en vivo en la pantalla de bloqueo",
-  "ios.live.settingHint": "Muestra una tarea que dura más de 30 segundos, con un botón para detenerla."
+  "ios.live.settingHint": "Muestra una tarea que dura más de 30 segundos, con un botón para detenerla.",
+  "ios.share.title": "Enviar a Bandito",
+  "ios.share.empty": "Abre Bandito y conecta un servidor",
+  "ios.share.done": "Listo. Abre Bandito y el mensaje se enviará solo",
+  "ios.share.failed": "No se pudo guardar el mensaje. Inténtalo de nuevo.",
+  "ios.share.picture": "Imagen adjunta"
 }

@@ -3526,5 +3526,10 @@
   "ios.live.stopNoConnection": "Anhalten nicht möglich: keine Verbindung",
   "ios.live.stopFailed": "Anhalten nicht möglich. Versuchen Sie es in der App.",
   "ios.live.setting": "Live-Aktivitäten auf dem Sperrbildschirm",
-  "ios.live.settingHint": "Zeigt eine Aufgabe, die länger als 30 Sekunden dauert, mit einer Stopp-Taste."
+  "ios.live.settingHint": "Zeigt eine Aufgabe, die länger als 30 Sekunden dauert, mit einer Stopp-Taste.",
+  "ios.share.title": "An Bandito senden",
+  "ios.share.empty": "Öffne Bandito und verbinde einen Server",
+  "ios.share.done": "Fertig. Öffne Bandito, dann wird die Nachricht von selbst gesendet",
+  "ios.share.failed": "Die Nachricht konnte nicht gespeichert werden. Versuche es noch einmal.",
+  "ios.share.picture": "Angehängtes Bild"
 }

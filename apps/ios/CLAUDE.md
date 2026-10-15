@@ -124,6 +124,15 @@ The screen every day. Read the rules before changing it; each came from the Mac'
   `Text(timerInterval:)`: the system archives that text and the extension crashes (the timer uses the system's mono font).
 - Debug: `-demo -live-demo` starts Forge's activity, "Done" after 20 s (`-live-demo-seconds N`). On the Simulator the first
   request asks the system's consent on the lock screen ("Always allow"); the Island's pixels are not in `simctl` screenshots.
+## The share extension (`BanditoShare/`)
+
+- `ShareViewController` hosts the SwiftUI `ShareView`; `ShareModel` is its state. The agents come from the widget snapshot's
+  `directory` (so no server list of its own). The extension writes `ShareInbox` and opens `bandito://share/<id>` through the
+  responder chain (no `UIApplication.shared` in an extension); it never calls a server and never reads the Keychain.
+- The app side is `Share/ShareImporter.swift` (drained on a `.share` link, on `.active`, when servers load and when one
+  connects; not while Face ID covers the app). Remove a task only after `ChatOutbox.enqueue`.
+- `ShareView` and `ShareModel` are also compiled into the app for `-share-preview` (DEBUG; `-share-empty` for no agents).
+- The extension has a ~120 MB memory limit: pictures are read one at a time and shrunk with ImageIO (`ShareLoader`).
 
 ## Known gaps before a release
 

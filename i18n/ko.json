@@ -3485,5 +3485,10 @@
   "ios.live.stopNoConnection": "중지할 수 없음: 연결 없음",
   "ios.live.stopFailed": "중지하지 못했습니다. 앱에서 다시 시도해 주세요.",
   "ios.live.setting": "잠금 화면의 실시간 현황",
-  "ios.live.settingHint": "30초보다 오래 걸리는 작업을 중지 버튼과 함께 표시합니다."
+  "ios.live.settingHint": "30초보다 오래 걸리는 작업을 중지 버튼과 함께 표시합니다.",
+  "ios.share.title": "Bandito로 보내기",
+  "ios.share.empty": "Bandito를 열고 서버를 연결하세요",
+  "ios.share.done": "완료되었습니다. Bandito를 열면 메시지가 자동으로 전송됩니다",
+  "ios.share.failed": "메시지를 저장하지 못했습니다. 다시 시도하세요.",
+  "ios.share.picture": "첨부된 이미지"
 }

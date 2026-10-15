@@ -50,6 +50,8 @@ struct RootView: View {
     @State private var newTaskFollowUp: NewTaskFollowUp?
     /// The toast after an answer to an agent ("Allowed — Forge goes on"); every tab reads it from the environment.
     @State private var answerToast = AnswerToastCenter()
+    /// A `bandito://share/<id>` link that waits for Face ID: the task is sent and its chat opens once the app is open.
+    @State private var pendingShare: UUID?
     /// The first run's progress; the flow covers the app until a server is paired (docs/IOS_APP.md, Onboarding).
     @State private var onboarding = OnboardingStore.launch(arguments: ProcessInfo.processInfo.arguments)
     private let biometrics = DeviceAuthenticator()
@@ -94,6 +96,12 @@ struct RootView: View {
                     .id(dynamicTypeSize)
                     .transition(.opacity)
             }
+
+            #if DEBUG
+            if SharePreview.isRequested(in: ProcessInfo.processInfo.arguments) {
+                ShareView(model: SharePreview.model(empty: ProcessInfo.processInfo.arguments.contains("-share-empty")))
+            }
+            #endif
         }
         // One place decides the scheme: the onboarding is always dark, the app follows the setting. A second
         // preference inside the onboarding stayed on the sheets opened after it (the New task sheet was dark in light).
@@ -110,6 +118,7 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             appLock.scenePhaseChanged(to: phase, enabled: settings.faceIDLock, timeout: settings.lockTimeout)
+            if phase == .active { importSharedTasks() }
             notifications.appActiveChanged(phase == .active)
             account.setActive(phase == .active)
             if phase == .active { TurnActivities.shared.appBecameActive() }
@@ -134,6 +143,7 @@ struct RootView: View {
                 newTask = nil
             } else {
                 runPendingQuickAction()
+                if let id = pendingShare { openShared(id) } else { importSharedTasks() }
             }
         }
         .onOpenURL { url in
@@ -142,7 +152,11 @@ struct RootView: View {
                 incomingLink = url.absoluteString
                 connect = ConnectRequest(mode: .scanCode)
             } else if let link = BanditoLink(url: url) {
-                openLink(link)
+                if case .share(let id) = link {
+                    openShared(id)
+                } else {
+                    openLink(link)
+                }
             }
         }
         // A Siri or Shortcuts intent asks for a screen (AppIntentHub), and a Spotlight result opens its agent.
@@ -169,11 +183,18 @@ struct RootView: View {
         .onChange(of: session.current.map(\.id), initial: true) { _, _ in
             notifications.attach(session.current)
             ChatOutbox.shared.attach(session.current)
+            ShareImporter.shared.attach(.live(session: session))
+            importSharedTasks()
+        }
+        // A server that comes online lets the tasks with pictures go.
+        .onChange(of: session.current.filter { $0.state == .connected }.map(\.id)) { _, _ in
+            importSharedTasks()
         }
         // Accents are the brand's signal orange (a link, a menu's chevron); the tab bar itself stays cream on warm dark.
         .tint(Color.Bandito.signal)
         .task {
             appLock.start(enabled: settings.faceIDLock)
+            ShareImporter.shared.cleanUp()
             let arguments = ProcessInfo.processInfo.arguments
             notifications.settings = settings
             notifications.source = SessionNotificationSource(session: session)
@@ -281,6 +302,32 @@ struct RootView: View {
         }
     }
 
+    /// Sends what the share extension left, unless the lock covers the app (it waits for Face ID).
+    private func importSharedTasks() {
+        guard !appLock.isLocked else { return }
+        Task { await ShareImporter.shared.drain() }
+    }
+
+    /// A `bandito://share/<id>` link: the task is queued and the agent's chat opens. Behind the lock it waits.
+    private func openShared(_ id: UUID) {
+        guard !appLock.isLocked else {
+            pendingShare = id
+            return
+        }
+        pendingShare = nil
+        guard let target = ShareImporter.shared.target(of: id) else { return }
+        Task {
+            await ShareImporter.shared.drain()
+            // A link that started the app can arrive before the saved servers are read: the chat opens once its server is there.
+            var waited = 0
+            while !session.current.contains(where: { $0.id == target.server }), waited < 30 {
+                try? await Task.sleep(for: .milliseconds(100))
+                waited += 1
+            }
+            openLink(.agent(server: target.server.uuidString, id: target.agent))
+        }
+    }
+
     /// Opens an agent's chat in the Crew (the Inbox sheet's button).
     private func openChat(serverID: UUID, agentID: String) {
         tab = .crew
@@ -329,6 +376,8 @@ struct RootView: View {
             if let serverID = UUID(uuidString: server) {
                 crewFocus = CrewFocus(serverID: serverID, agentID: id, request: UUID())
             }
+        case .share(let id):
+            openShared(id)
         }
     }
 
