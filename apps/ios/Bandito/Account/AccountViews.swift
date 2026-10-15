@@ -128,7 +128,6 @@ struct AccountScreen: View {
             .buttonStyle(OnboardingLinkStyle())
             .accessibilityIdentifier("account.email.toggle")
         }
-        footnote(L10n.Onboarding.Account.privacy)
     }
 
     @ViewBuilder private func githubBlock(_ github: PhoneGitHubSignIn) -> some View {
