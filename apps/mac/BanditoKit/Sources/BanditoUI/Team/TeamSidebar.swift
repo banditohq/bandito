@@ -212,7 +212,7 @@ struct TeamSidebar: View {
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                        if !agent.role.isEmpty { Chip(text: agent.role) }
+                        if let role = AgentRoleText.visible(agent.role) { Chip(text: role) }
                         Spacer(minLength: 4)
                         UnreadBadge(count: facts.unread)
                         Text(TeamTime.label(ms: facts.lastActivityMs))
@@ -476,7 +476,7 @@ struct AgentRow: View {
                             .accessibilityLabel(L10n.Inspector.statePaused)
                             .help(L10n.Inspector.statePaused)
                     }
-                    if !agent.role.isEmpty { Chip(text: agent.role) }
+                    if let role = AgentRoleText.visible(agent.role) { Chip(text: role) }
                     if let place { WorkspaceChip(text: place) }
                     Spacer(minLength: 4)
                     UnreadBadge(count: facts.unread)

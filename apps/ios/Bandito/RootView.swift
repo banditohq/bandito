@@ -276,6 +276,7 @@ struct RootView: View {
                 onJoin: { askJoin($0) },
                 onClose: { connect = nil })
                 .preferredColorScheme(settings.theme.colorScheme ?? shownScheme)
+                .banditoSheet()
         }
         .sheet(isPresented: $showsAccount, onDismiss: {
             if let ticket = confirmAfterSheet {
@@ -285,6 +286,7 @@ struct RootView: View {
         }) {
             NavigationStack { AccountScreen(account: account, onClose: { showsAccount = false }) }
                 .preferredColorScheme(.dark)
+                .banditoSheet()
         }
         .sheet(item: $joinConfirm) { request in
             JoinConfirmSheet(
@@ -296,16 +298,19 @@ struct RootView: View {
                 onCancel: { joinConfirm = nil })
                 .presentationDetents([.medium])
                 .preferredColorScheme(settings.theme.colorScheme ?? shownScheme)
+                .banditoSheet()
         }
         .sheet(isPresented: $asksNotifications) {
             NotificationAskSheet(onDone: { asksNotifications = false })
                 .presentationDetents([.medium])
+                .banditoSheet()
         }
         .sheet(item: $newTask, onDismiss: runNewTaskFollowUp) { request in
             NewTaskSheet(
                 servers: servers, startsDictating: request.dictate,
                 onFinish: { newTaskFollowUp = $0 })
                 .preferredColorScheme(settings.theme.colorScheme ?? shownScheme)
+                .banditoSheet()
         }
     }
 

@@ -84,7 +84,8 @@ Settings → Account (and the welcome step's "I have a Bandito account") signs i
 email code, the same Kit logic as the Mac. A new iPhone shows its own code and waits; a Mac approves it by comparing
 codes, then the iPhone shows the Mac's code to confirm before it keeps the sync key. Then the servers of the account are
 listed with their state: "Waiting for the Mac…" while a request is open, "Connected" once the Mac issued this iPhone a
-token (docs/RELAY.md, "One account on every device"). Sign out parks the sync key, so signing in again needs no approval.
+token (docs/RELAY.md, "One account on every device"). Sign out parks the sync key, so signing in again needs no approval. Without a signed-in account, Settings lists the servers this iPhone has by code under "Servers on this iPhone"
+("Connected by code"), and the account row reads "Sign in to the account" with "Then your Mac's servers will appear here by themselves".
 "Sign in with a Mac" is the first button of the sign-in screen: the Mac shows a QR code (profile → Devices → "Add iPhone or
 iPad", or the Connect iPhone wizard), the iPhone scans it (the in-app scanner, the connect sheet's scanner, or the system
 camera, which opens `bandito://join`), redeems the ticket and takes the key from that Mac without a code to compare: the key
