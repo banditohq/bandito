@@ -58,6 +58,38 @@ func eventPage(_ seqs: ClosedRange<Int>) -> String {
 
 @MainActor
 @Suite struct ServerModelTests {
+    @Test func aSavedAgentListFillsAnEmptyModelAndStaysUnread() {
+        let (model, _) = makeModel([])
+        model.seedCachedAgents([Agent(id: "a1", name: "Forge", runtime: .claude, cwd: "/work")])
+        #expect(model.agents.map(\.id) == ["a1"])
+        #expect(model.agentsFromCache)
+        #expect(model.agentsReadAt == nil)
+        model.seedCachedAgents([])
+        #expect(model.agents.map(\.id) == ["a1"])
+    }
+
+    @Test func aSavedAgentListNeverReplacesOneThatWasRead() async throws {
+        let fake = FakeTransport(handlers: daemonHandlers())
+        let (model, _) = makeModel([fake])
+        await model.connect()
+        try await eventually { model.agentsReadAt != nil }
+        model.seedCachedAgents([Agent(id: "old", name: "Old", runtime: .claude, cwd: "/work")])
+        #expect(model.agents.isEmpty)
+        #expect(!model.agentsFromCache)
+        await model.disconnect()
+    }
+
+    @Test func readingTheListFromTheDaemonReplacesTheSavedOne() async throws {
+        let fake = FakeTransport(handlers: daemonHandlers())
+        let (model, _) = makeModel([fake])
+        model.seedCachedAgents([Agent(id: "old", name: "Old", runtime: .claude, cwd: "/work")])
+        await model.connect()
+        try await eventually { model.agentsReadAt != nil }
+        #expect(model.agents.isEmpty)
+        #expect(!model.agentsFromCache)
+        await model.disconnect()
+    }
+
     @Test func firstConnectSubscribesOnlyToLiveEvents() async throws {
         let fake = FakeTransport(handlers: daemonHandlers(lastSeq: 42))
         let (model, _) = makeModel([fake])

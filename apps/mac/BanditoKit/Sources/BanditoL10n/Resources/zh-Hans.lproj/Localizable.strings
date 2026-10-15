@@ -1064,6 +1064,11 @@
 "ios.connect.trust.body" = "这台 iPhone 还没见过此服务器。请将下方指纹与 Mac 上的（设置 → 服务器 → iPhone）比对，一致时才连接。";
 "ios.connect.trust.title" = "这是你的服务器吗？";
 "ios.connect.working" = "正在连接…";
+"ios.connection.cachedLine" = "已离线——显示之前的内容";
+"ios.connection.connecting" = "正在连接 %1$@…";
+"ios.connection.offlineHint" = "请确认 Mac 已开机且 Bandito 正在运行";
+"ios.connection.offlineTitle" = "无法连接 %1$@";
+"ios.connection.retry" = "重试";
 "ios.crew.createAgent" = "创建代理";
 "ios.crew.emptyMessage" = "这台服务器还没有代理。创建第一个，让团队开始工作。";
 "ios.crew.emptyTitle" = "还没有代理";

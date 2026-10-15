@@ -3496,5 +3496,10 @@
   "ios.share.failedForGoodUnnamed": "画像を送信できませんでした。もう一度お試しください。",
   "ios.share.notify": "アプリを開いて{name}にタスクを送信",
   "ios.share.doneButton": "完了",
-  "ios.share.agentGoneUnnamed": "エージェントはもういません。メッセージは送信されませんでした"
+  "ios.share.agentGoneUnnamed": "エージェントはもういません。メッセージは送信されませんでした",
+  "ios.connection.connecting": "{name} に接続しています…",
+  "ios.connection.offlineTitle": "{name} に接続できません",
+  "ios.connection.offlineHint": "Mac の電源が入っていて、Bandito が起動していることを確認してください",
+  "ios.connection.retry": "再試行",
+  "ios.connection.cachedLine": "オフラインです。以前の内容を表示しています"
 }

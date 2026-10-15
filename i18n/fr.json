@@ -3538,5 +3538,10 @@
   "ios.share.failedForGoodUnnamed": "Impossible d'envoyer les images. Réessayez.",
   "ios.share.notify": "Ouvrez l’app pour envoyer la tâche à {name}",
   "ios.share.doneButton": "Terminé",
-  "ios.share.agentGoneUnnamed": "L’agent n’existe plus — le message n’a pas été envoyé"
+  "ios.share.agentGoneUnnamed": "L’agent n’existe plus — le message n’a pas été envoyé",
+  "ios.connection.connecting": "Connexion à {name}…",
+  "ios.connection.offlineTitle": "Impossible de joindre {name}",
+  "ios.connection.offlineHint": "Vérifiez que le Mac est allumé et que Bandito y est lancé",
+  "ios.connection.retry": "Réessayer",
+  "ios.connection.cachedLine": "Hors connexion : affichage de ce qui était là avant"
 }

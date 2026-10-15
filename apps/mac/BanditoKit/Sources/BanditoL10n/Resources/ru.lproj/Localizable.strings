@@ -1064,6 +1064,11 @@
 "ios.connect.trust.body" = "Этот iPhone ещё не видел этот сервер. Сравните отпечаток ниже с тем, что на Mac (Настройки → Серверы → iPhone). Подключайтесь, только если они совпадают.";
 "ios.connect.trust.title" = "Это ваш сервер?";
 "ios.connect.working" = "Подключаюсь…";
+"ios.connection.cachedLine" = "Нет связи — показываем, что было раньше";
+"ios.connection.connecting" = "Подключаемся к %1$@…";
+"ios.connection.offlineHint" = "Проверьте, что Mac включён и Bandito на нём запущен";
+"ios.connection.offlineTitle" = "Нет связи с %1$@";
+"ios.connection.retry" = "Повторить";
 "ios.crew.createAgent" = "Создать агента";
 "ios.crew.emptyMessage" = "На этом сервере нет агентов. Создайте первого, чтобы команда начала работать.";
 "ios.crew.emptyTitle" = "Агентов пока нет";

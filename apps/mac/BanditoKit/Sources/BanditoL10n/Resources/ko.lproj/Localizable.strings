@@ -1064,6 +1064,11 @@
 "ios.connect.trust.body" = "이 iPhone은 아직 이 서버를 모릅니다. 아래 지문을 Mac의 설정 → 서버 → iPhone에 있는 것과 비교하고, 같을 때만 연결하세요.";
 "ios.connect.trust.title" = "내 서버가 맞나요?";
 "ios.connect.working" = "연결 중…";
+"ios.connection.cachedLine" = "오프라인 상태입니다. 이전 내용을 보여 드립니다";
+"ios.connection.connecting" = "%1$@에 연결하는 중…";
+"ios.connection.offlineHint" = "Mac이 켜져 있고 Bandito가 실행 중인지 확인하세요";
+"ios.connection.offlineTitle" = "%1$@에 연결할 수 없습니다";
+"ios.connection.retry" = "다시 시도";
 "ios.crew.createAgent" = "에이전트 만들기";
 "ios.crew.emptyMessage" = "이 서버에는 에이전트가 없어요. 첫 에이전트를 만들어 팀을 시작하세요.";
 "ios.crew.emptyTitle" = "아직 에이전트가 없어요";

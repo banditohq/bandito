@@ -3496,5 +3496,10 @@
   "ios.share.failedForGoodUnnamed": "사진을 보내지 못했습니다. 다시 시도해 주세요.",
   "ios.share.notify": "앱을 열어 {name}에게 작업을 보내세요",
   "ios.share.doneButton": "완료",
-  "ios.share.agentGoneUnnamed": "에이전트가 더 이상 없습니다. 메시지가 전송되지 않았습니다"
+  "ios.share.agentGoneUnnamed": "에이전트가 더 이상 없습니다. 메시지가 전송되지 않았습니다",
+  "ios.connection.connecting": "{name}에 연결하는 중…",
+  "ios.connection.offlineTitle": "{name}에 연결할 수 없습니다",
+  "ios.connection.offlineHint": "Mac이 켜져 있고 Bandito가 실행 중인지 확인하세요",
+  "ios.connection.retry": "다시 시도",
+  "ios.connection.cachedLine": "오프라인 상태입니다. 이전 내용을 보여 드립니다"
 }

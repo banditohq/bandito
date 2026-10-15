@@ -1586,6 +1586,14 @@ public enum L10n {
             }
         }
 
+        public enum Connection {
+            public static var cachedLine: String { L10n.tr("ios.connection.cachedLine") }
+            public static func connecting(name: String) -> String { L10n.tr("ios.connection.connecting", name) }
+            public static var offlineHint: String { L10n.tr("ios.connection.offlineHint") }
+            public static func offlineTitle(name: String) -> String { L10n.tr("ios.connection.offlineTitle", name) }
+            public static var retry: String { L10n.tr("ios.connection.retry") }
+        }
+
         public enum Crew {
             public static var createAgent: String { L10n.tr("ios.crew.createAgent") }
             public static var emptyMessage: String { L10n.tr("ios.crew.emptyMessage") }

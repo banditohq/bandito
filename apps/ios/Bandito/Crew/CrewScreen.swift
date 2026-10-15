@@ -191,11 +191,20 @@ struct CrewList: View {
         let rows = CrewFacts.build(server: server, pinned: pinned, answered: answered)
         let waiting = rows.filter { $0.waiting != nil }
         let approvals = CrewFacts.waitingItems(of: server, answered: answered)
+        let notice = CrewFacts.notice(
+            state: server.state, agentsReadAt: server.agentsReadAt, fromCache: server.agentsFromCache)
         List {
             serverSwitch
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 0, leading: BanditoSpace.s5, bottom: 0, trailing: BanditoSpace.s5))
                 .listRowSeparator(.hidden)
+
+            if !rows.isEmpty, notice == .offline || notice == .offlineWithCache {
+                offlineLine
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 0, leading: BanditoSpace.s5, bottom: 0, trailing: BanditoSpace.s5))
+                    .listRowSeparator(.hidden)
+            }
 
             if !waiting.isEmpty {
                 let split = CrewWaitingSplit.split(waiting)
@@ -245,7 +254,7 @@ struct CrewList: View {
 
             if rows.isEmpty {
                 Section {
-                    emptyState
+                    emptyState(notice)
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
@@ -376,8 +385,50 @@ struct CrewList: View {
         }
     }
 
+    /// One quiet line over a list that is not live (the saved copy of an earlier list, or one that the connection lost).
+    private var offlineLine: some View {
+        HStack(spacing: BanditoSpace.s2) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.Bandito.text3)
+                .accessibilityHidden(true)
+            Text(L10n.Ios.Connection.cachedLine)
+                .font(BanditoFont.text(size: 13))
+                .foregroundStyle(Color.Bandito.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: BanditoSpace.s2)
+            Button {
+                retry()
+            } label: {
+                Text(L10n.Ios.Connection.retry)
+                    .font(BanditoFont.text(size: 13, weight: 500))
+                    .foregroundStyle(Color.Bandito.signal)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("connection.retry")
+        }
+        .padding(.vertical, BanditoSpace.s1)
+    }
+
+    private func retry() {
+        Task { await server.connect() }
+    }
+
+    /// No agent shown. Connected: a sleeping raccoon, one line, and the action that opens the creation sheet. Not
+    /// connected the list says nothing about the server's team, so it says so (`ConnectionNoticeView`).
+    @ViewBuilder private func emptyState(_ notice: CrewConnectionNotice) -> some View {
+        switch notice {
+        case .connecting:
+            ConnectionNoticeView(kind: .connecting, serverName: server.config.name, retry: retry)
+        case .offline, .offlineWithCache:
+            ConnectionNoticeView(kind: .offline, serverName: server.config.name, retry: retry)
+        case .none:
+            createState
+        }
+    }
+
     /// No agent on this server: a sleeping raccoon, one line, and the action that opens the creation sheet.
-    private var emptyState: some View {
+    private var createState: some View {
         VStack(spacing: BanditoSpace.s3) {
             CrewAvatar(
                 name: "", look: CrewLook(color: .peach, face: .sleeping, customHex: nil), mood: .sleeping, size: 72)
