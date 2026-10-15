@@ -115,13 +115,17 @@ struct RootView: View {
         .onChange(of: notifications.route) { _, route in
             open(route)
         }
-        // An action of the app icon (long press on it), also one that started the app: the same as the button or the tab.
-        .onChange(of: QuickActionHub.shared.pending, initial: true) { _, action in
-            guard let action else { return }
-            QuickActionHub.shared.consume()
-            switch action {
-            case .newTask: newTask = NewTaskRequest(dictate: false)
-            case .inbox: tab = .inbox
+        // An action of the app icon, also one that started the app. It waits while the lock screen covers the app.
+        .onChange(of: QuickActionHub.shared.pending, initial: true) { _, _ in
+            runPendingQuickAction()
+        }
+        // The lock closes the new-task sheet (a sheet is shown above the lock screen otherwise), and an action that
+        // waited for Face ID runs once the app is open.
+        .onChange(of: appLock.isLocked) { _, locked in
+            if locked {
+                newTask = nil
+            } else {
+                runPendingQuickAction()
             }
         }
         .onOpenURL { url in
@@ -175,9 +179,9 @@ struct RootView: View {
                 guard session.current.isEmpty else { return }
                 session.installDemo(await IOSDemo.startServers(withTeam: !IOSDemo.isEmptyRequested(in: arguments)))
                 #if DEBUG
-                // `-demo -new-task` opens the new-task sheet at launch (the screenshots).
+                // `-demo -new-task` opens the new-task sheet at launch (the screenshots), as the icon's action does.
                 if arguments.contains("-new-task") {
-                    newTask = NewTaskRequest(dictate: false)
+                    QuickActionHub.shared.request(.newTask)
                 }
                 #endif
                 return
@@ -226,12 +230,28 @@ struct RootView: View {
         content.safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
             if shown {
                 NewTaskButton(
-                    onTap: { newTask = NewTaskRequest(dictate: false) },
-                    onLongPress: { newTask = NewTaskRequest(dictate: true) }
+                    onTap: { openNewTask(dictate: false) },
+                    onLongPress: { openNewTask(dictate: true) }
                 )
                 .padding(.trailing, BanditoSpace.s4)
                 .padding(.bottom, BanditoSpace.s2)
             }
+        }
+    }
+
+    /// Opens the new-task sheet, or the dictation on it. Nothing opens while the lock screen covers the app.
+    private func openNewTask(dictate: Bool) {
+        guard !appLock.isLocked else { return }
+        newTask = NewTaskRequest(dictate: dictate)
+    }
+
+    /// Does the icon's action, when the app is open and the lock does not cover it. The action stays pending until then.
+    private func runPendingQuickAction() {
+        guard !appLock.isLocked, let action = QuickActionHub.shared.pending else { return }
+        QuickActionHub.shared.consume()
+        switch action {
+        case .newTask: openNewTask(dictate: false)
+        case .inbox: tab = .inbox
         }
     }
 

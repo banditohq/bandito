@@ -33,29 +33,27 @@ struct NewTaskSheet: View {
     @SceneStorage("ios.newTask.draft") private var draft = ""
     /// The agent the person picked; nil means the first of the picker (the last one used).
     @State private var selectedID: String?
-    @State private var dictation = ChatDictation()
+    /// Made at the first press of the microphone, not before: typing needs no recogniser.
+    @State private var dictation: ChatDictation?
+    /// The start of the dictation, kept so that closing the sheet can cancel it.
+    @State private var dictationTask: Task<Void, Never>?
     @State private var listening = false
+    /// Whether the sheet is on screen. A dictation that starts after the sheet closed is stopped at once.
+    @State private var isShown = false
     @State private var askingDictation = false
     @State private var notice: DictationNotice?
     @State private var micShown = false
     @FocusState private var focused: Bool
 
-    private var options: [NewTaskOption] {
-        NewTaskRules.order(NewTaskRules.options(servers: servers), last: NewTaskRules.lastChoice())
-    }
-
-    private var chosen: NewTaskOption? {
-        let all = options
-        return all.first { $0.id == selectedID } ?? all.first
-    }
-
     var body: some View {
+        let options = NewTaskRules.order(NewTaskRules.options(servers: servers), last: NewTaskRules.lastChoice())
+        let chosen = options.first { $0.id == selectedID } ?? options.first
         NavigationStack {
             Group {
                 if options.isEmpty {
                     emptyState
                 } else {
-                    form
+                    form(options: options, chosen: chosen)
                 }
             }
             .background(Color.Bandito.bg.ignoresSafeArea())
@@ -70,6 +68,7 @@ struct NewTaskSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .task {
+            isShown = true
             micShown = NewTaskRules.microphoneShown(
                 speech: SFSpeechRecognizer.authorizationStatus(),
                 microphone: AVAudioApplication.shared.recordPermission,
@@ -81,9 +80,11 @@ struct NewTaskSheet: View {
             }
         }
         .onDisappear {
-            // Closed during a dictation (a swipe included): the recognition stops with the sheet.
-            dictation.stop()
-            listening = false
+            // Closed during a dictation or while its start is pending (a swipe included): nothing keeps listening.
+            isShown = false
+            dictationTask?.cancel()
+            dictationTask = nil
+            stopDictation()
         }
         .alert(L10n.Ios.Chat.Dictation.explainTitle, isPresented: $askingDictation) {
             Button(L10n.Common.cancel, role: .cancel) {}
@@ -109,15 +110,15 @@ struct NewTaskSheet: View {
 
     // MARK: the form
 
-    private var form: some View {
+    private func form(options: [NewTaskOption], chosen: NewTaskOption?) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: BanditoSpace.s4) {
                 Text(L10n.Ios.NewTask.to)
                     .font(BanditoFont.text(size: 13, weight: 500))
                     .foregroundStyle(Color.Bandito.text2)
                     .padding(.horizontal, BanditoSpace.s4)
-                agentPicker
-                composer
+                agentPicker(options: options, chosen: chosen)
+                composer(chosen: chosen)
             }
             .padding(.top, BanditoSpace.s2)
             .padding(.bottom, BanditoSpace.s4)
@@ -126,14 +127,12 @@ struct NewTaskSheet: View {
     }
 
     /// The agents in a row, the chosen one outlined. A second server adds its name under the agent's.
-    private var agentPicker: some View {
-        let all = options
-        let current = chosen
-        return ScrollView(.horizontal, showsIndicators: false) {
+    private func agentPicker(options: [NewTaskOption], chosen: NewTaskOption?) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: BanditoSpace.s2) {
-                ForEach(all) { option in
+                ForEach(options) { option in
                     AgentChip(
-                        option: option, showsServer: servers.count > 1, selected: option.id == current?.id
+                        option: option, showsServer: servers.count > 1, selected: option.id == chosen?.id
                     ) {
                         selectedID = option.id
                     }
@@ -143,8 +142,9 @@ struct NewTaskSheet: View {
         }
     }
 
-    private var composer: some View {
-        VStack(alignment: .leading, spacing: BanditoSpace.s3) {
+    private func composer(chosen: NewTaskOption?) -> some View {
+        let canSend = NewTaskRules.canSend(text: draft, agentChosen: chosen != nil)
+        return VStack(alignment: .leading, spacing: BanditoSpace.s3) {
             TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
                 .lineLimit(3...8)
                 .font(BanditoFont.text(size: 16))
@@ -173,7 +173,9 @@ struct NewTaskSheet: View {
                         .lineLimit(2)
                 }
                 Spacer(minLength: 0)
-                Button(action: send) {
+                Button {
+                    if let chosen { send(chosen) }
+                } label: {
                     Text(L10n.Thread.send)
                 }
                 .buttonStyle(SignalButtonStyle())
@@ -220,18 +222,12 @@ struct NewTaskSheet: View {
 
     // MARK: sending
 
-    private var canSend: Bool {
-        NewTaskRules.canSend(text: draft, agentChosen: chosen != nil)
-    }
-
     private func isOnline(_ option: NewTaskOption) -> Bool {
         servers.first { $0.id == option.serverID }?.state == .connected
     }
 
-    private func send() {
-        guard let option = chosen, canSend else { return }
-        dictation.stop()
-        listening = false
+    private func send(_ option: NewTaskOption) {
+        stopDictation()
         ChatOutbox.shared.enqueue(
             serverID: option.serverID, agentID: option.agentID, text: NewTaskRules.message(for: draft))
         NewTaskRules.remember(NewTaskChoice(serverID: option.serverID, agentID: option.agentID))
@@ -245,8 +241,7 @@ struct NewTaskSheet: View {
 
     private func microphoneTapped() {
         if listening {
-            dictation.stop()
-            listening = false
+            stopDictation()
             return
         }
         // The explanation comes before the system's first questions (as in the chat).
@@ -258,13 +253,22 @@ struct NewTaskSheet: View {
     }
 
     private func startDictation() {
+        let controller = dictation ?? ChatDictation()
+        dictation = controller
         let base = draft
         listening = true
-        Task { @MainActor in
-            let outcome = await dictation.start(
+        dictationTask?.cancel()
+        dictationTask = Task { @MainActor in
+            let outcome = await controller.start(
                 onPartial: { partial in draft = Self.dictated(base: base, partial: partial) },
                 onEnd: { listening = false })
-            listening = dictation.isListening
+            // The sheet closed while the permissions were asked: the recognition that just started is stopped.
+            guard isShown else {
+                controller.stop()
+                listening = false
+                return
+            }
+            listening = controller.isListening
             switch outcome {
             case .started, .finished:
                 break
@@ -278,6 +282,11 @@ struct NewTaskSheet: View {
                 notice = DictationNotice(message: L10n.Dictation.failed, offersSettings: false)
             }
         }
+    }
+
+    private func stopDictation() {
+        dictation?.stop()
+        listening = false
     }
 
     /// The text before the dictation, then the words recognised so far, with a space between them when needed.
