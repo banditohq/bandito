@@ -11,8 +11,8 @@ public enum AgentNotice: Equatable, Sendable {
     case approval(
         agentID: String, agentName: String, approvalID: String, title: String, command: String? = nil,
         reviewOnly: Bool = false)
-    /// The agent finished a turn.
-    case finished(agentID: String, agentName: String)
+    /// The agent finished a turn; `text` is the reply's plain text (nil when the reply is not known).
+    case finished(agentID: String, agentName: String, text: String?)
     /// The agent's turn failed.
     case failed(agentID: String, agentName: String, message: String?)
     /// The Allow/Deny answer could not be sent: the request is already answered, or it is stale.
@@ -24,7 +24,7 @@ public enum AgentNotice: Equatable, Sendable {
 
     public var agentID: String {
         switch self {
-        case .approval(let id, _, _, _, _, _), .finished(let id, _), .failed(let id, _, _), .resolveFailed(let id),
+        case .approval(let id, _, _, _, _, _), .finished(let id, _, _), .failed(let id, _, _), .resolveFailed(let id),
             .form(let id, _, _), .question(let id, _, _):
             id
         }
@@ -76,7 +76,7 @@ public enum NotificationRules {
             return settings.needsYou && !windowActive
         case .failed:
             return settings.failed && !windowActive
-        case .finished(let agentID, _):
+        case .finished(let agentID, _, _):
             return settings.finished && !windowActive && agentID != selectedAgentID
         }
     }
@@ -147,9 +147,15 @@ public struct NotificationContent: Equatable, Sendable {
             content.agentName = agentName
             content.command = command
             return content
-        case .finished(let agentID, let agentName):
+        case .finished(let agentID, let agentName, let text):
+            // With the reply's text the notice is the agent's name and the text; without it, the old title.
+            guard let text else {
+                return NotificationContent(
+                    title: L10n.Notify.finished(name: agentName), body: "",
+                    categoryID: finishedCategory, agentID: agentID, approvalID: nil, agentName: agentName)
+            }
             return NotificationContent(
-                title: L10n.Notify.finished(name: agentName), body: "",
+                title: agentName, body: text,
                 categoryID: finishedCategory, agentID: agentID, approvalID: nil, agentName: agentName)
         case .failed(let agentID, let agentName, let message):
             return NotificationContent(
@@ -291,16 +297,24 @@ public final class NotificationService {
 
 extension AgentNotice {
     /// The notice an agent event makes, if any: an approval waiting, a finished turn, or an error. A quiet turn
-    /// (`turn.quiet`) finishes without a notice. Shared by the Mac and the iPhone.
+    /// (`turn.quiet`) finishes without a notice, and so does a finished turn whose reply has no text: nothing is shown
+    /// for it. Shared by the Mac and the iPhone.
     @MainActor
     public static func notice(for event: Event, in server: ServerModel) -> AgentNotice? {
         let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
-        return notice(for: event, agentName: name, quietTurn: { server.thread(for: event.agentId).quietTurn })
+        let made = notice(
+            for: event, agentName: name, quietTurn: { server.thread(for: event.agentId).quietTurn },
+            turnText: { NoticeText.finishedText(server.thread(for: event.agentId).lastTurnText) })
+        if case .finished(_, _, nil)? = made { return nil }
+        return made
     }
 
-    /// The same rules without a server: the agent's name is given, and `quietTurn` says (only when asked, for a finished
-    /// turn) whether the turn was quiet. The iPhone's push extension has the event and the name from the push alone.
-    public static func notice(for event: Event, agentName name: String, quietTurn: () -> Bool) -> AgentNotice? {
+    /// The same rules without a server: the agent's name is given, `quietTurn` says (only when asked, for a finished
+    /// turn) whether the turn was quiet, and `turnText` is the reply's plain text (nil when there is none). The iPhone's
+    /// push extension has the event, the name and the text from the push alone.
+    public static func notice(
+        for event: Event, agentName name: String, quietTurn: () -> Bool, turnText: () -> String?
+    ) -> AgentNotice? {
         switch event.body {
         case .approvalRequested(let approvalID, _, let tool, let title, let command, _, _, _):
             return .approval(
@@ -308,7 +322,7 @@ extension AgentNotice {
                 reviewOnly: tool == AgentCreateSummary.tool)
         case .turnCompleted(_, .ok, _, _):
             if quietTurn() { return nil }
-            return .finished(agentID: event.agentId, agentName: name)
+            return .finished(agentID: event.agentId, agentName: name, text: turnText())
         case .error(let message):
             return .failed(agentID: event.agentId, agentName: name, message: message)
         default:

@@ -19,7 +19,7 @@ import Testing
     }
 
     @Test func finishedSkipsTheSelectedAgent() {
-        let notice = AgentNotice.finished(agentID: "a1", agentName: "Forge")
+        let notice = AgentNotice.finished(agentID: "a1", agentName: "Forge", text: nil)
         #expect(!NotificationRules.shouldDeliver(notice, settings: all, windowActive: false, selectedAgentID: "a1"))
         #expect(NotificationRules.shouldDeliver(notice, settings: all, windowActive: false, selectedAgentID: "a2"))
         #expect(!NotificationRules.shouldDeliver(notice, settings: all, windowActive: true, selectedAgentID: "a2"))
@@ -42,7 +42,7 @@ import Testing
         #expect(approval.categoryID == NotificationContent.approvalCategory)
         #expect(approval.approvalID == "ap1")
 
-        let done = NotificationContent.make(.finished(agentID: "a1", agentName: "Forge"))
+        let done = NotificationContent.make(.finished(agentID: "a1", agentName: "Forge", text: nil))
         #expect(done.title.contains("Forge"))
         #expect(done.categoryID == NotificationContent.finishedCategory)
 

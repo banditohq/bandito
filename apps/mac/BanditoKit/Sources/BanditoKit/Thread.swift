@@ -297,6 +297,19 @@ public struct AgentThread: Sendable, Hashable {
         return nil
     }
 
+    /// The text of the last message with text that the running turn (or the turn that just ended) wrote; nil when it
+    /// wrote none. A blank message (nothing left once the markdown is off) does not count. A finished turn's notice
+    /// shows it.
+    public var lastTurnText: String? {
+        guard let start = turnItemsStart else { return nil }
+        for item in items[min(start, items.count)...].reversed() {
+            if case .assistant(_, let text, _) = item, !NoticeText.plain(text, limit: NoticeText.limit).isEmpty {
+                return text
+            }
+        }
+        return nil
+    }
+
     /// Apply one event. Events with `seq <= lastSeq` (replays) are ignored.
     public mutating func apply(_ e: Event) {
         if e.seq > 0 {

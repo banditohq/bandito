@@ -72,12 +72,12 @@ import Testing
         let approval = try event(
             #"{"seq":1,"agent_id":"a","ts":1,"kind":"approval.requested","payload":{"approval_id":"ap","call_id":"c","tool":"bash","title":"Run ls","command":"ls","reason":"rule: ask"}}"#)
         #expect(
-            AgentNotice.notice(for: approval, agentName: "Forge", quietTurn: { false })
+            AgentNotice.notice(for: approval, agentName: "Forge", quietTurn: { false }, turnText: { nil })
                 == .approval(agentID: "a", agentName: "Forge", approvalID: "ap", title: "Run ls", command: "ls", reviewOnly: false))
         let done = try event(#"{"seq":2,"agent_id":"a","ts":1,"kind":"turn.completed","payload":{"turn_id":"t","status":"ok"}}"#)
-        #expect(AgentNotice.notice(for: done, agentName: "Forge", quietTurn: { false }) == .finished(agentID: "a", agentName: "Forge"))
+        #expect(AgentNotice.notice(for: done, agentName: "Forge", quietTurn: { false }, turnText: { nil }) == .finished(agentID: "a", agentName: "Forge", text: nil))
         // A quiet turn finishes with no notice; the check runs only for a finished turn.
-        #expect(AgentNotice.notice(for: done, agentName: "Forge", quietTurn: { true }) == nil)
-        #expect(AgentNotice.notice(for: approval, agentName: "Forge", quietTurn: { Issue.record("asked"); return true }) != nil)
+        #expect(AgentNotice.notice(for: done, agentName: "Forge", quietTurn: { true }, turnText: { nil }) == nil)
+        #expect(AgentNotice.notice(for: approval, agentName: "Forge", quietTurn: { Issue.record("asked"); return true }, turnText: { nil }) != nil)
     }
 }

@@ -9,18 +9,21 @@ import Foundation
 /// notification (title, text, category, what a press carries).
 enum PhoneNotice {
     /// The notice an event makes on the phone, and whether it is a risky approval. The shared notices (approval,
-    /// finished, error) come from `AgentNotice.notice(for:agentName:quietTurn:)`; a form and a question are phone-only.
-    /// `agentWaitsAlone` says whether nothing else of the agent waits (a question is the agent's own wait, as the Inbox
-    /// lists it); `questionText` is its last message.
+    /// finished, error) come from `AgentNotice.notice(for:agentName:quietTurn:turnText:)`; a form and a question are
+    /// phone-only. `turnText` is a finished turn's reply (plain, from the push); `agentWaitsAlone` says whether nothing
+    /// else of the agent waits (a question is the agent's own wait, as the Inbox lists it); `questionText` is its last
+    /// message.
     static func notice(
-        for event: Event, agentName name: String, quietTurn: () -> Bool, agentWaitsAlone: () -> Bool,
-        questionText: () -> String?
+        for event: Event, agentName name: String, quietTurn: () -> Bool, turnText: () -> String?,
+        agentWaitsAlone: () -> Bool, questionText: () -> String?
     ) -> (notice: AgentNotice, risky: Bool)? {
         if case .approvalRequested(_, _, _, _, _, _, let reason, _) = event.body {
-            guard let notice = AgentNotice.notice(for: event, agentName: name, quietTurn: quietTurn) else { return nil }
+            guard
+                let notice = AgentNotice.notice(for: event, agentName: name, quietTurn: quietTurn, turnText: turnText)
+            else { return nil }
             return (notice, ApprovalReason.isRisky(reason))
         }
-        if let notice = AgentNotice.notice(for: event, agentName: name, quietTurn: quietTurn) {
+        if let notice = AgentNotice.notice(for: event, agentName: name, quietTurn: quietTurn, turnText: turnText) {
             return (notice, false)
         }
         switch event.body {
@@ -112,6 +115,8 @@ enum PushNoticeBuilder {
         let ts = (root["ts"] as? NSNumber)?.int64Value ?? 0
 
         var made: (notice: AgentNotice, risky: Bool)?
+        // The reply of a done, as the daemon wrote it (plain); an older daemon sends none.
+        let text = (root["text"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         // The event as `events.since` sends it: decoded by the same code as the app's live events.
         var wire = eventBody
         wire["seq"] = seq
@@ -124,10 +129,12 @@ enum PushNoticeBuilder {
             decoded = true
             // The daemon has already looked at the agent's other waits and at quiet turns; nothing is left to check here.
             made = PhoneNotice.notice(
-                for: event, agentName: name, quietTurn: { false }, agentWaitsAlone: { true }, questionText: { nil })
+                for: event, agentName: name, quietTurn: { false }, turnText: { text }, agentWaitsAlone: { true },
+                questionText: { nil })
         }
         if !decoded {
-            made = shortened(kind: kind, payload: eventBody["payload"] as? [String: Any], agent: agent, name: name)
+            made = shortened(
+                kind: kind, payload: eventBody["payload"] as? [String: Any], agent: agent, name: name, text: text)
         }
         guard let made else { return nil }
         var content = NotificationContent.make(made.notice)
@@ -146,7 +153,7 @@ enum PushNoticeBuilder {
     /// An event the daemon had to cut down (`payload` only has an id, or is gone): a text for its kind, and the buttons
     /// that still make sense. The app reads the rest from the server when it connects.
     static func shortened(
-        kind: String, payload: [String: Any]?, agent: String, name: String
+        kind: String, payload: [String: Any]?, agent: String, name: String, text: String?
     ) -> (notice: AgentNotice, risky: Bool)? {
         switch kind {
         case "approval.requested":
@@ -158,7 +165,7 @@ enum PushNoticeBuilder {
         case "agent.status":
             return (.question(agentID: agent, agentName: name, text: nil), false)
         case "turn.completed":
-            return (.finished(agentID: agent, agentName: name), false)
+            return (.finished(agentID: agent, agentName: name, text: text), false)
         case "error":
             return (.failed(agentID: agent, agentName: name, message: payload?["message"] as? String), false)
         default:
