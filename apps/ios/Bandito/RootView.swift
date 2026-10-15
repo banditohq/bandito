@@ -84,12 +84,6 @@ struct RootView: View {
             }
             .preferredColorScheme(settings.theme.colorScheme)
 
-            #if DEBUG
-            if SharePreview.isRequested(in: ProcessInfo.processInfo.arguments) {
-                ShareView(model: SharePreview.model(empty: ProcessInfo.processInfo.arguments.contains("-share-empty")))
-            }
-            #endif
-
             if showsOnboarding {
                 OnboardingView(store: onboarding, motion: settings.motion, onConnect: { mode in
                     connect = ConnectRequest(mode: mode)
@@ -97,6 +91,12 @@ struct RootView: View {
                     .id(dynamicTypeSize)
                     .transition(.opacity)
             }
+
+            #if DEBUG
+            if SharePreview.isRequested(in: ProcessInfo.processInfo.arguments) {
+                ShareView(model: SharePreview.model(empty: ProcessInfo.processInfo.arguments.contains("-share-empty")))
+            }
+            #endif
         }
         .animation(BanditoMotion.ease, value: showsOnboarding)
         .overlay {
@@ -295,6 +295,12 @@ struct RootView: View {
         guard let target = ShareImporter.shared.target(of: id) else { return }
         Task {
             await ShareImporter.shared.drain()
+            // A link that started the app can arrive before the saved servers are read: the chat opens once its server is there.
+            var waited = 0
+            while !session.current.contains(where: { $0.id == target.server }), waited < 30 {
+                try? await Task.sleep(for: .milliseconds(100))
+                waited += 1
+            }
             openLink(.agent(server: target.server.uuidString, id: target.agent))
         }
     }

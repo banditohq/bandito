@@ -11,7 +11,7 @@ final class ShareViewController: UIViewController {
         super.viewDidLoad()
         BanditoFont.registerBundledFonts()
         view.backgroundColor = UIColor(Color.Bandito.bg)
-        model.openApp = { [weak self] url in self?.open(url) ?? false }
+        model.openApp = { [weak self] url in await self?.open(url) ?? false }
         model.finish = { [weak self] in self?.extensionContext?.completeRequest(returningItems: nil) }
         model.cancel = { [weak self] in
             self?.extensionContext?.cancelRequest(withError: NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError))
@@ -36,20 +36,42 @@ final class ShareViewController: UIViewController {
     }
 
     /// Opens a link through the responder chain: the first object that answers `open(_:options:completionHandler:)`
-    /// is the application. An extension has no `UIApplication.shared`, so this is the way to reach it; if nothing
-    /// answers the sheet says the message is saved.
-    private func open(_ url: URL) -> Bool {
+    /// is the application. An extension has no `UIApplication.shared`, so this is the way to reach it. True only when
+    /// the system says it opened the link; with no answer within two seconds, or none in the chain, the sheet says the
+    /// message is saved instead.
+    private func open(_ url: URL) async -> Bool {
         let selector = sel_registerName("openURL:options:completionHandler:")
         var responder: UIResponder? = self
         while let current = responder {
             if current.responds(to: selector), let method = class_getInstanceMethod(type(of: current), selector) {
-                typealias Open = @convention(c) (AnyObject, Selector, URL, NSDictionary, AnyObject?) -> Void
+                typealias Open = @convention(c) (AnyObject, Selector, URL, NSDictionary, @escaping @convention(block) (Bool) -> Void) -> Void
                 let call = unsafeBitCast(method_getImplementation(method), to: Open.self)
-                call(current, selector, url, [:], nil)
-                return true
+                let once = OnceFlag()
+                return await withCheckedContinuation { continuation in
+                    call(current, selector, url, [:]) { opened in
+                        if once.take() { continuation.resume(returning: opened) }
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        if once.take() { continuation.resume(returning: false) }
+                    }
+                }
             }
             responder = current.next
         }
         return false
+    }
+}
+
+/// Lets exactly one of two racing callbacks through.
+private final class OnceFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var taken = false
+
+    func take() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if taken { return false }
+        taken = true
+        return true
     }
 }

@@ -17,25 +17,27 @@ struct ShareView: View {
     }
 
     private var header: some View {
-        HStack(spacing: BanditoSpace.s3) {
-            Button(model.agents.isEmpty || model.stage == .savedNotOpened ? L10n.Common.close : L10n.Common.cancel) {
-                if model.stage == .savedNotOpened { model.finish() } else { model.cancel() }
-            }
-            .font(BanditoFont.text(size: 16))
-            .foregroundStyle(Color.Bandito.text2)
-            Spacer(minLength: BanditoSpace.s2)
-            Text(L10n.Ios.Share.title)
-                .font(BanditoFont.display(size: 15, weight: 600))
-                .foregroundStyle(Color.Bandito.text)
+        VStack(alignment: .leading, spacing: BanditoSpace.s3) {
+            HStack(spacing: BanditoSpace.s3) {
+                Button(model.agents.isEmpty || model.stage == .savedNotOpened ? L10n.Common.close : L10n.Common.cancel) {
+                    if model.stage == .savedNotOpened { model.finish() } else { model.cancel() }
+                }
+                .font(BanditoFont.text(size: 16))
+                .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Spacer(minLength: BanditoSpace.s2)
-            if !model.agents.isEmpty && model.stage != .savedNotOpened {
-                Button(action: model.send) { Text(L10n.Thread.send) }
-                    .buttonStyle(ShareSendStyle())
-                    .disabled(!model.canSend)
-                    .opacity(model.canSend ? 1 : 0.4)
+                .fixedSize()
+                Spacer(minLength: BanditoSpace.s2)
+                if !model.agents.isEmpty && model.stage != .savedNotOpened {
+                    Button(action: model.send) { Text(L10n.Thread.send).lineLimit(1).fixedSize() }
+                        .buttonStyle(ShareSendStyle())
+                        .disabled(!model.canSend)
+                        .opacity(model.canSend ? 1 : 0.4)
+                }
             }
+            Text(L10n.Ios.Share.title)
+                .font(BanditoFont.display(size: 20, weight: 600))
+                .foregroundStyle(Color.Bandito.text)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, BanditoSpace.s4)
         .padding(.vertical, BanditoSpace.s3)

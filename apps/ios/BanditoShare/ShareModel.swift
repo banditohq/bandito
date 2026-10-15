@@ -36,7 +36,7 @@ final class ShareModel {
     private(set) var stage: ShareStage = .editing
 
     /// Opens Bandito with a link; false when the extension has no way to. Set by the controller.
-    var openApp: (URL) -> Bool = { _ in false }
+    var openApp: (URL) async -> Bool = { _ in false }
     var finish: () -> Void = {}
     var cancel: () -> Void = {}
 
@@ -66,7 +66,7 @@ final class ShareModel {
     }
 
     var canSend: Bool {
-        stage == .editing && !loading
+        (stage == .editing || stage == .failed) && !loading
             && ShareRules.canSend(text: text, imageCount: images.count, agentChosen: chosen != nil)
     }
 
@@ -80,6 +80,10 @@ final class ShareModel {
     func send() {
         guard canSend, let agent = chosen, let inbox else { return }
         stage = .saving
+        Task { await save(agent: agent, inbox: inbox) }
+    }
+
+    private func save(agent: WidgetSnapshot.Listing, inbox: ShareInbox) async {
         let task = SharedTask(
             id: UUID(), serverID: agent.server, agentID: agent.id,
             text: text.trimmingCharacters(in: .whitespacesAndNewlines), images: [], createdAt: Date())
@@ -90,7 +94,7 @@ final class ShareModel {
             return
         }
         defaults?.set(ShareRules.key(agent), forKey: ShareRules.lastKey)
-        if openApp(BanditoLink.share(id: task.id).url) {
+        if await openApp(BanditoLink.share(id: task.id).url) {
             finish()
         } else {
             stage = .savedNotOpened
