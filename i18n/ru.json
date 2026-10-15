@@ -3619,7 +3619,8 @@
   "ios.share.failed": "Не удалось сохранить сообщение. Попробуйте ещё раз.",
   "ios.share.picture": "Прикреплённая картинка",
   "ios.share.agentGone": "{name} больше нет — сообщение не отправлено",
-  "ios.share.failedForGood": "Не удалось отправить {name} картинки — попробуйте ещё раз",
+  "ios.share.failedForGood": "Не удалось отправить картинки для {name} — попробуйте ещё раз",
   "ios.share.notify": "Откройте, чтобы отправить задачу {name}",
-  "ios.share.doneButton": "Готово"
+  "ios.share.doneButton": "Готово",
+  "ios.share.agentGoneUnnamed": "Агента больше нет — сообщение не отправлено"
 }

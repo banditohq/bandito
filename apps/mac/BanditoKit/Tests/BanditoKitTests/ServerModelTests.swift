@@ -416,6 +416,40 @@ func eventPage(_ seqs: ClosedRange<Int>) -> String {
         #expect(model.state == .connected)
         await model.disconnect()
     }
+
+    /// `agentsListedAt` is the time of the last SUCCESSFUL read: a failed read moves `agentsReadAt` but not this, and
+    /// `refreshAgentsNow` says false for it.
+    @Test func aFailedReadIsNotAListedList() async throws {
+        let failing = Switch(on: false)
+        let daemon = AgentListDaemon("[]")
+        let fake = FakeTransport(
+            handlers: daemonHandlers(lastSeq: 42, extra: ["agents.list": daemon.handler()]),
+            errors: ["agents.list": { _ in failing.isOn ? #"{"code":-32000,"message":"boom"}"# : nil }])
+        let (model, _) = makeModel([fake], reconnectDelay: .milliseconds(10))
+        #expect(model.agentsListedAt == nil)
+        await model.connect()
+        model.agentsRetryDelay = .seconds(600)
+        let listed = try #require(model.agentsListedAt, "the connect read the list")
+
+        failing.set(true)
+        let failedRead = await model.refreshAgentsNow()
+        #expect(!failedRead, "a read that failed does not count")
+        #expect(model.agentsListedAt == listed, "the time of the last good read stays")
+        #expect(model.agentsReadAt != nil)
+
+        failing.set(false)
+        let goodRead = await model.refreshAgentsNow()
+        #expect(goodRead)
+        #expect(try #require(model.agentsListedAt) > listed)
+        await model.disconnect()
+    }
+
+    @Test func refreshWithoutAConnectionIsNotARead() async {
+        let (model, _) = makeModel([FakeTransport(handlers: daemonHandlers())])
+        let read = await model.refreshAgentsNow()
+        #expect(!read)
+        #expect(model.agentsListedAt == nil)
+    }
 }
 
 /// A number shared with a fake daemon's handlers.

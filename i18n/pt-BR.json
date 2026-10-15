@@ -3536,5 +3536,6 @@
   "ios.share.agentGone": "{name} não existe mais — a mensagem não foi enviada",
   "ios.share.failedForGood": "Não foi possível enviar as imagens para {name}. Tente novamente.",
   "ios.share.notify": "Abra para enviar a tarefa para {name}",
-  "ios.share.doneButton": "Concluir"
+  "ios.share.doneButton": "Concluir",
+  "ios.share.agentGoneUnnamed": "O agente não existe mais — a mensagem não foi enviada"
 }

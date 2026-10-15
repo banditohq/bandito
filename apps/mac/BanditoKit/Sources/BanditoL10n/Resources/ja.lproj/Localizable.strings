@@ -1203,6 +1203,7 @@
 "ios.settings.servers.via.lan" = "ローカルネットワーク";
 "ios.settings.servers.via.tailscale" = "Tailscale";
 "ios.share.agentGone" = "%1$@はもういません。メッセージは送信されませんでした";
+"ios.share.agentGoneUnnamed" = "エージェントはもういません。メッセージは送信されませんでした";
 "ios.share.done" = "完了しました。Banditoを開くと、メッセージは自動で送信されます";
 "ios.share.doneButton" = "完了";
 "ios.share.empty" = "Banditoを開いて、サーバーを接続してください";

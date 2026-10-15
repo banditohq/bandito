@@ -1825,6 +1825,7 @@ public enum L10n {
 
         public enum Share {
             public static func agentGone(name: String) -> String { L10n.tr("ios.share.agentGone", name) }
+            public static var agentGoneUnnamed: String { L10n.tr("ios.share.agentGoneUnnamed") }
             public static var done: String { L10n.tr("ios.share.done") }
             public static var doneButton: String { L10n.tr("ios.share.doneButton") }
             public static var empty: String { L10n.tr("ios.share.empty") }

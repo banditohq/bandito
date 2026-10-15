@@ -25,12 +25,17 @@ struct ShareNotice: Equatable {
     }
 
     let kind: Kind
-    let agentName: String
+    /// The agent's name; nil when nothing tells it (an old task of an agent that is gone).
+    let agentName: String?
+    /// What the notice says when there is no name: the agent's id.
+    var fallbackName = ""
 
     var text: String {
         switch kind {
-        case .agentGone: L10n.Ios.Share.agentGone(name: agentName)
-        case .failedForGood: L10n.Ios.Share.failedForGood(name: agentName)
+        case .agentGone:
+            agentName.map { L10n.Ios.Share.agentGone(name: $0) } ?? L10n.Ios.Share.agentGoneUnnamed
+        case .failedForGood:
+            L10n.Ios.Share.failedForGood(name: agentName ?? fallbackName)
         }
     }
 }
@@ -64,7 +69,10 @@ struct ShareImporterEnvironment {
     var upload: @MainActor (_ serverID: UUID, _ agentID: String, _ data: Data, _ name: String) async throws -> AgentAttachment
     var enqueue: @MainActor (_ serverID: UUID, _ agentID: String, _ text: String, _ attachments: [AgentAttachment]) -> Void
     /// Asks the server for its agents again and returns when the list is updated.
-    var refreshAgents: @MainActor (_ serverID: UUID) async -> Void = { _ in }
+    /// True only when the list was read successfully by this call; false when the read failed or there is no link.
+    var refreshAgents: @MainActor (_ serverID: UUID) async -> Bool = { _ in false }
+    /// The agent's name from the server's list, nil when the list does not have it.
+    var agentName: @MainActor (_ serverID: UUID, _ agentID: String) -> String? = { _, _ in nil }
     /// Takes down the reminder the share sheet left for the task (`share-<id>`): delivered or still waiting.
     var clearReminder: @MainActor (_ taskID: UUID) -> Void = { _ in }
 
@@ -76,7 +84,7 @@ struct ShareImporterEnvironment {
             facts: { id, agentID in
                 guard let model = server(id) else { return nil }
                 return ShareServerFacts(
-                    connected: model.state == .connected, agentsKnown: model.agentsReadAt != nil,
+                    connected: model.state == .connected, agentsKnown: model.agentsListedAt != nil,
                     hasAgent: model.agents.contains { $0.id == agentID })
             },
             upload: { id, agentID, data, name in
@@ -86,7 +94,11 @@ struct ShareImporterEnvironment {
             enqueue: { id, agentID, text, attachments in
                 ChatOutbox.shared.enqueue(serverID: id, agentID: agentID, text: text, attachments: attachments)
             },
-            refreshAgents: { id in await server(id)?.refreshAgentsNow() },
+            refreshAgents: { id in
+                guard let model = server(id) else { return false }
+                return await model.refreshAgentsNow()
+            },
+            agentName: { id, agentID in server(id)?.agents.first { $0.id == agentID }?.name },
             clearReminder: { taskID in
                 let identifier = ShareReminder.identifier(for: taskID)
                 let center = UNUserNotificationCenter.current()
@@ -152,7 +164,7 @@ final class ShareImporter {
 
     private func pass() async {
         guard let inbox, let environment, environment.serversLoaded() else { return }
-        var refreshed: Set<UUID> = []
+        var refreshed: [UUID: Bool] = [:]
         for task in inbox.pending() {
             if Task.isCancelled { return }
             guard let serverID = UUID(uuidString: task.serverID) else {
@@ -163,14 +175,27 @@ final class ShareImporter {
             var decision = ShareImportRule.decide(task, facts: facts)
             // An agent that is not in the list may only be missing from an old list: the list is read again, once for
             // each server, before the task is let go.
-            if decision == .drop, Self.agentLooksGone(task, facts), refreshed.insert(serverID).inserted {
-                await environment.refreshAgents(serverID)
-                facts = environment.facts(serverID, task.agentID)
-                decision = ShareImportRule.decide(task, facts: facts)
+            if decision == .drop, Self.agentLooksGone(task, facts) {
+                let listed: Bool
+                if let known = refreshed[serverID] {
+                    listed = known
+                } else {
+                    listed = await environment.refreshAgents(serverID)
+                    refreshed[serverID] = listed
+                }
+                if listed {
+                    facts = environment.facts(serverID, task.agentID)
+                    decision = ShareImportRule.decide(task, facts: facts)
+                } else {
+                    // The list could not be read: it is no proof. The task waits for the next time.
+                    decision = .wait
+                }
             }
             switch decision {
             case .drop:
-                if Self.agentLooksGone(task, facts) { onNotice?(ShareNotice(kind: .agentGone, agentName: task.displayName)) }
+                if Self.agentLooksGone(task, facts) {
+                    onNotice?(ShareNotice(kind: .agentGone, agentName: agentName(of: task, environment)))
+                }
                 finish(task, inbox: inbox, environment: environment)
             case .wait:
                 continue
@@ -184,6 +209,13 @@ final class ShareImporter {
     private static func agentLooksGone(_ task: SharedTask, _ facts: ShareServerFacts?) -> Bool {
         guard let facts, facts.connected, facts.agentsKnown, !facts.hasAgent else { return false }
         return !task.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !task.images.isEmpty
+    }
+
+    /// The agent's name for a notice: the one saved with the task, else the one in the server's list, else nil.
+    private func agentName(of task: SharedTask, _ environment: ShareImporterEnvironment) -> String? {
+        if !task.agentName.isEmpty { return task.agentName }
+        guard let server = UUID(uuidString: task.serverID) else { return nil }
+        return environment.agentName(server, task.agentID)
     }
 
     /// The task is over (sent or dropped): its folder and its reminder go.
@@ -211,10 +243,17 @@ final class ShareImporter {
                 inbox.update(task)
                 attachments.append(saved)
             } catch {
-                // The server is connected (a task with pictures waits otherwise): this counts as a failed try.
+                // A failed try counts only while the server is still connected: a link that dropped is not the pictures'
+                // fault, and the task waits for the connection.
+                guard environment.facts(serverID, task.agentID)?.connected == true else {
+                    inbox.update(task)
+                    return
+                }
                 task.attempts += 1
                 if task.attempts >= SharedTask.maxAttempts {
-                    onNotice?(ShareNotice(kind: .failedForGood, agentName: task.displayName))
+                    onNotice?(
+                        ShareNotice(
+                            kind: .failedForGood, agentName: agentName(of: task, environment), fallbackName: task.agentID))
                     finish(task, inbox: inbox, environment: environment)
                 } else {
                     inbox.update(task)

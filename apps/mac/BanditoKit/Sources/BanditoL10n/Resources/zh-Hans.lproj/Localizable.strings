@@ -1203,6 +1203,7 @@
 "ios.settings.servers.via.lan" = "局域网";
 "ios.settings.servers.via.tailscale" = "Tailscale";
 "ios.share.agentGone" = "%1$@ 已不存在，消息未发送";
+"ios.share.agentGoneUnnamed" = "该智能体已不存在，消息未发送";
 "ios.share.done" = "完成。打开 Bandito，消息会自动发送。";
 "ios.share.doneButton" = "完成";
 "ios.share.empty" = "请打开 Bandito 并连接服务器";

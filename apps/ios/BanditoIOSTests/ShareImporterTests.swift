@@ -28,6 +28,10 @@ import Testing
         var pattern: [Bool] = []
         var facts: ShareServerFacts?
         var refreshes = 0
+        /// What `refreshAgents` answers: false is a read that failed.
+        var refreshResult = true
+        var beforeUploadFails: () -> Void = {}
+        var names: [String: String] = [:]
         var onRefresh: () -> Void = {}
         var cleared: [UUID] = []
         var notices: [ShareNotice] = []
@@ -42,7 +46,10 @@ import Testing
             serversLoaded: { loaded },
             facts: { _, _ in log.facts },
             upload: { _, _, _, name in
-                if log.failUploads { throw CancellationError() }
+                if log.failUploads {
+                    log.beforeUploadFails()
+                    throw CancellationError()
+                }
                 if !log.pattern.isEmpty, log.pattern.removeFirst() { throw CancellationError() }
                 log.uploads.append(name)
                 return AgentAttachment(path: "/a/\(name)", name: name, size: 1, mime: "image/jpeg")
@@ -54,7 +61,9 @@ import Testing
             refreshAgents: { _ in
                 log.refreshes += 1
                 log.onRefresh()
+                return log.refreshResult
             },
+            agentName: { _, agent in log.names[agent] },
             clearReminder: { log.cleared.append($0) })
         let importer = ShareImporter(inbox: inbox, environment: environment)
         importer.onNotice = { log.notices.append($0) }
@@ -175,7 +184,7 @@ import Testing
         #expect(log.queued.isEmpty)
         #expect(inbox.pending().isEmpty)
         #expect(log.notices.count == 2)
-        #expect(log.notices.first == ShareNotice(kind: .agentGone, agentName: "forge"))
+        #expect(log.notices.first == ShareNotice(kind: .agentGone, agentName: nil), "an old task has no name, and the agent is not listed")
         #expect(importer.target(of: first.id) == nil, "a dropped task opens no chat")
         #expect(log.cleared.count == 2)
     }
@@ -207,8 +216,47 @@ import Testing
         }
         await importer.drain()
         #expect(inbox.pending().isEmpty, "the fifth failure drops the task")
-        #expect(log.notices == [ShareNotice(kind: .failedForGood, agentName: "Forge")])
+        #expect(log.notices == [ShareNotice(kind: .failedForGood, agentName: "Forge", fallbackName: "forge")])
         #expect(log.queued.isEmpty)
+    }
+
+    @Test func aListThatCouldNotBeReadIsNoProofThatTheAgentIsGone() async throws {
+        let log = Log()
+        log.refreshResult = false
+        let (importer, inbox, base) = try makeImporter(facts: agentMissing, log: log)
+        defer { try? FileManager.default.removeItem(at: base) }
+        try inbox.save(task("keep me", at: 10), images: [])
+        await importer.drain()
+        #expect(inbox.pending().count == 1, "the task waits")
+        #expect(log.notices.isEmpty && log.queued.isEmpty)
+        #expect(log.cleared.isEmpty)
+        log.refreshResult = true
+        await importer.drain()
+        #expect(inbox.pending().isEmpty, "a list that was read says the agent is gone")
+        #expect(log.notices.count == 1)
+    }
+
+    @Test func aLinkThatDropsMidUploadIsNotAFailedTry() async throws {
+        let log = Log()
+        log.failUploads = true
+        let (importer, inbox, base) = try makeImporter(facts: online, log: log)
+        defer { try? FileManager.default.removeItem(at: base) }
+        log.beforeUploadFails = { log.facts = ShareServerFacts(connected: false, agentsKnown: true, hasAgent: true) }
+        try inbox.save(task("pic", at: 10), images: [Data([1])])
+        for _ in 1...6 { await importer.drain() }
+        #expect(inbox.pending().first?.attempts == 0)
+        #expect(log.notices.isEmpty)
+    }
+
+    @Test func anOldTaskGetsTheAgentsNameFromTheServersList() async throws {
+        let log = Log()
+        log.failUploads = true
+        log.names["forge"] = "Scout"
+        let (importer, inbox, base) = try makeImporter(facts: online, log: log)
+        defer { try? FileManager.default.removeItem(at: base) }
+        try inbox.save(task("pic", at: 10), images: [Data([1])])
+        for _ in 1...5 { await importer.drain() }
+        #expect(log.notices == [ShareNotice(kind: .failedForGood, agentName: "Scout", fallbackName: "forge")])
     }
 
     @Test func waitingForTheConnectionIsNotAFailedTry() async throws {

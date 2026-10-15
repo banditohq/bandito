@@ -52,6 +52,8 @@ struct RootView: View {
     @State private var answerToast = AnswerToastCenter()
     /// A `bandito://share/<id>` link that waits for Face ID: the task is sent and its chat opens once the app is open.
     @State private var pendingShare: UUID?
+    /// Toasts about shared tasks that were dropped while Face ID covered the app: shown once it is open.
+    @State private var pendingNotices: [ShareNotice] = []
     /// The first run's progress; the flow covers the app until a server is paired (docs/IOS_APP.md, Onboarding).
     @State private var onboarding = OnboardingStore.launch(arguments: ProcessInfo.processInfo.arguments)
     private let biometrics = DeviceAuthenticator()
@@ -143,6 +145,8 @@ struct RootView: View {
                 newTask = nil
             } else {
                 runPendingQuickAction()
+                for notice in pendingNotices { showShareNotice(notice) }
+                pendingNotices = []
                 if let id = pendingShare { openShared(id) } else { importSharedTasks() }
             }
         }
@@ -184,9 +188,7 @@ struct RootView: View {
             notifications.attach(session.current)
             ChatOutbox.shared.attach(session.current)
             ShareImporter.shared.attach(.live(session: session))
-            ShareImporter.shared.onNotice = { notice in
-                answerToast.show(AnswerToastMessage(text: notice.text, allowed: false))
-            }
+            ShareImporter.shared.onNotice = { notice in showShareNotice(notice) }
             importSharedTasks()
         }
         // A server that comes online lets the tasks with pictures go.
@@ -311,6 +313,15 @@ struct RootView: View {
         Task { await ShareImporter.shared.drain() }
     }
 
+    /// The toast of a dropped shared task; behind the lock it waits for Face ID.
+    private func showShareNotice(_ notice: ShareNotice) {
+        if appLock.isLocked {
+            pendingNotices.append(notice)
+        } else {
+            answerToast.show(AnswerToastMessage(text: notice.text, allowed: false))
+        }
+    }
+
     /// A `bandito://share/<id>` link: the task is queued and the agent's chat opens. Behind the lock it waits.
     private func openShared(_ id: UUID) {
         guard !appLock.isLocked else {
@@ -321,6 +332,11 @@ struct RootView: View {
         Task {
             // The task is sent (or dropped) first: a task whose agent is gone opens no chat.
             await ShareImporter.shared.drain()
+            // The lock may have closed while the task was sent: the chat waits for Face ID.
+            guard !appLock.isLocked else {
+                pendingShare = id
+                return
+            }
             guard let target = ShareImporter.shared.target(of: id) else { return }
             // A link that started the app can arrive before the saved servers are read: the chat opens once its server is there.
             var waited = 0

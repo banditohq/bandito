@@ -296,6 +296,9 @@ public final class ServerModel: Identifiable {
     public private(set) var agents: [Agent] = []
     /// When `agents` was last read from the daemon (`agents.list`); nil until the first read.
     public private(set) var agentsReadAt: Date?
+    /// When the agent list was last read SUCCESSFULLY. Unlike `agentsReadAt` a failed read does not set it, so nil or an
+    /// old value means the list may not be what the daemon has.
+    public private(set) var agentsListedAt: Date?
     /// Agent changes that arrive close together are answered by one `agents.list` after this delay.
     public nonisolated static let agentsRefreshDelay: Duration = .milliseconds(300)
     /// Coming back to the front re-reads the agents when the last read is older than this (seconds).
@@ -848,6 +851,7 @@ public final class ServerModel: Identifiable {
             ? list
             : list + syntheticAgents.values.filter { s in !list.contains { $0.id == s.id } }.sorted { $0.name < $1.name }
         agentsReadAt = Date()
+        agentsListedAt = Date()
     }
 
     /// Agents that exist only in the app, for the performance scenarios (the QA command `perf` and the smoothness
@@ -940,15 +944,18 @@ public final class ServerModel: Identifiable {
         }
     }
 
-    /// Reads `agents.list` now and returns when the list is updated (or the read failed). One read already in flight is
-    /// waited for first, so the answer is not older than the call. For a screen that must know whether an agent exists.
-    public func refreshAgentsNow() async {
-        var waited = 0
-        while agentsRefreshing, waited < 50 {
+    /// Reads `agents.list` now. One read already in flight is waited for first (as long as it takes), so the answer is not
+    /// older than the call. True only when this call saw a successful read (`agentsListedAt` moved): false means the
+    /// list may be out of date, whether the read failed, the link is down or the task was cancelled. For a screen that
+    /// must know whether an agent exists.
+    public func refreshAgentsNow() async -> Bool {
+        let before = agentsListedAt
+        while agentsRefreshing {
             try? await Task.sleep(for: .milliseconds(100))
-            waited += 1
+            if Task.isCancelled { return false }
         }
         await runAgentsRefresh()
+        return agentsListedAt != before
     }
 
     /// Called when the app comes back to the front. Re-reads the agents when the last read is older than

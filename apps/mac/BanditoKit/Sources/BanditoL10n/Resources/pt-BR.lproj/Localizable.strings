@@ -1203,6 +1203,7 @@
 "ios.settings.servers.via.lan" = "Rede local";
 "ios.settings.servers.via.tailscale" = "Tailscale";
 "ios.share.agentGone" = "%1$@ não existe mais — a mensagem não foi enviada";
+"ios.share.agentGoneUnnamed" = "O agente não existe mais — a mensagem não foi enviada";
 "ios.share.done" = "Pronto. Abra o Bandito e a mensagem será enviada sozinha";
 "ios.share.doneButton" = "Concluir";
 "ios.share.empty" = "Abra o Bandito e conecte um servidor";
