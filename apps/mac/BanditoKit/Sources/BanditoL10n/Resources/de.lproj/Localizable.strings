@@ -1100,6 +1100,11 @@
 "ios.newAgent.tabOne" = "Ein Agent";
 "ios.newAgent.tabTeams" = "Fertige Teams";
 "ios.newAgent.teamsEmpty" = "Auf diesem Server gibt es noch keine fertigen Teams.";
+"ios.newTask.empty" = "Lege zuerst einen Agenten an. Sobald einer im Team ist, kannst du ihm von hier aus eine Aufgabe schicken.";
+"ios.newTask.offline" = "Wird gesendet, sobald der Server online ist";
+"ios.newTask.title" = "Neue Aufgabe";
+"ios.newTask.to" = "An";
+"ios.newTask.voiceHint" = "Gedrückt halten zum Diktieren";
 "ios.notifications.ask.body" = "Bandito kann dir sagen, wenn ein Agent um Freigabe bittet, eine Frage hat oder scheitert. Sonst nichts. Du kannst das in den Einstellungen ändern.";
 "ios.notifications.ask.later" = "Nicht jetzt";
 "ios.notifications.ask.title" = "Möchtest du wissen, wann dich dein Team braucht?";
@@ -1135,6 +1140,7 @@
 "ios.onboarding.welcome.start" = "Los geht's";
 "ios.onboarding.welcome.subtitle" = "Agenten arbeiten auf Ihrem eigenen Server, mit Rollen und Zeitplänen. Sie entscheiden, was sie dürfen.";
 "ios.onboarding.welcome.title" = "Ihr Team ist bereit";
+"ios.quickAction.newTask" = "Neue Aufgabe";
 "ios.settings.about.docs" = "Dokumentation";
 "ios.settings.about.privacy" = "Datenschutz";
 "ios.settings.about.report" = "Problem melden";

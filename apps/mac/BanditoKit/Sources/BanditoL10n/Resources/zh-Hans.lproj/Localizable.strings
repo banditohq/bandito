@@ -1100,6 +1100,11 @@
 "ios.newAgent.tabOne" = "单个代理";
 "ios.newAgent.tabTeams" = "现成团队";
 "ios.newAgent.teamsEmpty" = "此服务器暂无现成团队。";
+"ios.newTask.empty" = "请先添加一个智能体。团队里有智能体后，就能在这里给它发送任务。";
+"ios.newTask.offline" = "服务器上线后发送";
+"ios.newTask.title" = "新任务";
+"ios.newTask.to" = "发给";
+"ios.newTask.voiceHint" = "长按以语音输入";
 "ios.notifications.ask.body" = "当智能体请求批准、提出问题或失败时，Bandito 可以通知你，仅此而已。你可以在设置中更改。";
 "ios.notifications.ask.later" = "暂不";
 "ios.notifications.ask.title" = "想在团队需要你时收到通知吗？";
@@ -1135,6 +1140,7 @@
 "ios.onboarding.welcome.start" = "开始";
 "ios.onboarding.welcome.subtitle" = "代理在你自己的服务器上工作，有角色，也有排期。它们能做什么，由你决定。";
 "ios.onboarding.welcome.title" = "你的团队已就绪";
+"ios.quickAction.newTask" = "新任务";
 "ios.settings.about.docs" = "文档";
 "ios.settings.about.privacy" = "隐私";
 "ios.settings.about.report" = "报告问题";

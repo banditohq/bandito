@@ -41,6 +41,10 @@ struct RootView: View {
     @State private var inboxFocus: String?
     /// The agent a widget or a `bandito://agent/...` link asked the Crew to open.
     @State private var crewFocus: CrewFocus?
+    /// The new-task sheet, while it is open: a new value is a new sheet (the long press asks for the dictation).
+    @State private var newTask: NewTaskRequest?
+    /// What the screen does once the new-task sheet has closed (see `runNewTaskFollowUp`).
+    @State private var newTaskFollowUp: NewTaskFollowUp?
     /// The first run's progress; the flow covers the app until a server is paired (docs/IOS_APP.md, Onboarding).
     @State private var onboarding = OnboardingStore.launch(arguments: ProcessInfo.processInfo.arguments)
     private let biometrics = DeviceAuthenticator()
@@ -51,22 +55,28 @@ struct RootView: View {
         let showsOnboarding = onboarding.shows(hasServers: !servers.isEmpty)
         ZStack {
             TabView(selection: $tab) {
-                CrewScreen(
-                    servers: servers, settings: settings, onConnect: openConnect, onShowInbox: { tab = .inbox },
-                    focus: crewFocus)
-                    .id(dynamicTypeSize)
-                    .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
-                    .tag(AppTab.crew)
+                withNewTaskButton(
+                    CrewScreen(
+                        servers: servers, settings: settings, onConnect: openConnect, onShowInbox: { tab = .inbox },
+                        focus: crewFocus)
+                        .id(dynamicTypeSize),
+                    shown: !servers.isEmpty
+                )
+                .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
+                .tag(AppTab.crew)
                 InboxScreen(servers: servers, settings: settings, focus: $inboxFocus, openChat: openChat)
                     .id(dynamicTypeSize)
                     .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
                     .badge(InboxRules.badge(of: servers))
                     .tag(AppTab.inbox)
-                ActivityScreen(servers: servers, settings: settings)
-                    .id(dynamicTypeSize)
-                    .badge(ActivityFacts.unreadCount(servers: servers))
-                    .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
-                    .tag(AppTab.activity)
+                withNewTaskButton(
+                    ActivityScreen(servers: servers, settings: settings)
+                        .id(dynamicTypeSize),
+                    shown: !servers.isEmpty
+                )
+                .badge(ActivityFacts.unreadCount(servers: servers))
+                .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
+                .tag(AppTab.activity)
                 SettingsTab(
                     settings: settings, session: session, account: account, biometrics: biometrics,
                     onConnect: openConnect)
@@ -104,6 +114,15 @@ struct RootView: View {
         }
         .onChange(of: notifications.route) { _, route in
             open(route)
+        }
+        // An action of the app icon (long press on it), also one that started the app: the same as the button or the tab.
+        .onChange(of: QuickActionHub.shared.pending, initial: true) { _, action in
+            guard let action else { return }
+            QuickActionHub.shared.consume()
+            switch action {
+            case .newTask: newTask = NewTaskRequest(dictate: false)
+            case .inbox: tab = .inbox
+            }
         }
         .onOpenURL { url in
             if url.scheme?.lowercased() == "bandito", url.host?.lowercased() == "pair" {
@@ -155,6 +174,12 @@ struct RootView: View {
             if IOSDemo.isRequested(in: arguments) {
                 guard session.current.isEmpty else { return }
                 session.installDemo(await IOSDemo.startServers(withTeam: !IOSDemo.isEmptyRequested(in: arguments)))
+                #if DEBUG
+                // `-demo -new-task` opens the new-task sheet at launch (the screenshots).
+                if arguments.contains("-new-task") {
+                    newTask = NewTaskRequest(dictate: false)
+                }
+                #endif
                 return
             }
             session.loadIfNeeded()
@@ -187,6 +212,40 @@ struct RootView: View {
         .sheet(isPresented: $asksNotifications) {
             NotificationAskSheet(onDone: { asksNotifications = false })
                 .presentationDetents([.medium])
+        }
+        .sheet(item: $newTask, onDismiss: runNewTaskFollowUp) { request in
+            NewTaskSheet(
+                servers: servers, startsDictating: request.dictate,
+                onFinish: { newTaskFollowUp = $0 })
+        }
+    }
+
+    /// The floating New task button at the bottom right, above the tab bar. It is an inset of the tab's screen, so the
+    /// last row of its list scrolls above the button. Shown only when a server is connected.
+    private func withNewTaskButton<Content: View>(_ content: Content, shown: Bool) -> some View {
+        content.safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
+            if shown {
+                NewTaskButton(
+                    onTap: { newTask = NewTaskRequest(dictate: false) },
+                    onLongPress: { newTask = NewTaskRequest(dictate: true) }
+                )
+                .padding(.trailing, BanditoSpace.s4)
+                .padding(.bottom, BanditoSpace.s2)
+            }
+        }
+    }
+
+    /// Does what the new-task sheet asked for, once it has closed: the sheet and the connect sheet cannot be open together.
+    private func runNewTaskFollowUp() {
+        guard let followUp = newTaskFollowUp else { return }
+        newTaskFollowUp = nil
+        switch followUp {
+        case .connect:
+            openConnect()
+        case .crew:
+            tab = .crew
+        case .chat(let serverID, let agentID):
+            openLink(.agent(server: serverID.uuidString, id: agentID))
         }
     }
 
