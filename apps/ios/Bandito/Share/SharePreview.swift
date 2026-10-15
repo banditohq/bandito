@@ -19,6 +19,7 @@ enum SharePreview {
         model.apply(
             SharedContent(
                 text: "Look at this page\nhttps://bandito.dev/docs", images: [picture(0.55), picture(0.1)]))
+        if ProcessInfo.processInfo.arguments.contains("-share-saved") { model.showSavedForPreview() }
         return model
     }
 

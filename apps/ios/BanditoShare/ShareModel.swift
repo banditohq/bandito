@@ -80,6 +80,13 @@ final class ShareModel {
         loading = false
     }
 
+    #if DEBUG
+    /// `-share-preview -share-saved`: the screen after Send, for the screenshots.
+    func showSavedForPreview() {
+        stage = .saved
+    }
+    #endif
+
     /// Writes the task to the App Group, then opens Bandito on it. The write comes first, always.
     func send() {
         guard canSend, let agent = chosen, let inbox else { return }
