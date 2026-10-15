@@ -1446,6 +1446,7 @@ public enum L10n {
         }
 
         public enum Chat {
+            public static var attachmentPlaceholder: String { L10n.tr("ios.chat.attachmentPlaceholder") }
             public static var copyLink: String { L10n.tr("ios.chat.copyLink") }
             public static var discard: String { L10n.tr("ios.chat.discard") }
             public static var loading: String { L10n.tr("ios.chat.loading") }

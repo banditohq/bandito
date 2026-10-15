@@ -987,6 +987,7 @@
 "ios.chat.attach.files" = "Archivos";
 "ios.chat.attach.noPreview" = "Sin vista previa en esta conexión";
 "ios.chat.attach.photos" = "Fototeca";
+"ios.chat.attachmentPlaceholder" = "📎 Adjunto";
 "ios.chat.camera.denied" = "Bandito no puede usar la cámara. Permítelo en Ajustes de iOS → Bandito.";
 "ios.chat.changes.failed" = "No se pudieron cargar los cambios.";
 "ios.chat.connection.offline" = "Sin conexión. Los mensajes nuevos esperan aquí hasta que vuelva.";

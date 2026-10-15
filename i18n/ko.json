@@ -3370,6 +3370,7 @@
   "ios.chat.loadFailed.title": "채팅을 불러오지 못했습니다",
   "ios.chat.loadFailed.message": "{name}의 기록을 읽지 못했습니다. 연결을 확인하고 다시 시도해 주세요.",
   "ios.chat.loading": "채팅을 불러오는 중",
+  "ios.chat.attachmentPlaceholder": "📎 첨부 파일",
   "ios.chat.discard": "메시지 삭제",
   "ios.chat.empty.title": "{name}와 시작하기",
   "ios.chat.empty.message": "{name}에게 작업을 맡기거나 질문해 보세요. 답변이 여기에 표시됩니다.",

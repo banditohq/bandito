@@ -987,6 +987,7 @@
 "ios.chat.attach.files" = "ファイル";
 "ios.chat.attach.noPreview" = "この接続ではプレビューできません";
 "ios.chat.attach.photos" = "写真ライブラリ";
+"ios.chat.attachmentPlaceholder" = "📎 添付ファイル";
 "ios.chat.camera.denied" = "Banditoはカメラを使用できません。iOSの設定 → Banditoで許可してください。";
 "ios.chat.changes.failed" = "変更を読み込めませんでした。";
 "ios.chat.connection.offline" = "接続がありません。新しいメッセージは、接続が戻るまでここで待機します。";

@@ -3412,6 +3412,7 @@
   "ios.chat.loadFailed.title": "Não foi possível carregar a conversa",
   "ios.chat.loadFailed.message": "Não foi possível ler o histórico de {name}. Verifique a conexão e tente de novo.",
   "ios.chat.loading": "Carregando a conversa",
+  "ios.chat.attachmentPlaceholder": "📎 Anexo",
   "ios.chat.discard": "Excluir mensagem",
   "ios.chat.empty.title": "Comece com {name}",
   "ios.chat.empty.message": "Dê uma tarefa a {name} ou faça uma pergunta. A resposta aparece aqui.",

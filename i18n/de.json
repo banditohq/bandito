@@ -3411,6 +3411,7 @@
   "ios.chat.loadFailed.title": "Der Chat konnte nicht geladen werden",
   "ios.chat.loadFailed.message": "Der Verlauf von {name} konnte nicht gelesen werden. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
   "ios.chat.loading": "Der Chat wird geladen",
+  "ios.chat.attachmentPlaceholder": "📎 Anhang",
   "ios.chat.discard": "Nachricht löschen",
   "ios.chat.empty.title": "Beginnen Sie mit {name}",
   "ios.chat.empty.message": "Geben Sie {name} eine Aufgabe oder stellen Sie eine Frage. Die Antwort erscheint hier.",

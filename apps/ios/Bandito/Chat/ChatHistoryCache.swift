@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import Foundation
 
 // The last messages of each chat, kept on disk so a chat opens with its history while the connection is still being made
@@ -30,6 +31,8 @@ struct CachedChatItem: Codable, Equatable, Sendable {
     var run: ScheduleRun?
     /// A quiet turn.
     var reason: String?
+    /// A person's message that was only a file: the file is not kept, so it reads as a line saying there was one.
+    var attachmentOnly: Bool?
 
     /// The most characters of one message that are kept; the rest is a quiet loss in a copy (the server has it all).
     static let textLimit = 20_000
@@ -42,9 +45,10 @@ struct CachedChatItem: Codable, Equatable, Sendable {
     /// The saved form of an item, nil for what is not kept (tool calls, approvals, forms, connect requests, a stream).
     init?(_ item: ThreadItem) {
         switch item {
-        case .user(let id, let text, let source, let from, let ts, _):
+        case .user(let id, let text, let source, let from, let ts, let files):
             self.init(kind: .user, id: id)
             self.text = Self.cut(text)
+            if text.isEmpty, !files.isEmpty { attachmentOnly = true }
             self.ts = ts
             self.source = source.rawValue
             self.from = from
@@ -91,7 +95,7 @@ struct CachedChatItem: Codable, Equatable, Sendable {
         switch kind {
         case .user:
             return .user(
-                id: id, text: text, source: source.flatMap(MessageSource.init(rawValue:)) ?? .user, from: from, ts: ts)
+                id: id, text: attachmentOnly == true ? L10n.Ios.Chat.attachmentPlaceholder : text, source: source.flatMap(MessageSource.init(rawValue:)) ?? .user, from: from, ts: ts)
         case .assistant:
             return .assistant(id: id, text: text, ts: ts)
         case .note:

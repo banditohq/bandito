@@ -987,6 +987,7 @@
 "ios.chat.attach.files" = "파일";
 "ios.chat.attach.noPreview" = "이 연결에서는 미리보기를 사용할 수 없습니다";
 "ios.chat.attach.photos" = "사진 보관함";
+"ios.chat.attachmentPlaceholder" = "📎 첨부 파일";
 "ios.chat.camera.denied" = "Bandito가 카메라를 사용할 수 없습니다. iOS 설정 → Bandito에서 허용해 주세요.";
 "ios.chat.changes.failed" = "변경 사항을 불러오지 못했습니다.";
 "ios.chat.connection.offline" = "연결이 없습니다. 새 메시지는 연결이 돌아올 때까지 여기서 대기합니다.";

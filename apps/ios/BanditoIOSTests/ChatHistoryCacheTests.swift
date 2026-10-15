@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import Foundation
 import Testing
 
@@ -72,6 +73,29 @@ import Testing
         for item in loaded.thread.items {
             if case .user(_, _, _, _, _, let files) = item { #expect(files.isEmpty) }
         }
+    }
+
+    @Test func aMessageThatWasOnlyAFileIsKeptAsALineSayingSo() throws {
+        let cache = makeCache()
+        defer { cache.remove(serverID: serverA) }
+        let file = AgentAttachment(path: "/tmp/photo.jpg", name: "photo.jpg", size: 10, mime: "image/jpeg")
+        var source = AgentThread()
+        source.items = [
+            .user(id: "s1", text: "", source: .user, from: nil, ts: 1, attachments: [file]),
+            .user(id: "s2", text: "With words", source: .user, from: nil, ts: 2, attachments: [file]),
+            .user(id: "s3", text: "", source: .user, from: nil, ts: 3),
+        ]
+        cache.save(ChatHistorySnapshot(thread: source, now: 1), serverID: serverA, agentID: "forge")
+        let loaded = try #require(cache.load(serverID: serverA, agentID: "forge"))
+        var texts: [String] = []
+        for item in loaded.thread.items {
+            if case .user(_, let text, _, _, _, _) = item { texts.append(text) }
+        }
+        // The file-only message says there was a file; the one with words keeps its words; the empty one stays empty.
+        #expect(texts == [L10n.Ios.Chat.attachmentPlaceholder, "With words", ""])
+        #expect(!L10n.Ios.Chat.attachmentPlaceholder.isEmpty)
+        let json = String(data: try JSONEncoder().encode(loaded), encoding: .utf8) ?? ""
+        #expect(!json.contains("photo.jpg"))
     }
 
     @Test func aVeryLongMessageIsCutInTheCopy() throws {
