@@ -1,0 +1,131 @@
+{
+  "version": "0.1.19",
+  "date": "2026-10-15",
+  "items": [
+    {
+      "icon": "qrcode.viewfinder",
+      "title": {
+        "en": "Sign in on the iPhone with your Mac",
+        "ru": "Вход на iPhone через Mac",
+        "de": "Auf dem iPhone mit dem Mac anmelden",
+        "es": "Inicie sesión en el iPhone con su Mac",
+        "fr": "Connectez l’iPhone avec votre Mac",
+        "ja": "Mac で iPhone にサインイン",
+        "ko": "Mac으로 iPhone에 로그인",
+        "pt-BR": "Entre no iPhone com o seu Mac",
+        "zh-Hans": "用 Mac 登录 iPhone"
+      },
+      "text": {
+        "en": "No password and no mail code: on the Mac open Settings → Account → Add iPhone or iPad, then point the iPhone at the QR code. The phone is signed in, approved and gets your servers by itself.",
+        "ru": "Без пароля и кода из почты: на Mac откройте Настройки → Аккаунт → «Добавить iPhone или iPad» и наведите iPhone на QR-код. Телефон сам войдёт, получит подтверждение и ваши серверы.",
+        "de": "Ohne Passwort und ohne Code per Mail: Öffnen Sie auf dem Mac Einstellungen → Konto → „iPhone oder iPad hinzufügen“ und richten Sie das iPhone auf den QR-Code. Das Telefon meldet sich an, wird bestätigt und erhält Ihre Server von selbst.",
+        "es": "Sin contraseña ni código por correo: en el Mac abra Ajustes → Cuenta → «Añadir iPhone o iPad» y apunte el iPhone al código QR. El teléfono inicia sesión, se aprueba y recibe sus servidores solo.",
+        "fr": "Sans mot de passe ni code par e-mail : sur le Mac, ouvrez Réglages → Compte → « Ajouter un iPhone ou un iPad », puis visez le code QR avec l’iPhone. Le téléphone se connecte, est validé et reçoit vos serveurs tout seul.",
+        "ja": "パスワードもメールのコードも不要。Mac で 設定 → アカウント →「iPhone または iPad を追加」を開き、iPhone で QR コードを読み取るだけ。サインイン、承認、サーバーの追加まで自動で行われます。",
+        "ko": "비밀번호도 메일 코드도 필요 없습니다. Mac에서 설정 → 계정 → ‘iPhone 또는 iPad 추가’를 열고 iPhone으로 QR 코드를 비추세요. 휴대폰이 알아서 로그인하고 승인받아 서버를 가져옵니다.",
+        "pt-BR": "Sem senha e sem código por e-mail: no Mac abra Ajustes → Conta → “Adicionar iPhone ou iPad” e aponte o iPhone para o código QR. O celular entra, é aprovado e recebe seus servidores sozinho.",
+        "zh-Hans": "无需密码，也无需邮件验证码：在 Mac 上打开 设置 → 账户 →“添加 iPhone 或 iPad”，用 iPhone 对准二维码即可。手机会自动登录、获得批准并收到你的服务器。"
+      }
+    },
+    {
+      "icon": "bell.badge.fill",
+      "title": {
+        "en": "Notifications with the app closed",
+        "ru": "Уведомления при закрытом приложении",
+        "de": "Mitteilungen bei geschlossener App",
+        "es": "Notificaciones con la app cerrada",
+        "fr": "Notifications app fermée",
+        "ja": "アプリを閉じていても通知",
+        "ko": "앱을 닫아도 알림",
+        "pt-BR": "Notificações com o app fechado",
+        "zh-Hans": "应用关闭时也能收到通知"
+      },
+      "text": {
+        "en": "The iPhone tells you when an agent finishes, fails or asks for permission, even when Bandito is closed. Allow or deny right from the banner. Notifications are end-to-end encrypted.",
+        "ru": "iPhone сообщит, когда агент закончил, упал или просит разрешения, даже если Bandito закрыт. Разрешить или запретить можно прямо с баннера. Уведомления зашифрованы сквозным шифрованием.",
+        "de": "Das iPhone meldet, wenn ein Agent fertig ist, scheitert oder um Erlaubnis bittet, auch wenn Bandito geschlossen ist. Erlauben oder ablehnen direkt im Banner. Mitteilungen sind Ende-zu-Ende verschlüsselt.",
+        "es": "El iPhone le avisa cuando un agente termina, falla o pide permiso, aunque Bandito esté cerrado. Permita o deniegue desde el propio aviso. Las notificaciones van cifradas de extremo a extremo.",
+        "fr": "L’iPhone vous prévient quand un agent termine, échoue ou demande une autorisation, même Bandito fermé. Autorisez ou refusez directement depuis la bannière. Les notifications sont chiffrées de bout en bout.",
+        "ja": "Bandito を閉じていても、エージェントの完了・失敗・許可の要求を iPhone が知らせます。バナーからそのまま許可・拒否できます。通知はエンドツーエンドで暗号化されます。",
+        "ko": "Bandito를 닫아 두어도 에이전트가 끝나거나 실패하거나 권한을 요청하면 iPhone이 알려 줍니다. 배너에서 바로 허용하거나 거부하세요. 알림은 종단 간 암호화됩니다.",
+        "pt-BR": "O iPhone avisa quando um agente termina, falha ou pede permissão, mesmo com o Bandito fechado. Permita ou negue direto no banner. As notificações têm criptografia de ponta a ponta.",
+        "zh-Hans": "即使 Bandito 已关闭，iPhone 也会在智能体完成、失败或请求权限时通知你。可直接在横幅上允许或拒绝。通知采用端到端加密。"
+      }
+    },
+    {
+      "icon": "bolt.horizontal.circle.fill",
+      "title": {
+        "en": "Servers appear in seconds",
+        "ru": "Серверы появляются за секунды",
+        "de": "Server erscheinen in Sekunden",
+        "es": "Los servidores aparecen en segundos",
+        "fr": "Les serveurs apparaissent en quelques secondes",
+        "ja": "サーバーが数秒で表示",
+        "ko": "서버가 몇 초 만에 표시",
+        "pt-BR": "Os servidores aparecem em segundos",
+        "zh-Hans": "服务器几秒内出现"
+      },
+      "text": {
+        "en": "After you sign in or approve a device, every server of your account shows up on the iPhone within seconds, with its status, and you can switch between them in Settings.",
+        "ru": "После входа или подтверждения устройства все серверы аккаунта появляются на iPhone за секунды, со статусом, и между ними можно переключаться в Настройках.",
+        "de": "Nach der Anmeldung oder Bestätigung eines Geräts erscheinen alle Server Ihres Kontos binnen Sekunden auf dem iPhone, mit Status, und Sie wechseln in den Einstellungen zwischen ihnen.",
+        "es": "Tras iniciar sesión o aprobar un dispositivo, todos los servidores de su cuenta aparecen en el iPhone en segundos, con su estado, y puede cambiar entre ellos en Ajustes.",
+        "fr": "Après la connexion ou la validation d’un appareil, tous les serveurs de votre compte apparaissent sur l’iPhone en quelques secondes, avec leur état, et vous passez de l’un à l’autre dans Réglages.",
+        "ja": "サインインやデバイスの承認のあと、アカウントのすべてのサーバーが状態つきで数秒以内に iPhone に表示され、設定で切り替えられます。",
+        "ko": "로그인하거나 기기를 승인하면 계정의 모든 서버가 상태와 함께 몇 초 안에 iPhone에 나타나고, 설정에서 서로 전환할 수 있습니다.",
+        "pt-BR": "Depois de entrar ou aprovar um dispositivo, todos os servidores da sua conta aparecem no iPhone em segundos, com o status, e você alterna entre eles em Ajustes.",
+        "zh-Hans": "登录或批准设备后，账户中的所有服务器会在几秒内带着状态出现在 iPhone 上，并可在设置中切换。"
+      }
+    },
+    {
+      "icon": "square.and.pencil",
+      "title": {
+        "en": "A new iPhone app, inside and out",
+        "ru": "Обновлённое приложение для iPhone",
+        "de": "Die iPhone-App, rundum erneuert",
+        "es": "La app de iPhone, renovada",
+        "fr": "L’app iPhone, entièrement revue",
+        "ja": "iPhone アプリを一新",
+        "ko": "새로워진 iPhone 앱",
+        "pt-BR": "O app de iPhone, renovado",
+        "zh-Hans": "全新的 iPhone 应用"
+      },
+      "text": {
+        "en": "Start a task from anywhere with New task or the Share sheet, follow it on the Lock Screen with Live Activities, and see clearly when a server is offline. Smoother screens and animations throughout.",
+        "ru": "Запускайте задачу откуда угодно — кнопкой «Новая задача» или через «Поделиться», следите за ней на экране блокировки в Live Activities и сразу видьте, когда сервер недоступен. Экраны и анимации стали плавнее.",
+        "de": "Starten Sie Aufgaben von überall mit „Neue Aufgabe“ oder über das Teilen-Menü, verfolgen Sie sie mit Live-Aktivitäten auf dem Sperrbildschirm und sehen Sie klar, wenn ein Server offline ist. Flüssigere Bildschirme und Animationen.",
+        "es": "Inicie una tarea desde cualquier sitio con «Nueva tarea» o con Compartir, sígala en la pantalla bloqueada con Actividades en Vivo y vea claramente cuándo un servidor está desconectado. Pantallas y animaciones más fluidas.",
+        "fr": "Lancez une tâche de n’importe où avec « Nouvelle tâche » ou via Partager, suivez-la sur l’écran verrouillé avec les Activités en direct et voyez clairement quand un serveur est hors ligne. Écrans et animations plus fluides.",
+        "ja": "「新しいタスク」や共有シートからどこでもタスクを開始し、ロック画面のライブアクティビティで進み具合を確認。サーバーがオフラインのときもひと目でわかります。画面とアニメーションもより滑らかに。",
+        "ko": "‘새 작업’이나 공유 시트로 어디서든 작업을 시작하고, 잠금 화면의 실시간 현황으로 진행을 확인하며, 서버가 오프라인이면 바로 알 수 있습니다. 화면과 애니메이션도 더 부드러워졌습니다.",
+        "pt-BR": "Comece uma tarefa de qualquer lugar com “Nova tarefa” ou pelo Compartilhar, acompanhe na tela bloqueada com as Atividades ao Vivo e veja claramente quando um servidor está offline. Telas e animações mais fluidas.",
+        "zh-Hans": "通过“新任务”或共享菜单随时开始任务，在锁定屏幕上用实时活动跟进进度，服务器离线时一目了然。界面和动画也更流畅。"
+      }
+    },
+    {
+      "icon": "checkmark.shield.fill",
+      "title": {
+        "en": "Steadier everyday use",
+        "ru": "Надёжнее в мелочах",
+        "de": "Zuverlässiger im Alltag",
+        "es": "Más fiable en el día a día",
+        "fr": "Plus fiable au quotidien",
+        "ja": "日々の使い心地が安定",
+        "ko": "일상 사용이 더 안정적",
+        "pt-BR": "Mais confiável no dia a dia",
+        "zh-Hans": "日常使用更稳定"
+      },
+      "text": {
+        "en": "Sign-in survives network blips and says why it failed, chat drafts are kept when you leave the app, widget links open the right agent, and the badge follows every server.",
+        "ru": "Вход переживает обрывы сети и объясняет причину ошибки, черновик чата сохраняется при выходе из приложения, ссылки из виджетов открывают нужного агента, а счётчик на иконке следит за всеми серверами.",
+        "de": "Die Anmeldung übersteht Netzaussetzer und sagt, warum sie scheiterte, Chat-Entwürfe bleiben beim Verlassen der App erhalten, Widget-Links öffnen den richtigen Agenten und das Kennzeichen folgt jedem Server.",
+        "es": "El inicio de sesión resiste cortes de red y explica por qué falló, los borradores del chat se guardan al salir de la app, los enlaces de widgets abren el agente correcto y el globo sigue a todos los servidores.",
+        "fr": "La connexion résiste aux coupures réseau et explique pourquoi elle a échoué, les brouillons du chat sont gardés quand vous quittez l’app, les liens des widgets ouvrent le bon agent et la pastille suit tous les serveurs.",
+        "ja": "サインインは通信の瞬断に強くなり、失敗の理由も表示。アプリを離れてもチャットの下書きは残り、ウィジェットのリンクは正しいエージェントを開き、バッジはすべてのサーバーに追従します。",
+        "ko": "로그인이 네트워크 끊김을 견디고 실패 이유를 알려 주며, 앱을 나가도 채팅 초안이 남고, 위젯 링크가 올바른 에이전트를 열고, 배지가 모든 서버를 따라갑니다.",
+        "pt-BR": "O login resiste a quedas de rede e diz por que falhou, os rascunhos do chat ficam salvos ao sair do app, os links dos widgets abrem o agente certo e o indicador acompanha todos os servidores.",
+        "zh-Hans": "登录能扛住网络抖动并说明失败原因，离开应用时会保留聊天草稿，小组件链接会打开正确的智能体，角标会跟随所有服务器。"
+      }
+    }
+  ]
+}
