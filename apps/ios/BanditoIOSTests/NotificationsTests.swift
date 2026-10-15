@@ -236,6 +236,20 @@ struct PhoneHarness {
         #expect(IOSNotifications.routeForPress(agentID: "a1", approvalID: "") == .agent("a1"))
     }
 
+    /// An approval answered on the Mac makes no notice, but the app icon's badge still has to follow it.
+    @Test func anEventWithoutANoticeStillRefreshesTheBadge() async {
+        let server = await IOSDemo.start()
+        let notifications = IOSNotifications()
+        notifications.source = StaticNotificationSource(servers: [server])
+        var shown: [Int] = []
+        notifications.setBadge = { shown.append($0) }
+        let resolved = Event(
+            seq: 5, agentId: "ios-demo-1", ts: 0,
+            body: .approvalResolved(approvalId: "ap-mac", decision: .allow, by: .user, remember: false))
+        notifications.ingest(resolved, from: server)
+        #expect(shown.count == 1)
+    }
+
     @Test func theBackgroundTaskIsPermittedInTheAppsPlist() {
         let identifiers = Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String]
         #expect(identifiers?.contains(BackgroundRefresh.taskIdentifier) == true)
