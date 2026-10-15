@@ -90,6 +90,16 @@ The screen every day. Read the rules before changing it; each came from the Mac'
 - Debug launch arguments: `-chat <agent>` (Crew), `-chat-draft <text>`, `-chat-send <text>`, `-chat-top`, `-chat-row <id part>`.
   The demo agents answer (`Demo/DemoChatScript.swift`: commands, a streamed reply, an approval for Forge, two buttons).
 
+## The share extension (`BanditoShare/`)
+
+- `ShareViewController` hosts the SwiftUI `ShareView`; `ShareModel` is its state. The agents come from the widget snapshot's
+  `directory` (so no server list of its own). The extension writes `ShareInbox` and opens `bandito://share/<id>` through the
+  responder chain (no `UIApplication.shared` in an extension); it never calls a server and never reads the Keychain.
+- The app side is `Share/ShareImporter.swift` (drained on a `.share` link, on `.active`, when servers load and when one
+  connects; not while Face ID covers the app). Remove a task only after `ChatOutbox.enqueue`.
+- `ShareView` and `ShareModel` are also compiled into the app for `-share-preview` (DEBUG; `-share-empty` for no agents).
+- The extension has a ~120 MB memory limit: pictures are read one at a time and shrunk with ImageIO (`ShareLoader`).
+
 ## Known gaps before a release
 
 - `AppIcon` is `brand/png/icon-1024.png` with an alpha channel; App Store Connect rejects an icon with alpha: flatten it
