@@ -18,6 +18,8 @@ targets:
       # The share sheet's view and model, so `-share-preview` can show the sheet inside the app (DEBUG).
       - path: BanditoShare
         includes: [ShareView.swift, ShareModel.swift]
+      # What the push notification extension shares with the app: the keys, opening a push, the notice's text.
+      - SharedPush
     dependencies:
       - package: BanditoKit
         product: BanditoKit
@@ -27,9 +29,12 @@ targets:
         product: BanditoL10n
       - target: BanditoWidgets
       - target: BanditoShare
+      - target: BanditoNotify
     entitlements:
       path: Bandito/Bandito.entitlements
       properties:
+        # Push (docs/IOS_APP.md, Push). Xcode turns it into `production` when a build is signed for TestFlight or the App Store.
+        aps-environment: development
         com.apple.security.application-groups:
           - group.dev.bandito.ios
     # xcodegen rewrites the file at `path` from these properties on every `generate`, so they live here, not in the file.
@@ -162,6 +167,48 @@ targets:
         SKIP_INSTALL: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 74Q24ZMD7A
+  # The push notification extension (docs/IOS_APP.md, Push). It opens a push with the key of the server it came from
+  # (the shared Keychain, `SharedPush/PushKeychain.swift`) and makes the notification the app would have made. It never
+  # reaches a server.
+  BanditoNotify:
+    type: app-extension
+    platform: iOS
+    sources:
+      - BanditoNotify
+      - SharedPush
+    dependencies:
+      - package: BanditoKit
+        product: BanditoKit
+      - package: BanditoKit
+        product: BanditoL10n
+    info:
+      path: BanditoNotify/Info.plist
+      properties:
+        CFBundleDisplayName: Bandito
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotifyService
+    entitlements:
+      path: BanditoNotify/BanditoNotify.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.bandito.ios
+    settings:
+      base:
+        PRODUCT_NAME: BanditoNotify
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.ios.notify
+        MARKETING_VERSION: 0.1.18
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: NO
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SKIP_INSTALL: YES
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 74Q24ZMD7A
   BanditoIOSTests:
     type: bundle.unit-test
     platform: iOS
@@ -216,6 +263,7 @@ schemes:
         BanditoIOSPairing: [test]
         BanditoWidgets: all
         BanditoShare: all
+        BanditoNotify: all
     test:
       targets:
         - BanditoIOSTests

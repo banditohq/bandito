@@ -19,4 +19,20 @@ final class SessionNotificationSource: NotificationSource {
         if server.state != .connected { await server.connect() }
         return try await server.eventsSince(seq)
     }
+
+    /// Reads the saved servers when the app was woken without its screens, and connects the one the notification names, else the
+    /// one that has the agent.
+    func readyServer(serverRef: String?, agentID: String) async -> ServerModel? {
+        session.loadIfNeeded()
+        guard let server = Self.pick(from: servers, serverRef: serverRef, agentID: agentID) else { return nil }
+        if server.state != .connected { await server.connect() }
+        // A connection that was already under way (`connect` returns at once then) is waited for, for 15 seconds at most.
+        for _ in 0..<100 where server.state != .connected {
+            switch server.state {
+            case .connecting, .reconnecting: try? await Task.sleep(for: .milliseconds(150))
+            default: return server
+            }
+        }
+        return server
+    }
 }

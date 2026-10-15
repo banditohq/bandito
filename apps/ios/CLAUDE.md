@@ -141,6 +141,17 @@ The screen every day. Read the rules before changing it; each came from the Mac'
   after 5 failed uploads (`SharedTask.attempts`); uploaded pictures are kept in `task.json` and not sent twice.
 - The extension has a ~120 MB memory limit: pictures are read one at a time and shrunk with ImageIO (`ShareLoader`).
 
+## Push (`Push/`, `SharedPush/`, `BanditoNotify/`)
+
+- Target `BanditoNotify` (Notification Service Extension, `dev.bandito.ios.notify`) opens a push with the server's key and makes
+  the notification with the same code as the app (`PhoneNotice`, `SharedPush/PushNotice.swift`). `SharedPush/` is compiled into
+  the app and the extension only (it uses BanditoKit; `Shared/` also goes into the widgets and Share, which do not).
+- Keys and the cloud handle are in the Keychain under the access group `group.dev.bandito.ios` (`PushKeychain`); never log
+  a key, a handle or a token. Push does not work in an unsigned build (no Keychain group, no token): sign for the Simulator
+  (`CODE_SIGN_IDENTITY=-` with the entitlements, or the team's automatic signing) to try it. Full description: `docs/IOS_APP.md`, "Push on the phone".
+- Try it on the Simulator: allow notifications, read `Documents/push-debug.json` in the app's data container (DEBUG), then
+  `xcrun simctl push <udid> dev.bandito.ios x.apns` with a payload sealed with a key from `-push-test-key`, or send through the cloud.
+
 ## Known gaps before a release
 
 - `bandito://pair…` opens the connect sheet (shown and confirmed before anything is sent); the other `bandito://` links (`inbox`, `crew`, `agent/<server>/<agent>`) are read by `BanditoLink` (`Shared/WidgetSnapshot.swift`) and opened in `RootView`: the tab switches, and an agent opens its chat in the Crew (`CrewFocus`). A notification's press and the Inbox sheet's chat button take the same way.

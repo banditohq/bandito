@@ -1207,9 +1207,10 @@
 "ios.settings.notifications.allow" = "允许通知";
 "ios.settings.notifications.answers" = "就绪的回复";
 "ios.settings.notifications.approvals" = "审批和问题";
-"ios.settings.notifications.background" = "应用关闭时，Bandito 会不定时检查。即时通知将随后续更新推出。";
+"ios.settings.notifications.background" = "应用关闭时，通知通过 Bandito 云到达。不支持推送的服务器会不时检查。";
 "ios.settings.notifications.denied" = "Bandito 的通知在 iOS 设置中已关闭。";
 "ios.settings.notifications.errors" = "错误";
+"ios.settings.notifications.pushUnavailable" = "推送不可用。打开应用时会收到通知。";
 "ios.settings.openSettings" = "打开 iOS 设置";
 "ios.settings.security.enableReason" = "开启 Face ID 锁定";
 "ios.settings.security.faceIDLock" = "Face ID 锁定";

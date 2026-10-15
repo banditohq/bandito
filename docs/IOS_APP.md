@@ -30,8 +30,9 @@ and Activity) opens the composer with an agent picker (last used first).
   Connect iPhone) or paste a `bandito://pair` link or type an address and code → name confirmation → notifications
   permission (asked only after the first server works, with the reason) → Crew. Under a minute.
 - **Approve from the lock screen**: actionable notification "Forge wants to run git push origin feat/…" with Approve
-  / Deny. Risky (push, deploy, delete, outside folder) → Approve needs Face ID. Without push service (phase 1) the
-  same actions come from local notifications while the app is alive or refreshing in the background.
+  / Deny. Risky (push, deploy, delete, outside folder) → Approve needs Face ID. With push (see "Push on the phone") the
+  same actions arrive while the app is closed; without it (an older daemon) they come from local notifications while the
+  app is alive or refreshing in the background.
 - **Task by voice**: long press the New task button → recording starts at once (dictation), release → picker shows the
   last agent, Send. Share sheet extension (built): "Share" → Bandito in any app (text, a link, up to 4 pictures) → pick an
   agent → Send; Bandito opens on that agent's chat. The extension never reaches a server and never reads a token: it leaves
@@ -92,7 +93,7 @@ counts only when its sender is the Mac of the code. A phone that is signed in al
 
 ## iOS-native extras (phase order)
 
-1. Actionable notifications (local now, push later), Face ID lock (optional, off by default), haptics on approve/send. Built.
+1. Actionable notifications (local, and push through the Bandito cloud), Face ID lock (optional, off by default), haptics on approve/send. Built.
 2. Widgets: small "Needs you: 2" (tap → Inbox), medium "Crew" (4 agents with status), lock screen circular count. Built.
 3. Live Activities for running turns. Built (updated by the app; push updates wait for the APNs key).
 4. App Intents / Shortcuts / Siri: "Ask Forge to …", "What needs me in Bandito". Built. Home screen quick actions:
@@ -164,6 +165,66 @@ cloud gave it. A push carries `ct` and `nonce` as the daemon sent them (base64, 
 - The actions follow the decrypted event: `approval.requested` gets Approve and Deny. `collapseId` is `b<seq>`, so the
   same event shown by the app as a local notification replaces the push.
 - A push that cannot be opened (no key for that server, bad tag) is shown with a generic text, never dropped.
+
+### Push on the phone (built)
+
+Notifications arrive with the app closed: the daemon sends an encrypted push through the Bandito cloud and Apple; the
+notification service extension opens it and makes the same notification the app makes from a live event, in the phone's
+language. Code: `apps/ios/Bandito/Push/` (the app side), `apps/ios/SharedPush/` (compiled into the app and the extension),
+`apps/ios/BanditoNotify/` (the extension, `NotifyService`).
+
+- **Entitlements.** The app has `aps-environment` (`development`; Xcode makes it `production` when it signs for TestFlight
+  or the App Store). `BanditoNotify` is a Notification Service Extension (`dev.bandito.ios.notify`) in the App Group
+  `group.dev.bandito.ios`. `UIBackgroundModes` is unchanged: a push with `mutable-content` needs no background mode.
+- **Keychain.** `PushKeychain` keeps, under the access group `group.dev.bandito.ios` (an app group is a valid keychain
+  access group on iOS; service `dev.bandito.ios.push`, readable after the first unlock, this device only): one random
+  32-byte key per server (`push.key.<serverRef>`, `serverRef` = the server's UUID string), and the cloud address
+  (`push.handle`, with the `push.token` and `push.env` it was made for). Plain values the extension reads are in the
+  group's UserDefaults (`PushShared`): `push.seen.<serverRef>` (the ring of seen seqs) and the Face ID choice for risky approvals.
+- **Cloud address** (`PushDevice`). While notifications are allowed the app asks Apple for a token at every launch
+  (`registerForRemoteNotifications`, from `PushCoordinator`; the permission is read again when the app comes to the front).
+  The token (hex) and the environment go to `POST /push/register {apnsToken, env, bundleId}` and the answer's `handle` is kept.
+  `env` is `sandbox` on the Simulator and in debug builds; otherwise it is read from `aps-environment` in
+  `embedded.mobileprovision` (`development` is sandbox), and a build with no profile (the App Store) is `production`
+  (`PushEnvironment`). A new token, a new environment, or a day later registers again; the old handle is unregistered
+  (silently). A 409 (the token is known in the other environment) is retried once with the other
+  environment; if that works the environment is kept in the Keychain next to the handle (`push.envFixed`), if not the handle is
+  dropped, the next launch tries again, and Settings > Notifications shows a grey line "Push unavailable" (the app's own
+  notices still work). No network or a refusal is retried at the next launch or when a server connects (not sooner than a
+  minute); while no handle is known the registrar also retries by itself after 30 s, 2 min, 10 min, then every hour. A handle is used only after
+  this launch has confirmed it: after a reinstall the Keychain still holds the earlier install's handle and keys.
+- **Servers** (`PushRegistrar`). A server that is connected, has `"push"` in `daemon.info.features`, with a confirmed handle
+  and notifications allowed gets `push.register {handle, key, serverRef, kinds, lang}`. `kinds` follow the Notifications
+  switches (approvals and questions: "needs you"; `done`: answers; `error`: errors), `lang` is the phone's first language.
+  What was told is remembered per server (a hash of handle, kinds, language and the first 8 bytes of the SHA-256 of the server's key, in UserDefaults), so it is repeated only
+  when one of them changes (a new key or a forget resets it), and once a day. A server that connects is asked `push.status` once: if the daemon lost the
+  registration the cloud is asked again and then the daemon. Notifications off, or every switch off, sends
+  `push.unregister` to every connected server (once). A server removed from the phone is told to stop (when reachable;
+  disconnecting revokes the device, which removes it on the daemon) and its key is deleted; keys of servers that are not in
+  the list are deleted too. Servers without `"push"` are never touched. Demo servers never register.
+- **A replaced handle.** The Keychain keeps the previous handle with its date (`push.handle.prev`, `push.handle.prevAt`). The
+  extension tries the associated data of the current handle, then of the previous one (younger than 7 days), so a push sent
+  before the server learnt the new handle still opens. The previous handle is deleted once every push server the phone has
+  registered carries the new one.
+- **The extension.** It tries each server's key against `ct`/`nonce` (ChaCha20-Poly1305, associated data
+  `bandito-push:v1:<handle>`), reads the payload, and builds the notification with the same code as the app (`PhoneNotice`:
+  event, then `AgentNotice` and `NotificationContent`, in `SharedPush/PushNotice.swift`): title, text, category
+  (`bandito.approval`, `.approval.review`, `.approval.risky`, `.finished`, `.failed`, `.form`, `.question`: the app registers
+  them), `threadIdentifier` = the agent, and `userInfo` (`agentID`, `approvalID`, `formID`, `risky`, `server`), so Allow,
+  Deny and Reply work as on a local notification. An event the daemon cut down (no payload) still gets the text of its kind;
+  one that cannot be opened keeps the cloud's own English text, with the finished category (no buttons). When it runs out of
+  time (`serviceExtensionTimeWillExpire`) it shows what it has. The server's name is not used (neither is it in the local
+  notice).
+- **No repeats.** The extension records the seq of each event it showed in a ring of the last 200 per server
+  (`push.seen.<serverRef>` in the group's UserDefaults) and takes down a local notification of the same event
+  (`<server>:<seq>`). The app's `ingest` makes no local notice for an event whose seq is in that set (the cursor moves as
+  always); an earlier event whose push never came is still shown. So the background check does not repeat a push. A push that arrives while the app is on
+  the screen is not shown (`willPresent` returns no options, as for local notices); the app shows its own.
+- **Buttons with the app closed.** A press on Allow, Deny or Reply wakes the app: it reads the saved servers, connects the
+  one named in the notification's `server` (older notices without it: the one that has the agent), sends the answer, and only then returns to the system (20 seconds at most).
+- **Debug.** `-push-test-key <base64 32 bytes>` (DEBUG) keeps a known key for the server `TEST`; `Documents/push-debug.json`
+  holds the token, the handle and the environment. On the Simulator (Apple silicon) a push can be sent with
+  `xcrun simctl push <udid> dev.bandito.ios file.apns`, or through the cloud with the handle (`POST /push/send`).
 
 ## Onboarding (iPhone and Mac, one story)
 
