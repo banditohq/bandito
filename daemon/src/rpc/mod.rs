@@ -43,6 +43,7 @@ pub mod host;
 pub mod integrations;
 pub mod migrate;
 pub mod preview;
+pub mod push;
 pub mod relay;
 pub mod schedules;
 pub mod screen;
@@ -124,6 +125,7 @@ pub fn features() -> Vec<&'static str> {
         "server_settings",
         "phone_access",
         "relay",
+        "push",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -1298,6 +1300,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     }
     if method.starts_with("relay.") {
         return relay::dispatch(app, method, p).await;
+    }
+    if method.starts_with("push.") {
+        return push::dispatch(app, peer, method, p).await;
     }
     if method.starts_with("telegram.") {
         return telegram::dispatch(app, method, p).await;
@@ -4536,6 +4541,9 @@ mod trust_tests {
         "relay.enable",
         "relay.disable",
         "relay.status",
+        "push.register",
+        "push.unregister",
+        "push.status",
         "telegram.status",
         "telegram.set_token",
         "telegram.remove_token",

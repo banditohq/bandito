@@ -34,6 +34,7 @@ pub mod migrate;
 pub mod pairing;
 pub mod phone;
 pub mod policy;
+pub mod push;
 pub mod recommend;
 pub mod redact;
 pub mod relay;
