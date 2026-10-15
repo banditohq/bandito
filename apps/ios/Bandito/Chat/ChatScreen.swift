@@ -73,10 +73,16 @@ struct ChatHeader: View {
                     .font(BanditoFont.display(size: 14.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
-                Text(Self.statusLine(connected: server.state == .connected, status: status, turnRunning: summary.turnRunning))
-                    .font(BanditoFont.text(size: 11.5, weight: 450))
-                    .foregroundStyle(status == .needsYou ? Color.Bandito.signal : Color.Bandito.text3)
-                    .lineLimit(1)
+                if let working = CrewWorking(summary: summary, paused: agent?.paused ?? false),
+                   server.state == .connected, status != .needsYou {
+                    // The same line as the Crew row: what the turn does now, and its live time.
+                    WorkingLine(activity: working.activity, since: working.since, size: 11.5)
+                } else {
+                    Text(Self.statusLine(connected: server.state == .connected, status: status, turnRunning: summary.turnRunning))
+                        .font(BanditoFont.text(size: 11.5, weight: 450))
+                        .foregroundStyle(status == .needsYou ? Color.Bandito.signal : Color.Bandito.text3)
+                        .lineLimit(1)
+                }
             }
         }
         .accessibilityElement(children: .combine)
