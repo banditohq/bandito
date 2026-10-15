@@ -110,6 +110,12 @@ enum InboxRules {
         return found
     }
 
+    /// The item a notice's route names, once it is in the list. Nil while it is not: a cold start has no list yet, so the
+    /// route must wait for its item rather than be dropped.
+    static func focusedItem(_ id: String, in items: [InboxItem]) -> InboxItem? {
+        items.first { $0.id == id }
+    }
+
     /// The number on the Inbox tab: every item the list shows.
     static func badge(of servers: [ServerModel]) -> Int {
         items(in: servers).count
