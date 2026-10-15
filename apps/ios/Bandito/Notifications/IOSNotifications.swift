@@ -32,16 +32,20 @@ final class IOSNotifications {
     /// Where the servers come from. Set once at launch.
     var source: NotificationSource = StaticNotificationSource()
 
+    /// The highest event of a server that a push showed (the extension writes it to the App Group). Replaced in tests.
+    var pushSeq: (UUID) -> Int64 = { PushShared.shared.lastSeq(for: $0.uuidString) }
+
     /// The event sequence numbers each server has shown, read by the background check.
     let cursor: NotificationCursor
     private let sink: IOSNotificationSink
     private(set) var service: NotificationService!
 
-    init() {
+    /// `postingTo`: where the notices go instead of the system (tests).
+    init(postingTo override: (any NotificationService.Sink)? = nil) {
         cursor = NotificationCursor(defaults: .standard)
         sink = IOSNotificationSink()
         service = NotificationService(
-            sink: sink,
+            sink: override ?? sink,
             settings: { [weak self] in
                 guard let settings = self?.settings else { return NotificationSettings() }
                 return NotificationSettings(
@@ -50,11 +54,11 @@ final class IOSNotifications {
             windowActive: { [weak self] in self?.isAppActive ?? false },
             selectedAgentID: { nil },
             resolve: { [weak self] agentID, approvalID, decision in
-                guard let server = self?.server(forAgent: agentID) else { throw AgentNotFoundError() }
+                guard let server = await self?.source.readyServer(forAgent: agentID) else { throw AgentNotFoundError() }
                 try await server.resolve(approvalID, decision, remember: false)
             },
             reply: { [weak self] agentID, text in
-                guard let server = self?.server(forAgent: agentID) else { throw AgentNotFoundError() }
+                guard let server = await self?.source.readyServer(forAgent: agentID) else { throw AgentNotFoundError() }
                 try await server.send(text, to: agentID, viaButton: true)
             })
         sink.service = service
@@ -105,7 +109,10 @@ final class IOSNotifications {
         if case .approvalResolved(let approvalID, _, _, _) = event.body {
             service.approvalSettled(approvalID)
         }
-        guard event.seq > 0, let made = Self.notice(for: event, in: server) else { return }
+        guard event.seq > 0 else { return }
+        // A push already showed this event (and everything before it): a second notice would be a repeat.
+        guard event.seq > pushSeq(server.id) else { return }
+        guard let made = Self.notice(for: event, in: server) else { return }
         guard !isViewingAgent(server: server, agent: event.agentId) else { return }
         service.handle(
             made.notice, serverID: server.id, key: Self.key(serverID: server.id, seq: event.seq), risky: made.risky)
@@ -170,26 +177,15 @@ final class IOSNotifications {
     /// The notice an event makes on the phone and whether it is risky. The shared notices (approval, finished, error)
     /// come from `AgentNotice.notice(for:in:)`; a form and a question are phone-only.
     static func notice(for event: Event, in server: ServerModel) -> (notice: AgentNotice, risky: Bool)? {
-        if case .approvalRequested(_, _, _, _, _, _, let reason, _) = event.body {
-            guard let notice = AgentNotice.notice(for: event, in: server) else { return nil }
-            return (notice, ApprovalReason.isRisky(reason))
-        }
-        if let notice = AgentNotice.notice(for: event, in: server) {
-            return (notice, false)
-        }
         let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
-        switch event.body {
-        case .formRequested(let formID, _):
-            return (.form(agentID: event.agentId, agentName: name, formID: formID), false)
-        case .agentStatus(let status, _) where status == .needsYou:
-            // A question is the agent's own wait: only when nothing else of the agent waits (as the Inbox lists it).
-            let summary = server.threadSummary(for: event.agentId)
-            guard summary.pendingApprovalRows.isEmpty, summary.pendingForms.isEmpty, summary.pendingConnects.isEmpty
-            else { return nil }
-            return (.question(agentID: event.agentId, agentName: name, text: summary.lastMessageHead), false)
-        default:
-            return nil
-        }
+        return PhoneNotice.notice(
+            for: event, agentName: name, quietTurn: { server.thread(for: event.agentId).quietTurn },
+            agentWaitsAlone: {
+                let summary = server.threadSummary(for: event.agentId)
+                return summary.pendingApprovalRows.isEmpty && summary.pendingForms.isEmpty
+                    && summary.pendingConnects.isEmpty
+            },
+            questionText: { server.threadSummary(for: event.agentId).lastMessageHead })
     }
 }
 

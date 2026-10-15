@@ -15,7 +15,7 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
     var onRoute: ((IOSNotifications.Route) -> Void)?
 
     /// The category of a risky approval while `riskyNeedsFaceID` is on: its Allow opens the app (the sheet asks Face ID).
-    static let riskyCategory = "bandito.approval.risky"
+    static let riskyCategory = PhoneNotice.riskyCategory
     static let questionCategory = NotificationContent.questionCategory
 
     /// Registers the categories. Call once at launch. Nothing is asked here: the permission is asked at the first
@@ -53,10 +53,7 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
 
     /// The category a notice is posted with: a risky approval whose Allow asks for the app's sheet, else the shared one.
     static func categoryID(for content: NotificationContent, riskyNeedsFaceID: Bool) -> String? {
-        if content.categoryID == NotificationContent.approvalCategory, content.risky, riskyNeedsFaceID {
-            return riskyCategory
-        }
-        return content.categoryID
+        PhoneNotice.categoryID(for: content, riskyNeedsFaceID: riskyNeedsFaceID)
     }
 
     /// The identifier of the system request: the content's key (server and event), else its approval, else fresh.
@@ -70,40 +67,25 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
 
     private func deliver(_ content: NotificationContent) async {
         guard await permissionAllows() else { return }
+        // The same fields the push extension makes for a push (`PhoneNotice`), so the two look and answer alike.
+        let fields = PhoneNotice.fields(for: content, serverRef: nil, riskyNeedsFaceID: riskyNeedsFaceID())
         let request = UNMutableNotificationContent()
-        request.title = Self.title(for: content)
-        request.body = Self.body(for: content)
+        request.title = fields.title
+        request.body = fields.body
         request.sound = .default
-        request.threadIdentifier = content.agentID
-        request.categoryIdentifier = Self.categoryID(for: content, riskyNeedsFaceID: riskyNeedsFaceID()) ?? ""
-        request.userInfo = [
-            "agentID": content.agentID,
-            "approvalID": content.approvalID ?? "",
-            "formID": content.formID ?? "",
-            "risky": content.risky,
-        ]
+        request.threadIdentifier = fields.threadID
+        request.categoryIdentifier = fields.categoryID
+        request.userInfo = fields.userInfo
         let identifier = Self.identifier(for: content)
         try? await UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: identifier, content: request, trigger: nil))
     }
 
     /// An approval says "Forge хочет выполнить" (the agent's name); the other notices keep their own titles.
-    static func title(for content: NotificationContent) -> String {
-        if content.approvalID != nil, content.categoryID == NotificationContent.approvalCategory
-            || content.categoryID == NotificationContent.approvalReviewCategory
-        {
-            return L10n.Notify.wantsToRun(name: content.agentName)
-        }
-        return content.title
-    }
+    static func title(for content: NotificationContent) -> String { PhoneNotice.title(for: content) }
 
     /// The command itself, for an approval Allow can answer; the review sentence for a long or multi-line one.
-    static func body(for content: NotificationContent) -> String {
-        if content.categoryID == NotificationContent.approvalCategory, let command = content.command {
-            return command
-        }
-        return content.body
-    }
+    static func body(for content: NotificationContent) -> String { PhoneNotice.body(for: content) }
 
     /// Asks the system once, when the first notice needs it, and returns whether notices may be shown.
     private func permissionAllows() async -> Bool {
@@ -123,7 +105,8 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
         }
     }
 
-    /// The app is open: the change shows in the app, so no banner.
+    /// The app is open: the change shows in the app, so no banner. A push (`UNPushNotificationTrigger`) is held back the same
+    /// way as a local notice: the app makes its own for what the person should see, and a push that came meanwhile is not shown.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
@@ -142,10 +125,18 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
         let action = response.actionIdentifier
         let typed = (response as? UNTextInputNotificationResponse)?.userText ?? ""
         let link = info[ShareReminder.userInfoKey] as? String ?? ""
-        completionHandler()
+        // The system waits for this handler before it lets a woken app sleep again: an answer from a button (the app may be
+        // woken just for it, by a push) is sent first. A slow server must not keep the system waiting: 20 seconds at most.
+        let done = CompletionOnce(completionHandler)
         Task { @MainActor [weak self] in
+            let limit = Task {
+                try? await Task.sleep(for: .seconds(20))
+                done.call()
+            }
             await self?.respond(
                 action: action, agentID: agentID, approvalID: approvalID, risky: risky, typed: typed, link: link)
+            limit.cancel()
+            done.call()
         }
     }
 
@@ -168,5 +159,24 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
         default:
             await service?.handleAction(action, agentID: agentID, approvalID: approvalID)
         }
+    }
+}
+
+/// The system's completion handler, called once whichever finishes first: the answer or the time limit.
+final class CompletionOnce: @unchecked Sendable {
+    // @unchecked: `handler` is taken under `lock`.
+    private let lock = NSLock()
+    private var handler: (() -> Void)?
+
+    init(_ handler: @escaping () -> Void) {
+        self.handler = handler
+    }
+
+    func call() {
+        let taken = lock.withLock { () -> (() -> Void)? in
+            defer { handler = nil }
+            return handler
+        }
+        taken?()
     }
 }

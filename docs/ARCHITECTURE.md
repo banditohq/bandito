@@ -1523,6 +1523,8 @@ Only events that happen after the phone registered are sent. A phone gets only t
 
 **Answers.** 2xx sent; `410`, or `404` with `unknown_handle`, remove that target (the phone registers again); `429` (pause, see above), `400`, `503` and anything else are dropped without a retry; a network error or another `5xx` is tried once more after 2 s. A device revoked or re-registered while its request waits gets nothing. An unreachable cloud changes nothing else: the daemon goes on and no error reaches the apps. Logs have the kind and the status code only, never the handle, the key, the text or a token. The key is held in memory that is zeroed when dropped. After the task fell behind the hub (a lag), it forgets what it knew of waiting approvals and forms and reads it again from the database. The task starts with the daemon (not in safe mode); targets live in the database, so a restart keeps them.
 
+**The iPhone side** (docs/IOS_APP.md, "Push on the phone"): the app registers with the cloud, then calls `push.register` on each connected server that lists `"push"`, with a key of its own per server (Keychain, shared with the notification service extension), the kinds its notification switches allow, and the phone's language. It asks `push.status` when a server connects and registers again when the daemon forgot; it calls `push.unregister` when notifications are turned off or the server is removed.
+
 ## Screen
 
 A virtual desktop on a Linux server that people see in the app and agents can drive. `daemon/src/screen.rs` runs it; `daemon/src/rpc/screen.rs` is the RPC layer. Other systems answer `unsupported`.

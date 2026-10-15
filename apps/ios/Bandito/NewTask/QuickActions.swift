@@ -63,6 +63,15 @@ final class QuickActionAppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
+    /// Apple's push token (`PushCoordinator`).
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        PushCoordinator.shared.tokenReceived(deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        PushCoordinator.shared.registrationFailed(error)
+    }
+
     func application(
         _ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions

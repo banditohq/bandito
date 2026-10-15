@@ -70,7 +70,10 @@ final class IOSSettings {
     }
 
     var riskyNeedsFaceID: Bool {
-        didSet { defaults.set(riskyNeedsFaceID, forKey: Key.riskyNeedsFaceID) }
+        didSet {
+            defaults.set(riskyNeedsFaceID, forKey: Key.riskyNeedsFaceID)
+            mirrorRiskyForPush()
+        }
     }
 
     var notifyApprovals: Bool {
@@ -109,5 +112,13 @@ final class IOSSettings {
         liveActivities = defaults.object(forKey: Key.liveActivities) as? Bool ?? true
         theme = defaults.string(forKey: Key.theme).flatMap(AppTheme.init(rawValue:)) ?? .system
         motion = defaults.string(forKey: Key.motion).flatMap(MotionPreference.init(rawValue:)) ?? .system
+        mirrorRiskyForPush()
+    }
+
+    /// The push extension builds the notification of a risky approval, and cannot read these defaults: the choice is copied
+    /// to the App Group's. Only the app's own settings do it (a test's settings stay in the test's defaults).
+    private func mirrorRiskyForPush() {
+        guard defaults === UserDefaults.standard else { return }
+        PushShared.shared.riskyNeedsFaceID = riskyNeedsFaceID
     }
 }

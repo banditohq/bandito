@@ -49,6 +49,8 @@ final class ServerSession {
     }
     /// Called when a server is forgotten: its notification cursor goes too.
     @ObservationIgnored var forgetCursor: @MainActor (UUID) -> Void = { IOSNotifications.shared.cursor.forget(serverID: $0) }
+    /// Called when a server is forgotten (the push key goes, and, when `unregister`, the server is told to stop sending).
+    @ObservationIgnored var forgetPush: @MainActor (ServerModel, _ unregister: Bool) async -> Void = { _, _ in }
     @ObservationIgnored var revokeSelf: @Sendable (ServerConfig) async -> Bool = { await DevicePairing.revokeSelf(config: $0) }
 
     /// The last agent list of each server, shown at a start without a connection.
@@ -222,6 +224,8 @@ final class ServerSession {
             return .keychainRefused
         }
         try? secrets.save(nil, account: Self.noiseAccount(id))
+        // The server forgets this device below (and its push registration with it): only the phone's own side is cleared.
+        await forgetPush(server, false)
         await server.disconnect()
         var revoked = false
         if config.endpoint.isPaired { revoked = await revokeSelf(withToken) }
@@ -242,7 +246,7 @@ final class ServerSession {
     /// Forgets a server and its key on this iPhone. (The daemon keeps the device until it is disconnected there.)
     func remove(_ id: UUID) {
         let removed = servers.first(where: { $0.id == id })?.config
-        guard drop(id) else { return }
+        guard drop(id, forgettingPush: true) else { return }
         try? secrets.save(nil, account: id.uuidString)
         try? secrets.save(nil, account: Self.noiseAccount(id))
         forgetCursor(id)
@@ -254,11 +258,17 @@ final class ServerSession {
     }
 
     /// Takes the model out of the list and disconnects it. The key and the saved list stay for the caller to settle.
+    /// `forgettingPush`: the server is forgotten for good, so it is told to stop sending push before it is disconnected
+    /// (a server paired again keeps its id and its push key).
     @discardableResult
-    private func drop(_ id: UUID) -> Bool {
+    private func drop(_ id: UUID, forgettingPush: Bool = false) -> Bool {
         guard let index = servers.firstIndex(where: { $0.id == id }) else { return false }
         let server = servers.remove(at: index)
-        Task { await server.disconnect() }
+        let forget = forgetPush
+        Task {
+            if forgettingPush { await forget(server, true) }
+            await server.disconnect()
+        }
         return true
     }
 
