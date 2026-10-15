@@ -64,6 +64,10 @@ public enum L10n {
         public static var notSignedIn: String { L10n.tr("account.notSignedIn") }
         public static var title: String { L10n.tr("account.title") }
 
+        public enum Code {
+            public static var title: String { L10n.tr("account.code.title") }
+        }
+
         public enum Color {
             public static var cream: String { L10n.tr("account.color.cream") }
             public static var lilac: String { L10n.tr("account.color.lilac") }
@@ -78,6 +82,8 @@ public enum L10n {
             public static var disconnectMessage: String { L10n.tr("account.device.disconnectMessage") }
             public static func disconnectTitle(name: String) -> String { L10n.tr("account.device.disconnectTitle", name) }
             public static func lastSeen(when: String) -> String { L10n.tr("account.device.lastSeen", when) }
+            public static var menu: String { L10n.tr("account.device.menu") }
+            public static var online: String { L10n.tr("account.device.online") }
         }
 
         public enum Devices {
@@ -107,6 +113,7 @@ public enum L10n {
 
         public enum Photo {
             public static var change: String { L10n.tr("account.photo.change") }
+            public static var choose: String { L10n.tr("account.photo.choose") }
             public static var pickerMessage: String { L10n.tr("account.photo.pickerMessage") }
             public static var remove: String { L10n.tr("account.photo.remove") }
             public static var tooLarge: String { L10n.tr("account.photo.tooLarge") }
@@ -135,6 +142,7 @@ public enum L10n {
             public static func done(when: String) -> String { L10n.tr("account.sync.done", when) }
             public static var now: String { L10n.tr("account.sync.now") }
             public static var on: String { L10n.tr("account.sync.on") }
+            public static var synced: String { L10n.tr("account.sync.synced") }
             public static var what: String { L10n.tr("account.sync.what") }
         }
 
@@ -1813,6 +1821,7 @@ public enum L10n {
                 public static var ready: String { L10n.tr("ios.settings.account.ready") }
                 public static var signIn: String { L10n.tr("ios.settings.account.signIn") }
                 public static var signInHint: String { L10n.tr("ios.settings.account.signInHint") }
+                public static var signInThen: String { L10n.tr("ios.settings.account.signInThen") }
                 public static var waiting: String { L10n.tr("ios.settings.account.waiting") }
             }
 
@@ -1834,6 +1843,7 @@ public enum L10n {
                 public static var notifications: String { L10n.tr("ios.settings.header.notifications") }
                 public static var security: String { L10n.tr("ios.settings.header.security") }
                 public static var servers: String { L10n.tr("ios.settings.header.servers") }
+                public static var serversOnPhone: String { L10n.tr("ios.settings.header.serversOnPhone") }
             }
 
             public enum Notifications {
@@ -1862,6 +1872,7 @@ public enum L10n {
             }
 
             public enum Servers {
+                public static var byCode: String { L10n.tr("ios.settings.servers.byCode") }
                 public static var disconnect: String { L10n.tr("ios.settings.servers.disconnect") }
                 public static func disconnectMessage(name: String) -> String { L10n.tr("ios.settings.servers.disconnectMessage", name) }
                 public static func disconnectTitle(name: String) -> String { L10n.tr("ios.settings.servers.disconnectTitle", name) }
