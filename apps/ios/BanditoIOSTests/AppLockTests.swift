@@ -72,4 +72,10 @@ import Testing
         lock.scenePhaseChanged(to: .active, enabled: true, timeout: .oneMinute, now: start.addingTimeInterval(600))
         #expect(!lock.isLocked)
     }
+
+    @Test func theLockIsClosedFromItsCreationWhenItIsOn() {
+        // A link that arrives before the first `.task` must already find the lock closed.
+        #expect(AppLock(lockedAtLaunch: true).isLocked)
+        #expect(!AppLock(lockedAtLaunch: false).isLocked)
+    }
 }

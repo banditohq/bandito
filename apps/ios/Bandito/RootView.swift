@@ -39,7 +39,7 @@ struct RootView: View {
     #endif
     /// "Sign in" was chosen in the connect sheet: the account sheet follows when that sheet has closed.
     @State private var signsInAfterConnect = false
-    @State private var appLock = AppLock()
+    @State private var appLock = AppLock(lockedAtLaunch: IOSSettings().faceIDLock)
     /// The approval item the Inbox opens (a notification's route), cleared by the Inbox once it is open.
     @State private var inboxFocus: String?
     /// The agent a widget or a `bandito://agent/...` link asked the Crew to open.

@@ -15,8 +15,14 @@ enum AppLockPolicy {
 @MainActor
 @Observable
 final class AppLock {
-    private(set) var isLocked = false
+    private(set) var isLocked: Bool
     private var backgroundedAt: Date?
+
+    /// `lockedAtLaunch`: the setting read when the app is made. A link or a shared task can arrive before the first
+    /// `.task` runs; a lock that opened closed only there let them through on a cold start.
+    init(lockedAtLaunch: Bool = false) {
+        isLocked = lockedAtLaunch
+    }
 
     /// At launch: the lock starts closed when it is on.
     func start(enabled: Bool) {
