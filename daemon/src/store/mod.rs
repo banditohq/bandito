@@ -18,6 +18,7 @@ mod forms;
 mod history;
 mod integrations;
 mod migrate;
+mod push;
 mod reactions;
 mod rules;
 mod schedules;
@@ -38,6 +39,7 @@ pub use integrations::{
     ToolOverride,
 };
 pub use migrate::{ExportedEvent, NewEvent};
+pub use push::PushTarget;
 pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
@@ -76,6 +78,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0026_query_indexes.sql"),
     include_str!("../../migrations/0027_server_settings.sql"),
     include_str!("../../migrations/0028_device_noise_key.sql"),
+    include_str!("../../migrations/0029_push.sql"),
 ];
 
 pub struct Store {

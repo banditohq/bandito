@@ -748,6 +748,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
         rpc::integrations::spawn_oauth_refresher(app.clone());
         // Polls the Telegram bot when a token is set (never in safe mode: the database is not the real one).
         app.telegram.start();
+        // Encrypted push notifications for phones whose app is closed (docs/ARCHITECTURE.md#push).
+        bandito::push::spawn(sup.hub());
     }
     // Stops server screens that nobody has used for `screen_idle_minutes` (see docs/ARCHITECTURE.md#screen).
     app.screens.spawn_idle_reaper(app.sup.hub().store.clone());

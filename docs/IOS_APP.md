@@ -128,12 +128,38 @@ Code: `apps/ios/Bandito/Account/`.
    forms / quick replies), Settings basics, local notifications, Face ID lock.
 2. **Daily use**: Activity tab, New task button with voice, share extension, widgets, changes summary, agent details and
    new agent (with ready teams).
-3. **Push and live**: push.bandito.dev (APNs key from the owner), notification service extension (decrypt), Live
-   Activities, App Intents.
+3. **Push and live**: push through the Bandito cloud (APNs key from the owner), notification service extension (decrypt;
+   format below), Live Activities, App Intents.
 4. **Reach**: in-app SSH, Bandito Relay, iPad layout.
 
 Each phase is accepted on simulator screenshots of every screen (dark/light, ru/en, small and large iPhone, XXL type),
 XCUITest flows, work-budget tests, and the Mac suites staying green.
+
+### Push payload (for the notification service extension)
+
+The daemon registers per device with `push.register {handle, key, serverRef, kinds}` (docs/ARCHITECTURE.md#push): the
+phone makes a random 32-byte key for each server, keeps it in the shared Keychain, and sends it with the handle the
+cloud gave it. A push carries `ct` and `nonce` as the daemon sent them (base64, standard, padded).
+
+- Decrypt: ChaCha20-Poly1305, key = the server's 32 bytes, nonce = the 12 bytes of `nonce`, associated data = the UTF-8
+  text `bandito-push:v1:<handle>`. `ct` is the ciphertext followed by the 16-byte tag:
+
+  ```swift
+  let raw = Data(base64Encoded: ct)!
+  let box = try ChaChaPoly.SealedBox(nonce: .init(data: Data(base64Encoded: nonce)!),
+                                     ciphertext: raw.dropLast(16), tag: raw.suffix(16))
+  let json = try ChaChaPoly.open(box, using: key, authenticating: Data("bandito-push:v1:\(handle)".utf8))
+  ```
+
+- Parse the JSON: `{"v":1,"srv":serverRef,"seq":Int,"agent":agentID,"name":agentName,"ts":ms,"event":{"kind":..,"payload":{..}}}`.
+  `srv` says which server it is (the name the phone gave it at `push.register`). `event` is an event body exactly as
+  `events.since` returns it (decode it with `Event`'s body decoder, with `agent_id`, `seq` and `ts` from the outer
+  fields). Build the notification from it like the local one (`IOSNotifications.notice(for:)`).
+- Long texts are cut (300 characters, `…`); if the event was too big, `payload` holds only `approval_id`, `form_id` or
+  `request_id`: show a generic text for the kind and open the app to `events.since` for the rest.
+- The actions follow the decrypted event: `approval.requested` gets Approve and Deny. `collapseId` is `b<seq>`, so the
+  same event shown by the app as a local notification replaces the push.
+- A push that cannot be opened (no key for that server, bad tag) is shown with a generic text, never dropped.
 
 ## Onboarding (iPhone and Mac, one story)
 
