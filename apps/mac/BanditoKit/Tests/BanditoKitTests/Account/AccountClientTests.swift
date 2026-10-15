@@ -589,6 +589,20 @@ import Testing
         #expect(http.requests[0].value(forHTTPHeaderField: "Authorization") == "Bearer tok_9")
     }
 
+    @Test func createTicketReadsExpiryAsUnixSeconds() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let http = ScriptedHTTP([
+            "POST /auth/ticket": [ScriptedReply(#"{"ok":true,"ticket_id":"tk_2","expires_at":1760572800}"#)]
+        ])
+        let client = try makeClient(http: http, sessions: sessions)
+
+        let created = try await client.createTicket(hash: "ab12")
+
+        #expect(created.id == "tk_2")
+        #expect(created.expiresAt == Date(timeIntervalSince1970: 1_760_572_800))
+    }
+
     @Test func ticketStatusReadsOpenExpiredAndClaimed() async throws {
         let sessions = MemorySecretStore()
         try seedSession(sessions, token: "tok_9")

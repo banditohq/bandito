@@ -178,7 +178,7 @@ public actor AccountClient {
     public func createTicket(hash: String) async throws -> (id: String, expiresAt: Date) {
         let reply = try await send("POST", "/auth/ticket", body: TicketBody(ticketHash: hash), authenticated: true)
         let wire = try decodeOK(TicketCreatedWire.self, reply)
-        guard let expiresAt = ShareDate.parse(wire.expiresAt) else { throw AccountError.badResponse }
+        guard let expiresAt = wire.expiresAt else { throw AccountError.badResponse }
         return (wire.ticketID, expiresAt)
     }
 
@@ -628,11 +628,22 @@ private struct TicketBody: Encodable {
 
 private struct TicketCreatedWire: Decodable {
     var ticketID: String
-    var expiresAt: String
+    /// Unix seconds (an integer). An ISO 8601 text is read too, as a fallback. Nil when neither fits.
+    var expiresAt: Date?
 
     private enum CodingKeys: String, CodingKey {
         case ticketID = "ticket_id"
         case expiresAt = "expires_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ticketID = try container.decode(String.self, forKey: .ticketID)
+        if let seconds = try? container.decode(Double.self, forKey: .expiresAt) {
+            expiresAt = Date(timeIntervalSince1970: seconds)
+        } else {
+            expiresAt = ShareDate.parse(try container.decode(String.self, forKey: .expiresAt))
+        }
     }
 }
 

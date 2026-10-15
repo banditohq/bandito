@@ -24,6 +24,7 @@ Base URL: `https://bandito.dev/api/v1` (served by the same Worker as the site, c
 | 404 | `not_found` | Unknown path, or a device id that does not belong to the caller |
 | 404 | `not_yet` | No key envelope for this device yet |
 | 404 | `flow_not_found` | Unknown GitHub flow, or the flow was already completed |
+| 404 | `ticket_invalid` | Join ticket unknown, already used, or expired (one answer for all three) |
 | 405 | `method` | Known path, wrong HTTP method |
 | 409 | `conflict` | Sync version mismatch; response includes the current `version` |
 | 409 | `already_approved` | Device is already approved |
@@ -129,6 +130,53 @@ Order of checks: device proof first (a bad proof does not touch the code), then 
 - Right code: single use. All codes of the email are deleted on success. A second concurrent use gets `401`.
 
 Response on success: the same shape as `/auth/github/poll`.
+
+## Sign in with a Mac (join tickets)
+
+A signed-in Mac lets a new iPhone sign in by scanning a QR code. The code carries a secret the cloud never gets. Only its hashed or derived forms reach the server.
+
+Keys, from a random 32-byte secret `t`:
+
+- `tAuth = HKDF-SHA256(t, info "bandito-join:auth:v1", 32 bytes)`, no salt. Sent to the cloud as `ticket` (base64url) and hashed as `ticket_hash` (hex SHA-256 of `tAuth`).
+- `tMac = HKDF-SHA256(t, info "bandito-join:mac:v1", 32 bytes)`. Never sent. Only the Mac and the new device hold it.
+
+QR link: `bandito://join?v=1&t=<b64url t>&m=<b64url SHA-256 of the Mac's X25519 public key>&n=<Mac name, at most 40 characters, percent-encoded>`. Parsers accept `t` and `m` with or without padding and in the standard alphabet.
+
+Flow:
+
+1. The Mac creates a ticket: `POST /auth/ticket`. The new device scans the code and redeems it: `POST /auth/ticket/redeem`, with a signed device block and a proof (below). The session comes back as on email sign-in, with the device not yet approved.
+2. The Mac polls `GET /auth/ticket/:id` every 2 seconds while its sheet is open. When the status is `claimed`, it checks the proof and approves the device (`POST /devices/:id/approve`). If the proof is wrong, it removes the device (`DELETE /devices/:id`) and warns the user.
+3. The new device then reads its envelope as usual. It checks that the SHA-256 of the envelope's sender key equals `m`, and refuses the key otherwise.
+4. The Mac deletes the ticket (`DELETE /auth/ticket/:id`) when its sheet closes.
+
+Proof, sent by the new device: `base64url(HMAC-SHA256(tMac, "bandito-join-proof:v1:" + public_key + ":" + signing_key))`, where `public_key` and `signing_key` are the base64 strings of the device block. The cloud cannot make it: it has `tAuth` but not `tMac`.
+
+### `POST /auth/ticket` (signed in)
+
+Request: `{ "ticket_hash": "<64 lower-case hex>" }`. Response: `{ "ok": true, "ticket_id": "...", "expires_at": 1760572800 }`.
+
+`expires_at` is Unix seconds, an integer. The ticket lives 5 minutes. A `ticket_hash` that already exists is `409 conflict`. Limits: 10 creations per hour per device, at most 3 open tickets per user. Over a limit: `429 rate`.
+
+### `GET /auth/ticket/:id` (signed in)
+
+Response: `{ "ok": true, "status": "open" | "claiming" | "expired" | "claimed", "device"?: { id, name, platform, public_key, signing_key }, "proof"?: "<b64url>" }`.
+
+- `open`: nobody has scanned it yet.
+- `claiming`: just redeemed; the device is being linked. The Mac keeps waiting.
+- `expired`: the time ran out.
+- `claimed`: `device` and `proof` are set. The Mac checks the proof.
+
+Unknown ids: `404 not_found`.
+
+### `POST /auth/ticket/redeem` (no session)
+
+Request: `{ "ticket": "<b64url tAuth>", "device": { ...signed device block... }, "proof": "<b64url>" }`. Response: the same shape as `/auth/email/verify`. The new device is not yet approved.
+
+The device block is checked as for email sign-in. The ticket is single use: it is marked used atomically (`UPDATE ... WHERE used_at IS NULL`). An unknown, used or expired ticket is `404 ticket_invalid`, the same answer for all three. Limit: 20 redeems per hour per client address, else `429 rate`.
+
+### `DELETE /auth/ticket/:id` (signed in)
+
+Cancels a ticket that is no longer shown. Response: `{ "ok": true }`.
 
 ## Session response
 

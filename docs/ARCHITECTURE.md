@@ -1486,6 +1486,8 @@ An account is optional: without one the app works on one Mac. With one, every de
 
 **Reaching servers from a phone.** Tailscale and direct TLS use the [phone listener](#phone-access) (the Mac app switches it on and shows the QR code); SSH works through an in-app SSH client; the Bandito Relay (outbound-only, end-to-end encrypted) covers servers behind NAT without any setup.
 
+**Sign in with a Mac.** A new iPhone can join an account by scanning a QR code on a signed-in Mac, without email or GitHub. The code carries a one-time secret; the cloud sees only derived keys and a proof that only the scanning device can make. The Mac approves the device after the proof checks out, then the sync key follows the usual envelope path. Protocol: [Sign in with a Mac](#sign-in-with-a-mac-join-tickets) in `docs/ACCOUNTS_API.md`.
+
 ## Push
 
 `daemon/src/push.rs` (the task and the payload), `daemon/src/rpc/push.rs` (the methods), `daemon/src/store/push.rs` (the table). Feature string: `"push"`.
