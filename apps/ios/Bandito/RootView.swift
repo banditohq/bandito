@@ -48,6 +48,8 @@ struct RootView: View {
     @State private var newTask: NewTaskRequest?
     /// What the screen does once the new-task sheet has closed (see `runNewTaskFollowUp`).
     @State private var newTaskFollowUp: NewTaskFollowUp?
+    /// The toast after an answer to an agent ("Allowed — Forge goes on"); every tab reads it from the environment.
+    @State private var answerToast = AnswerToastCenter()
     /// The first run's progress; the flow covers the app until a server is paired (docs/IOS_APP.md, Onboarding).
     @State private var onboarding = OnboardingStore.launch(arguments: ProcessInfo.processInfo.arguments)
     private let biometrics = DeviceAuthenticator()
@@ -83,6 +85,7 @@ struct RootView: View {
                     .tabItem { Label(L10n.Settings.title, systemImage: "gearshape") }
                     .tag(AppTab.settings)
             }
+            .environment(\.answerToast, answerToast)
 
             if showsOnboarding {
                 OnboardingView(store: onboarding, motion: settings.motion, onConnect: { mode in
@@ -96,6 +99,9 @@ struct RootView: View {
         // preference inside the onboarding stayed on the sheets opened after it (the New task sheet was dark in light).
         .preferredColorScheme(showsOnboarding ? .dark : settings.theme.colorScheme)
         .animation(BanditoMotion.ease, value: showsOnboarding)
+        .overlay(alignment: .bottom) {
+            AnswerToastHost(center: answerToast)
+        }
         .overlay {
             if appLock.isLocked {
                 LockScreen(onUnlock: unlockApp)

@@ -968,6 +968,9 @@
 "ios.agent.delete.button" = "Supprimer l'agent";
 "ios.agent.error" = "Échec de l'enregistrement : %1$@";
 "ios.agent.noSchedules" = "Aucune planification pour l'instant.";
+"ios.answerToast.allowed" = "Autorisé — %1$@ poursuit";
+"ios.answerToast.denied" = "Refusé — %1$@ en sera informé";
+"ios.answerToast.sent" = "Envoyé à %1$@";
 "ios.chat.approval.allowed" = "Autorisé";
 "ios.chat.approval.denied" = "Refusé";
 "ios.chat.approval.failed" = "Impossible d’envoyer votre réponse. Vérifiez la connexion et réessayez.";

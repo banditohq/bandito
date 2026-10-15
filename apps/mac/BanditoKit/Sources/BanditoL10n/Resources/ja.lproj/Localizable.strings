@@ -968,6 +968,9 @@
 "ios.agent.delete.button" = "エージェントを削除";
 "ios.agent.error" = "保存できませんでした: %1$@";
 "ios.agent.noSchedules" = "スケジュールはまだありません。";
+"ios.answerToast.allowed" = "許可 — %1$@ が続行します";
+"ios.answerToast.denied" = "拒否 — %1$@ に伝わります";
+"ios.answerToast.sent" = "%1$@ に送信しました";
 "ios.chat.approval.allowed" = "許可しました";
 "ios.chat.approval.denied" = "拒否しました";
 "ios.chat.approval.failed" = "回答を送信できませんでした。接続を確認してもう一度お試しください。";
