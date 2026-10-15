@@ -80,6 +80,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | `agent.spawned` | `{agent_id, name, role?, runtime, model?, approved_by: "user"\|"policy"}`: in the feed of the agent that created another one |
 | `agent.created_by` | `{by_agent_id, by_name, approved_by: "user"\|"policy"}`: in the feed of the agent that another one created |
 | `reaction` | `{seq, emoji?, by: "user"\|"agent"}`: a reaction on the message with that seq; no `emoji` means it was taken off (see [Reactions](#reactions)) |
+| `read_mark` | `{seq}`: the owner read the chat to that seq on another device. Transient: `seq` is 0, it is never stored, sends no push and does not wake the agent (see [Read marks](#read-marks)) |
 | `error` | `{message}` |
 
 Protocol rule for these: new fields are optional, so old clients keep working; new things get a new `kind`, which old clients ignore.
@@ -160,6 +161,19 @@ A person puts one emoji on a message of the agent (`messages.react{agent_id, seq
 An emoji is one grapheme cluster of at most 16 bytes, with no spaces (a joined family is 18 bytes, so it is refused). A reaction is a message of the thread: `seq` must be a `message.user` or `message.assistant` of that agent.
 
 A reaction by the person on a message of the agent does not start a turn. The reactions made since the last turn that a person started go into the next prompt, as the first line: `(Реакции с прошлого раза: 👍 на «первые 80 символов сообщения…»)`. The window runs from the moment the last human turn read its reactions (recorded as `reactions_until` on its `turn.started`) to the moment this turn reads them. A reaction made after that moment goes into the next prompt, so each reaction is said once.
+
+## Read marks
+
+The unread state of a chat is kept on the server, so that a chat read on one device (the Mac or the iPhone) is read on every other one: its badge and its dots go out. Feature `read_marks` in `daemon.info.features`. Code: `daemon/src/store/read_marks.rs` (the table `read_marks(agent_id, seq, updated_ms)`, migration 0030), `daemon/src/rpc/chat.rs` (`messages.read`), `daemon/src/event.rs` (`read_mark`). The client side is `BanditoKit/Sources/BanditoKit/ReadMarkSync.swift` and `ThreadStates.swift`.
+
+- `messages.read{agent_id, seq}` (owner and apps; agents are refused) moves the agent's mark up to `seq`. The mark is cut to the agent's newest event (a seq past it is not read yet), and it never moves back: two devices that read at once keep the newer mark. The reply is `{seq}`, the mark that is stored now (0 when nothing has been read). An unknown agent is `INVALID_PARAMS` (`no agent <id>`); a negative `seq` is `INVALID_PARAMS`. The write itself is one transaction, so a read and a mark cannot interleave.
+- Only a move is news. When the mark moved, the daemon broadcasts `read_mark{seq}` with `seq` 0: it is not written to the event log, it does not wake the agent and it sends no push. A device that gets it moves its unread count and does not send the mark back.
+- `agents.list` and `agents.get` return `read_seq` for each agent: the mark, or `null` before any read. A device applies it when the list arrives (a reconnect brings the reads made meanwhile).
+- A device keeps its own marks on the device (UserDefaults, per server). A device with no mark for a chat counts what is loaded as read (the first launch shows no badges for the old history); a mark from the daemon moves that device's mark as well.
+- Deleting an agent deletes its mark (`ON DELETE CASCADE`, and `agent_delete` removes the row too).
+- Sending from a device: once per agent per second at most, and the newest mark wins (a read during the wait goes out when the wait is over). A send that fails (offline) is dropped; the next read sends a newer mark. A daemon without the method (`method not found`, an older one) turns the sending off for that server until the next connection, without a word to the person.
+- An app of an older version reads `read_mark` as an unknown event and shows nothing (an unknown kind never breaks a page of events).
+- On iPhone, a read elsewhere takes the delivered notices of that chat away, except the ones that wait for an answer (an approval or a question): those stay until they are answered.
 
 ## Replies and attachments
 
@@ -329,7 +343,7 @@ Connection: WAL, `synchronous=NORMAL`, `busy_timeout=5000`, `foreign_keys=ON`. `
 JSON-RPC 2.0. Same methods on every transport.
 
 - `devices.list` returns the paired devices as `{id, name, created_at, last_seen_at, current}`. `current` is `true` for the device whose token made the request; the owner's CLI is no device, so every row is `false` for it. Old apps ignore the field.
-- Chat: `forms.answer{form_id, action: "submit"\|"reject", values?, comment?}` (`values` checked against the form, `already_answered` on a second answer), `forms.list{agent_id?, status?}`, `messages.react{agent_id, seq, emoji: string|null}`, `attachments.upload{agent_id, name, data_base64}` (returns `{path, name, size, mime}`). `agents.send` also takes `reply_to?: seq`, `attachments?: [path]` and `mentions?: [{kind, id, label}]`. See [Forms](#forms), [Reactions](#reactions), [Replies and attachments](#replies-and-attachments), [Mentions](#mentions).
+- Chat: `forms.answer{form_id, action: "submit"\|"reject", values?, comment?}` (`values` checked against the form, `already_answered` on a second answer), `forms.list{agent_id?, status?}`, `messages.react{agent_id, seq, emoji: string|null}`, `messages.read{agent_id, seq}` → `{seq}` (the chat was read to `seq`; see [Read marks](#read-marks)), `attachments.upload{agent_id, name, data_base64}` (returns `{path, name, size, mime}`). `agents.send` also takes `reply_to?: seq`, `attachments?: [path]` and `mentions?: [{kind, id, label}]`. See [Forms](#forms), [Reactions](#reactions), [Replies and attachments](#replies-and-attachments), [Mentions](#mentions).
 - Requests: `daemon.info` (also `safe_mode`, `safe_mode_error`, `last_restore`; see [Backups](#backups); `phone_access`, `tls_fingerprint`, see [Phone access](#phone-access)), `runtimes.status` (each entry has `supported_capabilities`, see [Capabilities](#capabilities)), `runtimes.models{runtime?, refresh?}` (see [Runtime models](#runtime-models)), `agents.list|get|create|update|delete` (`update` takes `paused` too, see [Pause](#pause)), `agents.templates` and `agents.create_from_template` (see [Agent templates](#agent-templates)), `agents.send{agent_id,text}` (replies `{queued: true}` when the agent is paused), `agents.interrupt`, `agents.new_chapter{id}` (owner only: starts the agent's next chapter now, with the same wrap-up as a context close; a running turn finishes first), `agents.pause_all{paused}`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke|issue`, `phone.info`, `relay.enable|disable|status` (see [Relay](#relay)), `push.register|unregister|status` (see [Push](#push)), `pair.redeem{code,device_name,noise_key?}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch|close_tab` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)), `daemon.logs{lines,level}` (see [Logs](#logs)), `backups.list|create|restore|leave_safe_mode` (see [Backups](#backups)), `server.settings_get|set` (see [Server settings](#server-settings)), `agents.export` and `agents.create_from_shared`, `skills.export` and `skills.install_shared` (see [Sharing](#sharing)). `agents.create|update` also take `avatar` and `capabilities` (see [Capabilities](#capabilities)). `agents.avatar_image_set|get|clear` are the picture of the avatar (see Capabilities, avatar picture). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
@@ -1291,12 +1305,13 @@ Errors: code `-32028` (`WORKSPACE_ERROR`) with `error.data.reason`: `docker_unav
 
 ## Team preview
 
-`agents.list`, `agents.get`, `agents.create` and `agents.update` return each agent with three fields the team view needs, without loading its thread:
+`agents.list`, `agents.get`, `agents.create` and `agents.update` return each agent with the fields the team view needs, without loading its thread:
 
 - `last_message`: the newest user or assistant message, `{role: "user"|"assistant", text, ts}`, or `null`. `text` is cut to 200 characters on a character boundary. Messages Bandito sent itself (`source: "system"`, the wrap-up turn) are skipped, as in `history.search`.
 - `status`: the status of the agent's newest `agent.status` event (`idle`, `working`, `needs_you`, `error`, `offline`), or `null` before any.
 - `pending_approval_ids`: the ids of the agent's approvals that still wait for an answer (`approvals.status = 'pending'`), oldest first.
 - `pending_approvals`: the number of those ids, for clients that only count.
+- `read_seq`: the seq the owner's chat was read to on any device, or `null` before any read (see [Read marks](#read-marks)).
 
 The daemon reads them in one query per list: correlated subqueries per agent (`store/agents.rs`, `LAST_MESSAGE_SQL`, `STATUS_SQL`, `PENDING_IDS_SQL`). The status lookup uses `events_agent_kind_seq`, and the pending ids `approvals_agent_status`, both from migration 0010; the message lookup uses `events_agent_seq`. The daemon's own checks use `agent_get` and `agent_list`, which do not read these fields; the RPC reads use `agent_view` and `agent_list_view`.
 

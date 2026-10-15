@@ -122,6 +122,25 @@ pub async fn dispatch(app: &App, _peer: &Peer, method: &str, p: Value) -> RpcRes
             );
             ok(json!({}))
         }
+        "messages.read" => {
+            let r: ReadParams = params(p)?;
+            if r.seq < 0 {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    "invalid params: seq must not be negative",
+                ));
+            }
+            let hub = app.sup.hub();
+            if hub.store.agent_get(&r.agent_id).map_err(server)?.is_none() {
+                return Err(RpcError::new(INVALID_PARAMS, format!("no agent {}", r.agent_id)));
+            }
+            // Only a move is news: the other devices hear of it once, and the event is not kept in the log.
+            let (seq, moved) = hub.store.read_mark_raise(&r.agent_id, r.seq).map_err(server)?;
+            if moved {
+                hub.emit(&r.agent_id, EventBody::ReadMark { seq });
+            }
+            ok(json!({ "seq": seq }))
+        }
         "messages.agent.react" => {
             let r: AgentReactParams = params(p)?;
             let store = &app.sup.hub().store;
@@ -419,6 +438,12 @@ struct ReactParams {
     seq: i64,
     #[serde(default)]
     emoji: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ReadParams {
+    agent_id: String,
+    seq: i64,
 }
 
 #[derive(Deserialize)]
@@ -1282,5 +1307,202 @@ mod tests {
         .await
         .unwrap_err();
         assert_eq!(e.code, INVALID_PARAMS);
+    }
+
+    fn read_mark_fixture_with_events(f: &Fixture, n: usize) -> Vec<i64> {
+        (0..n)
+            .map(|i| {
+                f.store
+                    .append_event(&f.agent, EventBody::MessageAssistant { text: format!("m{i}") })
+                    .unwrap()
+                    .seq
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn messages_read_saves_the_mark_and_answers_with_it() {
+        let f = fixture();
+        let seqs = read_mark_fixture_with_events(&f, 3);
+        let reply = call(
+            &f,
+            &Peer::Local,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": seqs[1] }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reply, json!({ "seq": seqs[1] }));
+        // A smaller seq (another device) does not move it back: the reply is what is stored.
+        let reply = call(
+            &f,
+            &Peer::Local,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": seqs[0] }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reply, json!({ "seq": seqs[1] }));
+        assert_eq!(f.store.read_mark(&f.agent).unwrap(), Some(seqs[1]));
+        // A seq past the newest event is cut to it.
+        let reply = call(
+            &f,
+            &Peer::Local,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": 999_999 }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reply, json!({ "seq": seqs[2] }));
+    }
+
+    #[tokio::test]
+    async fn a_moved_mark_is_published_once_and_never_stored_as_an_event() {
+        let f = fixture();
+        let seqs = read_mark_fixture_with_events(&f, 3);
+        let mut rx = f.app.sup.hub().subscribe();
+        let before = f.store.last_seq().unwrap();
+        call(
+            &f,
+            &Peer::Local,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": seqs[1] }),
+        )
+        .await
+        .unwrap();
+        let ev = rx.try_recv().expect("a moved mark is published");
+        assert_eq!(ev.seq, 0, "a transient event carries seq 0, like a delta");
+        assert_eq!(ev.agent_id, f.agent);
+        assert_eq!(ev.body, EventBody::ReadMark { seq: seqs[1] });
+        assert_eq!(
+            f.store.last_seq().unwrap(),
+            before,
+            "nothing is written to the event log"
+        );
+        // The same mark again, or an older one: nothing moved, nothing is published.
+        call(
+            &f,
+            &Peer::Local,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": seqs[1] }),
+        )
+        .await
+        .unwrap();
+        call(
+            &f,
+            &Peer::Local,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": seqs[0] }),
+        )
+        .await
+        .unwrap();
+        assert!(rx.try_recv().is_err(), "an unmoved mark publishes nothing");
+        // It moves again: published again.
+        call(
+            &f,
+            &Peer::Local,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": seqs[2] }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(rx.try_recv().unwrap().body, EventBody::ReadMark { seq: seqs[2] });
+    }
+
+    #[tokio::test]
+    async fn messages_read_checks_the_agent_and_the_seq() {
+        let f = fixture();
+        read_mark_fixture_with_events(&f, 1);
+        let e = call(
+            &f,
+            &Peer::Local,
+            "messages.read",
+            json!({ "agent_id": "no-such-agent", "seq": 1 }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert_eq!(e.message, "no agent no-such-agent");
+        let e = call(
+            &f,
+            &Peer::Local,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": -1 }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.code, INVALID_PARAMS);
+        let e = call(&f, &Peer::Local, "messages.read", json!({ "agent_id": f.agent }))
+            .await
+            .unwrap_err();
+        assert_eq!(e.code, INVALID_PARAMS, "seq is required");
+        assert_eq!(f.store.read_mark(&f.agent).unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn messages_read_is_for_the_owner_and_its_apps_only() {
+        let f = fixture();
+        let seqs = read_mark_fixture_with_events(&f, 2);
+        let device = Peer::Device(f.store.device_add("iPhone", "token-read").unwrap());
+        let agent = Peer::Agent(f.agent.clone());
+        assert!(crate::rpc::allowed(&Peer::Local, "messages.read"));
+        assert!(crate::rpc::allowed(&device, "messages.read"));
+        assert!(!crate::rpc::allowed(&agent, "messages.read"));
+        assert!(!crate::rpc::allowed(
+            &Peer::Anonymous("203.0.113.7".into(), None),
+            "messages.read"
+        ));
+        let e = call(
+            &f,
+            &agent,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": seqs[1] }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.code, crate::rpc::UNAUTHORIZED);
+        assert_eq!(
+            f.store.read_mark(&f.agent).unwrap(),
+            None,
+            "a refused call writes nothing"
+        );
+        // The apps can call it, and their mark is the same one the owner's CLI sees.
+        call(
+            &f,
+            &device,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": seqs[1] }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(f.store.read_mark(&f.agent).unwrap(), Some(seqs[1]));
+    }
+
+    #[tokio::test]
+    async fn agents_list_and_get_carry_the_read_seq() {
+        let f = fixture();
+        let seqs = read_mark_fixture_with_events(&f, 2);
+        let listed = call(&f, &Peer::Local, "agents.list", json!({})).await.unwrap();
+        let row = listed.as_array().unwrap().iter().find(|a| a["id"] == f.agent).unwrap();
+        assert_eq!(row["read_seq"], Value::Null, "nothing read yet is null, not 0");
+        let got = call(&f, &Peer::Local, "agents.get", json!({ "id": f.agent }))
+            .await
+            .unwrap();
+        assert_eq!(got["read_seq"], Value::Null);
+        call(
+            &f,
+            &Peer::Local,
+            "messages.read",
+            json!({ "agent_id": f.agent, "seq": seqs[1] }),
+        )
+        .await
+        .unwrap();
+        let listed = call(&f, &Peer::Local, "agents.list", json!({})).await.unwrap();
+        let row = listed.as_array().unwrap().iter().find(|a| a["id"] == f.agent).unwrap();
+        assert_eq!(row["read_seq"], json!(seqs[1]));
+        let got = call(&f, &Peer::Local, "agents.get", json!({ "id": f.agent }))
+            .await
+            .unwrap();
+        assert_eq!(got["read_seq"], json!(seqs[1]));
     }
 }

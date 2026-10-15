@@ -126,6 +126,7 @@ pub fn features() -> Vec<&'static str> {
         "phone_access",
         "relay",
         "push",
+        "read_marks",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -1347,6 +1348,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             | "forms.list"
             | "forms.agent.ask"
             | "messages.react"
+            | "messages.read"
             | "messages.agent.react"
             | "messages.agent.quick_replies"
             | "messages.agent.nothing_to_report"
@@ -4544,6 +4546,7 @@ mod trust_tests {
         "push.register",
         "push.unregister",
         "push.status",
+        "messages.read",
         "telegram.status",
         "telegram.set_token",
         "telegram.remove_token",

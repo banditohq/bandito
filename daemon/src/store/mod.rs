@@ -20,6 +20,7 @@ mod integrations;
 mod migrate;
 mod push;
 mod reactions;
+mod read_marks;
 mod rules;
 mod schedules;
 mod secrets;
@@ -79,6 +80,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0027_server_settings.sql"),
     include_str!("../../migrations/0028_device_noise_key.sql"),
     include_str!("../../migrations/0029_push.sql"),
+    include_str!("../../migrations/0030_read_marks.sql"),
 ];
 
 pub struct Store {
