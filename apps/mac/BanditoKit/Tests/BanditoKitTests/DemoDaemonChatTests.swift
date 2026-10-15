@@ -42,6 +42,41 @@ import Testing
         #expect(heard.calls.map(\.method) == ["agents.send", "agents.interrupt"])
         #expect(heard.calls.first?.text == "hello")
     }
+
+    @MainActor @Test func aReactionComesBackAsTheDaemonsEvent() async throws {
+        let (server, transport) = DemoDaemon.server(id: UUID(), name: "Demo", setup: DemoDaemonSetup(agentIDs: ["a1"]))
+        await server.connect()
+        await transport.setClientHook { _ in }
+        try await server.react("🔥", toMessage: 2, of: "a1")
+        var chips: [ReactionChip] = []
+        for _ in 0..<100 where chips.isEmpty {
+            chips = server.thread(for: "a1").reactions[2]?.chips ?? []
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(chips.map(\.emoji) == ["🔥"])
+        #expect(chips.first?.byUser == true)
+        // Taken off: an event with no emoji.
+        try await server.react(nil, toMessage: 2, of: "a1")
+        for _ in 0..<100 where !chips.isEmpty {
+            chips = server.thread(for: "a1").reactions[2]?.chips ?? []
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(chips.isEmpty)
+    }
+
+    @MainActor @Test func aReplyComesBackWithTheMessageItAnswers() async throws {
+        let (server, transport) = DemoDaemon.server(id: UUID(), name: "Demo", setup: DemoDaemonSetup(agentIDs: ["a1"]))
+        await server.connect()
+        await transport.setClientHook { _ in }
+        #expect(server.supports("attachments"))
+        try await server.send("About that", to: "a1", replyTo: 5)
+        var answered: [Int64: Int64] = [:]
+        for _ in 0..<100 where answered.isEmpty {
+            answered = server.thread(for: "a1").replies
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(answered.values.contains(5))
+    }
 }
 
 private final class Heard: @unchecked Sendable {

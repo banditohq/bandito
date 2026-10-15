@@ -143,14 +143,21 @@ public actor DemoDaemonTransport: RPCTransport {
                 persisted: false)
         case "agents.send":
             guard let agent = params["agent_id"] as? String, let text = params["text"] as? String else { return }
-            emitEvent(
-                agentID: agent, kind: "message.user",
-                payload: ["text": text, "source": "user", "via_button": params["via_button"] ?? false], persisted: false)
+            var payload: [String: Any] = ["text": text, "source": "user", "via_button": params["via_button"] ?? false]
+            // A reply keeps the message it answers, as the daemon's event does.
+            if let replyTo = params["reply_to"] as? NSNumber { payload["reply_to"] = replyTo.int64Value }
+            emitEvent(agentID: agent, kind: "message.user", payload: payload, persisted: false)
             emitEvent(agentID: agent, kind: "agent.status", payload: ["status": "working"], persisted: false)
             clientHook?(DemoClientCall(method: method, agentID: agent, text: text))
         case "agents.interrupt":
             guard let agent = params["agent_id"] as? String else { return }
             clientHook?(DemoClientCall(method: method, agentID: agent))
+        case "messages.react":
+            // The person's reaction comes back as the daemon's `reaction` event (no `emoji`: it was taken off).
+            guard let agent = params["agent_id"] as? String, let seq = params["seq"] as? NSNumber else { return }
+            var payload: [String: Any] = ["seq": seq.int64Value, "by": "user"]
+            if let emoji = params["emoji"] as? String { payload["emoji"] = emoji }
+            emitEvent(agentID: agent, kind: "reaction", payload: payload, persisted: false)
         default:
             return
         }
@@ -303,7 +310,8 @@ public actor DemoDaemonTransport: RPCTransport {
             return .success(DemoJSON.text(setupStatus))
         case "browser.status":
             return .success("{\"cdp\":null,\"controller\":null,\"pid\":null,\"running\":false,\"started_at\":null}")
-        case "approvals.resolve", "forms.answer", "integrations.request_decline", "agents.send", "agents.interrupt":
+        case "approvals.resolve", "forms.answer", "integrations.request_decline", "agents.send", "agents.interrupt",
+            "messages.react":
             // The answer is accepted; the event that follows (`followUp`) is what the app folds in.
             return .success("{}")
         case "screen.status", "screen.start", "screen.stop", "screen.control":

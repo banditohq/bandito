@@ -39,6 +39,8 @@ public struct QueuedSend: Codable, Equatable, Sendable, Identifiable {
     public var text: String
     public var attachments: [AgentAttachment]
     public var viaButton: Bool
+    /// The `seq` of the message this one answers (a reply), when the person chose Reply.
+    public var replyTo: Int64?
     /// Unix milliseconds, on this device.
     public var createdAt: Int64
     public var state: State
@@ -58,7 +60,7 @@ public struct QueuedSend: Codable, Equatable, Sendable, Identifiable {
         id: String = UUID().uuidString, serverID: UUID, agentID: String, text: String,
         attachments: [AgentAttachment] = [], viaButton: Bool = false, createdAt: Int64, state: State = .waiting,
         baseline: Int = 0, maybeDelivered: Bool = false, failure: String? = nil, failureKind: Failure? = nil,
-        attempts: Int = 0, retryAt: Int64? = nil
+        attempts: Int = 0, retryAt: Int64? = nil, replyTo: Int64? = nil
     ) {
         self.id = id
         self.serverID = serverID
@@ -74,11 +76,12 @@ public struct QueuedSend: Codable, Equatable, Sendable, Identifiable {
         self.failureKind = failureKind
         self.attempts = attempts
         self.retryAt = retryAt
+        self.replyTo = replyTo
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, serverID, agentID, text, attachments, viaButton, createdAt, state, baseline, maybeDelivered, failure
-        case failureKind, attempts, retryAt
+        case failureKind, attempts, retryAt, replyTo
     }
 
     /// A file written before `attempts` and the rest existed still reads.
@@ -98,6 +101,7 @@ public struct QueuedSend: Codable, Equatable, Sendable, Identifiable {
         failureKind = try c.decodeIfPresent(Failure.self, forKey: .failureKind)
         attempts = try c.decodeIfPresent(Int.self, forKey: .attempts) ?? 0
         retryAt = try c.decodeIfPresent(Int64.self, forKey: .retryAt)
+        replyTo = try c.decodeIfPresent(Int64.self, forKey: .replyTo)
     }
 }
 
