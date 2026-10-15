@@ -43,6 +43,9 @@ struct WelcomeView: View {
 /// The primary action: a cream capsule with an orange dot, as in the Mac app's `.signal` button. A small copy here
 /// until the button styles move from BanditoUI into BanditoDesign.
 struct SignalButtonStyle: ButtonStyle {
+    /// The capsule takes the whole width it is offered (a stacked pair of answers), not its label's.
+    var fullWidth = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(BanditoFont.display(size: 14, weight: 600))
@@ -50,7 +53,48 @@ struct SignalButtonStyle: ButtonStyle {
             .multilineTextAlignment(.center)
             .padding(.horizontal, 22)
             .frame(minHeight: 46)
+            .frame(maxWidth: fullWidth ? .infinity : nil)
             .background(Capsule().fill(Color.Bandito.text))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
+    }
+}
+
+/// The two answers of a card or a sheet: the quiet one and the main one (Signal). Side by side while both fit at this
+/// type size; at the largest sizes one above the other, the main one first, both full width. A side-by-side pair broke
+/// "Отклонить" letter by letter at XXXL.
+struct AnswerPair: View {
+    let quiet: String
+    let main: String
+    var quietID: String?
+    var mainID: String?
+    var disabled = false
+    let quietAction: () -> Void
+    let mainAction: () -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: BanditoSpace.s3) {
+                quietButton(fullWidth: false)
+                mainButton(fullWidth: false)
+            }
+            VStack(spacing: BanditoSpace.s2) {
+                mainButton(fullWidth: true)
+                quietButton(fullWidth: true)
+            }
+        }
+    }
+
+    private func quietButton(fullWidth: Bool) -> some View {
+        Button(quiet, action: quietAction)
+            .buttonStyle(QuietButtonStyle(fullWidth: fullWidth))
+            .disabled(disabled)
+            .accessibilityIdentifier(quietID ?? quiet)
+    }
+
+    private func mainButton(fullWidth: Bool) -> some View {
+        Button(main, action: mainAction)
+            .buttonStyle(SignalButtonStyle(fullWidth: fullWidth))
+            .disabled(disabled)
+            .accessibilityIdentifier(mainID ?? main)
     }
 }

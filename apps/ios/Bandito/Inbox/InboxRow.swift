@@ -73,7 +73,7 @@ struct InboxRow: View, Equatable {
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(2)
         case .question(let text, _):
-            Text(text ?? "")
+            Text(CrewPreview.line(text) ?? "")
                 .font(BanditoFont.text(size: lineSize, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(2)

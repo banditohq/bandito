@@ -33,8 +33,9 @@ enum CrewWaiting: Equatable {
     case approval(title: String)
     /// A form the agent asked the person to fill in.
     case form
-    /// Something else that needs the person (a status "needs you" with nothing else pending).
-    case answer
+    /// Something else that needs the person (a status "needs you" with nothing else pending): the question, as one
+    /// line, nil when the agent has said nothing in text.
+    case answer(question: String?)
 }
 
 /// The look of an agent's avatar on iPhone: the palette color or a custom `#RRGGBB`, and the face. Read from the
@@ -130,11 +131,12 @@ enum CrewPins {
     }
 }
 
-/// The last message of an agent as one line for a row: whitespace runs collapsed, nil when there is no text.
+/// The last message of an agent as one line for a row: Markdown marks left out, whitespace runs collapsed, nil when
+/// there is no text.
 enum CrewPreview {
     static func line(_ text: String?) -> String? {
         guard let text else { return nil }
-        let collapsed = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let collapsed = MessageBlocks.plainText(text).split(whereSeparator: \.isWhitespace).joined(separator: " ")
         return collapsed.isEmpty ? nil : collapsed
     }
 }
@@ -162,7 +164,8 @@ enum CrewFacts {
                 isLead: agent.id == lead,
                 isPinned: pins.contains(agent.id),
                 isPaused: agent.paused,
-                waiting: waiting(needsPerson: server.needsPerson(agent.id), summary: summary))
+                waiting: waiting(
+                    needsPerson: server.needsPerson(agent.id), summary: summary, lastText: agent.lastMessage?.text))
         }
     }
 
@@ -172,11 +175,13 @@ enum CrewFacts {
         [lastItemTimestamp, agent.lastMessage?.ts].compactMap { $0 }.max() ?? agent.lastTurnAt ?? agent.updatedAt
     }
 
-    /// What the agent waits for, from the thread's summary; nil when nothing waits for the person.
-    static func waiting(needsPerson: Bool, summary: AgentThreadState) -> CrewWaiting? {
-        guard needsPerson else { return nil }
+    /// What the agent waits for, from the thread's summary; nil when nothing waits for the person. An open approval or
+    /// form counts even when the status is not "needs you" (an agent in error with a form still open is waiting too).
+    /// `lastText` is the agent's last message, used for the question when the summary has no head yet.
+    static func waiting(needsPerson: Bool, summary: AgentThreadState, lastText: String? = nil) -> CrewWaiting? {
         if let title = summary.firstPendingApprovalTitle { return .approval(title: title) }
         if !summary.pendingForms.isEmpty { return .form }
-        return .answer
+        guard needsPerson else { return nil }
+        return .answer(question: CrewPreview.line(summary.lastMessageHead ?? lastText))
     }
 }

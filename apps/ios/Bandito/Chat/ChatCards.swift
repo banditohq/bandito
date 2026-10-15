@@ -87,16 +87,13 @@ struct ChatApprovalCard: View {
                     .foregroundStyle(Color.Bandito.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: BanditoSpace.s3) {
-                Button(L10n.Approval.deny) { Task { await answer(false) } }
-                    .buttonStyle(QuietButtonStyle())
-                    .disabled(busy)
-                    .accessibilityIdentifier("chat.approval.deny.\(row.approvalId)")
-                Button(L10n.Approval.approve) { Task { await answer(true) } }
-                    .buttonStyle(SignalButtonStyle())
-                    .disabled(busy)
-                    .accessibilityIdentifier("chat.approval.allow.\(row.approvalId)")
-            }
+            AnswerPair(
+                quiet: L10n.Approval.deny, main: L10n.Approval.approve,
+                quietID: "chat.approval.deny.\(row.approvalId)", mainID: "chat.approval.allow.\(row.approvalId)",
+                disabled: busy,
+                quietAction: { Task { await answer(false) } },
+                mainAction: { Task { await answer(true) } }
+            )
         }
         .chatCardSurface()
         .reportsHeight(onHeight)
@@ -174,16 +171,12 @@ struct ChatFormCard: View {
                     .foregroundStyle(Color.Bandito.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: BanditoSpace.s3) {
-                Button(FormPresentation.rejectTitle(row.spec)) { Task { await send(.reject) } }
-                    .buttonStyle(QuietButtonStyle())
-                    .disabled(busy)
-                    .accessibilityIdentifier("chat.form.reject")
-                Button(FormPresentation.submitTitle(row.spec)) { Task { await send(.submit) } }
-                    .buttonStyle(SignalButtonStyle())
-                    .disabled(busy)
-                    .accessibilityIdentifier("chat.form.submit")
-            }
+            AnswerPair(
+                quiet: FormPresentation.rejectTitle(row.spec), main: FormPresentation.submitTitle(row.spec),
+                quietID: "chat.form.reject", mainID: "chat.form.submit", disabled: busy,
+                quietAction: { Task { await send(.reject) } },
+                mainAction: { Task { await send(.submit) } }
+            )
         }
         .chatCardSurface()
         .reportsHeight(onHeight)

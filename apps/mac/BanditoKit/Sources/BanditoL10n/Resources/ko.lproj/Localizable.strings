@@ -1001,6 +1001,7 @@
 "ios.chat.openSettings" = "설정 열기";
 "ios.chat.retry" = "다시 시도";
 "ios.chat.sending" = "보내는 중…";
+"ios.chat.stopFailed" = "중지하지 못했어요: 서버와 연결되어 있지 않아요. 연결이 돌아오면 다시 시도해 주세요.";
 "ios.chat.tools.hide" = "명령 숨기기";
 "ios.chat.tools.show" = "명령 보기";
 "ios.chat.uncertain" = "도착했는지 확실하지 않음";
@@ -1063,6 +1064,7 @@
 "ios.crew.emptyMessage" = "이 서버에는 에이전트가 없어요. 첫 에이전트를 만들어 팀을 시작하세요.";
 "ios.crew.emptyTitle" = "아직 에이전트가 없어요";
 "ios.crew.lead" = "리더";
+"ios.crew.moreInInbox" = "받은 편지함에 %1$lld개 더";
 "ios.crew.needsYou" = "사용자를 기다리는 중";
 "ios.crew.noMessages" = "아직 메시지가 없어요";
 "ios.crew.openChat" = "%1$@와(과)의 대화 열기";
