@@ -16,12 +16,17 @@ import Testing
     }
 
     func thread(messages: Int, extra: [ThreadItem] = []) -> AgentThread {
+        var items: [ThreadItem] = []
+        for index in 1...max(1, messages) {
+            let ts = Int64(1_000 + index)
+            if index % 2 == 0 {
+                items.append(.assistant(id: "s\(index)", text: "Answer \(index)", ts: ts))
+            } else {
+                items.append(.user(id: "s\(index)", text: "Question \(index)", source: .user, from: nil, ts: ts))
+            }
+        }
         var thread = AgentThread()
-        thread.items = (1...max(1, messages)).map { index -> ThreadItem in
-            index % 2 == 0
-                ? .assistant(id: "s\(index)", text: "Answer \(index)", ts: Int64(1_000 + index))
-                : .user(id: "s\(index)", text: "Question \(index)", source: .user, from: nil, ts: Int64(1_000 + index))
-        } + extra
+        thread.items = items + extra
         return thread
     }
 
