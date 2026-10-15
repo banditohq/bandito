@@ -81,6 +81,7 @@ public enum L10n {
         }
 
         public enum Devices {
+            public static var addIPhone: String { L10n.tr("account.devices.addIPhone") }
             public static var connectPhone: String { L10n.tr("account.devices.connectPhone") }
         }
 
@@ -1664,6 +1665,44 @@ public enum L10n {
             }
         }
 
+        public enum Join {
+            public static var already: String { L10n.tr("ios.join.already") }
+            public static var button: String { L10n.tr("ios.join.button") }
+            public static var buttonHint: String { L10n.tr("ios.join.buttonHint") }
+            public static var compare: String { L10n.tr("ios.join.compare") }
+            public static var defaultMac: String { L10n.tr("ios.join.defaultMac") }
+            public static var expired: String { L10n.tr("ios.join.expired") }
+            public static var other: String { L10n.tr("ios.join.other") }
+            public static var silent: String { L10n.tr("ios.join.silent") }
+
+            public enum Confirm {
+                public static var action: String { L10n.tr("ios.join.confirm.action") }
+                public static var text: String { L10n.tr("ios.join.confirm.text") }
+                public static func title(mac: String) -> String { L10n.tr("ios.join.confirm.title", mac) }
+            }
+
+            public enum Foreign {
+                public static var text: String { L10n.tr("ios.join.foreign.text") }
+                public static var title: String { L10n.tr("ios.join.foreign.title") }
+            }
+
+            public enum Paste {
+                public static var placeholder: String { L10n.tr("ios.join.paste.placeholder") }
+                public static var submit: String { L10n.tr("ios.join.paste.submit") }
+            }
+
+            public enum Scan {
+                public static var hint: String { L10n.tr("ios.join.scan.hint") }
+                public static var notJoin: String { L10n.tr("ios.join.scan.notJoin") }
+                public static var title: String { L10n.tr("ios.join.scan.title") }
+            }
+
+            public enum Waiting {
+                public static var text: String { L10n.tr("ios.join.waiting.text") }
+                public static func title(mac: String) -> String { L10n.tr("ios.join.waiting.title", mac) }
+            }
+        }
+
         public enum Live {
             public static var done: String { L10n.tr("ios.live.done") }
             public static var failed: String { L10n.tr("ios.live.failed") }
@@ -1893,6 +1932,28 @@ public enum L10n {
                 public static var offline: String { L10n.tr("ios.widget.status.offline") }
                 public static var working: String { L10n.tr("ios.widget.status.working") }
             }
+        }
+    }
+
+    public enum JoinQR {
+        public static func added(name: String) -> String { L10n.tr("joinQR.added", name) }
+        public static var addedHint: String { L10n.tr("joinQR.addedHint") }
+        public static var badProof: String { L10n.tr("joinQR.badProof") }
+        public static var badProofKept: String { L10n.tr("joinQR.badProofKept") }
+        public static func claiming(name: String) -> String { L10n.tr("joinQR.claiming", name) }
+        public static var expired: String { L10n.tr("joinQR.expired") }
+        public static func expiresIn(time: String) -> String { L10n.tr("joinQR.expiresIn", time) }
+        public static var new: String { L10n.tr("joinQR.new") }
+        public static var qrLabel: String { L10n.tr("joinQR.qrLabel") }
+        public static var retrying: String { L10n.tr("joinQR.retrying") }
+        public static var steps: String { L10n.tr("joinQR.steps") }
+        public static var title: String { L10n.tr("joinQR.title") }
+        public static var waiting: String { L10n.tr("joinQR.waiting") }
+
+        public enum Blocked {
+            public static var noKey: String { L10n.tr("joinQR.blocked.noKey") }
+            public static var notApproved: String { L10n.tr("joinQR.blocked.notApproved") }
+            public static var signedOut: String { L10n.tr("joinQR.blocked.signedOut") }
         }
     }
 
@@ -2967,6 +3028,8 @@ public enum L10n {
         public static var retry: String { L10n.tr("phoneWizard.retry") }
         public static var signIn: String { L10n.tr("phoneWizard.signIn") }
         public static var title: String { L10n.tr("phoneWizard.title") }
+        public static var useAccount: String { L10n.tr("phoneWizard.useAccount") }
+        public static var usePairCode: String { L10n.tr("phoneWizard.usePairCode") }
         public static var via: String { L10n.tr("phoneWizard.via") }
         public static var waiting: String { L10n.tr("phoneWizard.waiting") }
 

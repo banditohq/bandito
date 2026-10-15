@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import Foundation
 import Observation
 import OSLog
@@ -46,6 +47,29 @@ final class IOSAccount {
     private(set) var refreshing = 0
     private(set) var github: PhoneGitHubSignIn?
     private(set) var email: PhoneEmailSignIn?
+    /// The name of the Mac this iPhone is signing in with ("Войти с помощью Mac"), from the first scan until the key has
+    /// arrived or the Mac stayed silent. Empty when the code carried no name. Nil outside that wait.
+    private(set) var joinMacName: String?
+    /// What went wrong with the sign-in by a Mac's code, when the screen has to say it.
+    private(set) var joinProblem: JoinProblem?
+
+    /// A sign-in by a Mac's code that needs the person's eyes.
+    enum JoinProblem: Equatable, Sendable {
+        /// The Mac did not hand over the key in time. The ordinary approval (compare codes) still works.
+        case silent
+        /// A key came, but not from the Mac of the code: it was not accepted.
+        case foreign
+    }
+
+    /// What `join` did with a code.
+    enum JoinResult: Equatable, Sendable {
+        /// The code is being used: the screen follows `stage`, `joinMacName` and `errorText`.
+        case joining
+        /// This iPhone is in the account already: nothing was changed.
+        case alreadySignedIn
+        /// Another sign-in by a code is running, or this is a preview.
+        case ignored
+    }
 
     @ObservationIgnored private let keys: SecretStore
     @ObservationIgnored private let identities: DeviceIdentityStore
@@ -72,6 +96,13 @@ final class IOSAccount {
     /// for the Mac, and otherwise.
     @ObservationIgnored private let fastInterval: Duration
     @ObservationIgnored private let waitingInterval: Duration
+    /// How long the Mac has to hand over the key after a scan before the screen says it is silent.
+    @ObservationIgnored private let joinTimeout: Duration
+    /// The ticket whose Mac must have sent the key: while it is set, a key from that Mac is accepted without a question.
+    @ObservationIgnored private var joinTicket: JoinTicket?
+    @ObservationIgnored private var joinInFlight = false
+    @ObservationIgnored private var joinTimeoutTask: Task<Void, Never>?
+    @ObservationIgnored private var acceptTask: Task<Void, Never>?
     @ObservationIgnored private let idleInterval: Duration
     /// The stretch of fast rounds: opened by a new ready account, by a round that wrote requests and by a return to the
     /// front with a server waiting; lengthened while a server waits, never past its limit in a row.
@@ -114,6 +145,7 @@ final class IOSAccount {
         pollInterval: Duration = .seconds(3), retryDelay: Duration = .milliseconds(1500),
         fastInterval: Duration = .seconds(3), waitingInterval: Duration = .seconds(10), idleInterval: Duration = .seconds(60),
         fastWindowLength: TimeInterval = 3 * 60, fastWindowLimit: TimeInterval = 10 * 60,
+        joinTimeout: Duration = .seconds(120),
         now: @escaping () -> Date = Date.init,
         sleep: @escaping @MainActor (Duration) async -> Void = { try? await Task.sleep(for: $0) },
         syncPause: @escaping @MainActor () async throws -> Void = SyncStore.randomPause
@@ -134,6 +166,7 @@ final class IOSAccount {
         self.fastInterval = fastInterval
         self.waitingInterval = waitingInterval
         self.idleInterval = idleInterval
+        self.joinTimeout = joinTimeout
         self.now = now
         self.sleep = sleep
         fastWindow = FastPollWindow(length: fastWindowLength, limit: fastWindowLimit)
@@ -152,11 +185,24 @@ final class IOSAccount {
         let account = IOSAccount(
             keys: secrets, identities: DeviceIdentityStore(secrets: identitySecrets),
             sink: AccountAccessSink(secrets: secrets, session: session, noiseKeys: noiseKeys), noiseKeys: noiseKeys,
-            connectedServers: { ServerSession.shared.servers })
+            connectedServers: { ServerSession.shared.servers }, baseURL: launchBaseURL())
         // A server the person removes stays removed; one added again (by any way) lifts the mark.
         ServerSession.shared.onForgotten = { [weak account] in account?.dismiss($0) }
         ServerSession.shared.onAdded = { [weak account] in account?.lift($0) }
         return account
+    }
+
+    /// The cloud's address: `-accountBaseURL <url>` in a debug build (a local `wrangler dev`; the Kit accepts only loopback
+    /// for plain http), else the real one. A release build ignores the argument.
+    static func launchBaseURL(arguments: [String] = ProcessInfo.processInfo.arguments) -> URL {
+        #if DEBUG
+        if let index = arguments.firstIndex(of: "-accountBaseURL"), arguments.indices.contains(index + 1),
+            let url = URL(string: arguments[index + 1])
+        {
+            return url
+        }
+        #endif
+        return AccountClient.defaultBaseURL
     }
 
     /// The Keychain; on the Simulator an unsigned build has no Keychain access group and refuses every write, so there a
@@ -363,6 +409,7 @@ final class IOSAccount {
     }
 
     private func becomeReady() {
+        endJoin()
         pollTask?.cancel()
         pollTask = nil
         let wasReady = stage == .ready
@@ -407,6 +454,18 @@ final class IOSAccount {
             let opened = try SyncKey.open(
                 envelope: envelope.envelope, with: identity, accountID: session.user.id, deviceID: me.device.id)
             pending = opened
+            if let ticket = joinTicket {
+                // Signed in with a Mac's code: the key counts only when that Mac sealed it. Then no question is asked.
+                guard let raw = Data(base64Encoded: envelope.envelope), ticket.isFromMac(envelope: raw) else {
+                    joinProblem = .foreign
+                    joinMacName = nil
+                    joinTimeoutTask?.cancel()
+                    return true
+                }
+                // Not run inside the poll task: accepting reads the account, and the poll task is cancelled on the way.
+                acceptTask = Task { [weak self] in await self?.acceptJoined() }
+                return true
+            }
             stage = .confirmSender(code: opened.senderFingerprint)
             return true
         } catch is CancellationError {
@@ -436,6 +495,106 @@ final class IOSAccount {
         } catch {
             fail(error)
         }
+    }
+
+    // MARK: sign-in by a Mac's code
+
+    /// "Войти с помощью Mac": signs in with the ticket of a scanned code. The Mac's key is then accepted by itself, and the
+    /// servers come within seconds. A phone that is in the account already is left as it is. The failures (a stale code,
+    /// no network) are in `errorText`; the screen follows `stage`, `joinMacName` and `joinProblem`.
+    @discardableResult
+    func join(_ ticket: JoinTicket) async -> JoinResult {
+        // Taken before the first suspension: a second call (the camera sees a code many times) finds it set.
+        guard !inert, !joinInFlight else { return .ignored }
+        joinInFlight = true
+        defer { joinInFlight = false }
+        // A link that started the app finds the stored session not read yet: read it first.
+        if stage == .loading { await start() }
+        if stage == .ready {
+            openFastWindow()
+            return .alreadySignedIn
+        }
+        clearError()
+        joinProblem = nil
+        let before = stage
+        let client: AccountClient
+        do {
+            client = try await prepare()
+        } catch {
+            fail(error)
+            return .joining
+        }
+        // Another way in that is half done (GitHub, a code by e-mail) ends: this one replaces it.
+        github?.cancel()
+        email?.finish()
+        joinMacName = ticket.macName
+        stage = .loading
+        do {
+            _ = try await client.redeemTicket(ticket)
+        } catch {
+            joinMacName = nil
+            stage = before
+            // A pending device from an earlier sign-in goes on waiting for its approval.
+            if case .waitingForApproval = before { startPolling() }
+            fail(error)
+            return .joining
+        }
+        joinTicket = ticket
+        startJoinTimeout()
+        await refresh()
+        return .joining
+    }
+
+    /// The key came from the Mac of the code: it is kept, and the account is read again.
+    func acceptJoined() async {
+        guard let pending, case .waitingForApproval = stage else {
+            // The phone left the wait (signed out, refused) while the key was on its way: say so, do not keep it.
+            endJoin()
+            pending = nil
+            errorText = L10n.Onboarding.Account.errorGeneric
+            errorDetails = "join: not waiting"
+            return
+        }
+        do {
+            let key = try pending.accept(confirmedFingerprint: pending.senderFingerprint)
+            try SyncKey.save(key, to: keys)
+            self.pending = nil
+            endJoin()
+            clearError()
+            stage = .loading
+            await refresh()
+        } catch {
+            endJoin()
+            fail(error)
+        }
+    }
+
+    /// A key arrived from another sender than the Mac of the code: the person may compare the codes by hand, the old way.
+    func compareManually() {
+        guard joinProblem == .foreign, let pending else { return }
+        endJoin()
+        stage = .confirmSender(code: pending.senderFingerprint)
+    }
+
+    /// The Mac has `joinTimeout` to answer; then the screen says so, and the ordinary approval stays open.
+    private func startJoinTimeout() {
+        joinTimeoutTask?.cancel()
+        let delay = joinTimeout
+        joinTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self, self.joinTicket != nil, self.joinProblem == nil else { return }
+            self.joinProblem = .silent
+            self.joinMacName = nil
+        }
+    }
+
+    /// The sign-in by a code is over (ready, refused, signed out): nothing of it is kept.
+    private func endJoin() {
+        joinTicket = nil
+        joinMacName = nil
+        joinProblem = nil
+        joinTimeoutTask?.cancel()
+        joinTimeoutTask = nil
     }
 
     /// The codes differ: the key is dropped and nothing is stored. This iPhone is removed from the account too.
@@ -637,6 +796,7 @@ final class IOSAccount {
         hiddenCount = 0
         queuedDismissals = []
         pending = nil
+        endJoin()
         fastWindow.close()
         fastMode = false
         loadedServers = false
@@ -649,6 +809,9 @@ final class IOSAccount {
     }
 
     private func stopTasks() {
+        endJoin()
+        acceptTask?.cancel()
+        acceptTask = nil
         pollTask?.cancel()
         pollTask = nil
         cycleTask?.cancel()

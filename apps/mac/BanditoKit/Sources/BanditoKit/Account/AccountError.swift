@@ -61,6 +61,7 @@ public enum AccountError: Error, Sendable, Equatable, LocalizedError {
         case "key_mismatch": return "This device's key does not match the one it was registered with."
         case "last_device": return "This is the last approved device. Confirm the reset to remove it."
         case "rate": return "Too many attempts. Try again later."
+        case "ticket_invalid": return "The sign-in ticket is invalid, used or expired. Make a new one on your Mac."
         case "email_failed": return "The email could not be sent. Try again."
         case "email_unavailable": return "Email sign-in is not available right now."
         case "github_failed": return "GitHub did not answer as expected. Try again."

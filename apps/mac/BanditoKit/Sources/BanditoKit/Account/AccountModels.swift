@@ -100,6 +100,14 @@ public struct PendingDevice: Codable, Sendable, Equatable, Identifiable {
     public var publicKey: String
     public var createdAt: String
 
+    public init(id: String, name: String, platform: String, publicKey: String, createdAt: String) {
+        self.id = id
+        self.name = name
+        self.platform = platform
+        self.publicKey = publicKey
+        self.createdAt = createdAt
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, name, platform
         case publicKey = "public_key"

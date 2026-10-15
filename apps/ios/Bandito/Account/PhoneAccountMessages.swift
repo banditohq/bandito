@@ -78,6 +78,7 @@ enum PhoneAccountMessages {
         case "device_not_approved": return L10n.Onboarding.Failure.deviceNotApproved
         case "access_denied": return L10n.Onboarding.Failure.accessDenied
         case "session_too_old": return L10n.Onboarding.Failure.sessionTooOld
+        case "ticket_invalid": return L10n.Ios.Join.expired
         case "not_found": return L10n.Onboarding.Failure.notFound
         case "not_yet": return L10n.Onboarding.Failure.notYet
         case "flow_not_found", "expired": return L10n.Onboarding.Failure.flowNotFound

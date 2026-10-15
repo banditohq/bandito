@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import CryptoKit
 import Foundation
 import Testing
@@ -63,7 +64,8 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
     }
 
     private func makeRig(
-        signedIn: Bool = true, fastLength: TimeInterval = 180, fastLimit: TimeInterval = 600, clock: ManualClock? = nil
+        signedIn: Bool = true, fastLength: TimeInterval = 180, fastLimit: TimeInterval = 600, clock: ManualClock? = nil,
+        joinTimeout: Duration = .seconds(120), retryDelay: Duration = .milliseconds(1500)
     ) async throws -> Rig {
         let keys = MemorySecretStore()
         if signedIn {
@@ -82,8 +84,8 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
             keys: keys, identities: identities,
             sink: AccountAccessSink(secrets: MemorySecretStore(), file: sinkFile),
             noiseKeys: ServerNoiseKeyStore(secrets: MemorySecretStore()), http: server, deviceName: "iPhone",
-            defaults: defaults, pollInterval: .milliseconds(5),
-            fastWindowLength: fastLength, fastWindowLimit: fastLimit,
+            defaults: defaults, pollInterval: .milliseconds(5), retryDelay: retryDelay,
+            fastWindowLength: fastLength, fastWindowLimit: fastLimit, joinTimeout: joinTimeout,
             now: { clock?.now ?? Date() }, sleep: { duration in
                 if let clock { await clock.sleep(duration) } else { try? await Task.sleep(for: duration) }
             }, syncPause: {})
@@ -283,6 +285,210 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
     // MARK: fast rounds
 
     /// A ready account whose one server waits for the Mac. `asked`: the request is already written.
+    // MARK: sign-in with a Mac's code
+
+    private let redeemed = #"{"ok":true,"token":"tok2","user":{"id":"u1","email":"anna@example.com"},"device":{"id":"phone","approved":false}}"#
+
+    /// The redeem of a ticket needs the challenge first (the device block is signed over its nonce).
+    private func setRedeem(_ rig: Rig, _ body: String? = nil, status: Int = 200) {
+        let nonce = Data(repeating: 7, count: 64).base64EncodedString()
+        rig.server.set("POST /auth/challenge", #"{"ok":true,"nonce":"\#(nonce)","expires_in":300}"#)
+        rig.server.set("POST /auth/ticket/redeem", body ?? redeemed, status: status)
+    }
+
+    private func makeTicket(for mac: DeviceIdentity, name: String = "Studio 🦝") throws -> JoinTicket {
+        let key = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: try #require(Data(base64Encoded: mac.publicKeyBase64)))
+        return JoinTicket.make(macPublicKey: key, macName: name)
+    }
+
+    /// The server as it is once the Mac approved: the account reads as approved, with the Mac's blob, and the envelope is there.
+    private func macApproves(_ rig: Rig, sender: DeviceIdentity? = nil) throws {
+        rig.server.set("GET /me", me(approved: true))
+        rig.server.set("GET /sync", #"{"ok":true,"version":1,"blob":"\#(try blob(rig, version: 1, asked: true))"}"#)
+        rig.server.set("PUT /sync", #"{"ok":true,"version":2}"#)
+        let envelope = try SyncKey.seal(
+            rig.syncKey, forPublicKey: rig.phone.publicKeyBase64, sender: sender ?? rig.mac, accountID: accountID, deviceID: phoneID)
+        rig.server.set("GET /devices/me/envelope", #"{"ok":true,"envelope":"\#(envelope)","from_public_key":"x"}"#)
+    }
+
+    @Test func aScannedCodeSignsInWaitsForTheMacAndTakesItsKeyWithoutAQuestion() async throws {
+        let rig = try await makeRig(signedIn: false)
+        setRedeem(rig)
+        rig.server.set("GET /me", me(approved: false))
+        let ticket = try makeTicket(for: rig.mac)
+
+        let result = await rig.account.join(ticket)
+        #expect(result == .joining)
+        #expect(rig.account.stage == .waitingForApproval(code: rig.phone.fingerprint))
+        #expect(rig.account.joinMacName == "Studio 🦝")
+        let redeem = try #require(rig.server.requests.first { $0.key == "POST /auth/ticket/redeem" })
+        let redeemBody = try #require(redeem.body)
+        let body = try #require(try JSONSerialization.jsonObject(with: redeemBody) as? [String: Any])
+        #expect(body["ticket"] as? String == ticket.authToken)
+
+        try macApproves(rig)
+        #expect(await wait { rig.account.stage == .ready })
+        #expect(try SyncKey.load(from: rig.keys) != nil)
+        #expect(rig.account.joinMacName == nil && rig.account.joinProblem == nil)
+        #expect(rig.account.fastMode, "the servers are asked for at the fast pace")
+    }
+
+    @Test func aKeyFromAnotherSenderIsNotTakenAndTheCodesCanBeComparedByHand() async throws {
+        let rig = try await makeRig(signedIn: false)
+        setRedeem(rig)
+        rig.server.set("GET /me", me(approved: false))
+        // The code is of one Mac, the envelope is sealed by another device.
+        let other = try await DeviceIdentityStore(secrets: MemorySecretStore()).load()
+        await rig.account.join(try makeTicket(for: other))
+        try macApproves(rig)
+
+        #expect(await wait { rig.account.joinProblem == .foreign })
+        #expect(rig.account.stage == .waitingForApproval(code: rig.phone.fingerprint))
+        #expect(try SyncKey.load(from: rig.keys) == nil)
+
+        rig.account.compareManually()
+        #expect(rig.account.stage == .confirmSender(code: rig.mac.fingerprint))
+        #expect(rig.account.joinProblem == nil)
+    }
+
+    @Test func aStaleCodeSaysSoAndLeavesThePhoneSignedOut() async throws {
+        let rig = try await makeRig(signedIn: false)
+        setRedeem(rig, #"{"ok":false,"error":"ticket_invalid"}"#, status: 404)
+
+        await rig.account.join(try makeTicket(for: rig.mac))
+        #expect(rig.account.stage == .signedOut)
+        #expect(rig.account.errorText == L10n.Ios.Join.expired)
+        #expect(rig.account.joinMacName == nil)
+        #expect(try rig.keys.load(account: AccountClient.sessionAccount) == nil)
+    }
+
+    @Test func aScanWithoutNetworkSaysSoAndALaterScanWorks() async throws {
+        let rig = try await makeRig(signedIn: false, retryDelay: .milliseconds(1))
+        // No route: the request fails on the network.
+        await rig.account.join(try makeTicket(for: rig.mac))
+        #expect(rig.account.stage == .signedOut)
+        #expect(rig.account.errorText == L10n.Onboarding.Failure.network)
+
+        setRedeem(rig)
+        rig.server.set("GET /me", me(approved: false))
+        await rig.account.join(try makeTicket(for: rig.mac))
+        #expect(rig.account.stage == .waitingForApproval(code: rig.phone.fingerprint))
+        #expect(rig.account.errorText == nil)
+    }
+
+    @Test func aMacThatStaysSilentIsSaidAfterTheTimeoutAndItsLateKeyIsStillTaken() async throws {
+        let rig = try await makeRig(signedIn: false, joinTimeout: .milliseconds(40))
+        setRedeem(rig)
+        rig.server.set("GET /me", me(approved: false))
+        await rig.account.join(try makeTicket(for: rig.mac))
+        #expect(rig.account.joinMacName != nil)
+
+        #expect(await wait { rig.account.joinProblem == .silent })
+        // The session stays: the ordinary approval screen shows.
+        #expect(rig.account.stage == .waitingForApproval(code: rig.phone.fingerprint))
+        #expect(rig.account.joinMacName == nil)
+        #expect(try rig.keys.load(account: AccountClient.sessionAccount) != nil)
+
+        try macApproves(rig)
+        #expect(await wait { rig.account.stage == .ready })
+        #expect(rig.account.joinProblem == nil)
+    }
+
+    @Test func twoScansOfTheSameCodeRedeemOnceAndTheSecondDoesNotResetTheStage() async throws {
+        let rig = try await makeRig(signedIn: false)
+        setRedeem(rig)
+        rig.server.set("GET /me", me(approved: false))
+        let ticket = try makeTicket(for: rig.mac)
+
+        let account = rig.account
+        let first = Task { @MainActor in await account.join(ticket) }
+        let second = Task { @MainActor in await account.join(ticket) }
+        let results = [await first.value, await second.value]
+
+        #expect(results.filter { $0 == .joining }.count == 1)
+        #expect(results.filter { $0 == .ignored }.count == 1)
+        #expect(rig.server.requests.filter { $0.key == "POST /auth/ticket/redeem" }.count == 1)
+        #expect(rig.account.stage == .waitingForApproval(code: rig.phone.fingerprint))
+        #expect(rig.account.joinMacName == "Studio 🦝")
+        // The flag is free again: a later scan (after the sign-in failed, say) is not shut out.
+        setRedeem(rig, #"{"ok":false,"error":"ticket_invalid"}"#, status: 404)
+        #expect(await rig.account.join(ticket) == .joining)
+    }
+
+    @Test func aScanDuringTheStartupReadIsNotRacedByASecondOne() async throws {
+        // A stored session that is still being read (`.loading`): the first call waits for the read, the second is turned away
+        // at once, not let in while the first is suspended.
+        let rig = try await makeRig()
+        rig.server.set("GET /me", me(approved: true))
+        rig.server.set("GET /sync", #"{"ok":true,"version":1,"blob":"\#(try blob(rig, version: 1, asked: true))"}"#)
+        rig.server.set("PUT /sync", #"{"ok":true,"version":2}"#)
+        try SyncKey.save(rig.syncKey, to: rig.keys)
+        #expect(rig.account.stage == .loading)
+        let ticket = try makeTicket(for: rig.mac)
+
+        let account = rig.account
+        let first = Task { @MainActor in await account.join(ticket) }
+        let second = Task { @MainActor in await account.join(ticket) }
+        let results = [await first.value, await second.value]
+
+        #expect(results.sorted { "\($0)" < "\($1)" } == [.alreadySignedIn, .ignored])
+        #expect(!rig.server.requests.contains { $0.key == "POST /auth/ticket/redeem" })
+        #expect(rig.account.stage == .ready)
+    }
+
+    @Test func aKeyThatArrivesAfterThePhoneLeftTheWaitIsNotKeptAndTheScreenSaysSo() async throws {
+        let rig = try await makeRig(signedIn: false)
+        #expect(rig.account.stage == .signedOut)
+        await rig.account.acceptJoined()
+        #expect(rig.account.errorText == L10n.Onboarding.Account.errorGeneric)
+        #expect(rig.account.joinMacName == nil && rig.account.joinProblem == nil)
+        #expect(try SyncKey.load(from: rig.keys) == nil)
+    }
+
+    @Test func aPhoneThatIsInTheAccountIsNotSignedInAgain() async throws {
+        let (rig, _) = try await readyRig()
+        await rig.account.start()
+        #expect(rig.account.stage == .ready)
+
+        let result = await rig.account.join(try makeTicket(for: rig.mac))
+        #expect(result == .alreadySignedIn)
+        #expect(rig.account.stage == .ready)
+        #expect(rig.account.fastMode)
+        #expect(!rig.server.requests.contains { $0.key == "POST /auth/ticket/redeem" })
+    }
+
+    @Test func aPendingDeviceFromAnEmailSignInStillJoinsWithTheSameDevice() async throws {
+        let rig = try await makeRig()
+        rig.server.set("GET /me", me(approved: false))
+        await rig.account.start()
+        #expect(rig.account.stage == .waitingForApproval(code: rig.phone.fingerprint))
+
+        setRedeem(rig)
+        await rig.account.join(try makeTicket(for: rig.mac))
+        #expect(rig.server.requests.contains { $0.key == "POST /auth/ticket/redeem" })
+        #expect(rig.account.stage == .waitingForApproval(code: rig.phone.fingerprint))
+
+        try macApproves(rig)
+        #expect(await wait { rig.account.stage == .ready })
+    }
+
+    @Test func aFailedScanOfAPendingPhoneKeepsItWaitingForItsOrdinaryApproval() async throws {
+        let rig = try await makeRig()
+        rig.server.set("GET /me", me(approved: false))
+        await rig.account.start()
+        setRedeem(rig, #"{"ok":false,"error":"ticket_invalid"}"#, status: 404)
+
+        await rig.account.join(try makeTicket(for: rig.mac))
+        #expect(rig.account.stage == .waitingForApproval(code: rig.phone.fingerprint))
+        #expect(rig.account.errorText == L10n.Ios.Join.expired)
+
+        // The polling went on: the ordinary approval still arrives.
+        let envelope = try SyncKey.seal(
+            rig.syncKey, forPublicKey: rig.phone.publicKeyBase64, sender: rig.mac, accountID: accountID, deviceID: phoneID)
+        rig.server.set("GET /devices/me/envelope", #"{"ok":true,"envelope":"\#(envelope)","from_public_key":"x"}"#)
+        #expect(await wait { rig.account.stage == .confirmSender(code: rig.mac.fingerprint) })
+    }
+
     private func readyRig(asked: Bool = true, fastLength: TimeInterval = 180, fastLimit: TimeInterval = 600) async throws -> (Rig, ManualClock) {
         let clock = ManualClock()
         let rig = try await makeRig(fastLength: fastLength, fastLimit: fastLimit, clock: clock)

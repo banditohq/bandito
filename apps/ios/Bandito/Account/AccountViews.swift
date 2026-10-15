@@ -15,6 +15,8 @@ struct AccountScreen: View {
     @State private var emailOpen = false
     @State private var copied = false
     @State private var confirmingSignOut = false
+    /// The scanner for "Sign in with a Mac".
+    @State private var scan: JoinScanRequest?
 
     var body: some View {
         ScrollView {
@@ -48,14 +50,31 @@ struct AccountScreen: View {
         } message: {
             Text(L10n.Ios.Account.SignOut.message)
         }
+        .sheet(item: $scan) { _ in
+            JoinScannerSheet(
+                onTicket: { ticket in
+                    scan = nil
+                    Task { await account.join(ticket) }
+                },
+                onClose: { scan = nil })
+                .preferredColorScheme(.dark)
+        }
         .task { await account.start() }
     }
 
     @ViewBuilder private var content: some View {
         switch account.stage {
         case .signedOut: signIn
-        case .loading: loading
-        case .waitingForApproval(let code): waiting(code: code)
+        case .loading:
+            if account.joinMacName != nil { joinWaiting } else { loading }
+        case .waitingForApproval(let code):
+            if account.joinProblem == .foreign {
+                foreignKey
+            } else if account.joinMacName != nil {
+                joinWaiting
+            } else {
+                waiting(code: code)
+            }
         case .confirmSender(let code): confirm(code: code)
         case .rejected: rejected
         case .recoverRequired: recover
@@ -68,6 +87,26 @@ struct AccountScreen: View {
     @ViewBuilder private var signIn: some View {
         title(L10n.Account.SignIn.title)
         paragraph(L10n.Ios.Account.SignIn.text)
+        // The way that needs nothing typed comes first: the Mac shows a code, the camera reads it.
+        VStack(spacing: BanditoSpace.s2) {
+            Button {
+                scan = JoinScanRequest()
+            } label: {
+                Text(L10n.Ios.Join.button).frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SignalButtonStyle())
+            .accessibilityIdentifier("account.join")
+            Text(L10n.Ios.Join.buttonHint)
+                .font(BanditoFont.text(size: 12))
+                .foregroundStyle(Color.Bandito.text3)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        Text(L10n.Ios.Join.other)
+            .font(BanditoFont.text(size: 13, weight: 500))
+            .foregroundStyle(Color.Bandito.text3)
+            .padding(.top, BanditoSpace.s2)
         if let github = account.github {
             githubBlock(github)
         } else {
@@ -76,7 +115,7 @@ struct AccountScreen: View {
             } label: {
                 Text(L10n.Onboarding.Account.continueGithub).frame(maxWidth: .infinity)
             }
-            .buttonStyle(SignalButtonStyle())
+            .buttonStyle(QuietButtonStyle())
             .accessibilityIdentifier("account.github")
         }
         if emailOpen {
@@ -89,7 +128,6 @@ struct AccountScreen: View {
             .buttonStyle(OnboardingLinkStyle())
             .accessibilityIdentifier("account.email.toggle")
         }
-        footnote(L10n.Onboarding.Account.privacy)
     }
 
     @ViewBuilder private func githubBlock(_ github: PhoneGitHubSignIn) -> some View {
@@ -101,7 +139,7 @@ struct AccountScreen: View {
             } label: {
                 Text(L10n.Onboarding.Account.continueGithub).frame(maxWidth: .infinity)
             }
-            .buttonStyle(SignalButtonStyle())
+            .buttonStyle(QuietButtonStyle())
             .accessibilityIdentifier("account.github")
         case .connecting:
             progress(L10n.Onboarding.Account.Github.connecting)
@@ -173,8 +211,46 @@ struct AccountScreen: View {
         }
     }
 
+    /// Signed in by a Mac's code: the Mac is handing over the key. Nothing to do here but wait.
+    @ViewBuilder private var joinWaiting: some View {
+        let mac = account.joinMacName.flatMap { $0.isEmpty ? nil : $0 } ?? L10n.Ios.Join.defaultMac
+        title(L10n.Ios.Join.Waiting.title(mac: mac))
+            .accessibilityIdentifier("account.join.waiting")
+        paragraph(L10n.Ios.Join.Waiting.text)
+        switch AccountLoadingPresentation.of(refreshing: account.refreshing > 0, hasError: account.errorText != nil) {
+        case .checking:
+            progress(L10n.Onboarding.Account.approvalWaiting)
+        case .retry:
+            Button(L10n.Onboarding.Account.Github.retry) { Task { await account.start() } }
+                .buttonStyle(OnboardingLinkStyle())
+        }
+        signOutLink
+    }
+
+    /// A key came from somebody other than the Mac of the code. It was not taken.
+    @ViewBuilder private var foreignKey: some View {
+        title(L10n.Ios.Join.Foreign.title)
+            .accessibilityIdentifier("account.join.foreign")
+        paragraph(L10n.Ios.Join.Foreign.text)
+        Button {
+            account.compareManually()
+        } label: {
+            Text(L10n.Ios.Join.compare).frame(maxWidth: .infinity)
+        }
+        .buttonStyle(SignalButtonStyle())
+        .accessibilityIdentifier("account.join.compare")
+        signOutLink
+    }
+
     @ViewBuilder private func waiting(code: String) -> some View {
         title(L10n.Ios.Account.Approval.title)
+        if account.joinProblem == .silent {
+            Text(L10n.Ios.Join.silent)
+                .font(BanditoFont.text(size: 14))
+                .foregroundStyle(Color.Bandito.danger)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("account.join.silent")
+        }
         paragraph(L10n.Ios.Account.Approval.text)
         card {
             Text(L10n.Ios.Account.Approval.codeLabel)

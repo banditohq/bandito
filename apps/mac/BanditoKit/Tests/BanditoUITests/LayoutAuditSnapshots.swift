@@ -1,5 +1,6 @@
 import BanditoDesign
 @testable import BanditoKit
+import CryptoKit
 import SwiftUI
 import Testing
 
@@ -156,6 +157,27 @@ extension ScreenWorkSuites {
             AuditCase(name: "sheet-connect-phone-problem", width: 420, selfSized: true, signedIn: true) { _ in
                 AnyView(ConnectPhoneWizard(preview: .problem(.noServer)))
             },
+            AuditCase(name: "sheet-join-qr", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(JoinQRSheet(preview: .preview(.showing(link: Self.joinPreviewLink, expiresAt: Date().addingTimeInterval(272)))))
+            },
+            AuditCase(name: "sheet-join-qr-claiming", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(JoinQRSheet(preview: .preview(.claiming(name: "Anna’s iPhone 17 Pro Max with a very long name", retrying: true))))
+            },
+            AuditCase(name: "sheet-join-qr-added", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(JoinQRSheet(preview: .preview(.added(name: "Anna’s iPhone 🦝"))))
+            },
+            AuditCase(name: "sheet-join-qr-bad-proof", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(JoinQRSheet(preview: .preview(.badProof(removed: true))))
+            },
+            AuditCase(name: "sheet-join-qr-blocked", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(JoinQRSheet(preview: .preview(.blocked(.noSyncKey))))
+            },
+            AuditCase(name: "sheet-connect-phone-join", width: 420, selfSized: true, signedIn: true) { _ in
+                AnyView(
+                    ConnectPhoneWizard(
+                        previewJoin: .preview(.showing(link: Self.joinPreviewLink, expiresAt: Date().addingTimeInterval(272))),
+                        preview: .scan(Self.cloudPairPreview)))
+            },
             AuditCase(name: "sheet-file-name", width: 380, selfSized: true) { _ in
                 AnyView(FileNameSheet(sheet: .folder, existing: [], onSubmit: { _ in }))
             },
@@ -239,6 +261,11 @@ extension ScreenWorkSuites {
             expiresInMinutes: 10, viaCloud: false)
 
         /// A pairing reply of a server that is on the cloud only: no address, the cloud's line instead.
+        /// A join link of a made-up Mac, for the pictures.
+        static let joinPreviewLink = JoinTicket.make(
+            macPublicKey: Curve25519.KeyAgreement.PrivateKey().publicKey, macName: "Anna’s MacBook Pro"
+        ).link.absoluteString
+
         static let cloudPairPreview = PhoneAccessRules.PairState.ready(
             link: PhonePairLink.make(
                 code: "otter-lava-mint-orbit-crane-fig", fingerprint: nil, name: "Studio", hosts: [],
