@@ -19,7 +19,7 @@ public enum NotificationAsk {
     /// The agent the question is about, by name.
     public static func agentName(_ notice: AgentNotice) -> String? {
         switch notice {
-        case .approval(_, let name, _, _, _, _), .finished(_, let name): name
+        case .approval(_, let name, _, _, _, _), .finished(_, let name, _): name
         case .form(_, let name, _), .question(_, let name, _): name
         case .failed, .resolveFailed: nil
         }

@@ -22,7 +22,7 @@ import Testing
 
     private static let approval = AgentNotice.approval(
         agentID: "a1", agentName: "Ana", approvalID: "p1", title: "Run tests")
-    private static let finished = AgentNotice.finished(agentID: "a1", agentName: "Ana")
+    private static let finished = AgentNotice.finished(agentID: "a1", agentName: "Ana", text: nil)
     private static let failed = AgentNotice.failed(agentID: "a1", agentName: "Ana", message: "boom")
 
     @Test func theScopeOffSendsNothingFromThatServer() {

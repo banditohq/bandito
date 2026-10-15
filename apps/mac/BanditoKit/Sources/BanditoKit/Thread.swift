@@ -297,6 +297,16 @@ public struct AgentThread: Sendable, Hashable {
         return nil
     }
 
+    /// The text of the last message the running turn (or the turn that just ended) wrote; nil when it wrote none. A
+    /// finished turn's notice shows it.
+    public var lastTurnText: String? {
+        guard let start = turnItemsStart else { return nil }
+        for item in items[min(start, items.count)...].reversed() {
+            if case .assistant(_, let text, _) = item { return text }
+        }
+        return nil
+    }
+
     /// Apply one event. Events with `seq <= lastSeq` (replays) are ignored.
     public mutating func apply(_ e: Event) {
         if e.seq > 0 {

@@ -145,6 +145,24 @@ import UserNotifications
         #expect(failed.fields.categoryID == NotificationContent.failedCategory)
     }
 
+    /// A done carries the reply's text (the daemon's plain text): the notice shows the agent's name and the text. An
+    /// older daemon sends none, and the notice keeps its old title.
+    @Test func aFinishedTurnWithTextShowsTheTextUnderTheAgentsName() throws {
+        let done = #"{"kind":"turn.completed","payload":{"turn_id":"t","status":"ok"}}"#
+        let withText = #"{"v":1,"srv":"S1","seq":41,"agent":"agent-1","name":"Forge","ts":1700000000000,"text":"Готово: см. отчёт","event":\#(done)}"#
+        let plan = try #require(Self.plan(withText))
+        #expect(plan.fields.title == "Forge")
+        #expect(plan.fields.body == "Готово: см. отчёт")
+        #expect(plan.fields.categoryID == NotificationContent.finishedCategory)
+        let old = try #require(Self.plan(Self.text(event: done)))
+        #expect(old.fields.title == L10n.Notify.finished(name: "Forge"))
+        #expect(old.fields.body == "")
+        // Cut down to its kind, a done keeps its text too.
+        let cut = #"{"v":1,"srv":"S1","seq":41,"agent":"agent-1","name":"Forge","ts":1700000000000,"text":"Готово","event":{"kind":"turn.completed"}}"#
+        let cutPlan = try #require(Self.plan(cut))
+        #expect(cutPlan.fields.body == "Готово")
+    }
+
     /// The daemon cuts what does not fit: only `{kind}` is left (and an approval's id when it fits).
     @Test func aCutDownEventStillMakesATextForItsKind() throws {
         let done = try #require(Self.plan(Self.text(event: #"{"kind":"turn.completed"}"#)))

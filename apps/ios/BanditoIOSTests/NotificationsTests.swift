@@ -168,7 +168,7 @@ struct PhoneHarness {
     }
 
     @Test func otherNoticesKeepTheirTitlesAndQuestionsCarryTheLastMessage() {
-        let done = NotificationContent.make(.finished(agentID: "a1", agentName: "Forge"))
+        let done = NotificationContent.make(.finished(agentID: "a1", agentName: "Forge", text: nil))
         #expect(IOSNotificationSink.title(for: done) == L10n.Notify.finished(name: "Forge"))
         let question = NotificationContent.make(.question(agentID: "a1", agentName: "Forge", text: "Which branch?"))
         #expect(question.categoryID == IOSNotificationSink.questionCategory)
@@ -192,7 +192,7 @@ struct PhoneHarness {
 
     @Test func oneEventHasOneIdentifierSoARepeatReplacesIt() {
         let server = UUID()
-        let first = NotificationContent.make(.finished(agentID: "a1", agentName: "Forge"))
+        let first = NotificationContent.make(.finished(agentID: "a1", agentName: "Forge", text: nil))
         var again = first
         again.key = IOSNotifications.key(serverID: server, seq: 42)
         var repeated = first
@@ -210,7 +210,7 @@ struct PhoneHarness {
             .approval(agentID: "a1", agentName: "Forge", approvalID: "ap1", title: "git push"), serverID: server,
             key: IOSNotifications.key(serverID: server, seq: 1))
         harness.service.handle(
-            .finished(agentID: "a1", agentName: "Forge"), serverID: server,
+            .finished(agentID: "a1", agentName: "Forge", text: nil), serverID: server,
             key: IOSNotifications.key(serverID: server, seq: 2))
         #expect(harness.system.posted.count == 1)
         #expect(harness.system.posted.first?.key == IOSNotifications.key(serverID: server, seq: 2))

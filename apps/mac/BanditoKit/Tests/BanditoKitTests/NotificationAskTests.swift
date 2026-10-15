@@ -5,7 +5,7 @@ import Testing
 /// The question "Want to know when Forge needs you?" comes at the first moment that gives a reason, once.
 @Suite struct NotificationAskTests {
     private let approval = AgentNotice.approval(agentID: "a", agentName: "Forge", approvalID: "p", title: "git push")
-    private let finished = AgentNotice.finished(agentID: "a", agentName: "Forge")
+    private let finished = AgentNotice.finished(agentID: "a", agentName: "Forge", text: nil)
 
     @Test func anApprovalAndAFinishedTurnAreReasonsToAsk() {
         #expect(NotificationAsk.isReason(approval))

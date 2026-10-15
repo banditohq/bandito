@@ -47,8 +47,8 @@ struct StaleApproval: Error {}
         let sink = FakeNotificationSink()
         let service = service(sink: sink, answers: Answers(), selected: "a2")
         service.handle(.approval(agentID: "a1", agentName: "Forge", approvalID: "ap1", title: "git push"))
-        service.handle(.finished(agentID: "a2", agentName: "Scout"))  // the selected agent: no notice
-        service.handle(.finished(agentID: "a1", agentName: "Forge"))
+        service.handle(.finished(agentID: "a2", agentName: "Scout", text: nil))  // the selected agent: no notice
+        service.handle(.finished(agentID: "a1", agentName: "Forge", text: nil))
         #expect(sink.posted.count == 2)
         #expect(sink.posted[0].categoryID == NotificationContent.approvalCategory)
         #expect(sink.posted[1].title.contains("Forge"))

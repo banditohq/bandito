@@ -189,17 +189,21 @@ final class IOSNotifications {
     }
 
     /// The notice an event makes on the phone and whether it is risky. The shared notices (approval, finished, error)
-    /// come from `AgentNotice.notice(for:in:)`; a form and a question are phone-only.
+    /// come from `AgentNotice.notice(for:in:)`; a form and a question are phone-only. A finished turn whose reply has no
+    /// text makes none.
     static func notice(for event: Event, in server: ServerModel) -> (notice: AgentNotice, risky: Bool)? {
         let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
-        return PhoneNotice.notice(
+        let made = PhoneNotice.notice(
             for: event, agentName: name, quietTurn: { server.thread(for: event.agentId).quietTurn },
+            turnText: { NoticeText.finishedText(server.thread(for: event.agentId).lastTurnText) },
             agentWaitsAlone: {
                 let summary = server.threadSummary(for: event.agentId)
                 return summary.pendingApprovalRows.isEmpty && summary.pendingForms.isEmpty
                     && summary.pendingConnects.isEmpty
             },
             questionText: { server.threadSummary(for: event.agentId).lastMessageHead })
+        if case .finished(_, _, nil)? = made?.notice { return nil }
+        return made
     }
 }
 
