@@ -3501,5 +3501,10 @@
   "ios.connection.offlineTitle": "无法连接 {name}",
   "ios.connection.offlineHint": "请确认 Mac 已开机且 Bandito 正在运行",
   "ios.connection.retry": "重试",
-  "ios.connection.cachedLine": "已离线——显示之前的内容"
+  "ios.connection.cachedLine": "已离线——显示之前的内容",
+  "ios.accountServers.waiting": "正在等待 Mac 响应…",
+  "ios.accountServers.macOffline": "Mac 不在线，开机后服务器会出现",
+  "ios.accountServers.noAccess": "手机端已关闭。在 Mac 上：设置 → 服务器 → 该服务器 → iPhone →“手机访问”",
+  "ios.accountServers.fetching": "正在获取你账户的服务器…",
+  "ios.accountServers.title": "你账户的服务器"
 }

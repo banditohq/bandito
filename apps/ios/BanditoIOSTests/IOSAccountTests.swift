@@ -62,7 +62,10 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
         """
     }
 
-    private func makeRig(signedIn: Bool = true) async throws -> Rig {
+    private func makeRig(
+        signedIn: Bool = true, fastInterval: Duration = .seconds(3), fastLength: TimeInterval = 180,
+        fastLimit: TimeInterval = 600
+    ) async throws -> Rig {
         let keys = MemorySecretStore()
         if signedIn {
             let session = Session(
@@ -80,7 +83,8 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
             keys: keys, identities: identities,
             sink: AccountAccessSink(secrets: MemorySecretStore(), file: sinkFile),
             noiseKeys: ServerNoiseKeyStore(secrets: MemorySecretStore()), http: server, deviceName: "iPhone",
-            defaults: defaults, pollInterval: .milliseconds(5), syncPause: {})
+            defaults: defaults, pollInterval: .milliseconds(5), fastInterval: fastInterval,
+            fastWindowLength: fastLength, fastWindowLimit: fastLimit, syncPause: {})
         return Rig(
             account: account, server: server, keys: keys, phone: phone, mac: mac, syncKey: SymmetricKey(size: .bits256),
             defaults: defaults)
@@ -264,5 +268,74 @@ private final class FakeAccountServer: HTTPClient, @unchecked Sendable {
         #expect(rig.account.errorText == nil)
         #expect(try SyncKey.load(from: rig.keys) == nil, "the iPhone's own key is gone")
         #expect(rig.server.requests.filter { $0.key == "POST /devices/me/request-key" }.count == 1)
+    }
+
+    // MARK: fast rounds
+
+    /// A ready account whose one server waits for the Mac.
+    private func readyRig(fastInterval: Duration, fastLength: TimeInterval, fastLimit: TimeInterval) async throws -> Rig {
+        let rig = try await makeRig(fastInterval: fastInterval, fastLength: fastLength, fastLimit: fastLimit)
+        try SyncKey.save(rig.syncKey, to: rig.keys)
+        rig.server.set("GET /me", me(approved: true))
+        rig.server.set("GET /sync", #"{"ok":true,"version":1,"blob":"\#(try blob(rig, version: 1))"}"#)
+        rig.server.set("PUT /sync", #"{"ok":true,"version":2}"#)
+        rig.server.set("POST /auth/logout", #"{"ok":true}"#)
+        return rig
+    }
+
+    private func rounds(_ rig: Rig) -> Int { rig.server.requests.filter { $0.key == "GET /me" }.count }
+
+    @Test func aPhoneThatBecomesReadyAsksAgainEveryFewSecondsAndSlowsDownWhenTheWindowEnds() async throws {
+        let rig = try await readyRig(fastInterval: .milliseconds(30), fastLength: 0.3, fastLimit: 0.6)
+        await rig.account.start()
+        rig.account.setActive(true)
+        let base = rounds(rig)
+        #expect(rig.account.fastMode)
+        #expect(await wait { rounds(rig) >= base + 3 }, "more rounds follow at the fast pace, not a minute apart")
+
+        // The window ends (it never runs past its limit in a row): back to the slow pace.
+        #expect(await wait(3) { !rig.account.fastMode })
+        try await Task.sleep(for: .milliseconds(200))
+        let settled = rounds(rig)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(rounds(rig) == settled)
+        rig.account.setActive(false)
+    }
+
+    @Test func openingTheWindowWakesTheLoopThatIsAsleep() async throws {
+        let rig = try await readyRig(fastInterval: .milliseconds(30), fastLength: 0.1, fastLimit: 0.1)
+        await rig.account.start()
+        rig.account.setActive(true)
+        #expect(await wait(3) { !rig.account.fastMode })
+        try await Task.sleep(for: .milliseconds(200))
+        let asleep = rounds(rig)
+        // The waiting interval is 10 seconds: only the wake-up can run a round now.
+        rig.account.openFastWindow()
+        #expect(await wait(2) { rounds(rig) > asleep })
+        rig.account.setActive(false)
+    }
+
+    @Test func signingOutDuringFastRoundsStopsTheLoop() async throws {
+        let rig = try await readyRig(fastInterval: .milliseconds(30), fastLength: 5, fastLimit: 5)
+        await rig.account.start()
+        rig.account.setActive(true)
+        #expect(await wait { rounds(rig) >= 3 })
+
+        await rig.account.signOut()
+        #expect(rig.account.stage == .signedOut && !rig.account.fastMode && rig.account.servers.isEmpty)
+        try await Task.sleep(for: .milliseconds(100))
+        let settled = rounds(rig)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(rounds(rig) == settled)
+    }
+
+    @Test func aReadyPhoneSaysItIsGettingItsServersUntilTheFirstRoundComesBack() async throws {
+        let rig = try await readyRig(fastInterval: .milliseconds(30), fastLength: 5, fastLimit: 5)
+        await rig.account.start()
+        #expect(rig.account.stage == .ready)
+        #expect(rig.account.fetchingServers, "ready, nothing read yet, fast window open")
+        #expect(await wait { !rig.account.servers.isEmpty })
+        #expect(!rig.account.fetchingServers)
+        #expect(rig.account.servers.map(\.status) == [.waitingForMac])
     }
 }

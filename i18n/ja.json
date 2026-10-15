@@ -3501,5 +3501,10 @@
   "ios.connection.offlineTitle": "{name} に接続できません",
   "ios.connection.offlineHint": "Mac の電源が入っていて、Bandito が起動していることを確認してください",
   "ios.connection.retry": "再試行",
-  "ios.connection.cachedLine": "オフラインです。以前の内容を表示しています"
+  "ios.connection.cachedLine": "オフラインです。以前の内容を表示しています",
+  "ios.accountServers.waiting": "Macの応答を待っています…",
+  "ios.accountServers.macOffline": "Macがオフラインです。オンになるとサーバーが表示されます",
+  "ios.accountServers.noAccess": "スマートフォンからは使えません。Macで「設定」→「サーバー」→ サーバー → iPhone →「スマートフォンからのアクセス」",
+  "ios.accountServers.fetching": "アカウントのサーバーを取得しています…",
+  "ios.accountServers.title": "アカウントのサーバー"
 }

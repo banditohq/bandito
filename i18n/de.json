@@ -3542,5 +3542,10 @@
   "ios.connection.offlineTitle": "{name} ist nicht erreichbar",
   "ios.connection.offlineHint": "Prüfen Sie, ob der Mac eingeschaltet ist und Bandito darauf läuft",
   "ios.connection.retry": "Erneut versuchen",
-  "ios.connection.cachedLine": "Keine Verbindung – es wird angezeigt, was zuvor da war"
+  "ios.connection.cachedLine": "Keine Verbindung – es wird angezeigt, was zuvor da war",
+  "ios.accountServers.waiting": "Warten auf die Antwort des Mac …",
+  "ios.accountServers.macOffline": "Der Mac ist offline – der Server erscheint, sobald er an ist",
+  "ios.accountServers.noAccess": "Für Telefone gesperrt. Am Mac: Einstellungen → Server → Server → iPhone → „Zugriff vom Telefon“",
+  "ios.accountServers.fetching": "Server deines Kontos werden geladen …",
+  "ios.accountServers.title": "Server deines Kontos"
 }

@@ -955,6 +955,11 @@
 "ios.account.signIn.text" = "Entre para ver os servidores do seu Mac neste iPhone. A lista é criptografada: a chave fica só nos seus dispositivos.";
 "ios.account.signOut.message" = "Os servidores já conectados permanecem. Entrar de novo nesta conta não exige aprovação.";
 "ios.account.signOut.title" = "Sair da sua conta?";
+"ios.accountServers.fetching" = "Buscando os servidores da sua conta…";
+"ios.accountServers.macOffline" = "O Mac está offline — o servidor aparecerá quando ele ligar";
+"ios.accountServers.noAccess" = "Fechado para telefones. No Mac: Configurações → Servidores → o servidor → iPhone → “Acesso pelo celular”";
+"ios.accountServers.title" = "Servidores da sua conta";
+"ios.accountServers.waiting" = "Aguardando a resposta do Mac…";
 "ios.activity.emptyErrors" = "Nenhum erro.";
 "ios.activity.emptyMessage" = "Aqui aparecem as respostas concluídas e as execuções agendadas que tiveram algo a dizer.";
 "ios.activity.emptyTitle" = "Tudo tranquilo por enquanto";
@@ -1051,7 +1056,7 @@
 "ios.connect.manual.code" = "Código de pareamento";
 "ios.connect.manual.codeHint" = "As seis palavras mostradas em Conectar iPhone.";
 "ios.connect.manual.fingerprint" = "Impressão digital do certificado (opcional)";
-"ios.connect.manual.fingerprintHint" = "Aparece no Mac, em Ajustes → Servidores → iPhone. Se ficar vazio, o Bandito mostra o que o servidor apresenta e pede que você compare.";
+"ios.connect.manual.fingerprintHint" = "Aparece no Mac, em Configurações → Servidores → iPhone. Se ficar vazio, o Bandito mostra o que o servidor apresenta e pede que você compare.";
 "ios.connect.manual.submit" = "Conectar";
 "ios.connect.manual.title" = "Digitar um endereço";
 "ios.connect.paste.action" = "Colar um link";
@@ -1061,7 +1066,7 @@
 "ios.connect.scan.noCamera" = "Este dispositivo não tem câmera. Cole o link ou digite o endereço.";
 "ios.connect.scan.title" = "Escaneie o código do seu Mac";
 "ios.connect.trust.action" = "São iguais, conectar";
-"ios.connect.trust.body" = "Este iPhone ainda não conhece este servidor. Compare a impressão digital abaixo com a do seu Mac (Ajustes → Servidores → iPhone). Conecte só se forem iguais.";
+"ios.connect.trust.body" = "Este iPhone ainda não conhece este servidor. Compare a impressão digital abaixo com a do seu Mac (Configurações → Servidores → iPhone). Conecte só se forem iguais.";
 "ios.connect.trust.title" = "Este é o seu servidor?";
 "ios.connect.working" = "Conectando…";
 "ios.connection.cachedLine" = "Sem conexão — mostrando o que havia antes";
@@ -1199,7 +1204,7 @@
 "ios.settings.servers.disconnect" = "Desconectar";
 "ios.settings.servers.disconnectMessage" = "%1$@ e o token do dispositivo serão removidos deste iPhone. O servidor em si não muda.";
 "ios.settings.servers.disconnectTitle" = "Desconectar %1$@?";
-"ios.settings.servers.leftOnServerMessage" = "Não foi possível alcançar o servidor, então ele ainda lista este iPhone como dispositivo. Remova-o no Mac: Ajustes → Servidores → o servidor → iPhone → Desconectar.";
+"ios.settings.servers.leftOnServerMessage" = "Não foi possível alcançar o servidor, então ele ainda lista este iPhone como dispositivo. Remova-o no Mac: Configurações → Servidores → o servidor → iPhone → Desconectar.";
 "ios.settings.servers.leftOnServerTitle" = "Removido deste iPhone";
 "ios.settings.servers.removeFailed" = "Não foi possível desconectar o servidor. Tente de novo.";
 "ios.settings.servers.rename" = "Renomear";

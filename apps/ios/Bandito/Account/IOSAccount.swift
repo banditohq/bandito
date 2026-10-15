@@ -68,6 +68,21 @@ final class IOSAccount {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let pollInterval: Duration
     @ObservationIgnored private let retryDelay: Duration
+    /// Seconds between rounds while the fast window is open (a new phone is getting its servers), while a server waits
+    /// for the Mac, and otherwise.
+    @ObservationIgnored private let fastInterval: Duration
+    @ObservationIgnored private let waitingInterval: Duration
+    @ObservationIgnored private let idleInterval: Duration
+    /// The stretch of fast rounds: opened by a new ready account, by a round that wrote requests and by a return to the
+    /// front with a server waiting; lengthened while a server waits, never past its limit in a row.
+    @ObservationIgnored private var fastWindow: FastPollWindow
+    /// The sleep of the round loop; cancelled to wake the loop when the fast window opens.
+    @ObservationIgnored private var sleeper: Task<Void, Never>?
+    @ObservationIgnored private var cycling = false
+    /// True while the fast window is open (the screens say "getting your servers"). Follows the loop.
+    private(set) var fastMode = false
+    /// A round of the asking side finished since this account became ready.
+    private(set) var loadedServers = false
 
     @ObservationIgnored private(set) var client: AccountClient?
     @ObservationIgnored private var identity: DeviceIdentity?
@@ -90,6 +105,8 @@ final class IOSAccount {
         http: HTTPClient = BackgroundHTTPClient(URLSessionHTTPClient(configuration: URLSessionHTTPClient.accountConfiguration())), baseURL: URL = AccountClient.defaultBaseURL,
         deviceName: String = IOSAccount.currentDeviceName(), defaults: UserDefaults = .standard,
         pollInterval: Duration = .seconds(3), retryDelay: Duration = .milliseconds(1500),
+        fastInterval: Duration = .seconds(3), waitingInterval: Duration = .seconds(10), idleInterval: Duration = .seconds(60),
+        fastWindowLength: TimeInterval = 3 * 60, fastWindowLimit: TimeInterval = 10 * 60,
         syncPause: @escaping @MainActor () async throws -> Void = SyncStore.randomPause
     ) {
         self.keys = keys
@@ -105,6 +122,10 @@ final class IOSAccount {
         self.defaults = defaults
         self.pollInterval = pollInterval
         self.retryDelay = retryDelay
+        self.fastInterval = fastInterval
+        self.waitingInterval = waitingInterval
+        self.idleInterval = idleInterval
+        fastWindow = FastPollWindow(length: fastWindowLength, limit: fastWindowLimit)
         self.syncPause = syncPause
         stage = ((try? keys.load(account: AccountClient.sessionAccount)) ?? nil) != nil ? .loading : .signedOut
     }
@@ -333,8 +354,19 @@ final class IOSAccount {
     private func becomeReady() {
         pollTask?.cancel()
         pollTask = nil
+        let wasReady = stage == .ready
         stage = .ready
+        // A phone that has just become ready, or still has servers waiting, gets its servers within seconds. Every return
+        // to the front reads the account again, so an idle one does not open the window each time.
+        if !wasReady || servers.contains(where: { $0.status == .waitingForMac }) { openFastWindow() }
         Task { await runCycle() }
+    }
+
+    /// Starts (or lengthens) the fast stretch and wakes the round loop, so the sleep it is in does not delay the next round.
+    func openFastWindow() {
+        fastWindow.open(at: Date())
+        fastMode = true
+        sleeper?.cancel()
     }
 
     // MARK: approval
@@ -450,13 +482,16 @@ final class IOSAccount {
         guard let accountID else { return }
         dismissed.clear(accountID: accountID)
         hiddenCount = 0
+        openFastWindow()
         Task { await runCycle() }
     }
 
     /// One round of the asking side: opens grants, asks for the servers it has no token for. Silent on failure: the next
-    /// round tries again.
+    /// round tries again. A round that starts while another runs does nothing.
     func runCycle() async {
-        guard stage == .ready, let requester else { return }
+        guard stage == .ready, let requester, !cycling else { return }
+        cycling = true
+        defer { cycling = false }
         do {
             // Tell the account about the servers added here by a link, answer what its other devices ask for, then ask for
             // what this iPhone lacks.
@@ -467,7 +502,12 @@ final class IOSAccount {
             if let responder {
                 _ = try? await responder.run(servers: connected)
             }
-            servers = try await requester.run()
+            let states = try await requester.run()
+            // The person signed out while the round ran: nothing of it is kept.
+            guard stage == .ready else { return }
+            servers = states
+            loadedServers = true
+            noteRound(wroteRequests: requester.lastRunWroteRequests)
             if let accountID { hiddenCount = dismissed.count(accountID: accountID) }
         } catch AccountError.api(let code, _) where code == "unauthorized" {
             await dropSession()
@@ -476,22 +516,56 @@ final class IOSAccount {
         }
     }
 
-    /// The cycle runs while the app is in front: every 10 seconds while a server waits for the Mac, every minute
-    /// otherwise.
+    /// What a finished round says about the pace: requests written mean the Mac has not seen them yet (fast rounds for a
+    /// while); a server still waiting keeps a running fast stretch going, within its limit.
+    private func noteRound(wroteRequests: Bool) {
+        let now = Date()
+        if wroteRequests {
+            fastWindow.open(at: now)
+        } else if servers.contains(where: { $0.status == .waitingForMac }) {
+            fastWindow.extendIfOpen(at: now)
+        }
+        fastMode = fastWindow.isOpen(at: now)
+    }
+
+    /// The cycle runs while the app is in front: every few seconds while the fast window is open, every 10 seconds while a
+    /// server waits for the Mac, every minute otherwise. One loop at a time; opening the fast window wakes it.
     func setActive(_ active: Bool) {
         guard !inert else { return }
         cycleTask?.cancel()
         cycleTask = nil
-        guard active else { return }
+        sleeper?.cancel()
+        sleeper = nil
+        guard active else {
+            fastMode = false
+            return
+        }
+        // Back in front with a server still waiting for the Mac: ask quickly again.
+        if servers.contains(where: { $0.status == .waitingForMac }) { fastWindow.open(at: Date()) }
+        fastMode = fastWindow.isOpen(at: Date())
         cycleTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
                 if self.stage == .ready { await self.runCycle() }
-                let waiting = self.servers.contains { $0.status == .waitingForMac }
-                try? await Task.sleep(for: .seconds(waiting ? 10 : 60))
+                if Task.isCancelled { return }
+                let sleeper = self.beginSleep()
+                await withTaskCancellationHandler { await sleeper.value } onCancel: { sleeper.cancel() }
             }
         }
     }
+
+    private func beginSleep() -> Task<Void, Never> {
+        let fast = fastWindow.isOpen(at: Date())
+        fastMode = fast
+        let waiting = servers.contains { $0.status == .waitingForMac }
+        let interval = fast ? fastInterval : (waiting ? waitingInterval : idleInterval)
+        let task = Task<Void, Never> { try? await Task.sleep(for: interval) }
+        sleeper = task
+        return task
+    }
+
+    /// The account is ready but its servers have not been read yet, and the fast stretch is on.
+    var fetchingServers: Bool { stage == .ready && servers.isEmpty && !loadedServers && fastMode }
 
     // MARK: sign-out
 
@@ -530,6 +604,9 @@ final class IOSAccount {
         hiddenCount = 0
         queuedDismissals = []
         pending = nil
+        fastWindow.close()
+        fastMode = false
+        loadedServers = false
         stage = .signedOut
         me = nil
         servers = []
@@ -543,6 +620,8 @@ final class IOSAccount {
         pollTask = nil
         cycleTask?.cancel()
         cycleTask = nil
+        sleeper?.cancel()
+        sleeper = nil
         watchingSignIn?.cancel()
         watchingSignIn = nil
     }
