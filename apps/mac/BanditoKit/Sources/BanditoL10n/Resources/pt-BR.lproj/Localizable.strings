@@ -1002,6 +1002,7 @@
 "ios.chat.retry" = "Tentar de novo";
 "ios.chat.sending" = "Enviando…";
 "ios.chat.stopFailed" = "Não foi possível parar: sem conexão com o servidor. Tente de novo quando a conexão voltar.";
+"ios.chat.stopFailedOther" = "Não foi possível parar. Tente novamente.";
 "ios.chat.tools.hide" = "Ocultar os comandos";
 "ios.chat.tools.show" = "Mostrar os comandos";
 "ios.chat.uncertain" = "Não sabemos se chegou";

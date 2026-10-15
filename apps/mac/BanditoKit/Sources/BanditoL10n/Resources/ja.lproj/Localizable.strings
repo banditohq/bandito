@@ -1002,6 +1002,7 @@
 "ios.chat.retry" = "再試行";
 "ios.chat.sending" = "送信中…";
 "ios.chat.stopFailed" = "停止できませんでした：サーバーに接続できません。接続が戻ったら、もう一度お試しください。";
+"ios.chat.stopFailedOther" = "停止できませんでした。もう一度お試しください。";
 "ios.chat.tools.hide" = "コマンドを隠す";
 "ios.chat.tools.show" = "コマンドを表示";
 "ios.chat.uncertain" = "届いたか不明です";

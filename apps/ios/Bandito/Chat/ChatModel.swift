@@ -282,14 +282,14 @@ final class ChatModel {
         return true
     }
 
-    /// Asks the agent to stop. True when the request went out; false when it did not (no connection), so the
-    /// screen can say so.
-    func interrupt() async -> Bool {
+    /// Asks the agent to stop. Without a connection nothing is sent; the outcome says what happened, so the screen can say so.
+    func interrupt() async -> StopOutcome {
+        guard server.state == .connected else { return .offline }
         do {
             try await server.interrupt(agentID)
-            return true
+            return .sent
         } catch {
-            return false
+            return StopOutcome.classify(error)
         }
     }
 
@@ -346,5 +346,21 @@ final class ChatHostedSizer {
         host.sizingOptions = []
         let size = host.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
         return ceil(max(size.height, 1))
+    }
+}
+
+/// What a stop of the agent came to: the request went out (`sent`, also when the agent had already stopped), there is no
+/// connection to send it over (`offline`), or the daemon refused it (`failed`).
+enum StopOutcome: Equatable {
+    case sent
+    case offline
+    case failed
+
+    /// The outcome of a stop the daemon refused. The daemon says "agent <id> stopped" when the agent is no longer running:
+    /// that is the stop the person asked for, so it counts as sent. Any other error is a failure.
+    static func classify(_ error: Error) -> StopOutcome {
+        guard let rpc = error as? RPCError else { return .failed }
+        let message = rpc.message.lowercased()
+        return message.contains("stopped") || message.contains("not running") ? .sent : .failed
     }
 }

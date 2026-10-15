@@ -77,6 +77,15 @@ import Testing
         #expect(blocks == [.code(language: nil, code: "| a | b |\n|---|---|\n| 1 | 2 |", closed: true)])
     }
 
+    /// The plain text of a line leaves out the marks that start a list item or a quote.
+    @Test func listAndQuoteMarksAreLeftOutOfThePlainText() {
+        #expect(MessageBlocks.plainText("- one\n* two\n+ three") == "one\ntwo\nthree")
+        #expect(MessageBlocks.plainText("1. first\n2) second") == "first\nsecond")
+        #expect(MessageBlocks.plainText("> quoted **text**\n>> deeper") == "quoted text\ndeeper")
+        // A dash or a number without a space after its mark is text.
+        #expect(MessageBlocks.plainText("-5 degrees\n2024.year") == "-5 degrees\n2024.year")
+    }
+
     @Test func aHashWithoutASpaceIsText() {
         #expect(ChatMarkdown.parse("#tag and more", markdown: true) == [.paragraph("#tag and more")])
         #expect(ChatMarkdown.parse("-5 degrees", markdown: true) == [.paragraph("-5 degrees")])

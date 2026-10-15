@@ -1002,6 +1002,7 @@
 "ios.chat.retry" = "Réessayer";
 "ios.chat.sending" = "Envoi…";
 "ios.chat.stopFailed" = "Impossible d'arrêter : pas de connexion au serveur. Réessayez quand la connexion sera rétablie.";
+"ios.chat.stopFailedOther" = "Impossible d'arrêter. Réessayez.";
 "ios.chat.tools.hide" = "Masquer les commandes";
 "ios.chat.tools.show" = "Afficher les commandes";
 "ios.chat.uncertain" = "On ne sait pas si c’est arrivé";

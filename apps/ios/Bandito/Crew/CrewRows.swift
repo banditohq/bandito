@@ -148,6 +148,7 @@ struct NeedsYouCard: View {
         switch facts.waiting {
         case .approval(let title): L10n.Ios.Crew.wantsToRun(name: facts.name, command: title)
         case .form: L10n.Ios.Crew.waitingForm(name: facts.name)
+        case .connect(let service): L10n.Ios.Inbox.connect(name: facts.name, service: service)
         case .answer(let question?): question
         case .answer(nil), nil: L10n.Ios.Crew.waitingAnswer(name: facts.name)
         }

@@ -29,6 +29,8 @@ struct InboxItem: Identifiable, Equatable {
     let kind: Kind
     /// When the request was made (Unix ms); 0 when the daemon did not say.
     let ts: Int64
+    /// A question's last message as one plain line (Markdown left out), made once with the item; nil for the others.
+    var questionLine: String? = nil
 
     /// A risky approval: the daemon's reason marks it (`ApprovalReason.isRisky`). Nothing else is risky.
     var isRisky: Bool {
@@ -81,11 +83,12 @@ enum InboxRules {
             let status = server.status(of: agent.id)
             let mood = AvatarMood.crew(status: status, turnRunning: summary.turnRunning, paused: agent.paused)
             let look = CrewLook(agent: agent)
-            func add(_ id: String, _ ts: Int64?, _ kind: InboxItem.Kind) {
+            func add(_ id: String, _ ts: Int64?, _ kind: InboxItem.Kind, questionLine: String? = nil) {
                 found.append(
                     InboxItem(
                         id: id, serverID: server.id, serverName: server.config.name, agentID: agent.id,
-                        agentName: agent.name, look: look, mood: mood, kind: kind, ts: ts ?? 0))
+                        agentName: agent.name, look: look, mood: mood, kind: kind, ts: ts ?? 0,
+                        questionLine: questionLine))
             }
             for row in summary.pendingApprovalRows {
                 add("approval-\(row.approvalId)", row.ts, .approval(row))
@@ -104,7 +107,8 @@ enum InboxRules {
                 let when = summary.lastItemTimestamp ?? 0
                 add(
                     "question-\(agent.id)-\(when)", when,
-                    .question(text: summary.lastMessageHead, buttons: summary.quickReplies?.buttons ?? []))
+                    .question(text: summary.lastMessageHead, buttons: summary.quickReplies?.buttons ?? []),
+                    questionLine: CrewPreview.line(summary.lastMessageHead ?? agent.lastMessage?.text))
             }
         }
         return found

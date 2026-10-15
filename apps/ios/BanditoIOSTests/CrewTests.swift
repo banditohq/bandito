@@ -47,6 +47,12 @@ import Testing
         #expect(heading?.contains("\n") == false)
     }
 
+    /// A cut in the middle of `**bold` or a code span leaves no stray marks at the word ends.
+    @Test func aCutInsideEmphasisLeavesNoStars() {
+        #expect(CrewPreview.line("Done, see **the logs and the") == "Done, see the logs and the")
+        #expect(CrewPreview.line("Run `make` and _wait") == "Run make and wait")
+    }
+
     @Test func emptyTextIsNoLine() {
         #expect(CrewPreview.line("") == nil)
         #expect(CrewPreview.line("   ") == nil)
@@ -100,6 +106,27 @@ import Testing
     }
 }
 
+/// The Crew shows two waiting cards; the rest is counted in one line.
+@Suite struct CrewWaitingSplitTests {
+    @Test func noneWaitingShowsNoCardAndNoLine() {
+        let split = CrewWaitingSplit.split([String](), limit: 2)
+        #expect(split.shown.isEmpty)
+        #expect(split.more == 0)
+    }
+
+    @Test func twoWaitingShowTwoCardsAndNoLine() {
+        let split = CrewWaitingSplit.split(["a", "b"], limit: 2)
+        #expect(split.shown == ["a", "b"])
+        #expect(split.more == 0)
+    }
+
+    @Test func threeWaitingShowTwoCardsAndOneMore() {
+        let split = CrewWaitingSplit.split(["a", "b", "c"])
+        #expect(split.shown == ["a", "b"])
+        #expect(split.more == 1)
+    }
+}
+
 @MainActor
 @Suite struct CrewFactsTests {
     @Test func theDemoTeamShowsWhatEachAgentWaitsFor() async {
@@ -108,7 +135,7 @@ import Testing
         #expect(rows.count == IOSDemo.team.count)
         #expect(rows.first { $0.name == "Forge" }?.waiting == .approval(title: "git push origin feat/ios-crew"))
         #expect(rows.first { $0.name == "Watch" }?.waiting == .answer(question: "The server disk is 81% full. Should I clear the cache?"))
-        #expect(rows.first { $0.name == "Quill" }?.waiting == nil)
+        #expect(rows.first { $0.name == "Quill" }?.waiting == .form)
         #expect(rows.first { $0.name == "Scout" }?.waiting == nil)
         await server.disconnect()
     }
@@ -134,6 +161,34 @@ import Testing
         #expect(rows.first { $0.name == "Scout" }?.preview == IOSDemo.unreadReply)
         #expect(rows.first { $0.name == "Watch" }?.preview == "The server disk is 81% full. Should I clear the cache?")
         #expect(rows.allSatisfy { $0.preview != nil })
+        await server.disconnect()
+    }
+
+    /// An approval the daemon counts but whose row is not loaded is not in the Inbox, so the agent does not wait for it.
+    @Test func anApprovalWithoutItsRowIsNotWaiting() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "waiting-unloaded"
+        var agent = Agent(
+            id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+            createdAt: 1, updatedAt: 1, status: .working)
+        agent.pendingApprovalIds = ["approval-unloaded"]
+        agent.reportsPendingApprovalIds = true
+        server.installSyntheticAgent(agent, items: [])
+        #expect(server.needsPerson(id))
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.waiting == nil)
+        await server.disconnect()
+    }
+
+    /// A service the agent asks to connect is waiting for the person, as in the Inbox.
+    @Test func aConnectRequestIsWaiting() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "waiting-connect"
+        server.installSyntheticAgent(
+            Agent(
+                id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: 1, updatedAt: 1, status: .working),
+            items: [.connect(ConnectRow(requestId: "c1", service: "GitHub", ts: 1))])
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.waiting == .connect(service: "GitHub"))
         await server.disconnect()
     }
 

@@ -170,9 +170,6 @@ struct CrewList: View {
     /// Switches to the Inbox tab, where every waiting item is.
     let showInbox: () -> Void
 
-    /// The waiting agents shown as cards; the rest is one line that opens the Inbox.
-    private static let waitingCardLimit = 2
-
     @State private var pinned: [String] = []
 
     var body: some View {
@@ -185,8 +182,9 @@ struct CrewList: View {
                 .listRowSeparator(.hidden)
 
             if !waiting.isEmpty {
+                let split = CrewWaitingSplit.split(waiting)
                 Section {
-                    ForEach(waiting.prefix(Self.waitingCardLimit)) { facts in
+                    ForEach(split.shown) { facts in
                         // A button, not a link: the card is full width, with no disclosure chevron of the list.
                         Button {
                             open(CrewRoute(agentID: facts.id, name: facts.name))
@@ -198,12 +196,12 @@ struct CrewList: View {
                         .listRowSeparator(.hidden)
                         .listRowInsets(cardInsets)
                     }
-                    if waiting.count > Self.waitingCardLimit {
+                    if split.more > 0 {
                         Button {
                             showInbox()
                         } label: {
                             HStack(spacing: BanditoSpace.s2) {
-                                Text(L10n.Ios.Crew.moreInInbox(count: waiting.count - Self.waitingCardLimit))
+                                Text(L10n.Ios.Crew.moreInInbox(count: split.more))
                                     .font(BanditoFont.text(size: 14, weight: 500))
                                     .foregroundStyle(Color.Bandito.signal)
                                 Image(systemName: "chevron.right")

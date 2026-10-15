@@ -3395,6 +3395,7 @@
   "ios.chat.sending": "Envoi…",
   "ios.chat.notSent": "Non envoyé",
   "ios.chat.stopFailed": "Impossible d'arrêter : pas de connexion au serveur. Réessayez quand la connexion sera rétablie.",
+  "ios.chat.stopFailedOther": "Impossible d'arrêter. Réessayez.",
   "ios.chat.retry": "Réessayer",
   "ios.chat.discard": "Supprimer le message",
   "ios.chat.empty.title": "Commencez avec {name}",

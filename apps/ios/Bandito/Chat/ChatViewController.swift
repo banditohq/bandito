@@ -515,9 +515,14 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
             guard let self else { return }
             self.notifications.notificationOccurred(.warning)
             Task {
-                if await self.model.interrupt() { return }
-                self.notifications.notificationOccurred(.error)
-                self.explainStopFailed()
+                switch await self.model.interrupt() {
+                case .sent:
+                    return
+                case .offline:
+                    self.explainStopFailed(L10n.Ios.Chat.stopFailed)
+                case .failed:
+                    self.explainStopFailed(L10n.Ios.Chat.stopFailedOther)
+                }
             }
         }
         composer.onQuickReply = { [weak self] shown in
@@ -844,9 +849,10 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         composer.setDictating(false)
     }
 
-    /// The stop did not reach the agent: the person hears it in words, not only in a buzz.
-    private func explainStopFailed() {
-        let alert = UIAlertController(title: nil, message: L10n.Ios.Chat.stopFailed, preferredStyle: .alert)
+    /// The stop did not reach the agent: a buzz, and the reason in words.
+    private func explainStopFailed(_ message: String) {
+        notifications.notificationOccurred(.error)
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: L10n.Common.close, style: .default))
         present(alert, animated: !reduceMotion())
     }

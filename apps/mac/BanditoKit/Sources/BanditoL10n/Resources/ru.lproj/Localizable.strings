@@ -1002,6 +1002,7 @@
 "ios.chat.retry" = "Повторить";
 "ios.chat.sending" = "Отправляется…";
 "ios.chat.stopFailed" = "Не получилось остановить: нет связи с сервером. Попробуйте ещё раз, когда связь вернётся.";
+"ios.chat.stopFailedOther" = "Не получилось остановить. Попробуйте ещё раз.";
 "ios.chat.tools.hide" = "Скрыть команды";
 "ios.chat.tools.show" = "Показать команды";
 "ios.chat.uncertain" = "Не уверены, дошло ли";
