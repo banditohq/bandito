@@ -78,7 +78,14 @@ final class IOSAccount {
     @ObservationIgnored private var fastWindow: FastPollWindow
     /// The sleep of the round loop; cancelled to wake the loop when the fast window opens.
     @ObservationIgnored private var sleeper: Task<Void, Never>?
-    @ObservationIgnored private var cycling = false
+    @ObservationIgnored private(set) var cycling = false
+    /// A call came while a round ran: one more round follows it.
+    @ObservationIgnored private var rerunRequested = false
+    /// How many rounds started (tests).
+    @ObservationIgnored private(set) var cycleRuns = 0
+    /// The clock and the sleep of the round loop; tests drive both.
+    @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private let sleep: @MainActor (Duration) async -> Void
     /// True while the fast window is open (the screens say "getting your servers"). Follows the loop.
     private(set) var fastMode = false
     /// A round of the asking side finished since this account became ready.
@@ -107,6 +114,8 @@ final class IOSAccount {
         pollInterval: Duration = .seconds(3), retryDelay: Duration = .milliseconds(1500),
         fastInterval: Duration = .seconds(3), waitingInterval: Duration = .seconds(10), idleInterval: Duration = .seconds(60),
         fastWindowLength: TimeInterval = 3 * 60, fastWindowLimit: TimeInterval = 10 * 60,
+        now: @escaping () -> Date = Date.init,
+        sleep: @escaping @MainActor (Duration) async -> Void = { try? await Task.sleep(for: $0) },
         syncPause: @escaping @MainActor () async throws -> Void = SyncStore.randomPause
     ) {
         self.keys = keys
@@ -125,6 +134,8 @@ final class IOSAccount {
         self.fastInterval = fastInterval
         self.waitingInterval = waitingInterval
         self.idleInterval = idleInterval
+        self.now = now
+        self.sleep = sleep
         fastWindow = FastPollWindow(length: fastWindowLength, limit: fastWindowLimit)
         self.syncPause = syncPause
         stage = ((try? keys.load(account: AccountClient.sessionAccount)) ?? nil) != nil ? .loading : .signedOut
@@ -358,13 +369,17 @@ final class IOSAccount {
         stage = .ready
         // A phone that has just become ready, or still has servers waiting, gets its servers within seconds. Every return
         // to the front reads the account again, so an idle one does not open the window each time.
-        if !wasReady || servers.contains(where: { $0.status == .waitingForMac }) { openFastWindow() }
+        if !wasReady {
+            openFastWindow()
+        } else if servers.contains(where: { $0.status == .waitingForMac }), fastWindow.openOnReturn(at: now()) {
+            openFastWindow()
+        }
         Task { await runCycle() }
     }
 
     /// Starts (or lengthens) the fast stretch and wakes the round loop, so the sleep it is in does not delay the next round.
     func openFastWindow() {
-        fastWindow.open(at: Date())
+        fastWindow.open(at: now())
         fastMode = true
         sleeper?.cancel()
     }
@@ -487,11 +502,24 @@ final class IOSAccount {
     }
 
     /// One round of the asking side: opens grants, asks for the servers it has no token for. Silent on failure: the next
-    /// round tries again. A round that starts while another runs does nothing.
+    /// round tries again. A call that comes while a round runs is not lost: one more round runs when it ends.
     func runCycle() async {
-        guard stage == .ready, let requester, !cycling else { return }
+        guard stage == .ready, requester != nil else { return }
+        if cycling {
+            rerunRequested = true
+            return
+        }
         cycling = true
         defer { cycling = false }
+        repeat {
+            rerunRequested = false
+            cycleRuns += 1
+            await runCycleOnce()
+        } while rerunRequested && stage == .ready
+    }
+
+    private func runCycleOnce() async {
+        guard stage == .ready, let requester else { return }
         do {
             // Tell the account about the servers added here by a link, answer what its other devices ask for, then ask for
             // what this iPhone lacks.
@@ -519,13 +547,16 @@ final class IOSAccount {
     /// What a finished round says about the pace: requests written mean the Mac has not seen them yet (fast rounds for a
     /// while); a server still waiting keeps a running fast stretch going, within its limit.
     private func noteRound(wroteRequests: Bool) {
-        let now = Date()
+        let moment = now()
         if wroteRequests {
-            fastWindow.open(at: now)
+            fastWindow.open(at: moment)
+            // A loop that fell asleep during this round (it was run by another caller) chose its pace before the window
+            // opened: wake it to choose again.
+            sleeper?.cancel()
         } else if servers.contains(where: { $0.status == .waitingForMac }) {
-            fastWindow.extendIfOpen(at: now)
+            fastWindow.extendIfOpen(at: moment)
         }
-        fastMode = fastWindow.isOpen(at: now)
+        fastMode = fastWindow.isOpen(at: moment)
     }
 
     /// The cycle runs while the app is in front: every few seconds while the fast window is open, every 10 seconds while a
@@ -540,9 +571,10 @@ final class IOSAccount {
             fastMode = false
             return
         }
-        // Back in front with a server still waiting for the Mac: ask quickly again.
-        if servers.contains(where: { $0.status == .waitingForMac }) { fastWindow.open(at: Date()) }
-        fastMode = fastWindow.isOpen(at: Date())
+        // Back in front with a server still waiting for the Mac: ask quickly again, unless it has waited at the fast pace
+        // for the whole limit not long ago (then the Mac is off, and the slow pace says so).
+        if servers.contains(where: { $0.status == .waitingForMac }) { fastWindow.openOnReturn(at: now()) }
+        fastMode = fastWindow.isOpen(at: now())
         cycleTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
@@ -555,11 +587,12 @@ final class IOSAccount {
     }
 
     private func beginSleep() -> Task<Void, Never> {
-        let fast = fastWindow.isOpen(at: Date())
+        let fast = fastWindow.isOpen(at: now())
         fastMode = fast
         let waiting = servers.contains { $0.status == .waitingForMac }
         let interval = fast ? fastInterval : (waiting ? waitingInterval : idleInterval)
-        let task = Task<Void, Never> { try? await Task.sleep(for: interval) }
+        let sleep = self.sleep
+        let task = Task<Void, Never> { await sleep(interval) }
         sleeper = task
         return task
     }

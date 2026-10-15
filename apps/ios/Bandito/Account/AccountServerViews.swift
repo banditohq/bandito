@@ -58,8 +58,8 @@ struct AccountServersNotice: View {
                 }
                 .padding(.horizontal, BanditoSpace.s4)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.Bandito.surface1))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+                .background(RoundedRectangle(cornerRadius: BanditoRadius.lg, style: .continuous).fill(Color.Bandito.surface1))
+                .overlay(RoundedRectangle(cornerRadius: BanditoRadius.lg, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
             }
             Spacer()
             Button(action: onConnect) {

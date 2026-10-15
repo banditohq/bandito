@@ -90,15 +90,16 @@ public final class AccountHub {
     /// While open, the access cycle runs every `fastAnswerInterval` instead of every `idleInterval`: a device was just
     /// approved, or a request waits, and the person is looking at the other screen.
     @ObservationIgnored private var fastAnswer = FastPollWindow(length: 3 * 60, limit: 10 * 60)
-    /// When a request that was left unanswered last opened the window; it opens again no sooner than `signalCooldown`.
-    @ObservationIgnored private var lastSignalOpen: Date?
+    /// The unanswered requests that already opened or lengthened the window: one request does so once.
+    @ObservationIgnored private var signaledRequests: [String] = []
     @ObservationIgnored private var accessCycleRunning = false
+    /// A call came while a round ran: one more round follows it.
+    @ObservationIgnored private var rerunRequested = false
     /// How many access cycles started (tests).
     @ObservationIgnored private(set) var accessCycleRuns = 0
     /// Seconds between ticks of the watch task; tests shorten them.
     nonisolated(unsafe) static var fastAnswerInterval: Duration = .seconds(4)
     nonisolated(unsafe) static var idleInterval: Duration = .seconds(30)
-    static let signalCooldown: TimeInterval = 20 * 60
     /// The first `prepare` in progress. Calls that come meanwhile wait for it, so the device identity is read once.
     @ObservationIgnored private var preparing: Task<AccountClient, Error>?
     /// Reads this device's identity. The app reads the Keychain; tests pass their own.
@@ -266,12 +267,26 @@ public final class AccountHub {
     /// changed, then answers the requests of the account's other devices (`AccessResponder`). Silent on failure: the
     /// next round tries again. Does nothing without a session, a sync key or `accessServers`.
     public func runAccessCycle(configs: [ServerConfig]) async {
-        guard signedIn, hasSyncKey, let provider = accessServers else { return }
-        // Two rounds at once (the tick, the fast window, an approval) would read and write the blob twice.
-        guard !accessCycleRunning else { return }
+        guard signedIn, hasSyncKey, accessServers != nil else { return }
+        // Two rounds at once (the tick, the fast window, an approval) would read and write the blob twice: a call that
+        // comes meanwhile is not lost, one more round runs when this one ends.
+        if accessCycleRunning {
+            rerunRequested = true
+            return
+        }
         accessCycleRunning = true
-        accessCycleRuns += 1
         defer { accessCycleRunning = false }
+        var current = configs
+        repeat {
+            rerunRequested = false
+            accessCycleRuns += 1
+            await runAccessCycleOnce(configs: current)
+            if let fresh = accessServers?().map(\.config) { current = fresh }
+        } while rerunRequested && signedIn
+    }
+
+    private func runAccessCycleOnce(configs: [ServerConfig]) async {
+        guard let provider = accessServers else { return }
         do {
             _ = try await prepare()
             guard let store = syncStore, let client, let identity else { return }
@@ -284,7 +299,7 @@ public final class AccountHub {
                 sync: store, account: client, identity: identity, ledger: accessLedger)
             self.responder = responder
             let outcome = try await responder.run(servers: servers)
-            noteUnanswered(outcome.unanswered)
+            noteUnanswered(outcome.open)
             if outcome.updateNeeded > 0 {
                 Logger.account.notice("Access: \(outcome.updateNeeded) request(s) wait: bandito.dev does not list device keys yet, update the account service.")
             }
@@ -356,16 +371,14 @@ public final class AccountHub {
         requestAccessCycle()
     }
 
-    /// A round left requests without an answer: the fast stretch starts (once in `signalCooldown`) or, if it runs, goes on.
-    private func noteUnanswered(_ count: Int) {
-        guard count > 0 else { return }
-        let now = Date()
-        if fastAnswer.isOpen(at: now) {
-            fastAnswer.extendIfOpen(at: now)
-        } else if lastSignalOpen.map({ now.timeIntervalSince($0) >= Self.signalCooldown }) ?? true {
-            lastSignalOpen = now
-            fastAnswer.open(at: now)
-        }
+    /// A round left requests for servers this Mac holds without an answer: the fast stretch starts or, if it runs, goes
+    /// on. A request does this once, so one that can never be answered does not keep the Mac fast.
+    func noteUnanswered(_ requests: [String]) {
+        let fresh = requests.filter { !signaledRequests.contains($0) }
+        guard !fresh.isEmpty else { return }
+        signaledRequests.append(contentsOf: fresh)
+        if signaledRequests.count > 200 { signaledRequests.removeFirst(signaledRequests.count - 200) }
+        fastAnswer.open(at: Date())
     }
 
     /// A device left the account: runs a round now, which revokes the rows this Mac issued to it (the round compares what

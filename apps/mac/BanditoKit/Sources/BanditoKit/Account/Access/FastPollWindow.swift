@@ -13,6 +13,8 @@ public struct FastPollWindow: Equatable, Sendable {
     public let limit: TimeInterval
     private var started: Date?
     private var until: Date?
+    /// When the last window ended at its limit (not by running out), if one did.
+    private var cappedAt: Date?
 
     public init(length: TimeInterval, limit: TimeInterval) {
         self.length = length
@@ -28,7 +30,19 @@ public struct FastPollWindow: Equatable, Sendable {
         if !isOpen(at: now) { started = nil }
         let begin = started ?? now
         started = begin
-        until = min(now.addingTimeInterval(length), begin.addingTimeInterval(limit))
+        let cap = begin.addingTimeInterval(limit)
+        let wanted = now.addingTimeInterval(length)
+        until = min(wanted, cap)
+        if wanted > cap { cappedAt = cap }
+    }
+
+    /// Opens the window for a return to the front, which is no news: not while the last window ended at its limit less than
+    /// `limit` ago (a server that has waited that long is waited for at the slow pace). Returns whether it opened.
+    @discardableResult
+    public mutating func openOnReturn(at now: Date) -> Bool {
+        if !isOpen(at: now), let cappedAt, now.timeIntervalSince(cappedAt) < limit { return false }
+        open(at: now)
+        return true
     }
 
     public mutating func extendIfOpen(at now: Date) {
@@ -39,5 +53,6 @@ public struct FastPollWindow: Equatable, Sendable {
     public mutating func close() {
         started = nil
         until = nil
+        cappedAt = nil
     }
 }

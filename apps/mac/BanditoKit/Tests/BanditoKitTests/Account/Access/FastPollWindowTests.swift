@@ -33,4 +33,24 @@ import Testing
         window.close()
         #expect(!window.isOpen(at: t0))
     }
+
+    @Test func aReturnToTheFrontDoesNotReopenAWindowThatEndedAtItsLimitUntilTheLimitHasPassedAgain() {
+        var window = FastPollWindow(length: 180, limit: 600)
+        window.open(at: t0)
+        for step in stride(from: 100.0, through: 500, by: 100) { window.extendIfOpen(at: t0.addingTimeInterval(step)) }
+        // It ended at t0+600. A minute later a return is no news; eleven minutes later it is.
+        let early = window.openOnReturn(at: t0.addingTimeInterval(660))
+        #expect(!early)
+        #expect(!window.isOpen(at: t0.addingTimeInterval(661)))
+        let late = window.openOnReturn(at: t0.addingTimeInterval(1_211))
+        #expect(late)
+        #expect(window.isOpen(at: t0.addingTimeInterval(1_212)))
+    }
+
+    @Test func aWindowThatRanOutOnItsOwnLetsAReturnOpenIt() {
+        var window = FastPollWindow(length: 180, limit: 600)
+        window.open(at: t0)
+        let opened = window.openOnReturn(at: t0.addingTimeInterval(300))
+        #expect(opened)
+    }
 }
