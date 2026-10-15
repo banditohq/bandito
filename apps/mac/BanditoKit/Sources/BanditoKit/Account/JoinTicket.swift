@@ -19,7 +19,20 @@ public struct JoinTicket: Sendable, CustomStringConvertible, CustomDebugStringCo
     public init(secret: SymmetricKey, macKeyHash: Data, macName: String) {
         self.secret = secret
         self.macKeyHash = macKeyHash
-        self.macName = String(macName.prefix(Self.maxNameCharacters))
+        self.macName = Self.cleanName(macName)
+    }
+
+    /// The name as it is kept and shown: control characters and the characters that turn text around (U+200E, U+200F,
+    /// U+202A–202E, U+2066–2069) are dropped, the ends are trimmed, and at most `maxNameCharacters` characters stay. A
+    /// name that is empty after that is empty: the screens say "Mac".
+    public static func cleanName(_ name: String) -> String {
+        let bidi = Set<UInt32>([0x200E, 0x200F]).union(0x202A...0x202E).union(0x2066...0x2069)
+        var scalars = String.UnicodeScalarView()
+        for scalar in name.unicodeScalars where !CharacterSet.controlCharacters.contains(scalar) && !bidi.contains(scalar.value) {
+            scalars.append(scalar)
+        }
+        let trimmed = String(scalars).trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(String(trimmed.prefix(maxNameCharacters)).trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     /// A new ticket for the Mac whose X25519 public key is `macPublicKey`. The secret is random.
@@ -67,7 +80,7 @@ public struct JoinTicket: Sendable, CustomStringConvertible, CustomDebugStringCo
     /// other parameter, a repeated one, a path, a port or a fragment makes it nil.
     public static func parse(_ url: URL) -> JoinTicket? {
         guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
-            parts.scheme?.lowercased() == "bandito", parts.host == "join",
+            parts.scheme?.lowercased() == "bandito", parts.host?.lowercased() == "join",
             parts.path.isEmpty, parts.user == nil, parts.password == nil, parts.port == nil, parts.fragment == nil
         else { return nil }
         let items = parts.queryItems ?? []

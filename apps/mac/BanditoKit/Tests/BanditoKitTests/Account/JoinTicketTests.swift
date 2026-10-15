@@ -253,6 +253,39 @@ import Testing
         #expect(JoinTicket.find(in: "") == nil)
     }
 
+    @Test func theSchemeAndTheHostAreReadWithoutRegardToCase() throws {
+        let valid = linkText()
+        let upper = valid.replacingOccurrences(of: "bandito://join", with: "BANDITO://JOIN")
+        #expect(upper != valid)
+        #expect(JoinTicket.parse(upper) != nil)
+        #expect(JoinTicket.parse(valid.replacingOccurrences(of: "bandito://join", with: "Bandito://Join")) != nil)
+        #expect(JoinTicket.find(in: "see \(upper)") != nil)
+    }
+
+    @Test func theMacNameLosesControlAndBidiCharactersAndIsTrimmed() {
+        #expect(JoinTicket.cleanName("  Ann's\u{0}\n Mac\t ") == "Ann's Mac")
+        // Right-to-left override and isolates cannot turn the name around.
+        #expect(JoinTicket.cleanName("Mac \u{202E}evil\u{202C}\u{200E}\u{200F}\u{2066}x\u{2069}") == "Mac evilx")
+        #expect(JoinTicket.cleanName("\u{202A}\u{202B}\u{202D}\u{2067}\u{2068}") == "")
+        #expect(JoinTicket.cleanName("   \n  ") == "")
+        // Cut after the clean-up, and an emoji is one character.
+        let long = String(repeating: "🦝", count: 60)
+        #expect(JoinTicket.cleanName(long).count == JoinTicket.maxNameCharacters)
+        #expect(JoinTicket.cleanName("\u{202E}" + String(repeating: "a", count: 50)).count == JoinTicket.maxNameCharacters)
+        #expect(JoinTicket.cleanName("Studio 🦝") == "Studio 🦝")
+    }
+
+    @Test func aNameFromALinkIsCleanedToo() throws {
+        let text = linkText(extra: "&n=%E2%80%AEevil%0A%20Mac%00")
+        let ticket = try #require(JoinTicket.parse(text))
+        #expect(ticket.macName == "evil Mac")
+        // A name that is nothing but such characters is no name: the link then has no `n`.
+        let empty = try #require(JoinTicket.parse(linkText(extra: "&n=%E2%80%AE%0A")))
+        #expect(empty.macName.isEmpty)
+        #expect(!empty.link.absoluteString.contains("&n="))
+        #expect(madeTicket(name: "\u{202E}x\u{202C}").macName == "x")
+    }
+
     @Test func theSecretIsNotPrintedInAnyDescription() {
         let ticket = fixedTicket()
         let text = "\(ticket) \(String(reflecting: ticket))"
