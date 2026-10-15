@@ -170,6 +170,10 @@ pub struct Agent {
     /// The status of the agent's newest `agent.status` event; `null` before any. Only set by the view reads.
     #[serde(default)]
     pub status: Option<AgentStatus>,
+    /// The seq this agent's chat was read to, on any of the owner's devices (`messages.read`); `null` when no device
+    /// has read it yet. Only set by the view reads (see docs/ARCHITECTURE.md#read-marks).
+    #[serde(default)]
+    pub read_seq: Option<i64>,
     /// Ids of this agent's approvals that wait for an answer, oldest first. Only set by the view reads. The app keeps a
     /// set of them, so a replayed `approval.requested` does not count twice.
     #[serde(default)]
@@ -266,6 +270,9 @@ const LAST_MESSAGE_SQL: &str = "(SELECT json_array(kind, ts, substr(json_extract
     AND (kind <> 'message.user' OR json_extract(payload, '$.source') IS NOT 'system') \
     ORDER BY seq DESC LIMIT 1)";
 
+/// The seq the owner's chat with the agent was read to (`read_marks`, one row per agent), or NULL before any read.
+const READ_SEQ_SQL: &str = "(SELECT seq FROM read_marks WHERE agent_id = agents.id)";
+
 /// The status of the agent's newest `agent.status` event (`events_agent_kind_seq`).
 const STATUS_SQL: &str = "(SELECT json_extract(payload, '$.status') FROM events \
     WHERE agent_id = agents.id AND kind = 'agent.status' ORDER BY seq DESC LIMIT 1)";
@@ -315,6 +322,7 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         migrated_at: r.get(34)?,
         last_message: None,
         status: None,
+        read_seq: None,
         pending_approval_ids: Vec::new(),
         pending_approvals: 0,
     })
@@ -327,6 +335,7 @@ fn from_row_view(r: &Row) -> rusqlite::Result<Agent> {
     agent.status = status_column(r, 36)?;
     agent.pending_approval_ids = pending_ids_column(r, 37)?;
     agent.pending_approvals = agent.pending_approval_ids.len() as u32;
+    agent.read_seq = r.get(38)?;
     Ok(agent)
 }
 
@@ -386,7 +395,7 @@ fn pending_ids_column(r: &Row, i: usize) -> rusqlite::Result<Vec<String>> {
 
 /// The agent columns plus the wire-only fields, in the order `from_row_view` reads them.
 fn view_sql(filter: &str) -> String {
-    format!("SELECT {COLS}, {LAST_MESSAGE_SQL}, {STATUS_SQL}, {PENDING_IDS_SQL} FROM agents {filter}")
+    format!("SELECT {COLS}, {LAST_MESSAGE_SQL}, {STATUS_SQL}, {PENDING_IDS_SQL}, {READ_SEQ_SQL} FROM agents {filter}")
 }
 
 fn status_column(r: &Row, i: usize) -> rusqlite::Result<Option<AgentStatus>> {
@@ -473,6 +482,7 @@ impl Store {
             migrated_at: None,
             last_message: None,
             status: None,
+            read_seq: None,
             pending_approval_ids: Vec::new(),
             pending_approvals: 0,
         };
@@ -858,6 +868,7 @@ impl Store {
         tx.execute("DELETE FROM checkpoints WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM forms WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM reactions WHERE agent_id=?1", [id])?;
+        tx.execute("DELETE FROM read_marks WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM tool_calls WHERE agent_id=?1", [id])?;
         tx.commit()?;
         Ok(n > 0)

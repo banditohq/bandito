@@ -404,6 +404,10 @@ public final class ServerModel: Identifiable {
                 }
             }
         self.reconnectDelay = reconnectDelay ?? { ServerModel.backoff(attempt: $0) }
+        threads.readSync.send = { [weak self] agentID, seq in
+            guard let self else { return }
+            try await self.sendReadMark(agentID: agentID, seq: seq)
+        }
     }
 
     /// 1, 2, 4, 8, 16, then 30 seconds between reconnect attempts.
@@ -553,6 +557,7 @@ public final class ServerModel: Identifiable {
             try checkCurrent(attempt)
             connectionRoute = await (current as? RouteReporting)?.connectedRoute
             client = c
+            threads.readSync.resume()
             pump = startPump(c)
             notificationPump = startNotificationPump(c)
             let daemon = try await c.call("daemon.info", NoParams(), as: DaemonInfo.self)
@@ -746,6 +751,11 @@ public final class ServerModel: Identifiable {
     /// Fold one event into the model (also used by tests).
     public func apply(_ e: Event) {
         if e.seq > lastSeq { lastSeq = e.seq }
+        // Another device read the chat: its unread count follows, and nothing goes back to the daemon.
+        if case .readMark(let seq) = e.body {
+            receivedReadMark(agentID: e.agentId, seq: seq)
+            return
+        }
         if case .telegramChanged = e.body {
             telegramRevision &+= 1
             return
@@ -871,7 +881,31 @@ public final class ServerModel: Identifiable {
         agentsReadAt = Date()
         agentsListedAt = Date()
         agentsFromCache = false
+        applyReadSeqs(list)
     }
+
+    /// The read marks the daemon holds (`read_seq` of `agents.list`): each chat moves to its mark, as a mark of another
+    /// device does (`AgentThreadState.applyRemoteRead`).
+    func applyReadSeqs(_ list: [Agent]) {
+        for agent in list {
+            if let seq = agent.readSeq { receivedReadMark(agentID: agent.id, seq: seq) }
+            // A mark this device holds above the daemon's (read offline, or its send was lost) goes to the daemon.
+            if let mine = threads.box(agent.id).readMark, mine > (agent.readSeq ?? 0) {
+                threads.readSync.schedule(agentID: agent.id, seq: mine)
+            }
+        }
+    }
+
+    /// A read mark that came from the daemon (a `read_mark` event, the list, or its answer to this device's own read):
+    /// the chat moves to it, and `onRemoteRead` is told when it moved.
+    func receivedReadMark(agentID: String, seq: Int64) {
+        if let moved = threads.box(agentID).applyRemoteRead(seq) { onRemoteRead?(agentID, moved) }
+    }
+
+    /// Called when the read mark of an agent's chat moved because of another device (a `read_mark` event, the list
+    /// after a reconnect, or the daemon's answer to a read of this device), with the new mark. The app takes the notices
+    /// of the chat up to that seq away.
+    public var onRemoteRead: ((_ agentID: String, _ seq: Int64) -> Void)?
 
     /// Agents that exist only in the app, for the performance scenarios (the QA command `perf` and the smoothness
     /// check of the Help menu, which runs on a demo daemon): a thread built in memory, no daemon behind it.

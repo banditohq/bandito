@@ -347,6 +347,11 @@ pub enum EventBody {
         by_name: String,
         approved_by: DecidedBy,
     },
+    /// The chat was read to `seq` on one of the owner's devices (`messages.read`). Transient: broadcast with
+    /// `seq = 0`, never written to the event log, never wakes the agent, never sends a push. A device applies it to
+    /// its unread count and does not send it back.
+    #[serde(rename = "read_mark")]
+    ReadMark { seq: i64 },
     /// A reaction on a message, by seq. No `emoji` means the reaction was taken off.
     #[serde(rename = "reaction")]
     Reaction {
@@ -375,11 +380,12 @@ pub enum EventBody {
 pub const TOOL_OUTPUT_LIMIT: usize = 16 * 1024;
 
 impl EventBody {
-    /// Streaming deltas are broadcast but not written to the store.
+    /// Streaming deltas and read marks are broadcast but not written to the store.
     pub fn is_persisted(&self) -> bool {
         !matches!(
             self,
             EventBody::MessageDelta { .. }
+                | EventBody::ReadMark { .. }
                 | EventBody::TelegramChanged
                 | EventBody::RelayChanged
                 | EventBody::ServerSettingsChanged { .. }
@@ -437,6 +443,19 @@ mod tests {
             serde_json::to_value(&body).unwrap(),
             serde_json::json!({"kind": "approval.withdrawn", "payload": {"approval_id": "a1"}})
         );
+        let back: EventBody = serde_json::from_value(serde_json::to_value(&body).unwrap()).unwrap();
+        assert_eq!(back, body);
+    }
+
+    #[test]
+    fn read_mark_is_a_transient_event_on_the_wire() {
+        // The same envelope as every event (`kind` + `payload`), never written to the event log.
+        let body = EventBody::ReadMark { seq: 42 };
+        assert_eq!(
+            serde_json::to_value(&body).unwrap(),
+            serde_json::json!({"kind": "read_mark", "payload": {"seq": 42}})
+        );
+        assert!(!body.is_persisted());
         let back: EventBody = serde_json::from_value(serde_json::to_value(&body).unwrap()).unwrap();
         assert_eq!(back, body);
     }
