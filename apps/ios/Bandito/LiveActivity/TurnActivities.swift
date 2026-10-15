@@ -68,6 +68,11 @@ final class TurnActivities {
     func configure(servers: @escaping @MainActor () -> [ServerModel], isEnabled: @escaping @MainActor () -> Bool) {
         self.servers = servers
         self.isEnabled = isEnabled
+        // The setting is off: nothing shows, and what an earlier run left goes.
+        guard isEnabled() else {
+            endAll()
+            return
+        }
         adoptExisting()
         appBecameActive()
         // The servers connect a moment after launch: only then is "this agent has no turn" known.
@@ -131,6 +136,7 @@ final class TurnActivities {
 
     /// One live event of a server (from `IOSNotifications.attach`).
     func ingest(_ event: Event, from server: ServerModel) {
+        guard isEnabled() else { return }
         guard event.seq > 0 else { return }
         let key = Key(serverID: server.id, agentID: event.agentId)
         switch event.body {
@@ -360,30 +366,49 @@ final class TurnActivities {
 
     // MARK: Stop
 
-    /// The Stop button: interrupts the turn. Without a connection the activity stays and says so.
+    /// The Stop button: interrupts the turn. Without a connection the activity stays and says so; a refusal of the
+    /// server says so too. A server that answers that the agent already stopped counts as done.
     func stop(serverID: String, agentID: String) async {
         guard let id = UUID(uuidString: serverID), let server = server(id) else { return }
         let key = Key(serverID: id, agentID: agentID)
         if server.state != .connected { await server.connect() }
         guard server.state == .connected else {
-            showStopFailed(key)
+            showStopLine(key, L10n.Ios.Live.stopNoConnection)
             return
         }
         do {
             try await server.interrupt(agentID)
+        } catch let error as RPCError where error.message.contains("stopped") {
+            // The agent had already stopped: nothing is left to stop.
+            return
         } catch {
-            showStopFailed(key)
+            showStopLine(key, L10n.Ios.Live.stopFailed)
         }
     }
 
-    private func showStopFailed(_ key: Key) {
-        guard let slot = slots[key], !slot.ended else { return }
-        var next = slot.state
-        next.doing = L10n.Ios.Live.stopFailed
-        // The line stays for the next interval before the agent's own text comes back.
-        slot.lastDoingUpdate = Date()
-        push(slot, next)
-        refreshDoing(key)
+    /// Puts `text` in place of the line "what it does now". Without a slot (the app was launched by the Stop button alone)
+    /// the activity itself is updated.
+    private func showStopLine(_ key: Key, _ text: String) {
+        if let slot = slots[key] {
+            guard !slot.ended else { return }
+            var next = slot.state
+            next.doing = text
+            // The line stays for the next interval before the agent's own text comes back.
+            slot.lastDoingUpdate = Date()
+            push(slot, next)
+            refreshDoing(key)
+            return
+        }
+        for activity in Activity<TurnActivityAttributes>.activities
+        where activity.attributes.serverID == key.serverID && activity.attributes.agentID == key.agentID
+            && (activity.activityState == .active || activity.activityState == .stale)
+        {
+            var next = activity.content.state
+            next.doing = text
+            let content = ActivityContent(state: next, staleDate: activity.content.staleDate)
+            let handle = ActivityHandle(activity)
+            enqueue { await handle.update(content) }
+        }
     }
 
     // MARK: Helpers
@@ -392,13 +417,14 @@ final class TurnActivities {
         servers().first { $0.id == id }
     }
 
-    /// The phase the rules see for a slot: one that ended while still "running" counts as failed.
+    /// The phase the rules see for a slot (`TurnActivityRules.effectivePhase`).
     private func existingPhase(_ slot: Slot) -> Phase {
-        slot.ended && !Rules.isFinal(slot.state.phase) && slot.state.phase != .needsYou ? .failed : slot.state.phase
+        Rules.effectivePhase(shown: slot.state.phase, ended: slot.ended)
     }
 
+    /// The activities on screen: running, waiting for the person, and ended ones the system has not removed yet.
     private var liveCount: Int {
-        slots.values.filter { !$0.ended && !Rules.isFinal($0.state.phase) }.count
+        slots.count
     }
 
     private func removeNow(_ activity: Activity<TurnActivityAttributes>) {

@@ -3408,6 +3408,8 @@
   "shortcut.title.askAgent": "Спросить агента",
   "shortcut.title.openAgent": "Открыть агента",
   "shortcut.title.agentType": "Агент",
+  "shortcut.title.stop": "Остановить",
+  "shortcut.title.server": "Сервер",
   "shortcut.title.messageParam": "Сообщение",
   "shortcut.phrase.whatNeedsMe": "Что ждёт меня в ${applicationName}",
   "shortcut.phrase.askAgent": "Спросить ${agent} в ${applicationName}",
@@ -3604,7 +3606,8 @@
   "ios.account.servers.updateNeeded": "Нужно обновить Bandito",
   "ios.live.done": "Готово",
   "ios.live.failed": "Не закончил",
-  "ios.live.stopFailed": "Не удалось остановить: нет связи",
+  "ios.live.stopNoConnection": "Не удалось остановить: нет связи",
+  "ios.live.stopFailed": "Не удалось остановить. Попробуйте в приложении.",
   "ios.live.setting": "Живые действия на экране блокировки",
   "ios.live.settingHint": "Показывает задачу, которая идёт дольше 30 секунд, с кнопкой «Стоп»."
 }

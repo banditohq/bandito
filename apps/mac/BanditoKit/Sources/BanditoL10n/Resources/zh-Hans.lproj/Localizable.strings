@@ -1101,7 +1101,8 @@
 "ios.live.failed" = "未完成";
 "ios.live.setting" = "锁屏上的实时活动";
 "ios.live.settingHint" = "显示耗时超过 30 秒的任务，并带有停止按钮。";
-"ios.live.stopFailed" = "无法停止：没有网络连接";
+"ios.live.stopFailed" = "无法停止。请在应用中重试。";
+"ios.live.stopNoConnection" = "无法停止：没有网络连接";
 "ios.newAgent.installTimedOut" = "安装仍在进行，请稍后再试。";
 "ios.newAgent.tabOne" = "单个代理";
 "ios.newAgent.tabTeams" = "现成团队";

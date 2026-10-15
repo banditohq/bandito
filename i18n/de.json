@@ -3322,6 +3322,8 @@
   "shortcut.title.askAgent": "Einen Agenten fragen",
   "shortcut.title.openAgent": "Einen Agenten öffnen",
   "shortcut.title.agentType": "Agent",
+  "shortcut.title.stop": "Stopp",
+  "shortcut.title.server": "Server",
   "shortcut.title.messageParam": "Nachricht",
   "shortcut.phrase.whatNeedsMe": "Was wartet auf mich in ${applicationName}",
   "shortcut.phrase.askAgent": "${agent} in ${applicationName} fragen",
@@ -3518,7 +3520,8 @@
   "ios.account.servers.updateNeeded": "Bandito aktualisieren",
   "ios.live.done": "Fertig",
   "ios.live.failed": "Nicht abgeschlossen",
-  "ios.live.stopFailed": "Anhalten nicht möglich: keine Verbindung",
+  "ios.live.stopNoConnection": "Anhalten nicht möglich: keine Verbindung",
+  "ios.live.stopFailed": "Anhalten nicht möglich. Versuchen Sie es in der App.",
   "ios.live.setting": "Live-Aktivitäten auf dem Sperrbildschirm",
   "ios.live.settingHint": "Zeigt eine Aufgabe, die länger als 30 Sekunden dauert, mit einer Stopp-Taste."
 }

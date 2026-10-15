@@ -3323,6 +3323,8 @@
   "shortcut.title.askAgent": "Ask an agent",
   "shortcut.title.openAgent": "Open an agent",
   "shortcut.title.agentType": "Agent",
+  "shortcut.title.stop": "Stop",
+  "shortcut.title.server": "Server",
   "shortcut.title.messageParam": "Message",
   "shortcut.phrase.whatNeedsMe": "What needs me in ${applicationName}",
   "shortcut.phrase.askAgent": "Ask ${agent} in ${applicationName}",
@@ -3519,7 +3521,8 @@
   "ios.account.servers.updateNeeded": "Update Bandito",
   "ios.live.done": "Done",
   "ios.live.failed": "Did not finish",
-  "ios.live.stopFailed": "Could not stop: no connection",
+  "ios.live.stopNoConnection": "Could not stop: no connection",
+  "ios.live.stopFailed": "Couldn't stop. Try in the app.",
   "ios.live.setting": "Live Activities on the lock screen",
   "ios.live.settingHint": "Shows a task that runs longer than 30 seconds, with a Stop button."
 }

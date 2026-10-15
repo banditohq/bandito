@@ -3323,6 +3323,8 @@
   "shortcut.title.askAgent": "Demander à un agent",
   "shortcut.title.openAgent": "Ouvrir un agent",
   "shortcut.title.agentType": "Agent",
+  "shortcut.title.stop": "Arrêter",
+  "shortcut.title.server": "Serveur",
   "shortcut.title.messageParam": "Message",
   "shortcut.phrase.whatNeedsMe": "Ce qui m'attend dans ${applicationName}",
   "shortcut.phrase.askAgent": "Demander à ${agent} dans ${applicationName}",
@@ -3519,7 +3521,8 @@
   "ios.account.servers.updateNeeded": "Mettez Bandito à jour",
   "ios.live.done": "Terminé",
   "ios.live.failed": "Non terminé",
-  "ios.live.stopFailed": "Impossible d'arrêter : pas de connexion",
+  "ios.live.stopNoConnection": "Impossible d'arrêter : pas de connexion",
+  "ios.live.stopFailed": "Impossible d'arrêter. Réessayez dans l'application.",
   "ios.live.setting": "Activités en direct sur l'écran verrouillé",
   "ios.live.settingHint": "Affiche une tâche qui dure plus de 30 secondes, avec un bouton Arrêter."
 }

@@ -3273,6 +3273,8 @@
   "shortcut.title.askAgent": "에이전트에게 요청",
   "shortcut.title.openAgent": "에이전트 열기",
   "shortcut.title.agentType": "에이전트",
+  "shortcut.title.stop": "중지",
+  "shortcut.title.server": "서버",
   "shortcut.title.messageParam": "메시지",
   "shortcut.phrase.whatNeedsMe": "${applicationName}에서 나에게 필요한 것",
   "shortcut.phrase.askAgent": "${applicationName}에서 ${agent}에게 묻기",
@@ -3477,7 +3479,8 @@
   "ios.account.servers.updateNeeded": "Bandito 업데이트 필요",
   "ios.live.done": "완료",
   "ios.live.failed": "끝내지 못했습니다",
-  "ios.live.stopFailed": "중지할 수 없음: 연결 없음",
+  "ios.live.stopNoConnection": "중지할 수 없음: 연결 없음",
+  "ios.live.stopFailed": "중지하지 못했습니다. 앱에서 다시 시도해 주세요.",
   "ios.live.setting": "잠금 화면의 실시간 현황",
   "ios.live.settingHint": "30초보다 오래 걸리는 작업을 중지 버튼과 함께 표시합니다."
 }

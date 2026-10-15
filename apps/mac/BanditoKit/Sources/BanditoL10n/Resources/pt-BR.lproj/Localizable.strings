@@ -1101,7 +1101,8 @@
 "ios.live.failed" = "Não terminou";
 "ios.live.setting" = "Atividades ao vivo na tela de bloqueio";
 "ios.live.settingHint" = "Mostra uma tarefa que dura mais de 30 segundos, com um botão Parar.";
-"ios.live.stopFailed" = "Não foi possível parar: sem conexão";
+"ios.live.stopFailed" = "Não foi possível parar. Tente no aplicativo.";
+"ios.live.stopNoConnection" = "Não foi possível parar: sem conexão";
 "ios.newAgent.installTimedOut" = "A instalação ainda está em andamento. Tente de novo daqui a pouco.";
 "ios.newAgent.tabOne" = "Um agente";
 "ios.newAgent.tabTeams" = "Equipes prontas";

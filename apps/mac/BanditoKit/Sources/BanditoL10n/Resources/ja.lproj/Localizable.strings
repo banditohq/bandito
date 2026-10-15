@@ -1101,7 +1101,8 @@
 "ios.live.failed" = "完了しませんでした";
 "ios.live.setting" = "ロック画面のライブアクティビティ";
 "ios.live.settingHint" = "30秒以上かかるタスクを、停止ボタン付きで表示します。";
-"ios.live.stopFailed" = "停止できません: 接続がありません";
+"ios.live.stopFailed" = "停止できませんでした。アプリで試してください。";
+"ios.live.stopNoConnection" = "停止できません: 接続がありません";
 "ios.newAgent.installTimedOut" = "インストールがまだ続いています。しばらくしてからもう一度お試しください。";
 "ios.newAgent.tabOne" = "エージェント1つ";
 "ios.newAgent.tabTeams" = "すぐに使えるチーム";
