@@ -91,15 +91,19 @@ The screen every day. Read the rules before changing it; each came from the Mac'
 - The list and the box are placed by frames, never by constraints between them (`ChatFrameRules.frames`, pure and tested):
   the box is on the bottom edge (above the home indicator), or on the keyboard's top, and the list has the rest, with a floor
   (`min(120, a quarter of the room)`), so an empty or loading list can never hand the free space to the box and a keyboard
-  frame the system reports wrongly for a moment (a screenshot, a trait change) cannot carry the box up. The keyboard is read
-  from a hidden view tied to `view.keyboardLayoutGuide.topAnchor` (the interactive dismiss and the animation stay), and only
-  counts while the box's field is first responder or the keyboard is on its way down (`keyboardWillHide`). The box's height
-  is `composer.fittingHeight(width:)`. Screenshots and `didBecomeActive` lay the screen out again at once and 0.4 s later.
+  frame the system reports wrongly for a moment (a screenshot, a trait change) cannot carry the box up; the box is never
+  higher than the keyboard's top (an invariant of `ChatFrameRules`). The keyboard's top is the frame of the last
+  `keyboardWillShow/WillChangeFrame` notification (converted to the view; `keyboardWillHide/DidHide` forget it); the hidden
+  `keyboardLayoutGuide` view is trusted only while the person drags the keyboard (interactive dismiss) and is below that
+  frame. The box moves with the notification's duration and curve. It only counts while the box's field is first responder.
+  The box's height is `composer.fittingHeight(width:)`. Screenshots and `didBecomeActive` lay the screen out again at once and 0.4 s later.
   Do not put the list or the box back on Auto Layout against each other.
 - What stands in the list's place (`updateOverlays`): a spinner while the history is read (after 0.3 s, so a quick read does
   not flash it), "Couldn't load the chat" with "Try again" (`chat.loadFailed`, `chat.retryLoad`; `ChatModel.retryLoad`) when
   it could not be read and nothing is saved, the empty chat's invitation only when there is truly nothing (not loading, no
-  error). A history whose newest page shows no row (only tool calls) reads older pages (up to 10) before saying "empty".
+  error). A history whose newest page shows no row (only tool calls) reads older pages (up to 10 that came empty) before saying "empty";
+  a failed older page is the same failure screen with "Try again" (`ChatModel.olderFailed`), not a spinner. The offline banner
+  (`ChatBannerLabel`) wraps to two lines. A message that was only a file is saved as "📎 Attachment".
 - Saved history (`ChatHistoryCache`): the last 200 items per (server, agent) as JSON in
   `Application Support/ChatCache/<server uuid>/<agent>.json`, `completeUntilFirstUserAuthentication`, out of the iCloud backup.
   Text and metadata only (no files, no tool calls, no cards that wait for an answer, no stream; a message is cut at 20 000
