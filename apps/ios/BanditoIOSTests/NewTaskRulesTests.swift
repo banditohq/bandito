@@ -42,6 +42,13 @@ import Testing
         #expect(ordered.map(\.agentID) == ["b", "c", "a"])
     }
 
+    @Test func aPausedLastAgentStaysAtTheEnd() {
+        let server = UUID()
+        let options = [option(server, "a"), option(server, "b", paused: true), option(server, "c")]
+        let ordered = NewTaskRules.order(options, last: NewTaskChoice(serverID: server, agentID: "b"))
+        #expect(ordered.map(\.agentID) == ["a", "c", "b"])
+    }
+
     @Test func emptyTextCannotBeSent() {
         #expect(!NewTaskRules.canSend(text: "", agentChosen: true))
     }

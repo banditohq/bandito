@@ -46,17 +46,16 @@ enum NewTaskRules {
     }
 
     /// The picker's order: the paused agents move to the end (keeping their order), then the agent used last comes
-    /// first. A last agent that is no longer listed changes nothing.
+    /// first, unless it is paused (it stays at the end). A last agent that is no longer listed changes nothing.
     static func order(_ options: [NewTaskOption], last: NewTaskChoice?) -> [NewTaskOption] {
         let active = options.filter { !$0.paused }
         let paused = options.filter { $0.paused }
-        let base = active + paused
-        guard let last, let index = base.firstIndex(where: { $0.serverID == last.serverID && $0.agentID == last.agentID })
-        else { return base }
-        var result = base
+        guard let last, let index = active.firstIndex(where: { $0.serverID == last.serverID && $0.agentID == last.agentID })
+        else { return active + paused }
+        var result = active
         let chosen = result.remove(at: index)
         result.insert(chosen, at: 0)
-        return result
+        return result + paused
     }
 
     /// The text as it is sent: without the spaces and line breaks around it.
