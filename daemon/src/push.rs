@@ -44,6 +44,9 @@ const DEFERRED_MAX: usize = 20;
 const PARALLEL: usize = 4;
 /// The most bytes of plaintext. The cloud takes 2700 bytes of ciphertext; the tag adds 16.
 pub const MAX_PLAINTEXT: usize = 2600;
+/// The longest text a done shows, in characters; the envelope tries it cut to each step, then without it.
+const TEXT_CHARS: usize = 400;
+const TEXT_STEPS: [usize; 3] = [TEXT_CHARS, 200, 80];
 /// Heavy strings in a payload are cut to this many characters when it does not fit.
 const CUT_CHARS: usize = 300;
 /// The longest server name (`serverRef`) the daemon accepts.
@@ -122,12 +125,15 @@ impl PushKind {
 }
 
 /// What the task knows about the agent and the turn, beyond the event itself.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Ctx {
     /// The turn that ended with this event was a quiet one (`turn.quiet` came before): nobody is told.
     pub quiet_turn: bool,
     /// The agent has an approval, a form or a connect request waiting, which has its own push.
     pub other_pending: bool,
+    /// The plain text of the turn's last message (cut to 400 characters). Set on `turn.completed` only: a done needs
+    /// it, and it is the text the notification shows.
+    pub answer: Option<String>,
 }
 
 /// The push an event makes, if any: the same rules as the phone's local notifications
@@ -135,7 +141,7 @@ pub struct Ctx {
 /// - an approval waiting -> `approval`;
 /// - a form -> `question` (a connect request has no local notification either, so no push);
 /// - the agent needs the person with nothing else waiting (its own question) -> `question`;
-/// - a turn that ended well, unless it was quiet -> `done`;
+/// - a turn that ended well, unless it was quiet or wrote no text -> `done` (with the text);
 /// - an error -> `error`.
 pub fn push_kind(ev: &Event, ctx: &Ctx) -> Option<PushKind> {
     match &ev.body {
@@ -147,7 +153,7 @@ pub fn push_kind(ev: &Event, ctx: &Ctx) -> Option<PushKind> {
         } if !ctx.other_pending => Some(PushKind::Question),
         EventBody::TurnCompleted {
             status: TurnStatus::Ok, ..
-        } if !ctx.quiet_turn => Some(PushKind::Done),
+        } if !ctx.quiet_turn && ctx.answer.as_deref().is_some_and(|t| !t.is_empty()) => Some(PushKind::Done),
         EventBody::Error { .. } => Some(PushKind::Error),
         _ => None,
     }
@@ -182,8 +188,69 @@ fn cut_strings(v: &mut Value) {
     }
 }
 
-fn envelope(server_ref: &str, ev: &Event, name: &str, event: &Value) -> String {
-    json!({
+/// The text a notification shows: the markdown taken off (fence lines go, the code they wrap stays as text; heading
+/// marks, `**`, `*` and `_` emphasis and backticks go; `[text](url)` becomes `text`), then every run of whitespace is
+/// one space. A `*` or `_` between two letters or digits stays (`my_var`, `2*3`).
+pub fn plain(raw: &str) -> String {
+    let lines: Vec<&str> = raw
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("```"))
+        .map(heading_text)
+        .collect();
+    strip_inline(&lines.join("\n"))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A line without its heading mark (`## Итог` is `Итог`); a `#` with no space after it is text.
+fn heading_text(line: &str) -> &str {
+    let t = line.trim_start();
+    let body = t.trim_start_matches('#');
+    if body.len() < t.len() && body.starts_with(' ') {
+        body.trim_start()
+    } else {
+        t
+    }
+}
+
+fn strip_inline(s: &str) -> String {
+    let c: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < c.len() {
+        match c[i] {
+            '`' => {}
+            '[' => {
+                if let Some((close, end)) = link_end(&c, i) {
+                    out.extend(&c[i + 1..close]);
+                    i = end + 1;
+                    continue;
+                }
+                out.push('[');
+            }
+            '*' | '_'
+                if !(i > 0 && c[i - 1].is_alphanumeric() && c.get(i + 1).is_some_and(|n| n.is_alphanumeric())) => {}
+            other => out.push(other),
+        }
+        i += 1;
+    }
+    out
+}
+
+/// For a `[` at `open`: the index of the `]` that ends its text and of the `)` that ends its url, when `](...)` follows.
+fn link_end(c: &[char], open: usize) -> Option<(usize, usize)> {
+    let close = open + 1 + c[open + 1..].iter().position(|&x| x == ']')?;
+    if c.get(close + 1) != Some(&'(') {
+        return None;
+    }
+    let end = close + 2 + c[close + 2..].iter().position(|&x| x == ')')?;
+    Some((close, end))
+}
+
+/// The envelope; `text` (a done's reply, already plain) is added as the top-level `text` field when given.
+fn envelope(server_ref: &str, ev: &Event, name: &str, text: Option<&str>, event: &Value) -> String {
+    let mut env = json!({
         "v": 1,
         "srv": server_ref,
         "seq": ev.seq,
@@ -191,21 +258,32 @@ fn envelope(server_ref: &str, ev: &Event, name: &str, event: &Value) -> String {
         "name": cut(name, NAME_CHARS),
         "ts": ev.ts,
         "event": event,
-    })
-    .to_string()
+    });
+    if let Some(text) = text {
+        env["text"] = json!(text);
+    }
+    env.to_string()
 }
 
-/// The JSON a phone decrypts: `{"v":1,"srv":serverRef,"seq":N,"agent":id,"name":agentName,"ts":ms,"event":{kind,payload}}`.
-/// `event` is the event's body as `events.since` sends it (`kind` and `payload`). When the text is longer than
-/// [`MAX_PLAINTEXT`] bytes the heavy fields (`diff`, `input`, `command`, `message`) are cut to 300 characters; then
+/// The JSON a phone decrypts: `{"v":1,"srv":serverRef,"seq":N,"agent":id,"name":agentName,"ts":ms,"event":{kind,payload}}`,
+/// with a top-level `"text"` for a done.
+/// `event` is the event's body as `events.since` sends it (`kind` and `payload`). When the envelope is longer than
+/// [`MAX_PLAINTEXT`] bytes the `text` goes first (cut to 200, then 80 characters, then dropped); then the heavy fields (`diff`, `input`, `command`, `message`) are cut to 300 characters; then
 /// every long string; then `input` and `diff` go; and at the very end only the ids that let the phone fetch the
 /// event remain (`approval_id`, `form_id`, `request_id`).
-pub fn build_payload(server_ref: &str, ev: &Event, agent_name: &str) -> String {
+pub fn build_payload(server_ref: &str, ev: &Event, agent_name: &str, text: Option<&str>) -> String {
     let (kind, payload) = ev.body.to_parts();
     let mut event = json!({ "kind": kind, "payload": payload });
-    let full = envelope(server_ref, ev, agent_name, &event);
-    if full.len() <= MAX_PLAINTEXT {
-        return full;
+    // The text goes first: cut to 400, then 200 and 80 characters, then dropped; only then is anything else cut.
+    let mut shown: Vec<Option<String>> = text
+        .map(|t| TEXT_STEPS.iter().map(|&n| Some(cut(t, n))).collect())
+        .unwrap_or_default();
+    shown.push(None);
+    for candidate in &shown {
+        let full = envelope(server_ref, ev, agent_name, candidate.as_deref(), &event);
+        if full.len() <= MAX_PLAINTEXT {
+            return full;
+        }
     }
     // 1. The heavy fields.
     if let Some(map) = event.get_mut("payload").and_then(Value::as_object_mut) {
@@ -215,7 +293,7 @@ pub fn build_payload(server_ref: &str, ev: &Event, agent_name: &str) -> String {
             }
         }
     }
-    let text = envelope(server_ref, ev, agent_name, &event);
+    let text = envelope(server_ref, ev, agent_name, None, &event);
     if text.len() <= MAX_PLAINTEXT {
         return text;
     }
@@ -223,7 +301,7 @@ pub fn build_payload(server_ref: &str, ev: &Event, agent_name: &str) -> String {
     if let Some(p) = event.get_mut("payload") {
         cut_strings(p);
     }
-    let text = envelope(server_ref, ev, agent_name, &event);
+    let text = envelope(server_ref, ev, agent_name, None, &event);
     if text.len() <= MAX_PLAINTEXT {
         return text;
     }
@@ -232,7 +310,7 @@ pub fn build_payload(server_ref: &str, ev: &Event, agent_name: &str) -> String {
         map.remove("input");
         map.remove("diff");
     }
-    let text = envelope(server_ref, ev, agent_name, &event);
+    let text = envelope(server_ref, ev, agent_name, None, &event);
     if text.len() <= MAX_PLAINTEXT {
         return text;
     }
@@ -248,7 +326,13 @@ pub fn build_payload(server_ref: &str, ev: &Event, agent_name: &str) -> String {
             }
         }
     }
-    let text = envelope(server_ref, ev, agent_name, &json!({ "kind": kind, "payload": ids }));
+    let text = envelope(
+        server_ref,
+        ev,
+        agent_name,
+        None,
+        &json!({ "kind": kind, "payload": ids }),
+    );
     if text.len() <= MAX_PLAINTEXT {
         return text;
     }
@@ -306,6 +390,8 @@ fn seal_b64(key: &[u8], handle: &str, plaintext: &[u8]) -> Result<(String, Strin
 struct Tracker {
     open: HashMap<String, HashSet<String>>,
     quiet: HashSet<String>,
+    /// The plain text of each agent's last message in its running turn (cut to [`TEXT_CHARS`]).
+    answers: HashMap<String, String>,
 }
 
 impl Tracker {
@@ -354,7 +440,14 @@ impl Tracker {
     fn observe(&mut self, ev: &Event) -> Ctx {
         let agent = ev.agent_id.as_str();
         let mut quiet_turn = false;
+        let mut answer: Option<String> = None;
         match &ev.body {
+            EventBody::TurnStarted { .. } => {
+                self.answers.remove(agent);
+            }
+            EventBody::MessageAssistant { text } => {
+                self.answers.insert(agent.to_string(), cut(&plain(text), TEXT_CHARS));
+            }
             EventBody::ApprovalRequested { approval_id, .. } => self.add(agent, format!("a:{approval_id}")),
             EventBody::ApprovalResolved { approval_id, .. } | EventBody::ApprovalWithdrawn { approval_id } => {
                 self.remove(agent, &format!("a:{approval_id}"));
@@ -369,17 +462,22 @@ impl Tracker {
                 }
                 self.quiet.insert(turn_id.clone());
             }
-            EventBody::TurnCompleted { turn_id, .. } => quiet_turn = self.quiet.remove(turn_id),
+            EventBody::TurnCompleted { turn_id, .. } => {
+                quiet_turn = self.quiet.remove(turn_id);
+                answer = self.answers.remove(agent);
+            }
             EventBody::AgentChanged {
                 action: AgentChange::Deleted,
             } => {
                 self.open.remove(agent);
+                self.answers.remove(agent);
             }
             _ => {}
         }
         Ctx {
             quiet_turn,
             other_pending: self.open.contains_key(agent),
+            answer,
         }
     }
 }
@@ -508,7 +606,7 @@ pub fn spawn_with(hub: &Hub, config: Config) -> tokio::task::JoinHandle<()> {
                 Ok(ev) => {
                     let ctx = tracker.observe(&ev);
                     if let Some(kind) = push_kind(&ev, &ctx) {
-                        enqueue(&store, &queues, &ev, kind).await;
+                        enqueue(&store, &queues, &ev, kind, ctx.answer.as_deref()).await;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -523,7 +621,7 @@ pub fn spawn_with(hub: &Hub, config: Config) -> tokio::task::JoinHandle<()> {
 
 /// Encrypts the event for each phone that wants `kind` and queues the requests. A full low queue drops the event at
 /// once; a full high queue is waited for up to `high_wait`.
-async fn enqueue(store: &Store, queues: &Queues, ev: &Event, kind: PushKind) {
+async fn enqueue(store: &Store, queues: &Queues, ev: &Event, kind: PushKind, answer: Option<&str>) {
     let targets = match store.push_list() {
         Ok(t) => t,
         Err(e) => {
@@ -543,7 +641,7 @@ async fn enqueue(store: &Store, queues: &Queues, ev: &Event, kind: PushKind) {
         _ => String::new(),
     };
     for target in targets {
-        let body = match request_body(&target, kind, ev, &name) {
+        let body = match request_body(&target, kind, ev, &name, answer) {
             Ok(body) => body,
             Err(e) => {
                 tracing::warn!(kind = kind.as_str(), "push: {e:#}");
@@ -569,8 +667,14 @@ async fn enqueue(store: &Store, queues: &Queues, ev: &Event, kind: PushKind) {
 }
 
 /// The JSON body of `POST /push/send` for one phone.
-fn request_body(target: &PushTarget, kind: PushKind, ev: &Event, agent_name: &str) -> Result<String> {
-    let text = build_payload(&target.server_ref, ev, agent_name);
+fn request_body(
+    target: &PushTarget,
+    kind: PushKind,
+    ev: &Event,
+    agent_name: &str,
+    answer: Option<&str>,
+) -> Result<String> {
+    let text = build_payload(&target.server_ref, ev, agent_name, answer);
     let (ct, nonce) = seal_b64(&target.key, &target.handle, text.as_bytes())?;
     let mut body = json!({ "handle": target.handle, "kind": kind.as_str(), "ct": ct, "nonce": nonce });
     // One notification per event on the phone, and the agent's pushes group in one thread.
@@ -845,7 +949,7 @@ async fn post(base_url: &str, body: &str) -> Result<(u16, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::{ConnectEnd, DecidedBy, Decision};
+    use crate::event::{ConnectEnd, DecidedBy, Decision, Source};
     use crate::forms::{FieldType, FormField, FormKind};
     use crate::runtime::RuntimeKind;
     use crate::store::NewAgent;
@@ -948,16 +1052,107 @@ mod tests {
     }
 
     #[test]
-    fn only_a_turn_that_ended_well_and_was_not_quiet_is_done() {
-        let c = Ctx::default();
-        assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &c), Some(PushKind::Done));
-        assert_eq!(push_kind(&ev(completed(TurnStatus::Error)), &c), None);
-        assert_eq!(push_kind(&ev(completed(TurnStatus::Interrupted)), &c), None);
+    fn only_a_turn_that_ended_well_with_text_and_was_not_quiet_is_done() {
+        let said = Ctx {
+            answer: Some("Готово".into()),
+            ..Ctx::default()
+        };
+        assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &said), Some(PushKind::Done));
+        assert_eq!(push_kind(&ev(completed(TurnStatus::Error)), &said), None);
+        assert_eq!(push_kind(&ev(completed(TurnStatus::Interrupted)), &said), None);
         let quiet = Ctx {
             quiet_turn: true,
+            answer: Some("Готово".into()),
             ..Ctx::default()
         };
         assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &quiet), None);
+    }
+
+    #[test]
+    fn a_turn_that_wrote_no_text_makes_no_done() {
+        assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &Ctx::default()), None);
+        let blank = Ctx {
+            answer: Some(String::new()),
+            ..Ctx::default()
+        };
+        assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &blank), None);
+    }
+
+    #[test]
+    fn the_done_text_is_the_last_message_of_its_turn() {
+        let mut t = Tracker::default();
+        t.observe(&ev(turn_started()));
+        t.observe(&ev(EventBody::MessageAssistant {
+            text: "первое".into()
+        }));
+        t.observe(&ev(EventBody::MessageAssistant {
+            text: "**второе**".into(),
+        }));
+        assert_eq!(
+            t.observe(&ev(completed(TurnStatus::Ok))).answer.as_deref(),
+            Some("второе")
+        );
+        // The next turn wrote nothing: it has no text, whatever the turn before wrote.
+        t.observe(&ev(turn_started()));
+        assert_eq!(t.observe(&ev(completed(TurnStatus::Ok))).answer, None);
+    }
+
+    #[test]
+    fn the_markdown_comes_off_the_done_text() {
+        let raw = "## Итог\n\n**Сделано:** `fmt` и [отчёт](https://e.x/r)\n```rust\nlet a = 1;\n```\nвсё_готово *ok*";
+        assert_eq!(plain(raw), "Итог Сделано: fmt и отчёт let a = 1; всё_готово ok");
+        assert_eq!(plain("```\n```\n** **"), "");
+        assert_eq!(plain("[без ссылки"), "[без ссылки");
+        assert_eq!(plain("2*3 = 6, my_var"), "2*3 = 6, my_var");
+    }
+
+    #[test]
+    fn a_done_text_is_cut_to_400_characters_and_a_big_one_fits() {
+        let long = "а".repeat(1000);
+        let raw = build_payload("my-server", &ev(completed(TurnStatus::Ok)), "Forge", Some(&long));
+        assert!(raw.len() <= MAX_PLAINTEXT);
+        let v = parse(&raw);
+        let text = v["text"].as_str().unwrap();
+        assert_eq!(text.chars().count(), 400);
+        assert!(text.ends_with('…'));
+        let short = parse(&build_payload(
+            "my-server",
+            &ev(completed(TurnStatus::Ok)),
+            "Forge",
+            Some("Готово"),
+        ));
+        assert_eq!(short["text"], "Готово");
+        // Only a done carries a text.
+        let other = parse(&build_payload(
+            "my-server",
+            &ev(approval(None, None, None)),
+            "Forge",
+            None,
+        ));
+        assert!(other.get("text").is_none());
+    }
+
+    #[test]
+    fn the_text_shrinks_before_anything_else_when_the_envelope_is_too_big() {
+        let server = "s".repeat(2100);
+        let long = "a".repeat(1000);
+        let v = parse(&build_payload(
+            &server,
+            &ev(completed(TurnStatus::Ok)),
+            "Forge",
+            Some(&long),
+        ));
+        assert_eq!(v["srv"].as_str().unwrap().chars().count(), 2100);
+        assert_eq!(v["text"].as_str().unwrap().chars().count(), 200);
+    }
+
+    fn turn_started() -> EventBody {
+        EventBody::TurnStarted {
+            turn_id: "t1".into(),
+            source: Source::User,
+            reactions_until: None,
+            message_seq: None,
+        }
     }
 
     #[test]
@@ -1056,7 +1251,7 @@ mod tests {
     #[test]
     fn the_payload_has_the_agreed_shape() {
         let e = ev(approval(Some("ls".into()), None, Some(json!({ "path": "/tmp" }))));
-        let v = parse(&build_payload("my-server", &e, "Forge"));
+        let v = parse(&build_payload("my-server", &e, "Forge", None));
         assert_eq!(v["v"], 1);
         assert_eq!(v["srv"], "my-server");
         assert_eq!(v["seq"], 42);
@@ -1080,7 +1275,7 @@ mod tests {
             Some(big.clone()),
             Some(json!({ "text": big })),
         ));
-        let text = build_payload("s", &e, "Forge");
+        let text = build_payload("s", &e, "Forge", None);
         assert!(text.len() <= MAX_PLAINTEXT, "{}", text.len());
         let v = parse(&text);
         let p = &v["event"]["payload"];
@@ -1101,7 +1296,7 @@ mod tests {
         let e = ev(EventBody::Error {
             message: "x".repeat(6000),
         });
-        let text = build_payload("s", &e, "Forge");
+        let text = build_payload("s", &e, "Forge", None);
         assert!(text.len() <= MAX_PLAINTEXT);
         let v = parse(&text);
         assert_eq!(v["event"]["kind"], "error");
@@ -1115,7 +1310,7 @@ mod tests {
             .map(|i| json!({ "id": format!("f{i}"), "label": "y".repeat(250) }))
             .collect();
         let e = ev(approval(None, None, Some(json!({ "fields": fields }))));
-        let text = build_payload("s", &e, "Forge");
+        let text = build_payload("s", &e, "Forge", None);
         assert!(text.len() <= MAX_PLAINTEXT, "{}", text.len());
         let v = parse(&text);
         let p = &v["event"]["payload"];
@@ -1149,7 +1344,7 @@ mod tests {
             submit_label: None,
             reject_label: None,
         });
-        let text = build_payload("s", &e, "n");
+        let text = build_payload("s", &e, "n", None);
         assert!(text.len() <= MAX_PLAINTEXT, "{}", text.len());
         let v = parse(&text);
         assert_eq!(v["event"]["kind"], "form_requested");
@@ -1169,14 +1364,14 @@ mod tests {
             submit_label: None,
             reject_label: None,
         });
-        let v = parse(&build_payload("s", &e, "n"));
+        let v = parse(&build_payload("s", &e, "n", None));
         assert_eq!(v["event"]["payload"]["form_id"], "f9");
         assert_eq!(v["event"]["payload"]["title"].as_str().unwrap().chars().count(), 300);
     }
 
     #[test]
     fn a_long_name_is_cut() {
-        let v = parse(&build_payload("s", &ev(form()), &"n".repeat(500)));
+        let v = parse(&build_payload("s", &ev(form()), &"n".repeat(500), None));
         assert_eq!(v["name"].as_str().unwrap().chars().count(), 100);
     }
 
@@ -1466,6 +1661,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_done_push_carries_the_text_of_its_turn() {
+        let cloud = cloud(ok_reply).await;
+        let (hub, agent) = setup(&cloud);
+        let d = hub.store.device_add("iPhone", "tok").unwrap();
+        hub.store
+            .push_upsert(&d.id, "handle-1", &[9; 32], "my-server", "done", None)
+            .unwrap();
+        hub.emit(
+            &agent,
+            EventBody::MessageAssistant {
+                text: "**Готово**: см. [отчёт](https://e.x)".into(),
+            },
+        );
+        hub.emit(&agent, completed(TurnStatus::Ok));
+        cloud.wait_for(1).await;
+        let got = cloud.for_handle("handle-1", &[9; 32]);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].0, "done");
+        assert_eq!(got[0].3["text"], "Готово: см. отчёт");
+    }
+
+    #[tokio::test]
     async fn a_quiet_turn_and_a_failed_turn_are_not_done() {
         let cloud = cloud(ok_reply).await;
         let (hub, agent) = setup(&cloud);
@@ -1489,6 +1706,7 @@ mod tests {
             usage: None,
             cost_usd: None,
         };
+        hub.emit(&agent, EventBody::MessageAssistant { text: "ok".into() });
         hub.emit(&agent, next);
         cloud.wait_for(1).await;
     }
@@ -1894,6 +2112,7 @@ mod tests {
         assert_eq!(got[1].0, "approval");
         assert_eq!(got[1].3["event"]["payload"]["command"], "second");
         // And the phone is not paused any more.
+        hub.emit(&agent, EventBody::MessageAssistant { text: "ok".into() });
         hub.emit(&agent, completed(TurnStatus::Ok));
         cloud.wait_for(3).await;
     }
@@ -1927,7 +2146,7 @@ mod tests {
                 ts: 1,
                 body: EventBody::Error { message: "x".into() },
             };
-            enqueue(&store, &q, &e, PushKind::Error).await;
+            enqueue(&store, &q, &e, PushKind::Error, None).await;
         }
         let ap = Event {
             seq: 100,
@@ -1936,7 +2155,7 @@ mod tests {
             body: approval(None, None, None),
         };
         let started = Instant::now();
-        enqueue(&store, &q, &ap, PushKind::Approval).await;
+        enqueue(&store, &q, &ap, PushKind::Approval, None).await;
         assert!(
             started.elapsed() < Duration::from_millis(15),
             "the high queue did not wait"
@@ -1961,14 +2180,14 @@ mod tests {
             ts: 1,
             body: approval(None, None, None),
         };
-        enqueue(&store, &q, &ap(1), PushKind::Approval).await;
+        enqueue(&store, &q, &ap(1), PushKind::Approval, None).await;
         let started = Instant::now();
-        enqueue(&store, &q, &ap(2), PushKind::Approval).await;
+        enqueue(&store, &q, &ap(2), PushKind::Approval, None).await;
         assert!(started.elapsed() >= Duration::from_millis(50), "it waited");
         assert_eq!(high_rx.try_recv().unwrap().kind, PushKind::Approval);
         assert!(high_rx.try_recv().is_err(), "the second was dropped");
         // A slot that frees while it waits is used.
-        enqueue(&store, &q, &ap(3), PushKind::Approval).await;
+        enqueue(&store, &q, &ap(3), PushKind::Approval, None).await;
         let waiting = tokio::spawn({
             let (store, q) = (Arc::new(store), q);
             async move {
@@ -1978,7 +2197,7 @@ mod tests {
                     ts: 1,
                     body: approval(None, None, None),
                 };
-                enqueue(&store, &q, &e, PushKind::Approval).await;
+                enqueue(&store, &q, &e, PushKind::Approval, None).await;
             }
         });
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -2026,7 +2245,7 @@ mod tests {
         };
         for body in [form, approval, error] {
             let e = ev(body);
-            let text = build_payload(&server_ref, &e, &name);
+            let text = build_payload(&server_ref, &e, &name, None);
             assert!(text.len() <= MAX_PLAINTEXT, "{} bytes", text.len());
             let v = parse(&text);
             assert_eq!(v["seq"], 42);
@@ -2045,7 +2264,7 @@ mod tests {
             ts: 1,
             body: approval(None, None, None),
         };
-        let text = build_payload(&"s".repeat(64), &e, &"n".repeat(100));
+        let text = build_payload(&"s".repeat(64), &e, &"n".repeat(100), None);
         assert!(text.len() <= MAX_PLAINTEXT);
         let v = parse(&text);
         assert_eq!(v["event"]["kind"], "approval.requested");
@@ -2055,7 +2274,7 @@ mod tests {
             ts: 1,
             body: approval(None, None, None),
         };
-        let text = build_payload("s", &e, "n");
+        let text = build_payload("s", &e, "n", None);
         assert!(text.len() <= MAX_PLAINTEXT);
         assert_eq!(parse(&text)["event"]["kind"], "approval.requested");
     }
