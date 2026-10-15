@@ -171,6 +171,53 @@ public actor AccountClient {
         try sessions.save(nil, account: Self.sessionAccount)
     }
 
+    // MARK: join tickets ("Войти с помощью Mac", see JoinTicket)
+
+    /// Stores the hash of a new join ticket (`POST /auth/ticket`). Needs the Mac's own session. The ticket expires
+    /// after a few minutes; the answer gives its id and when it ends.
+    public func createTicket(hash: String) async throws -> (id: String, expiresAt: Date) {
+        let reply = try await send("POST", "/auth/ticket", body: TicketBody(ticketHash: hash), authenticated: true)
+        let wire = try decodeOK(TicketCreatedWire.self, reply)
+        guard let expiresAt = ShareDate.parse(wire.expiresAt) else { throw AccountError.badResponse }
+        return (wire.ticketID, expiresAt)
+    }
+
+    /// Where a join ticket of this Mac stands (`GET /auth/ticket/:id`). Claimed means a new device redeemed it: its
+    /// keys and the proof it sent come back for the Mac to check.
+    public func ticketStatus(id: String) async throws -> TicketStatus {
+        let reply = try await send("GET", "/auth/ticket/\(try Self.segment(id))", authenticated: true)
+        let wire = try decodeOK(TicketStatusWire.self, reply)
+        switch wire.status {
+        case "open": return .open
+        case "expired": return .expired
+        case "claiming": return .claiming
+        case "claimed":
+            guard let device = wire.device, let proof = wire.proof else { throw AccountError.badResponse }
+            return .claimed(device: device, proof: proof)
+        default: throw AccountError.badResponse
+        }
+    }
+
+    /// Removes a join ticket that is no longer shown (`DELETE /auth/ticket/:id`).
+    public func cancelTicket(id: String) async throws {
+        let reply = try await send("DELETE", "/auth/ticket/\(try Self.segment(id))", authenticated: true)
+        try checkOK(reply)
+    }
+
+    /// Signs this device in with a Mac's join ticket (`POST /auth/ticket/redeem`). The proof is an HMAC under the
+    /// ticket's MAC key over this device's keys, so only a device that scanned the code can make it. On success the
+    /// session is stored, as after `emailVerify`. The request is not repeated once it may have reached the server:
+    /// the ticket is spent.
+    public func redeemTicket(_ ticket: JoinTicket) async throws -> Session {
+        let device = try await signedDevice()
+        let proof = JoinProof.make(macKey: ticket.macKey, publicKey: device.publicKey, signingKey: device.signingKey)
+        let body = RedeemBody(ticket: ticket.authToken, device: device, proof: proof)
+        let reply = try await send("POST", "/auth/ticket/redeem", body: body)
+        let session = try decodeOK(Session.self, reply)
+        try storeSession(session)
+        return session
+    }
+
     // MARK: devices
 
     /// Devices of the account waiting for approval. Only an approved device may ask.
@@ -569,6 +616,36 @@ private struct EmptyBody: Encodable {}
 
 private struct EmailBody: Encodable {
     var email: String
+}
+
+private struct TicketBody: Encodable {
+    var ticketHash: String
+
+    private enum CodingKeys: String, CodingKey {
+        case ticketHash = "ticket_hash"
+    }
+}
+
+private struct TicketCreatedWire: Decodable {
+    var ticketID: String
+    var expiresAt: String
+
+    private enum CodingKeys: String, CodingKey {
+        case ticketID = "ticket_id"
+        case expiresAt = "expires_at"
+    }
+}
+
+private struct TicketStatusWire: Decodable {
+    var status: String
+    var device: ClaimedDevice?
+    var proof: String?
+}
+
+private struct RedeemBody: Encodable {
+    var ticket: String
+    var device: DeviceBlock
+    var proof: String
 }
 
 /// The device block of every sign-in request (docs/ACCOUNTS_API.md#device-identity).

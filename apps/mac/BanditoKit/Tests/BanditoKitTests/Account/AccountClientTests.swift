@@ -567,4 +567,171 @@ import Testing
         #expect(device == DeviceRef(id: "d1", approved: true))
         #expect(try jsonBody(http.requests[0])["confirm"] as? String == "RESET")
     }
+
+    // MARK: join tickets
+
+    @Test func createTicketPostsTheHashWithTheSessionAndReturnsIdAndExpiry() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let http = ScriptedHTTP([
+            "POST /auth/ticket": [
+                ScriptedReply(#"{"ok":true,"ticket_id":"tk_1","expires_at":"2026-10-15T10:05:00Z"}"#)
+            ]
+        ])
+        let client = try makeClient(http: http, sessions: sessions)
+
+        let created = try await client.createTicket(hash: "ab12")
+
+        #expect(created.id == "tk_1")
+        #expect(created.expiresAt == ISO8601DateFormatter().date(from: "2026-10-15T10:05:00Z"))
+        #expect(http.keys == ["POST /auth/ticket"])
+        #expect(try jsonBody(http.requests[0])["ticket_hash"] as? String == "ab12")
+        #expect(http.requests[0].value(forHTTPHeaderField: "Authorization") == "Bearer tok_9")
+    }
+
+    @Test func ticketStatusReadsOpenExpiredAndClaimed() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let http = ScriptedHTTP([
+            "GET /auth/ticket/tk_1": [
+                ScriptedReply(#"{"ok":true,"status":"open"}"#),
+                ScriptedReply(#"{"ok":true,"status":"expired"}"#),
+                ScriptedReply(
+                    #"{"ok":true,"status":"claimed","device":{"id":"d9","name":"Ann's iPhone","platform":"ios","public_key":"AQIDBA==","signing_key":"BQYHCA=="},"proof":"cHJvb2Y"}"#
+                ),
+            ]
+        ])
+        let client = try makeClient(http: http, sessions: sessions)
+
+        #expect(try await client.ticketStatus(id: "tk_1") == .open)
+        #expect(try await client.ticketStatus(id: "tk_1") == .expired)
+        let claimed = try await client.ticketStatus(id: "tk_1")
+        #expect(
+            claimed
+                == .claimed(
+                    device: ClaimedDevice(
+                        id: "d9", name: "Ann's iPhone", platform: "ios", publicKey: "AQIDBA==", signingKey: "BQYHCA=="),
+                    proof: "cHJvb2Y"))
+        #expect(http.keys == Array(repeating: "GET /auth/ticket/tk_1", count: 3))
+        #expect(http.requests[0].value(forHTTPHeaderField: "Authorization") == "Bearer tok_9")
+    }
+
+    @Test func ticketStatusReadsClaimingWhileTheDeviceIsBeingLinked() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let http = ScriptedHTTP([
+            "GET /auth/ticket/tk_1": [ScriptedReply(#"{"ok":true,"status":"claiming"}"#)]
+        ])
+        let client = try makeClient(http: http, sessions: sessions)
+
+        #expect(try await client.ticketStatus(id: "tk_1") == .claiming)
+    }
+
+    @Test func createTicketWithAnExistingHashIsAConflict() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let http = ScriptedHTTP([
+            "POST /auth/ticket": [ScriptedReply(#"{"ok":false,"error":"conflict"}"#, status: 409)]
+        ])
+        let client = try makeClient(http: http, sessions: sessions)
+
+        await #expect(throws: AccountError.api(code: "conflict", status: 409)) {
+            try await client.createTicket(hash: "ab12")
+        }
+    }
+
+    @Test func claimedWithoutAProofIsABadResponse() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let http = ScriptedHTTP([
+            "GET /auth/ticket/tk_1": [ScriptedReply(#"{"ok":true,"status":"claimed"}"#)]
+        ])
+        let client = try makeClient(http: http, sessions: sessions)
+
+        await #expect(throws: AccountError.badResponse) {
+            try await client.ticketStatus(id: "tk_1")
+        }
+    }
+
+    @Test func cancelTicketDeletesItWithTheSession() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let http = ScriptedHTTP([
+            "DELETE /auth/ticket/tk_1": [ScriptedReply(#"{"ok":true}"#)]
+        ])
+        let client = try makeClient(http: http, sessions: sessions)
+
+        try await client.cancelTicket(id: "tk_1")
+
+        #expect(http.keys == ["DELETE /auth/ticket/tk_1"])
+        #expect(http.requests[0].value(forHTTPHeaderField: "Authorization") == "Bearer tok_9")
+    }
+
+    @Test func ticketIdsThatAreNotSafePathSegmentsAreRejectedBeforeAnyRequest() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let http = ScriptedHTTP([:])
+        let client = try makeClient(http: http, sessions: sessions)
+
+        await #expect(throws: AccountError.invalidIdentifier) {
+            try await client.cancelTicket(id: "../devices")
+        }
+        await #expect(throws: AccountError.invalidIdentifier) {
+            try await client.ticketStatus(id: "")
+        }
+        #expect(http.requests.isEmpty)
+    }
+
+    @Test func redeemTicketSendsTheProofOfTheDeviceKeysAndStoresTheSession() async throws {
+        let identity = try makeIdentity()
+        let sessions = MemorySecretStore()
+        let ticket = JoinTicket.make(
+            macPublicKey: Curve25519.KeyAgreement.PrivateKey().publicKey, macName: "Ann's Mac")
+        let http = ScriptedHTTP([
+            "POST /auth/challenge": [ScriptedReply(#"{"ok":true,"nonce":"n-1","expires_in":300}"#)],
+            "POST /auth/ticket/redeem": [ScriptedReply(sessionBody)],
+        ])
+        let client = try makeClient(http: http, sessions: sessions, identity: identity)
+
+        let session = try await client.redeemTicket(ticket)
+
+        #expect(session.token == "tok_1")
+        #expect(session.device == DeviceRef(id: "d1", approved: true))
+        #expect(try await client.restoreSession()?.token == "tok_1")
+        #expect(http.keys == ["POST /auth/challenge", "POST /auth/ticket/redeem"])
+
+        let body = try jsonBody(http.requests[1])
+        #expect(body["ticket"] as? String == ticket.authToken)
+        #expect(http.requests[1].value(forHTTPHeaderField: "Authorization") == nil)
+        let device = try #require(body["device"] as? [String: Any])
+        #expect(device["name"] as? String == "Test Mac")
+        try expectValidLoginProof(device, identity: identity, nonce: "n-1")
+        let proof = try #require(body["proof"] as? String)
+        #expect(
+            proof
+                == JoinProof.make(
+                    macKey: ticket.macKey, publicKey: identity.publicKeyBase64, signingKey: identity.signingKeyBase64))
+        #expect(
+            JoinProof.verify(
+                proof, macKey: ticket.macKey, publicKey: identity.publicKeyBase64,
+                signingKey: identity.signingKeyBase64))
+    }
+
+    @Test func redeemTicketPassesTicketInvalidThroughAndStoresNothing() async throws {
+        let sessions = MemorySecretStore()
+        let ticket = JoinTicket.make(
+            macPublicKey: Curve25519.KeyAgreement.PrivateKey().publicKey, macName: "Ann's Mac")
+        let http = ScriptedHTTP([
+            "POST /auth/challenge": [ScriptedReply(#"{"ok":true,"nonce":"n-1","expires_in":300}"#)],
+            "POST /auth/ticket/redeem": [
+                ScriptedReply(#"{"ok":false,"error":"ticket_invalid"}"#, status: 404)
+            ],
+        ])
+        let client = try makeClient(http: http, sessions: sessions)
+
+        await #expect(throws: AccountError.api(code: "ticket_invalid", status: 404)) {
+            try await client.redeemTicket(ticket)
+        }
+        #expect(try await client.restoreSession() == nil)
+    }
 }
