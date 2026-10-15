@@ -28,6 +28,7 @@ struct ActivityScreen: View {
     var body: some View {
         NavigationStack(path: $path) {
             ActivityList(servers: servers, filter: $filter)
+                .newTaskButton()
                 .navigationTitle(L10n.Ios.Tab.activity)
                 .navigationBarTitleDisplayMode(.large)
                 .toolbarBackground(.hidden, for: .navigationBar)
@@ -86,7 +87,15 @@ struct ActivityList: View {
     }
 
     /// Nothing in the timeline: the sleeping raccoon and "All quiet for now". A filter with nothing in it says so in a line.
-    private var emptyState: some View {
+    @ViewBuilder private var emptyState: some View {
+        if filter == .all, CrewFacts.emptyNotice(servers: servers) != nil {
+            ConnectionNoticeView.forEmpty(servers: servers)
+        } else {
+            quietState
+        }
+    }
+
+    private var quietState: some View {
         VStack(spacing: BanditoSpace.s3) {
             if filter == .all {
                 CrewAvatar(
@@ -169,8 +178,9 @@ struct ActivityRow: View, Equatable {
 
     var body: some View {
         let _ = ActivityCounters.rowBodyRan()
-        HStack(alignment: .top, spacing: BanditoSpace.s3) {
+        AdaptiveRowLayout(alignment: .top) {
             CrewAvatar(name: facts.agentName, look: facts.look, mood: facts.mood, size: 36)
+        } content: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(facts.title)
                     .font(BanditoFont.display(size: titleSize, weight: 600))
@@ -183,7 +193,7 @@ struct ActivityRow: View, Equatable {
                         .multilineTextAlignment(.leading)
                 }
             }
-            Spacer(minLength: BanditoSpace.s2)
+        } trailing: {
             VStack(alignment: .trailing, spacing: 6) {
                 Text(CrewTime.date(ms: facts.ts), format: CrewTime.style(ms: facts.ts))
                     .font(BanditoFont.text(size: timeSize, weight: 400))

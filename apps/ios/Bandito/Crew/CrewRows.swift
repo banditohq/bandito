@@ -33,6 +33,7 @@ struct CrewAgentRow: View, Equatable {
     @ScaledMetric(relativeTo: .body) private var nameSize: CGFloat = 13.5
     @ScaledMetric(relativeTo: .body) private var lineSize: CGFloat = 13
     @ScaledMetric(relativeTo: .body) private var timeSize: CGFloat = 11.5
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     nonisolated static func == (lhs: CrewAgentRow, rhs: CrewAgentRow) -> Bool {
         lhs.facts == rhs.facts
@@ -40,12 +41,13 @@ struct CrewAgentRow: View, Equatable {
 
     var body: some View {
         let _ = CrewCounters.rowBodyRan()
-        HStack(alignment: .center, spacing: BanditoSpace.s3) {
+        AdaptiveRowLayout {
             CrewAvatar(name: facts.name, look: facts.look, mood: facts.mood, size: 44)
                 .overlay(alignment: .bottomTrailing) {
                     StatusDot(status: facts.status)
                         .offset(x: 3, y: 3)
                 }
+        } content: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(facts.name)
@@ -60,12 +62,16 @@ struct CrewAgentRow: View, Equatable {
                     }
                     RoleChip(text: facts.role)
                 }
-                Text(facts.preview ?? L10n.Ios.Crew.noMessages)
-                    .font(BanditoFont.text(size: lineSize, weight: facts.unread > 0 ? 500 : 400))
-                    .foregroundStyle(facts.unread > 0 ? Color.Bandito.text2 : Color.Bandito.text3)
-                    .lineLimit(1)
+                if let working = facts.working {
+                    WorkingLine(activity: working.activity, since: working.since, size: lineSize)
+                } else {
+                    Text(facts.preview ?? L10n.Ios.Crew.noMessages)
+                        .font(BanditoFont.text(size: lineSize, weight: facts.unread > 0 ? 500 : 400))
+                        .foregroundStyle(facts.unread > 0 ? Color.Bandito.text2 : Color.Bandito.text3)
+                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
+                }
             }
-            Spacer(minLength: BanditoSpace.s2)
+        } trailing: {
             VStack(alignment: .trailing, spacing: 5) {
                 Text(CrewTime.date(ms: facts.activityMs), format: CrewTime.style(ms: facts.activityMs))
                     .font(BanditoFont.text(size: timeSize, weight: 400))
@@ -83,25 +89,107 @@ struct CrewAgentRow: View, Equatable {
         .accessibilityValue(accessibilityValue)
     }
 
-    /// Role, status word, unread count: what a VoiceOver user hears after the name.
+    /// Role, status word, what the turn does now, unread count: what a VoiceOver user hears after the name. The elapsed
+    /// time is left out: it would be read out again every second.
     private var accessibilityValue: String {
         var parts = [facts.role, facts.status.label]
+        if let working = facts.working { parts.append(working.activity.title) }
         if facts.unread > 0 { parts.append(L10n.Ios.Crew.unread(count: facts.unread)) }
         if facts.isLead { parts.append(L10n.Ios.Crew.lead) }
         return parts.joined(separator: ", ")
     }
 }
 
-/// A waiting agent: its avatar pulses in signal, one line says what it waits for, an arrow opens its chat.
+/// What a running turn does now, with its live elapsed time: "Запускает команду · 1:12". One line, the title is cut at its
+/// tail; at accessibility sizes the time goes under the title and the title wraps. The time is hidden from VoiceOver (it
+/// would be read every second); the title is spoken.
+struct WorkingLine: View {
+    let activity: AgentActivity
+    let since: Date
+    /// The size of the line, already scaled by the caller.
+    let size: CGFloat
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let stacked = typeSize.isAccessibilitySize
+        let line = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))
+        line {
+            Text(activity.title)
+                .font(BanditoFont.text(size: size, weight: 500))
+                .foregroundStyle(Color.Bandito.ok)
+                .lineLimit(stacked ? nil : 1)
+            HStack(spacing: 4) {
+                Text("·")
+                    .font(BanditoFont.text(size: size, weight: 500))
+                    .foregroundStyle(Color.Bandito.text3)
+                Text(timerInterval: since...Date.distantFuture, countsDown: false)
+                    .font(BanditoFont.mono(size: size))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityHidden(true)
+        }
+    }
+}
+
+/// A waiting agent: its avatar pulses in signal, one line says what it waits for, an arrow opens its chat. An approval
+/// also has the two answers under the line. The top part is the button that opens the chat; the answers are its siblings
+/// in the same card, so a tap on an answer never opens the chat.
 struct NeedsYouCard: View {
     let facts: CrewAgentFacts
+    /// The approval the two answers send; nil for a form, a question or a connect request (no answers, the card only opens).
+    var approval: InboxItem?
+    /// The answer to `approval` is on its way: the main answer shows a spinner.
+    var answering = false
+    /// Another card's answer is on its way: both answers are off.
+    var disabled = false
+    /// Why the last answer did not go through, under the answers.
+    var problem: String?
+    let onOpen: () -> Void
+    var onAllow: () -> Void = {}
+    var onDeny: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .body) private var nameSize: CGFloat = 13.5
     @ScaledMetric(relativeTo: .body) private var lineSize: CGFloat = 14
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(alignment: .center, spacing: BanditoSpace.s3) {
+        VStack(alignment: .leading, spacing: BanditoSpace.s3) {
+            Button(action: onOpen) {
+                top
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(L10n.Ios.Crew.openChat(name: facts.name))
+
+            if approval != nil {
+                AnswerPair(
+                    quiet: L10n.Approval.deny, main: L10n.Approval.approve,
+                    quietID: "crew.card.deny", mainID: "crew.card.approve",
+                    disabled: disabled || answering, mainBusy: answering,
+                    quietAction: onDeny, mainAction: onAllow
+                )
+                if let problem {
+                    Text(problem)
+                        .font(BanditoFont.text(size: 12, weight: 500))
+                        .foregroundStyle(Color.Bandito.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .padding(BanditoSpace.s3)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.Bandito.surface1))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.Bandito.text.opacity(0.08), lineWidth: 1))
+    }
+
+    private var top: some View {
+        AdaptiveRowLayout {
             CrewAvatar(name: facts.name, look: facts.look, mood: .needsYou, size: 44)
                 .overlay {
                     if !reduceMotion {
@@ -109,18 +197,21 @@ struct NeedsYouCard: View {
                             .accessibilityHidden(true)
                     }
                 }
+        } content: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(facts.name)
                     .font(BanditoFont.display(size: nameSize, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(2)
-                // No line limit: at large type sizes the request wraps, it is not cut.
+                // No line limit for a request: at large type sizes it wraps, it is not cut. A question is three lines at most
+                // (four at accessibility sizes).
                 Text(waitingLine)
                     .font(BanditoFont.text(size: lineSize, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .multilineTextAlignment(.leading)
+                    .lineLimit(isQuestion ? (typeSize.isAccessibilitySize ? 4 : 3) : nil)
             }
-            Spacer(minLength: BanditoSpace.s2)
+        } trailing: {
             Image(systemName: "arrow.right")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text)
@@ -129,18 +220,23 @@ struct NeedsYouCard: View {
                 .overlay(Circle().stroke(Color.Bandito.text.opacity(0.14), lineWidth: 1))
                 .accessibilityHidden(true)
         }
-        .padding(BanditoSpace.s3)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.Bandito.surface1))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.Bandito.text.opacity(0.08), lineWidth: 1))
         .accessibilityElement(children: .combine)
-        .accessibilityHint(L10n.Ios.Crew.openChat(name: facts.name))
     }
 
+    /// The question the agent asks, when it asks one in text.
+    private var isQuestion: Bool {
+        if case .answer(let question?) = facts.waiting { return true }
+        return false
+    }
+
+    /// The question itself when the agent asked one; else what it waits for, in words.
     private var waitingLine: String {
         switch facts.waiting {
         case .approval(let title): L10n.Ios.Crew.wantsToRun(name: facts.name, command: title)
         case .form: L10n.Ios.Crew.waitingForm(name: facts.name)
-        case .answer, nil: L10n.Ios.Crew.waitingAnswer(name: facts.name)
+        case .connect(let service): L10n.Ios.Inbox.connect(name: facts.name, service: service)
+        case .answer(let question?): question
+        case .answer(nil), nil: L10n.Ios.Crew.waitingAnswer(name: facts.name)
         }
     }
 }

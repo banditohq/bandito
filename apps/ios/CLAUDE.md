@@ -13,7 +13,7 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
   `~/.cache/bandito-ios/<checkout>`; the log of a failed build is there too.
 - Tests: `xcodebuild -project apps/ios/BanditoIOS.xcodeproj -scheme BanditoIOS -destination 'platform=iOS Simulator,id=<udid>' -derivedDataPath ~/.cache/bandito-ios/<checkout> -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO "BUILD_DIR=<same>/Build/Products" "OBJROOT=<same>/Build/Intermediates.noindex" test`. Swift Testing, hosted in the app (`@testable import Bandito`: the module is named after the product).
 - Screenshots: `bash apps/ios/scripts/shot.sh <out.png> [launch args]` boots the shared simulator headless, installs, launches, and writes `<out>.png` and `<out>_s.png` (800 px). `-demo` shows the demo team.
-- The simulator is one, shared: `D7E3834B-1BA6-4071-9131-9FDEDE135C81` (iPhone 17 Pro). Do not create others. At the end of a task: `xcrun simctl shutdown all`.
+- The simulator is one, shared: `D7E3834B-1BA6-4071-9131-9FDEDE135C81` (iPhone 17 Pro). Do not create others. Never boot or shut down a simulator another agent may use: `simctl shutdown all` only when nobody else is working.
 - The owner's Mac may be asleep: never touch `~/.bandito`, `/Applications/Bandito.app` or anything outside the simulator.
   Interaction with the simulator is through XCUITest; screenshots through `xcrun simctl io`. Close Simulator.app when done.
 - After a Swift build: `git checkout -- apps/mac/BanditoKit/Package.resolved` (the build rewrites it).
@@ -90,10 +90,58 @@ The screen every day. Read the rules before changing it; each came from the Mac'
 - Debug launch arguments: `-chat <agent>` (Crew), `-chat-draft <text>`, `-chat-send <text>`, `-chat-top`, `-chat-row <id part>`.
   The demo agents answer (`Demo/DemoChatScript.swift`: commands, a streamed reply, an approval for Forge, two buttons).
 
+## New task (`NewTask/`)
+
+- The floating button is on the roots of Crew and Activity only (environment `newTaskAction`, set by RootView) and only
+  when some server has an agent. It is the main button of the design system: cream with the orange dot, the floating
+  shadow. A tap opens the sheet; a press held 0.35 s opens it with the dictation on (it fires while the finger is down;
+  the flags reset through `@GestureState`, so the next tap is never swallowed).
+- `NewTaskRules` (pure, tested) orders the agents (last used first), says when Send is enabled and whether the
+  microphone is offered. Sending opens the agent's chat with the task (`LinksAndNewTaskUITests`).
+- The app icon's actions (`QuickActions.swift`: New task, Inbox) are set in code and read by a small app delegate and a
+  scene delegate; `bandito://` links keep working through the scene delegate. With Face ID lock on, an action waits for
+  the unlock.
+
+## Crew details
+
+- "Waits for you" shows at most two cards (`CrewWaitingSplit`, from `InboxRules`) and "N more — in the Inbox". An
+  approval is answered right on the card through `InboxAnswer` (Face ID when the lock asks for it, as in the Inbox).
+- A running agent shows what it does now and for how long (`WorkingLine`, `AgentActivity.current(running:)`), in the row
+  and the chat header; the timer is `Text(timerInterval:)`, so the list does not redraw every second.
+- Rows switch to a stacked layout at accessibility text sizes (`AdaptiveRowLayout`); button pairs use `AnswerPair`
+  (`ViewThatFits`: side by side, else stacked). Previews show plain text (`MessageBlocks.plainText`), not markdown.
+
+## Live Activities (`LiveActivity/`, `Shared/TurnActivity*.swift`)
+
+- A turn that runs 30 seconds gets an activity (agent avatar, "what it does now", time, Stop); it ends on Done, Needs you
+  or a failure. `TurnActivityRules` (pure, `TurnActivityRulesTests`) decides; `TurnActivities.shared` applies it to
+  ActivityKit and is fed by `IOSNotifications.attach` (`ingest`), RootView (foreground, servers, the setting).
+- One activity per (server, agent), three running at most; `pushType: nil` (the app updates it itself, so a request needs
+  the foreground: a turn that passes 30 s in the background gets its activity when the app returns). `doing` changes at most
+  every 5 s. Ended ones stay 15 minutes (an hour on "needs you"). Orphans of a killed run are swept 15 s after launch.
+- Stop is `StopTurnIntent` (a `LiveActivityIntent`, runs in the app via `TurnStopRelay`), no connection leaves the activity and says so.
+- The extension draws only (`TurnActivityViews.swift`): static raccoon, no animation. Do not put a `BanditoFont` font on
+  `Text(timerInterval:)`: the system archives that text and the extension crashes (the timer uses the system's mono font).
+- Debug: `-demo -live-demo` starts Forge's activity, "Done" after 20 s (`-live-demo-seconds N`). On the Simulator the first
+  request asks the system's consent on the lock screen ("Always allow"); the Island's pixels are not in `simctl` screenshots.
+## The share extension (`BanditoShare/`)
+
+- `ShareViewController` hosts the SwiftUI `ShareView`; `ShareModel` is its state. The agents come from the widget snapshot's
+  `directory` (so no server list of its own). The extension writes `ShareInbox` and opens `bandito://share/<id>` through the
+  responder chain (no `UIApplication.shared` in an extension); it never calls a server and never reads the Keychain.
+- The app side is `Share/ShareImporter.swift` (drained on a `.share` link, on `.active`, when servers load and when one
+  connects; not while Face ID covers the app). Remove a task only after `ChatOutbox.enqueue`.
+- `ShareView` and `ShareModel` are also compiled into the app for `-share-preview` (DEBUG; `-share-empty` for no agents).
+- `NSExtensionActivationSupportsImageWithMaxCount` is 4: with 5 or more photos selected the system does not offer Bandito at
+  all (the rule is all-or-nothing, the extension cannot take the first four). Text and one link have no such limit.
+- The extension always ends on the saved screen (a check, "Done"): opening the app from it does not work on iOS 18+, so it
+  leaves a local reminder (`share-<id>`, only if notifications are allowed) whose press opens `bandito://share/<id>`.
+  The importer takes the reminder down. A task is dropped (with a toast) when its agent is gone after one list refresh, or
+  after 5 failed uploads (`SharedTask.attempts`); uploaded pictures are kept in `task.json` and not sent twice.
+- The extension has a ~120 MB memory limit: pictures are read one at a time and shrunk with ImageIO (`ShareLoader`).
+
 ## Known gaps before a release
 
-- `AppIcon` is `brand/png/icon-1024.png` with an alpha channel; App Store Connect rejects an icon with alpha: flatten it
-  before the first upload.
 - `bandito://pair…` opens the connect sheet (shown and confirmed before anything is sent); the other `bandito://` links (`inbox`, `crew`, `agent/<server>/<agent>`) are read by `BanditoLink` (`Shared/WidgetSnapshot.swift`) and opened in `RootView`: the tab switches, and an agent opens its chat in the Crew (`CrewFocus`). A notification's press and the Inbox sheet's chat button take the same way.
 - Not in the chat yet: reactions, reply quotes and mentions (the Mac has them), pictures that other clients sent (the daemon's file route is not reachable over `.direct`, so only pictures this phone sent show; others are a tile with the name), and a thread cache for a cold start without a connection (threads live in memory).
 - The agent card (`Agent/AgentDetailView.swift`) and the creation sheet (`Agent/NewAgentSheet.swift`, `OneAgentForm.swift`)

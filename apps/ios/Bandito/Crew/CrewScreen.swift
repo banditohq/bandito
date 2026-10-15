@@ -2,6 +2,7 @@ import BanditoDesign
 import BanditoKit
 import BanditoL10n
 import SwiftUI
+import UIKit
 
 /// Crew, the home tab: the agents that wait for the person on top, then the team. The server switcher sits in the title
 /// area under the large title (a menu when there is more than one server).
@@ -9,6 +10,8 @@ struct CrewScreen: View {
     let servers: [ServerModel]
     let settings: IOSSettings
     let onConnect: () -> Void
+    /// Switches to the Inbox tab (the "Ещё N" line of the waiting agents).
+    let onShowInbox: () -> Void
     /// An agent a `bandito://agent/...` link asked for: the screen opens its row, as a tap on the row does.
     var focus: CrewFocus?
 
@@ -29,18 +32,20 @@ struct CrewScreen: View {
             Group {
                 if let server = currentServer {
                     CrewList(
-                        server: server, servers: servers,
+                        server: server, servers: servers, riskyNeedsFaceID: settings.riskyNeedsFaceID,
                         // The path is reset here, not on a change of the chosen server: a widget's link sets both.
                         onChoose: { chosenServerID = $0; path = NavigationPath() },
                         open: { path.append($0) },
                         details: { path.append(AgentDetailRoute(agentID: $0)) },
-                        onCreate: { newAgent = NewAgentStart(tab: .teams) }
+                        onCreate: { newAgent = NewAgentStart(tab: .teams) },
+                        showInbox: onShowInbox
                     )
                     .id(server.id)
                 } else {
                     WelcomeView(onConnect: onConnect)
                 }
             }
+            .newTaskButton()
             .navigationTitle(L10n.Ios.Tab.crew)
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -157,6 +162,10 @@ struct AgentDetailRoute: Hashable {
 struct CrewList: View {
     let server: ServerModel
     let servers: [ServerModel]
+    /// The setting: a risky approval asks for Face ID before it is allowed (the rule is `InboxAnswer`'s, as in the Inbox).
+    let riskyNeedsFaceID: Bool
+    /// The owner's check for risky approvals (Face ID, else the passcode).
+    var authenticator: any BiometricAuthenticating = DeviceAuthenticator()
     let onChoose: (UUID) -> Void
     /// Opens an agent's chat (the screen's navigation path).
     let open: (CrewRoute) -> Void
@@ -164,31 +173,79 @@ struct CrewList: View {
     let details: (String) -> Void
     /// Opens the sheet that makes an agent (the empty state's button).
     let onCreate: () -> Void
+    /// Switches to the Inbox tab, where every waiting item is.
+    let showInbox: () -> Void
 
     @State private var pinned: [String] = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The toast after an answer ("Allowed — Forge goes on"), set by RootView.
+    @Environment(\.answerToast) private var answerToast
+    /// The Inbox items answered from this list, hidden at once while the server takes the answer.
+    @State private var answered: Set<String> = []
+    /// The item whose answer is on its way: its card shows a spinner and every answer is off until it ends.
+    @State private var answering: String?
+    /// Why an answer did not go through, by item: shown under its card.
+    @State private var problems: [String: String] = [:]
 
     var body: some View {
-        let rows = CrewFacts.build(server: server, pinned: pinned)
+        let rows = CrewFacts.build(server: server, pinned: pinned, answered: answered)
         let waiting = rows.filter { $0.waiting != nil }
+        let approvals = CrewFacts.waitingItems(of: server, answered: answered)
+        let notice = CrewFacts.notice(
+            state: server.state, fromCache: server.agentsFromCache, disabled: server.config.disabled)
         List {
             serverSwitch
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 0, leading: BanditoSpace.s5, bottom: 0, trailing: BanditoSpace.s5))
                 .listRowSeparator(.hidden)
 
+            if !rows.isEmpty, notice == .offline || notice == .offlineWithCache {
+                offlineLine
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 0, leading: BanditoSpace.s5, bottom: 0, trailing: BanditoSpace.s5))
+                    .listRowSeparator(.hidden)
+            }
+
             if !waiting.isEmpty {
+                let split = CrewWaitingSplit.split(waiting)
                 Section {
-                    ForEach(waiting) { facts in
-                        // A button, not a link: the card is full width, with no disclosure chevron of the list.
+                    ForEach(split.shown) { facts in
+                        let item = CrewFacts.approvalItem(approvals[facts.id])
+                        // The card's top is a button that opens the chat; its answers are beside it, not inside it.
+                        NeedsYouCard(
+                            facts: facts, approval: item,
+                            answering: item != nil && answering == item?.id,
+                            disabled: answering != nil,
+                            problem: item.flatMap { problems[$0.id] },
+                            onOpen: { open(CrewRoute(agentID: facts.id, name: facts.name)) },
+                            onAllow: { if let item { Task { await answer(item, allow: true) } } },
+                            onDeny: { if let item { Task { await answer(item, allow: false) } } }
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(cardInsets)
+                    }
+                    if split.more > 0 {
                         Button {
-                            open(CrewRoute(agentID: facts.id, name: facts.name))
+                            showInbox()
                         } label: {
-                            NeedsYouCard(facts: facts)
-                                .padding(.vertical, BanditoSpace.s1)
+                            HStack(spacing: BanditoSpace.s2) {
+                                Text(L10n.Ios.Crew.moreInInbox(count: split.more))
+                                    .font(BanditoFont.text(size: 14, weight: 500))
+                                    .foregroundStyle(Color.Bandito.signal)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(Color.Bandito.signal)
+                                    .accessibilityHidden(true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
+                        .listRowInsets(cardInsets)
                     }
                 } header: {
                     CrewSectionLabel(title: L10n.Ios.Crew.needsYou, waiting: true)
@@ -197,7 +254,7 @@ struct CrewList: View {
 
             if rows.isEmpty {
                 Section {
-                    emptyState
+                    emptyState(notice)
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
@@ -249,6 +306,52 @@ struct CrewList: View {
         }
     }
 
+    /// Sends the person's answer to an approval, as the Inbox does (`InboxAnswer`: a risky one waits for Face ID, and a
+    /// cancelled check sends nothing). One answer at a time: a second tap meanwhile does nothing. A sent answer hides the
+    /// item with the brand's ease (none with Reduce Motion) and gives a haptic, success to allow and warning to refuse.
+    private func answer(_ item: InboxItem, allow: Bool) async {
+        guard answering == nil else { return }
+        answering = item.id
+        problems[item.id] = nil
+        defer { answering = nil }
+        do {
+            let outcome: InboxAnswer.Outcome
+            if allow {
+                outcome = try await InboxAnswer.allow(
+                    item, server: server, remember: false, riskyNeedsFaceID: riskyNeedsFaceID,
+                    authenticator: authenticator, reason: L10n.Ios.Inbox.faceIDReason)
+            } else {
+                try await InboxAnswer.deny(item, server: server)
+                outcome = .sent
+            }
+            switch outcome {
+            case .sent:
+                UINotificationFeedbackGenerator().notificationOccurred(allow ? .success : .warning)
+                let text = allow
+                    ? L10n.Ios.AnswerToast.allowed(name: item.agentName)
+                    : L10n.Ios.AnswerToast.denied(name: item.agentName)
+                answerToast?.show(AnswerToastMessage(text: text, allowed: allow))
+                withAnimation(reduceMotion ? nil : BanditoMotion.ease) {
+                    _ = answered.insert(item.id)
+                }
+            case .notConfirmed:
+                // The person cancelled the check: nothing was sent, and nothing is said.
+                break
+            case .cannotConfirm:
+                problems[item.id] = L10n.Ios.Settings.Security.unavailable
+            case .failed:
+                problems[item.id] = L10n.Ios.Inbox.failed
+            }
+        } catch {
+            problems[item.id] = L10n.Ios.Inbox.failed
+        }
+    }
+
+    /// The insets of a waiting card or its line: one step of `s1` above and below, so two cards are `s2` apart.
+    private var cardInsets: EdgeInsets {
+        EdgeInsets(top: BanditoSpace.s1, leading: BanditoSpace.s4, bottom: BanditoSpace.s1, trailing: BanditoSpace.s4)
+    }
+
     /// The server's name under the large title: a menu to choose another server when there are several.
     @ViewBuilder private var serverSwitch: some View {
         let label = HStack(spacing: BanditoSpace.s2) {
@@ -282,8 +385,50 @@ struct CrewList: View {
         }
     }
 
+    /// One quiet line over a list that is not live (the saved copy of an earlier list, or one that the connection lost).
+    private var offlineLine: some View {
+        HStack(spacing: BanditoSpace.s2) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.Bandito.text3)
+                .accessibilityHidden(true)
+            Text(L10n.Ios.Connection.cachedLine)
+                .font(BanditoFont.text(size: 13))
+                .foregroundStyle(Color.Bandito.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: BanditoSpace.s2)
+            Button {
+                retry()
+            } label: {
+                Text(L10n.Ios.Connection.retry)
+                    .font(BanditoFont.text(size: 13, weight: 500))
+                    .foregroundStyle(Color.Bandito.signal)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("connection.retry")
+        }
+        .padding(.vertical, BanditoSpace.s1)
+    }
+
+    private func retry() {
+        Task { await server.connect() }
+    }
+
+    /// No agent shown. Connected: a sleeping raccoon, one line, and the action that opens the creation sheet. Not
+    /// connected the list says nothing about the server's team, so it says so (`ConnectionNoticeView`).
+    @ViewBuilder private func emptyState(_ notice: CrewConnectionNotice) -> some View {
+        switch notice {
+        case .connecting:
+            ConnectionNoticeView(kind: .connecting, serverName: server.config.name, retry: retry)
+        case .offline, .offlineWithCache:
+            ConnectionNoticeView(kind: .offline, serverName: server.config.name, retry: retry)
+        case .none:
+            createState
+        }
+    }
+
     /// No agent on this server: a sleeping raccoon, one line, and the action that opens the creation sheet.
-    private var emptyState: some View {
+    private var createState: some View {
         VStack(spacing: BanditoSpace.s3) {
             CrewAvatar(
                 name: "", look: CrewLook(color: .peach, face: .sleeping, customHex: nil), mood: .sleeping, size: 72)

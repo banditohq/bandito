@@ -58,6 +58,50 @@ func eventPage(_ seqs: ClosedRange<Int>) -> String {
 
 @MainActor
 @Suite struct ServerModelTests {
+    @Test func aSavedAgentListFillsAnEmptyModelAndStaysUnread() {
+        let (model, _) = makeModel([])
+        model.seedCachedAgents([Agent(id: "a1", name: "Forge", runtime: .claude, cwd: "/work")])
+        #expect(model.agents.map(\.id) == ["a1"])
+        #expect(model.agentsFromCache)
+        #expect(model.agentsReadAt == nil)
+        model.seedCachedAgents([])
+        #expect(model.agents.map(\.id) == ["a1"])
+    }
+
+    @Test func aSavedAgentKeepsNoStaleStatusOrApprovals() {
+        let (model, _) = makeModel([])
+        var saved = Agent(id: "a1", name: "Forge", runtime: .claude, cwd: "/work")
+        saved.status = .needsYou
+        saved.pendingApprovals = 2
+        saved.pendingApprovalIds = ["p1", "p2"]
+        model.seedCachedAgents([saved])
+        #expect(model.agents.first?.status == nil)
+        #expect(model.agents.first?.pendingApprovals == 0)
+        #expect(model.agents.first?.pendingApprovalIds.isEmpty == true)
+    }
+
+    @Test func aSavedAgentListNeverReplacesOneThatWasRead() async throws {
+        let fake = FakeTransport(handlers: daemonHandlers())
+        let (model, _) = makeModel([fake])
+        await model.connect()
+        try await eventually { model.agentsReadAt != nil }
+        model.seedCachedAgents([Agent(id: "old", name: "Old", runtime: .claude, cwd: "/work")])
+        #expect(model.agents.isEmpty)
+        #expect(!model.agentsFromCache)
+        await model.disconnect()
+    }
+
+    @Test func readingTheListFromTheDaemonReplacesTheSavedOne() async throws {
+        let fake = FakeTransport(handlers: daemonHandlers())
+        let (model, _) = makeModel([fake])
+        model.seedCachedAgents([Agent(id: "old", name: "Old", runtime: .claude, cwd: "/work")])
+        await model.connect()
+        try await eventually { model.agentsReadAt != nil }
+        #expect(model.agents.isEmpty)
+        #expect(!model.agentsFromCache)
+        await model.disconnect()
+    }
+
     @Test func firstConnectSubscribesOnlyToLiveEvents() async throws {
         let fake = FakeTransport(handlers: daemonHandlers(lastSeq: 42))
         let (model, _) = makeModel([fake])
@@ -415,6 +459,40 @@ func eventPage(_ seqs: ClosedRange<Int>) -> String {
         await stale.value
         #expect(model.state == .connected)
         await model.disconnect()
+    }
+
+    /// `agentsListedAt` is the time of the last SUCCESSFUL read: a failed read moves `agentsReadAt` but not this, and
+    /// `refreshAgentsNow` says false for it.
+    @Test func aFailedReadIsNotAListedList() async throws {
+        let failing = Switch(on: false)
+        let daemon = AgentListDaemon("[]")
+        let fake = FakeTransport(
+            handlers: daemonHandlers(lastSeq: 42, extra: ["agents.list": daemon.handler()]),
+            errors: ["agents.list": { _ in failing.isOn ? #"{"code":-32000,"message":"boom"}"# : nil }])
+        let (model, _) = makeModel([fake], reconnectDelay: .milliseconds(10))
+        #expect(model.agentsListedAt == nil)
+        await model.connect()
+        model.agentsRetryDelay = .seconds(600)
+        let listed = try #require(model.agentsListedAt, "the connect read the list")
+
+        failing.set(true)
+        let failedRead = await model.refreshAgentsNow()
+        #expect(!failedRead, "a read that failed does not count")
+        #expect(model.agentsListedAt == listed, "the time of the last good read stays")
+        #expect(model.agentsReadAt != nil)
+
+        failing.set(false)
+        let goodRead = await model.refreshAgentsNow()
+        #expect(goodRead)
+        #expect(try #require(model.agentsListedAt) > listed)
+        await model.disconnect()
+    }
+
+    @Test func refreshWithoutAConnectionIsNotARead() async {
+        let (model, _) = makeModel([FakeTransport(handlers: daemonHandlers())])
+        let read = await model.refreshAgentsNow()
+        #expect(!read)
+        #expect(model.agentsListedAt == nil)
     }
 }
 

@@ -39,6 +39,24 @@ import Testing
         #expect(CrewPreview.line("  \n ") == nil)
         #expect(CrewPreview.line(nil) == nil)
     }
+
+    @Test func markdownMarksAreLeftOut() {
+        #expect(CrewPreview.line("The queue now **resends** a `msg`") == "The queue now resends a msg")
+        let heading = CrewPreview.line("# Title\n\n- one\n- two")
+        #expect(heading?.contains("#") == false)
+        #expect(heading?.contains("\n") == false)
+    }
+
+    /// A cut in the middle of `**bold` or a code span leaves no stray marks at the word ends.
+    @Test func aCutInsideEmphasisLeavesNoStars() {
+        #expect(CrewPreview.line("Done, see **the logs and the") == "Done, see the logs and the")
+        #expect(CrewPreview.line("Run `make` and _wait") == "Run make and wait")
+    }
+
+    @Test func emptyTextIsNoLine() {
+        #expect(CrewPreview.line("") == nil)
+        #expect(CrewPreview.line("   ") == nil)
+    }
 }
 
 @Suite struct CrewMoodTests {
@@ -88,6 +106,27 @@ import Testing
     }
 }
 
+/// The Crew shows two waiting cards; the rest is counted in one line.
+@Suite struct CrewWaitingSplitTests {
+    @Test func noneWaitingShowsNoCardAndNoLine() {
+        let split = CrewWaitingSplit.split([String](), limit: 2)
+        #expect(split.shown.isEmpty)
+        #expect(split.more == 0)
+    }
+
+    @Test func twoWaitingShowTwoCardsAndNoLine() {
+        let split = CrewWaitingSplit.split(["a", "b"], limit: 2)
+        #expect(split.shown == ["a", "b"])
+        #expect(split.more == 0)
+    }
+
+    @Test func threeWaitingShowTwoCardsAndOneMore() {
+        let split = CrewWaitingSplit.split(["a", "b", "c"])
+        #expect(split.shown == ["a", "b"])
+        #expect(split.more == 1)
+    }
+}
+
 @MainActor
 @Suite struct CrewFactsTests {
     @Test func theDemoTeamShowsWhatEachAgentWaitsFor() async {
@@ -95,8 +134,8 @@ import Testing
         let rows = CrewFacts.build(server: server, pinned: [])
         #expect(rows.count == IOSDemo.team.count)
         #expect(rows.first { $0.name == "Forge" }?.waiting == .approval(title: "git push origin feat/ios-crew"))
-        #expect(rows.first { $0.name == "Watch" }?.waiting == .answer)
-        #expect(rows.first { $0.name == "Quill" }?.waiting == nil)
+        #expect(rows.first { $0.name == "Watch" }?.waiting == .answer(question: "The server disk is 81% full. Should I clear the cache?"))
+        #expect(rows.first { $0.name == "Quill" }?.waiting == .form)
         #expect(rows.first { $0.name == "Scout" }?.waiting == nil)
         await server.disconnect()
     }
@@ -122,6 +161,73 @@ import Testing
         #expect(rows.first { $0.name == "Scout" }?.preview == IOSDemo.unreadReply)
         #expect(rows.first { $0.name == "Watch" }?.preview == "The server disk is 81% full. Should I clear the cache?")
         #expect(rows.allSatisfy { $0.preview != nil })
+        await server.disconnect()
+    }
+
+    /// An approval the daemon counts but whose row is not loaded is not in the Inbox, so the agent does not wait for it.
+    @Test func anApprovalWithoutItsRowIsNotWaiting() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "waiting-unloaded"
+        var agent = Agent(
+            id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+            createdAt: 1, updatedAt: 1, status: .working)
+        agent.pendingApprovalIds = ["approval-unloaded"]
+        agent.reportsPendingApprovalIds = true
+        server.installSyntheticAgent(agent, items: [])
+        #expect(server.needsPerson(id))
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.waiting == nil)
+        await server.disconnect()
+    }
+
+    /// A service the agent asks to connect is waiting for the person, as in the Inbox.
+    @Test func aConnectRequestIsWaiting() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "waiting-connect"
+        server.installSyntheticAgent(
+            Agent(
+                id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: 1, updatedAt: 1, status: .working),
+            items: [.connect(ConnectRow(requestId: "c1", service: "GitHub", ts: 1))])
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.waiting == .connect(service: "GitHub"))
+        await server.disconnect()
+    }
+
+    /// An open form counts as waiting even when the agent is in error, not "needs you" (the Inbox lists it too).
+    @Test func anOpenFormOnAnAgentInErrorIsWaiting() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "waiting-form"
+        server.installSyntheticAgent(
+            Agent(
+                id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: 1, updatedAt: 1, status: .error),
+            items: [.form(FormRow(formId: "f1", spec: FormSpec(title: "Deploy?", fields: []), ts: 1))])
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.waiting == .form)
+        await server.disconnect()
+    }
+
+    /// An agent that needs the person with no approval or form asks its question: the card shows the text, Markdown-free.
+    @Test func anAgentThatNeedsYouWaitsWithItsQuestion() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "waiting-question"
+        server.installSyntheticAgent(
+            Agent(
+                id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: 1, updatedAt: 1, status: .needsYou),
+            items: [.assistant(id: "s1", text: "Should I push **main**?", ts: 1)])
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.waiting
+            == .answer(question: "Should I push main?"))
+        await server.disconnect()
+    }
+
+    @Test func anIdleAgentWithNothingPendingWaitsForNothing() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "waiting-none"
+        server.installSyntheticAgent(
+            Agent(
+                id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: 1, updatedAt: 1, status: .idle),
+            items: [.assistant(id: "s1", text: "Done.", ts: 1)])
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.waiting == nil)
         await server.disconnect()
     }
 
@@ -153,5 +259,102 @@ import Testing
         #expect(focus.isListed(in: [server]))
         #expect(CrewFocus(serverID: server.id, agentID: "no-such", request: UUID()).isListed(in: [server]) == false)
         await server.disconnect()
+    }
+}
+
+/// The card of a waiting agent answers its approval: the answered one leaves, the agent's next one is shown, and only an
+/// approval gets the two answers (a form, a question or a connect request keeps the card that opens the chat).
+@MainActor @Suite struct CrewAnswerCardTests {
+    /// The demo's Forge has two approvals: the risky push first, then the test run.
+    @Test func anAnsweredApprovalLeavesTheAgentsNextOne() async {
+        let server = await IOSDemo.start()
+        #expect(
+            CrewFacts.build(server: server, pinned: []).first { $0.name == "Forge" }?.waiting
+                == .approval(title: "git push origin feat/ios-crew"))
+        let answered: Set<String> = ["approval-ios-demo-approval-1"]
+        let rows = CrewFacts.build(server: server, pinned: [], answered: answered)
+        #expect(rows.first { $0.name == "Forge" }?.waiting == .approval(title: "swift test -q"))
+        let forge = server.sortedAgents.first { $0.name == "Forge" }?.id ?? ""
+        #expect(CrewFacts.waitingItems(of: server, answered: answered)[forge]?.id == "approval-ios-demo-approval-2")
+        await server.disconnect()
+    }
+
+    @Test func onlyAnApprovalGetsTheTwoAnswers() async {
+        let server = await IOSDemo.start()
+        let items = CrewFacts.waitingItems(of: server)
+        func agentID(_ name: String) -> String { server.sortedAgents.first { $0.name == name }?.id ?? "" }
+        #expect(CrewFacts.approvalItem(items[agentID("Forge")])?.id == "approval-ios-demo-approval-1")
+        #expect(CrewFacts.approvalItem(items[agentID("Quill")]) == nil)
+        #expect(CrewFacts.approvalItem(items[agentID("Watch")]) == nil)
+        #expect(CrewFacts.approvalItem(items[agentID("Scout")]) == nil)
+        await server.disconnect()
+    }
+}
+
+/// What a running turn does now, on the Crew row and in the chat header: the newest unfinished tool decides, and the
+/// start of the turn is the timer's.
+@MainActor
+@Suite struct CrewWorkingTests {
+    private func waitUntil(_ limit: Int = 100, _ done: () -> Bool) async {
+        var waited = 0
+        while !done(), waited < limit {
+            try? await Task.sleep(for: .milliseconds(10))
+            waited += 1
+        }
+    }
+
+    private func installAgent(_ server: ServerModel, id: String) {
+        server.installSyntheticAgent(
+            Agent(
+                id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: 1, updatedAt: 1, status: .working),
+            items: [])
+    }
+
+    @Test func aRunningCommandOfATurnReadsAsRunningACommand() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "working-command"
+        installAgent(server, id: id)
+        server.apply(Event(seq: 0, agentId: id, ts: 1_700_000_000_000, body: .turnStarted(turnId: "t1", source: .user)))
+        server.apply(Event(
+            seq: 0, agentId: id, ts: 1_700_000_001_000,
+            body: .toolCall(callId: "c1", tool: "Bash", title: "swift test", input: .null)))
+        await waitUntil { CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working != nil }
+        let working = CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working
+        #expect(working?.activity == .command)
+        #expect(working?.since == CrewTime.date(ms: 1_700_000_000_000))
+        await server.disconnect()
+    }
+
+    @Test func aTurnWithoutAStartOrWithNoTurnHasNoWorking() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "working-none"
+        installAgent(server, id: id)
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working == nil)
+        server.apply(Event(seq: 0, agentId: id, ts: 1_700_000_000_000, body: .turnStarted(turnId: "t1", source: .user)))
+        await waitUntil { server.threadSummary(for: id).turnRunning }
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working?.activity == .thinking)
+        server.apply(Event(
+            seq: 0, agentId: id, ts: 1_700_000_002_000,
+            body: .turnCompleted(turnId: "t1", status: .ok, usage: nil, costUsd: nil)))
+        await waitUntil { CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working == nil }
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working == nil)
+        await server.disconnect()
+    }
+
+    @Test func aPausedAgentOrALostServerShowsNoRunningTurn() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "working-cut"
+        installAgent(server, id: id)
+        server.apply(Event(seq: 0, agentId: id, ts: 1_700_000_000_000, body: .turnStarted(turnId: "t1", source: .user)))
+        await waitUntil { server.threadSummary(for: id).turnRunning }
+        let summary = server.threadSummary(for: id)
+        #expect(CrewWorking(summary: summary, paused: false, connected: true) != nil)
+        #expect(CrewWorking(summary: summary, paused: true, connected: true) == nil)
+        #expect(CrewWorking(summary: summary, paused: false, connected: false) == nil)
+        // The connection ends in the middle of the turn: the row stops its timer instead of counting forever.
+        await server.disconnect()
+        #expect(server.threadSummary(for: id).turnRunning)
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working == nil)
     }
 }

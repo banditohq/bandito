@@ -19,6 +19,8 @@ final class IOSNotifications {
         case agent(String)
         /// A risky approval: the Inbox opens its sheet (the owner confirms with Face ID there).
         case approval(approvalID: String, agentID: String)
+        /// A `bandito://` link carried by the notification (the share sheet's reminder).
+        case link(URL)
     }
 
     /// The last route a press asked for. The root view opens it and clears it.
@@ -87,6 +89,7 @@ final class IOSNotifications {
             server.onLiveEvent = { [weak self, weak server] event in
                 guard let self, let server else { return }
                 self.ingest(event, from: server)
+                TurnActivities.shared.ingest(event, from: server)
             }
         }
         updateBadge()

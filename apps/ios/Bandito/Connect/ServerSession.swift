@@ -51,10 +51,14 @@ final class ServerSession {
     @ObservationIgnored var forgetCursor: @MainActor (UUID) -> Void = { IOSNotifications.shared.cursor.forget(serverID: $0) }
     @ObservationIgnored var revokeSelf: @Sendable (ServerConfig) async -> Bool = { await DevicePairing.revokeSelf(config: $0) }
 
+    /// The last agent list of each server, shown at a start without a connection.
+    @ObservationIgnored private let cache: AgentListCache
+
     init(
         store: ServerStore = ServerStore(), secrets: SecretStore = ServerSession.deviceSecrets(),
-        connect: (@MainActor (ServerModel) -> Void)? = nil
+        connect: (@MainActor (ServerModel) -> Void)? = nil, cache: AgentListCache = AgentListCache()
     ) {
+        self.cache = cache
         self.store = store
         self.secrets = secrets
         self.connectOverride = connect
@@ -224,6 +228,7 @@ final class ServerSession {
         if let fingerprint = config.endpoint.pinnedFingerprint { DirectHostMemory.shared.forget(fingerprint) }
         drop(id)
         forgetCursor(id)
+        cache.remove(serverID: id)
         save()
         onForgotten?(config)
         return .removed(revokedOnServer: revoked)
@@ -241,6 +246,7 @@ final class ServerSession {
         try? secrets.save(nil, account: id.uuidString)
         try? secrets.save(nil, account: Self.noiseAccount(id))
         forgetCursor(id)
+        cache.remove(serverID: id)
         if let removed { onForgotten?(removed) }
         // What was written to this server and not sent stays with it no longer.
         ChatOutbox.shared.forget(serverID: id)
@@ -261,11 +267,13 @@ final class ServerSession {
         for config in store.load() {
             try? secrets.save(nil, account: config.id.uuidString)
             try? secrets.save(nil, account: Self.noiseAccount(config.id))
+            cache.remove(serverID: config.id)
         }
         for server in servers {
             ChatOutbox.shared.forget(serverID: server.id)
             Task { await server.disconnect() }
         }
+        for server in servers { cache.remove(serverID: server.id) }
         servers = []
         store.clear()
     }
@@ -283,13 +291,33 @@ final class ServerSession {
     private func start(_ config: ServerConfig) {
         let model = ServerModel(config: config)
         servers.append(model)
+        model.seedCachedAgents(cache.load(serverID: config.id) ?? [])
         if let connectOverride {
             connectOverride(model)
         } else {
             Task { @MainActor in
                 await model.connect()
-                onFirstConnected(model)
+                if model.state == .connected {
+                    onFirstConnected(model)
+                    return
+                }
+                // The first attempt failed and the model keeps trying: the cursor starts at the server's tail on the
+                // first success. Started at once, it found no tail, and the first background check showed every event
+                // the server ever had.
+                model.onStateChange = { [weak self, weak model] state in
+                    guard state == .connected, let self, let model else { return }
+                    model.onStateChange = nil
+                    self.onFirstConnected(model)
+                }
             }
+        }
+    }
+
+    /// Keeps each paired server's agent list that was read from the server (never the demo's, never a copy that was not
+    /// replaced). Called when the app goes to the background.
+    func saveAgentCaches() {
+        for server in servers where server.agentsListedAt != nil {
+            cache.save(server.agents, serverID: server.id)
         }
     }
 

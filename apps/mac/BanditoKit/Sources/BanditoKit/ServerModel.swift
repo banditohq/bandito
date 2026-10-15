@@ -296,6 +296,11 @@ public final class ServerModel: Identifiable {
     public private(set) var agents: [Agent] = []
     /// When `agents` was last read from the daemon (`agents.list`); nil until the first read.
     public private(set) var agentsReadAt: Date?
+    /// When the agent list was last read SUCCESSFULLY. Unlike `agentsReadAt` a failed read does not set it, so nil or an
+    /// old value means the list may not be what the daemon has.
+    public private(set) var agentsListedAt: Date?
+    /// Whether `agents` came from a saved copy (`seedCachedAgents`) and has not been read from the daemon yet.
+    public private(set) var agentsFromCache = false
     /// Agent changes that arrive close together are answered by one `agents.list` after this delay.
     public nonisolated static let agentsRefreshDelay: Duration = .milliseconds(300)
     /// Coming back to the front re-reads the agents when the last read is older than this (seconds).
@@ -647,11 +652,11 @@ public final class ServerModel: Identifiable {
             var attempt = 0
             while !Task.isCancelled {
                 attempt += 1
-                guard let model = self else { return }
-                model.state = .reconnecting(attempt: attempt)
-                let delay = model.reconnectDelay(attempt)
+                // The model is held only around each step, never during the wait: a model let go meanwhile ends the loop.
+                guard let delay = self?.beginReconnect(attempt: attempt) else { return }
                 try? await Task.sleep(for: delay)
                 if Task.isCancelled { return }
+                guard let model = self else { return }
                 do {
                     try await model.open()
                     model.reconnectTask = nil
@@ -670,6 +675,11 @@ public final class ServerModel: Identifiable {
                 }
             }
         }
+    }
+
+    private func beginReconnect(attempt: Int) -> Duration {
+        state = .reconnecting(attempt: attempt)
+        return reconnectDelay(attempt)
     }
 
     func noteDecodeFailure() {
@@ -836,6 +846,22 @@ public final class ServerModel: Identifiable {
         Int64(Date().timeIntervalSince1970 * 1000)
     }
 
+    /// Shows a saved copy of the agent list before the first read (a phone that starts without a connection). It is
+    /// taken only while nothing was read and nothing is listed; `agentsReadAt` stays nil, so the list still counts as
+    /// unread for everything that waits for a real one.
+    public func seedCachedAgents(_ cached: [Agent]) {
+        guard agentsReadAt == nil, agents.isEmpty, !cached.isEmpty else { return }
+        // What an agent was doing or waited for when the copy was saved is not true any more: only the team is shown.
+        agents = cached.map { agent in
+            var agent = agent
+            agent.status = nil
+            agent.pendingApprovals = 0
+            agent.pendingApprovalIds = []
+            return agent
+        }
+        agentsFromCache = true
+    }
+
     private func setAgents(_ list: [Agent]) {
         // The performance scenarios' synthetic agents survive a refresh of the list.
         agents =
@@ -843,6 +869,8 @@ public final class ServerModel: Identifiable {
             ? list
             : list + syntheticAgents.values.filter { s in !list.contains { $0.id == s.id } }.sorted { $0.name < $1.name }
         agentsReadAt = Date()
+        agentsListedAt = Date()
+        agentsFromCache = false
     }
 
     /// Agents that exist only in the app, for the performance scenarios (the QA command `perf` and the smoothness
@@ -893,32 +921,35 @@ public final class ServerModel: Identifiable {
 
     /// One `agents.list` at a time: a refresh asked for while one is in flight is asked again after it. A failed read
     /// is logged and asked again after `agentsRetryDelay`; its time counts as the last read, so the app coming back to
-    /// the front does not ask again at once.
-    private func runAgentsRefresh() async {
+    /// the front does not ask again at once. True only when this call read the list and set it.
+    @discardableResult
+    private func runAgentsRefresh() async -> Bool {
         agentsRefreshScheduled = false
-        guard !inSafeMode else { return }
+        guard !inSafeMode else { return false }
         guard !agentsRefreshing else {
             requestAgentsRefresh()
-            return
+            return false
         }
-        guard let c = client else { return }
+        guard let c = client else { return false }
         agentsRefreshing = true
         defer { agentsRefreshing = false }
         let generation = agentsGeneration
         do {
             let list = try await c.call("agents.list", NoParams(), as: [Agent].self)
-            guard client === c else { return }
+            guard client === c else { return false }
             guard agentsGeneration.accepts(generation) else {
                 // An agent was deleted while the answer was on its way: that answer may still list it.
                 requestAgentsRefresh()
-                return
+                return false
             }
             setAgents(list)
+            return true
         } catch {
-            guard client === c else { return }
+            guard client === c else { return false }
             Self.log.error("agents.list failed: \(String(describing: error), privacy: .public)")
             agentsReadAt = Date()
             scheduleAgentsRetry()
+            return false
         }
     }
 
@@ -933,6 +964,19 @@ public final class ServerModel: Identifiable {
             // A daemon that went into safe mode meanwhile refuses `agents.list`: no retry.
             self.requestAgentsRefresh()
         }
+    }
+
+    /// Reads `agents.list` now. One read already in flight is waited for first (as long as it takes), so the answer is not
+    /// older than the call. True only when this call read the list itself: false means the
+    /// list may be out of date, whether the read failed, the link is down or the task was cancelled. For a screen that
+    /// must know whether an agent exists.
+    public func refreshAgentsNow() async -> Bool {
+        while agentsRefreshing {
+            try? await Task.sleep(for: .milliseconds(100))
+            if Task.isCancelled { return false }
+        }
+        // Only this call's own read counts: a read that ended while waiting may be older than the question.
+        return await runAgentsRefresh()
     }
 
     /// Called when the app comes back to the front. Re-reads the agents when the last read is older than

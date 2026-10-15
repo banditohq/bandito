@@ -25,6 +25,24 @@ struct CrewAgentFacts: Equatable, Identifiable {
     let isPaused: Bool
     /// What the agent waits for from the person, nil when it waits for nothing.
     let waiting: CrewWaiting?
+    /// What a running turn does now and since when, nil when no turn runs.
+    let working: CrewWorking?
+}
+
+/// What a running turn does now, and since when. Changes only when the activity or the start of the turn does, not at
+/// every streamed token.
+struct CrewWorking: Equatable {
+    let activity: AgentActivity
+    let since: Date
+
+    /// Nil when no turn runs, when it has no start, when the agent is paused (it sleeps then), or when the server is not
+    /// connected (a turn cut by a lost connection is never seen ending, so its timer would run forever).
+    @MainActor
+    init?(summary: AgentThreadState, paused: Bool, connected: Bool) {
+        guard connected, !paused, summary.turnRunning, let start = summary.turnStartedAt else { return nil }
+        activity = AgentActivity.current(running: summary.unfinishedTools)
+        since = CrewTime.date(ms: start)
+    }
 }
 
 /// What an agent waits for from the person.
@@ -33,8 +51,11 @@ enum CrewWaiting: Equatable {
     case approval(title: String)
     /// A form the agent asked the person to fill in.
     case form
-    /// Something else that needs the person (a status "needs you" with nothing else pending).
-    case answer
+    /// A service the agent asks to connect (the Inbox's request), by its name.
+    case connect(service: String)
+    /// Something else that needs the person (a status "needs you" with nothing else pending): the question, as one
+    /// line, nil when the agent has said nothing in text.
+    case answer(question: String?)
 }
 
 /// The look of an agent's avatar on iPhone: the palette color or a custom `#RRGGBB`, and the face. Read from the
@@ -130,22 +151,87 @@ enum CrewPins {
     }
 }
 
-/// The last message of an agent as one line for a row: whitespace runs collapsed, nil when there is no text.
+/// The last message of an agent as one line for a row: Markdown marks left out, whitespace runs collapsed, nil when
+/// there is no text.
 enum CrewPreview {
     static func line(_ text: String?) -> String? {
         guard let text else { return nil }
-        let collapsed = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return collapsed.isEmpty ? nil : collapsed
+        let words = MessageBlocks.plainText(text)
+            .split(whereSeparator: \.isWhitespace)
+            .map(withoutHangingMarks)
+            .filter { !$0.isEmpty }
+        return words.isEmpty ? nil : words.joined(separator: " ")
+    }
+
+    /// The emphasis and code marks left at the ends of a word by a cut in the middle of `**bold` (the head of a message
+    /// is cut at a length): taken off, so the preview shows no stray stars.
+    private static func withoutHangingMarks(_ word: Substring) -> Substring {
+        let marks: Set<Character> = ["*", "_", "`"]
+        var word = word
+        while let first = word.first, marks.contains(first) { word = word.dropFirst() }
+        while let last = word.last, marks.contains(last) { word = word.dropLast() }
+        return word
+    }
+}
+
+/// The waiting agents of the Crew: the first `limit` are cards, the rest are counted (the "Ещё N" line).
+enum CrewWaitingSplit {
+    static func split<T>(_ waiting: [T], limit: Int = 2) -> (shown: [T], more: Int) {
+        (Array(waiting.prefix(limit)), max(0, waiting.count - limit))
+    }
+}
+
+/// What the screens say about the connection to a server, when it matters.
+enum CrewConnectionNotice: Equatable {
+    /// Connected: nothing to say.
+    case none
+    /// The first attempt is under way and there is nothing to show yet.
+    case connecting
+    /// Not connected, and no list to show.
+    case offline
+    /// Not connected, and the list shown is the saved copy of an earlier one.
+    case offlineWithCache
+}
+
+extension CrewFacts {
+    nonisolated static func notice(state: ConnectionState, fromCache: Bool, disabled: Bool = false) -> CrewConnectionNotice {
+        // A server switched off in Settings is never connected: it must not say "Connecting…" for ever.
+        if disabled { return fromCache ? .offlineWithCache : .offline }
+        switch state {
+        case .connected:
+            return .none
+        case .connecting, .disconnected:
+            // Every launch passes here before its first answer: a saved team is shown quietly (the server's dot is grey),
+            // never "Offline" for the half second a connection takes. `.disconnected` is the state before `connect()`.
+            return fromCache ? .none : .connecting
+        case .reconnecting, .failed:
+            return fromCache ? .offlineWithCache : .offline
+        }
+    }
+
+    /// What an empty Inbox or Activity says instead of "nothing waits": set when no server is connected, about the first
+    /// one that is not. Nil when some server is connected (the emptiness is true) or there is no server.
+    @MainActor
+    static func emptyNotice(servers: [ServerModel]) -> (notice: CrewConnectionNotice, server: ServerModel)? {
+        guard !servers.isEmpty, !servers.contains(where: { $0.state == .connected }) else { return nil }
+        // No server is connected, so nothing here is known yet: an empty Inbox or Activity never says "nothing waits"
+        // then, even while a saved team is shown quietly on the Crew.
+        guard let server = servers.first(where: { !$0.config.disabled }) ?? servers.first else { return nil }
+        let notice = notice(state: server.state, fromCache: server.agentsFromCache, disabled: server.config.disabled)
+        return (notice == .none ? .connecting : notice, server)
     }
 }
 
 /// Builds the rows of the Crew screen from a server. Reads each agent's thread summary, never its thread.
 @MainActor
 enum CrewFacts {
-    static func build(server: ServerModel, pinned: [String]) -> [CrewAgentFacts] {
+    /// `answered`: the Inbox items the person answered from this screen, hidden at once (the daemon's event removes them
+    /// later). An agent with a second approval then waits for that one.
+    static func build(server: ServerModel, pinned: [String], answered: Set<String> = []) -> [CrewAgentFacts] {
         let pins = Set(pinned)
         let lead = server.leadAgentID
         let agents = CrewOrder.ordered(server.sortedAgents, id: \.id, lead: lead, pinned: pins)
+        let waitingItems = waitingItems(of: server, answered: answered)
         return agents.map { agent in
             let summary = server.threadSummary(for: agent.id)
             let status = server.status(of: agent.id)
@@ -162,7 +248,8 @@ enum CrewFacts {
                 isLead: agent.id == lead,
                 isPinned: pins.contains(agent.id),
                 isPaused: agent.paused,
-                waiting: waiting(needsPerson: server.needsPerson(agent.id), summary: summary))
+                waiting: waiting(waitingItems[agent.id]),
+                working: CrewWorking(summary: summary, paused: agent.paused, connected: server.state == .connected))
         }
     }
 
@@ -172,11 +259,28 @@ enum CrewFacts {
         [lastItemTimestamp, agent.lastMessage?.ts].compactMap { $0 }.max() ?? agent.lastTurnAt ?? agent.updatedAt
     }
 
-    /// What the agent waits for, from the thread's summary; nil when nothing waits for the person.
-    static func waiting(needsPerson: Bool, summary: AgentThreadState) -> CrewWaiting? {
-        guard needsPerson else { return nil }
-        if let title = summary.firstPendingApprovalTitle { return .approval(title: title) }
-        if !summary.pendingForms.isEmpty { return .form }
-        return .answer
+    /// The first Inbox item of each agent that is not answered yet. What waits for the person is the Inbox's own list: an
+    /// agent waits exactly when it has an item there.
+    static func waitingItems(of server: ServerModel, answered: Set<String> = []) -> [String: InboxItem] {
+        let items = InboxRules.items(in: [server]).filter { !answered.contains($0.id) }
+        return Dictionary(items.map { ($0.agentID, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// The approval a card answers with its two buttons: the agent's waiting item when that one is an approval. A form,
+    /// a question or a connect request has no buttons on the card (the card opens the chat).
+    static func approvalItem(_ item: InboxItem?) -> InboxItem? {
+        guard let item, case .approval = item.kind else { return nil }
+        return item
+    }
+
+    /// What the agent waits for: the kind of its Inbox item, nil when it has none (it waits for nothing).
+    static func waiting(_ item: InboxItem?) -> CrewWaiting? {
+        guard let item else { return nil }
+        switch item.kind {
+        case .approval(let row): return .approval(title: row.title)
+        case .form: return .form
+        case .connect(let row): return .connect(service: row.service)
+        case .question: return .answer(question: item.questionLine)
+        }
     }
 }

@@ -141,17 +141,25 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
         let risky = info["risky"] as? Bool ?? false
         let action = response.actionIdentifier
         let typed = (response as? UNTextInputNotificationResponse)?.userText ?? ""
+        let link = info[ShareReminder.userInfoKey] as? String ?? ""
         completionHandler()
         Task { @MainActor [weak self] in
-            await self?.respond(action: action, agentID: agentID, approvalID: approvalID, risky: risky, typed: typed)
+            await self?.respond(
+                action: action, agentID: agentID, approvalID: approvalID, risky: risky, typed: typed, link: link)
         }
     }
 
     /// What a press does: the body opens the app; a risky Allow opens the sheet (no answer is sent here); the other
     /// buttons and the reply answer through the service.
-    func respond(action: String, agentID: String, approvalID: String, risky: Bool, typed: String) async {
+    func respond(
+        action: String, agentID: String, approvalID: String, risky: Bool, typed: String, link: String = ""
+    ) async {
         switch action {
         case UNNotificationDefaultActionIdentifier:
+            if let url = URL(string: link), !link.isEmpty {
+                onRoute?(.link(url))
+                return
+            }
             onRoute?(IOSNotifications.routeForPress(agentID: agentID, approvalID: approvalID))
         case NotificationContent.allowAction where risky && riskyNeedsFaceID():
             onRoute?(.approval(approvalID: approvalID, agentID: agentID))

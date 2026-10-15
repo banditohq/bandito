@@ -63,6 +63,18 @@ struct PhoneHarness {
 @Suite struct NotificationsTests {
     // MARK: What a press does
 
+    @Test func theShareReminderOpensItsLinkOnAPress() async throws {
+        let harness = PhoneHarness(riskyNeedsFaceID: true)
+        var routes: [IOSNotifications.Route] = []
+        harness.sink.onRoute = { routes.append($0) }
+        let id = UUID()
+        await harness.sink.respond(
+            action: UNNotificationDefaultActionIdentifier, agentID: "", approvalID: "", risky: false, typed: "",
+            link: BanditoLink.share(id: id).url.absoluteString)
+        #expect(routes == [.link(BanditoLink.share(id: id).url)])
+        #expect(ShareReminder.identifier(for: id) == "share-\(id.uuidString)")
+    }
+
     @Test func riskyAllowWithFaceIDOpensTheSheetAndSendsNothing() async {
         let harness = PhoneHarness(riskyNeedsFaceID: true)
         var routes: [IOSNotifications.Route] = []

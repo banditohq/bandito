@@ -8,6 +8,9 @@ import SwiftUI
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The scheme the screen shows now (the setting, or the system's). The sheets that RootView opens take it
+    /// explicitly: they do not follow the tabs' scheme by themselves (the New task sheet came up dark in light).
+    @Environment(\.colorScheme) private var shownScheme
     /// The servers: the paired ones (saved list and Keychain tokens), or the `-demo` world.
     @State private var session = ServerSession.shared
     /// The connect sheet, with the way the person chose before it opened (the sheet is built from this value, not from
@@ -34,11 +37,23 @@ struct RootView: View {
     /// The account screen over the onboarding ("I have a Bandito account").
     @State private var showsAccount = false
     #endif
-    @State private var appLock = AppLock()
+    /// "Sign in" was chosen in the connect sheet: the account sheet follows when that sheet has closed.
+    @State private var signsInAfterConnect = false
+    @State private var appLock = AppLock(lockedAtLaunch: IOSSettings().faceIDLock)
     /// The approval item the Inbox opens (a notification's route), cleared by the Inbox once it is open.
     @State private var inboxFocus: String?
     /// The agent a widget or a `bandito://agent/...` link asked the Crew to open.
     @State private var crewFocus: CrewFocus?
+    /// The new-task sheet, while it is open: a new value is a new sheet (the long press asks for the dictation).
+    @State private var newTask: NewTaskRequest?
+    /// What the screen does once the new-task sheet has closed (see `runNewTaskFollowUp`).
+    @State private var newTaskFollowUp: NewTaskFollowUp?
+    /// The toast after an answer to an agent ("Allowed — Forge goes on"); every tab reads it from the environment.
+    @State private var answerToast = AnswerToastCenter()
+    /// A `bandito://share/<id>` link that waits for Face ID: the task is sent and its chat opens once the app is open.
+    @State private var pendingShare: UUID?
+    /// Toasts about shared tasks that were dropped while Face ID covered the app: shown once it is open.
+    @State private var pendingNotices: [ShareNotice] = []
     /// The first run's progress; the flow covers the app until a server is paired (docs/IOS_APP.md, Onboarding).
     @State private var onboarding = OnboardingStore.launch(arguments: ProcessInfo.processInfo.arguments)
     private let biometrics = DeviceAuthenticator()
@@ -49,10 +64,13 @@ struct RootView: View {
         let showsOnboarding = onboarding.shows(hasServers: !servers.isEmpty)
         ZStack {
             TabView(selection: $tab) {
-                CrewScreen(servers: servers, settings: settings, onConnect: openConnect, focus: crewFocus)
+                CrewScreen(
+                    servers: servers, settings: settings, onConnect: openConnect, onShowInbox: { tab = .inbox },
+                    focus: crewFocus)
                     .id(dynamicTypeSize)
+                    .environment(\.newTaskAction, newTaskAction(for: servers))
                     .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
-                    .tag(AppTab.crew)
+                .tag(AppTab.crew)
                 InboxScreen(servers: servers, settings: settings, focus: $inboxFocus, openChat: openChat)
                     .id(dynamicTypeSize)
                     .tabItem { Label(L10n.Ios.Tab.inbox, systemImage: "tray") }
@@ -60,9 +78,10 @@ struct RootView: View {
                     .tag(AppTab.inbox)
                 ActivityScreen(servers: servers, settings: settings)
                     .id(dynamicTypeSize)
+                    .environment(\.newTaskAction, newTaskAction(for: servers))
                     .badge(ActivityFacts.unreadCount(servers: servers))
-                    .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
-                    .tag(AppTab.activity)
+                .tabItem { Label(L10n.Ios.Tab.activity, systemImage: "list.bullet.rectangle") }
+                .tag(AppTab.activity)
                 SettingsTab(
                     settings: settings, session: session, account: account, biometrics: biometrics,
                     onConnect: openConnect)
@@ -70,7 +89,7 @@ struct RootView: View {
                     .tabItem { Label(L10n.Settings.title, systemImage: "gearshape") }
                     .tag(AppTab.settings)
             }
-            .preferredColorScheme(settings.theme.colorScheme)
+            .environment(\.answerToast, answerToast)
 
             if showsOnboarding {
                 OnboardingView(store: onboarding, motion: settings.motion, onConnect: { mode in
@@ -79,8 +98,20 @@ struct RootView: View {
                     .id(dynamicTypeSize)
                     .transition(.opacity)
             }
+
+            #if DEBUG
+            if SharePreview.isRequested(in: ProcessInfo.processInfo.arguments) {
+                ShareView(model: SharePreview.model(empty: ProcessInfo.processInfo.arguments.contains("-share-empty")))
+            }
+            #endif
         }
+        // One place decides the scheme: the onboarding is always dark, the app follows the setting. A second
+        // preference inside the onboarding stayed on the sheets opened after it (the New task sheet was dark in light).
+        .preferredColorScheme(showsOnboarding ? .dark : settings.theme.colorScheme)
         .animation(BanditoMotion.ease, value: showsOnboarding)
+        .overlay(alignment: .bottom) {
+            AnswerToastHost(center: answerToast)
+        }
         .overlay {
             if appLock.isLocked {
                 LockScreen(onUnlock: unlockApp)
@@ -89,8 +120,11 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             appLock.scenePhaseChanged(to: phase, enabled: settings.faceIDLock, timeout: settings.lockTimeout)
+            if phase == .active { importSharedTasks() }
             notifications.appActiveChanged(phase == .active)
             account.setActive(phase == .active)
+            if phase == .background { session.saveAgentCaches() }
+            if phase == .active { TurnActivities.shared.appBecameActive() }
         }
         // An account that is ready ends the onboarding: the servers of the account come to this iPhone without pairing.
         .onChange(of: account.stage == .ready) { _, isReady in
@@ -101,13 +135,33 @@ struct RootView: View {
         .onChange(of: notifications.route) { _, route in
             open(route)
         }
+        // An action of the app icon, also one that started the app. It waits while the lock screen covers the app.
+        .onChange(of: QuickActionHub.shared.pending, initial: true) { _, _ in
+            runPendingQuickAction()
+        }
+        // The lock closes the new-task sheet (a sheet is shown above the lock screen otherwise), and an action that
+        // waited for Face ID runs once the app is open.
+        .onChange(of: appLock.isLocked) { _, locked in
+            if locked {
+                newTask = nil
+            } else {
+                runPendingQuickAction()
+                answerToast.showInTurn(pendingNotices.map { AnswerToastMessage(text: $0.text, allowed: false) })
+                pendingNotices = []
+                if let id = pendingShare { openShared(id) } else { importSharedTasks() }
+            }
+        }
         .onOpenURL { url in
             if url.scheme?.lowercased() == "bandito", url.host?.lowercased() == "pair" {
                 // A pairing link: the connect sheet shows it and asks before anything is sent.
                 incomingLink = url.absoluteString
                 connect = ConnectRequest(mode: .scanCode)
             } else if let link = BanditoLink(url: url) {
-                openLink(link)
+                if case .share(let id) = link {
+                    openShared(id)
+                } else {
+                    openLink(link)
+                }
             }
         }
         // A Siri or Shortcuts intent asks for a screen (AppIntentHub), and a Spotlight result opens its agent.
@@ -122,6 +176,10 @@ struct RootView: View {
         }
         .onChange(of: session.current.map(\.id)) { _, ids in
             SpotlightAgentIndex.shared.keepOnly(serverIDs: Set(ids.map(\.uuidString)))
+            TurnActivities.shared.serversChanged(ids: Set(ids))
+        }
+        .onChange(of: settings.liveActivities) { _, enabled in
+            TurnActivities.shared.settingChanged(enabled: enabled)
         }
         .onChange(of: session.current.isEmpty, initial: true) { _, isEmpty in
             if !isEmpty { onboarding.markCompleted() }
@@ -130,14 +188,24 @@ struct RootView: View {
         .onChange(of: session.current.map(\.id), initial: true) { _, _ in
             notifications.attach(session.current)
             ChatOutbox.shared.attach(session.current)
+            ShareImporter.shared.attach(.live(session: session))
+            ShareImporter.shared.onNotice = { notice in showShareNotice(notice) }
+            importSharedTasks()
+        }
+        // A server that comes online lets the tasks with pictures go.
+        .onChange(of: session.current.filter { $0.state == .connected }.map(\.id)) { _, _ in
+            importSharedTasks()
         }
         // Accents are the brand's signal orange (a link, a menu's chevron); the tab bar itself stays cream on warm dark.
         .tint(Color.Bandito.signal)
         .task {
             appLock.start(enabled: settings.faceIDLock)
+            ShareImporter.shared.cleanUp()
             let arguments = ProcessInfo.processInfo.arguments
             notifications.settings = settings
             notifications.source = SessionNotificationSource(session: session)
+            TurnActivities.shared.configure(
+                servers: { ServerSession.shared.current }, isEnabled: { [settings] in settings.liveActivities })
             AppIntentHub.shared.liveServers = { ServerSession.shared.current }
             WidgetSnapshotWriter.shared.onPicture = { SpotlightAgentIndex.shared.sync($0.directory) }
             WidgetSnapshotWriter.shared.watch { ServerSession.shared.current }
@@ -151,6 +219,15 @@ struct RootView: View {
             if IOSDemo.isRequested(in: arguments) {
                 guard session.current.isEmpty else { return }
                 session.installDemo(await IOSDemo.startServers(withTeam: !IOSDemo.isEmptyRequested(in: arguments)))
+                #if DEBUG
+                // `-demo -new-task` opens the new-task sheet at launch (the screenshots), as the icon's action does.
+                if arguments.contains("-new-task") {
+                    QuickActionHub.shared.request(.newTask)
+                }
+                if arguments.contains(TurnActivities.demoArgument) {
+                    TurnActivities.shared.runDemo(servers: session.current, arguments: arguments)
+                }
+                #endif
                 return
             }
             session.loadIfNeeded()
@@ -159,9 +236,23 @@ struct RootView: View {
                 connect = ConnectRequest(mode: .scanCode)
             }
         }
-        .sheet(item: $connect, onDismiss: { Task { await askNotificationsIfFirstServer() } }) { request in
+        .sheet(item: $connect, onDismiss: {
+            // "Sign in" in the connect sheet: the account sheet opens once this one is gone.
+            if signsInAfterConnect {
+                signsInAfterConnect = false
+                showsAccount = true
+                return
+            }
+            Task { await askNotificationsIfFirstServer() }
+        }) { request in
             ConnectServerView(
-                session: session, incomingLink: $incomingLink, start: request.mode, onClose: { connect = nil })
+                session: session, incomingLink: $incomingLink, start: request.mode,
+                onSignIn: account.signedIn ? nil : {
+                    signsInAfterConnect = true
+                    connect = nil
+                },
+                onClose: { connect = nil })
+                .preferredColorScheme(settings.theme.colorScheme ?? shownScheme)
         }
         .sheet(isPresented: $showsAccount) {
             NavigationStack { AccountScreen(account: account, onClose: { showsAccount = false }) }
@@ -170,6 +261,91 @@ struct RootView: View {
         .sheet(isPresented: $asksNotifications) {
             NotificationAskSheet(onDone: { asksNotifications = false })
                 .presentationDetents([.medium])
+        }
+        .sheet(item: $newTask, onDismiss: runNewTaskFollowUp) { request in
+            NewTaskSheet(
+                servers: servers, startsDictating: request.dictate,
+                onFinish: { newTaskFollowUp = $0 })
+                .preferredColorScheme(settings.theme.colorScheme ?? shownScheme)
+        }
+    }
+
+    /// The floating New task button at the bottom right, above the tab bar. It is an inset of the tab's screen, so the
+    /// last row of its list scrolls above the button. Shown only when a server is connected.
+    /// The floating button's action, only when some server has an agent to give a task to.
+    private func newTaskAction(for servers: [ServerModel]) -> NewTaskAction? {
+        guard servers.contains(where: { !$0.agents.isEmpty }) else { return nil }
+        return NewTaskAction(open: { openNewTask(dictate: $0) })
+    }
+
+    /// Opens the new-task sheet, or the dictation on it. Nothing opens while the lock screen covers the app.
+    private func openNewTask(dictate: Bool) {
+        guard !appLock.isLocked else { return }
+        newTask = NewTaskRequest(dictate: dictate)
+    }
+
+    /// Does the icon's action, when the app is open and the lock does not cover it. The action stays pending until then.
+    private func runPendingQuickAction() {
+        guard !appLock.isLocked, let action = QuickActionHub.shared.pending else { return }
+        QuickActionHub.shared.consume()
+        switch action {
+        case .newTask: openNewTask(dictate: false)
+        case .inbox: tab = .inbox
+        }
+    }
+
+    /// Does what the new-task sheet asked for, once it has closed: the sheet and the connect sheet cannot be open together.
+    private func runNewTaskFollowUp() {
+        guard let followUp = newTaskFollowUp else { return }
+        newTaskFollowUp = nil
+        switch followUp {
+        case .connect:
+            openConnect()
+        case .crew:
+            tab = .crew
+        case .chat(let serverID, let agentID):
+            openLink(.agent(server: serverID.uuidString, id: agentID))
+        }
+    }
+
+    /// Sends what the share extension left, unless the lock covers the app (it waits for Face ID).
+    private func importSharedTasks() {
+        guard !appLock.isLocked else { return }
+        Task { await ShareImporter.shared.drain() }
+    }
+
+    /// The toast of a dropped shared task; behind the lock it waits for Face ID.
+    private func showShareNotice(_ notice: ShareNotice) {
+        if appLock.isLocked {
+            pendingNotices.append(notice)
+        } else {
+            answerToast.show(AnswerToastMessage(text: notice.text, allowed: false))
+        }
+    }
+
+    /// A `bandito://share/<id>` link: the task is queued and the agent's chat opens. Behind the lock it waits.
+    private func openShared(_ id: UUID) {
+        guard !appLock.isLocked else {
+            pendingShare = id
+            return
+        }
+        pendingShare = nil
+        Task {
+            // The task is sent (or dropped) first: a task whose agent is gone opens no chat.
+            await ShareImporter.shared.drain()
+            // The lock may have closed while the task was sent: the chat waits for Face ID.
+            guard !appLock.isLocked else {
+                pendingShare = id
+                return
+            }
+            guard let target = ShareImporter.shared.target(of: id) else { return }
+            // A link that started the app can arrive before the saved servers are read: the chat opens once its server is there.
+            var waited = 0
+            while !session.current.contains(where: { $0.id == target.server }), waited < 30 {
+                try? await Task.sleep(for: .milliseconds(100))
+                waited += 1
+            }
+            openLink(.agent(server: target.server.uuidString, id: target.agent))
         }
     }
 
@@ -205,6 +381,8 @@ struct RootView: View {
         case .approval(let approvalID, _):
             inboxFocus = IOSNotifications.inboxItemID(approvalID: approvalID)
             tab = .inbox
+        case .link(let url):
+            if let link = BanditoLink(url: url) { openLink(link) }
         }
         notifications.consumeRoute()
     }
@@ -221,6 +399,8 @@ struct RootView: View {
             if let serverID = UUID(uuidString: server) {
                 crewFocus = CrewFocus(serverID: serverID, agentID: id, request: UUID())
             }
+        case .share(let id):
+            openShared(id)
         }
     }
 

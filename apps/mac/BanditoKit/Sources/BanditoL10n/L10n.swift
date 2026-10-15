@@ -1424,6 +1424,12 @@ public enum L10n {
             }
         }
 
+        public enum AnswerToast {
+            public static func allowed(name: String) -> String { L10n.tr("ios.answerToast.allowed", name) }
+            public static func denied(name: String) -> String { L10n.tr("ios.answerToast.denied", name) }
+            public static func sent(name: String) -> String { L10n.tr("ios.answerToast.sent", name) }
+        }
+
         public enum Chat {
             public static var copyLink: String { L10n.tr("ios.chat.copyLink") }
             public static var discard: String { L10n.tr("ios.chat.discard") }
@@ -1433,6 +1439,8 @@ public enum L10n {
             public static var openSettings: String { L10n.tr("ios.chat.openSettings") }
             public static var retry: String { L10n.tr("ios.chat.retry") }
             public static var sending: String { L10n.tr("ios.chat.sending") }
+            public static var stopFailed: String { L10n.tr("ios.chat.stopFailed") }
+            public static var stopFailedOther: String { L10n.tr("ios.chat.stopFailedOther") }
             public static var uncertain: String { L10n.tr("ios.chat.uncertain") }
             public static var waitingForConnection: String { L10n.tr("ios.chat.waitingForConnection") }
 
@@ -1578,11 +1586,20 @@ public enum L10n {
             }
         }
 
+        public enum Connection {
+            public static var cachedLine: String { L10n.tr("ios.connection.cachedLine") }
+            public static func connecting(name: String) -> String { L10n.tr("ios.connection.connecting", name) }
+            public static var offlineHint: String { L10n.tr("ios.connection.offlineHint") }
+            public static func offlineTitle(name: String) -> String { L10n.tr("ios.connection.offlineTitle", name) }
+            public static var retry: String { L10n.tr("ios.connection.retry") }
+        }
+
         public enum Crew {
             public static var createAgent: String { L10n.tr("ios.crew.createAgent") }
             public static var emptyMessage: String { L10n.tr("ios.crew.emptyMessage") }
             public static var emptyTitle: String { L10n.tr("ios.crew.emptyTitle") }
             public static var lead: String { L10n.tr("ios.crew.lead") }
+            public static func moreInInbox(count: Int) -> String { L10n.tr("ios.crew.moreInInbox", count) }
             public static var needsYou: String { L10n.tr("ios.crew.needsYou") }
             public static var noMessages: String { L10n.tr("ios.crew.noMessages") }
             public static func openChat(name: String) -> String { L10n.tr("ios.crew.openChat", name) }
@@ -1639,11 +1656,28 @@ public enum L10n {
             }
         }
 
+        public enum Live {
+            public static var done: String { L10n.tr("ios.live.done") }
+            public static var failed: String { L10n.tr("ios.live.failed") }
+            public static var setting: String { L10n.tr("ios.live.setting") }
+            public static var settingHint: String { L10n.tr("ios.live.settingHint") }
+            public static var stopFailed: String { L10n.tr("ios.live.stopFailed") }
+            public static var stopNoConnection: String { L10n.tr("ios.live.stopNoConnection") }
+        }
+
         public enum NewAgent {
             public static var installTimedOut: String { L10n.tr("ios.newAgent.installTimedOut") }
             public static var tabOne: String { L10n.tr("ios.newAgent.tabOne") }
             public static var tabTeams: String { L10n.tr("ios.newAgent.tabTeams") }
             public static var teamsEmpty: String { L10n.tr("ios.newAgent.teamsEmpty") }
+        }
+
+        public enum NewTask {
+            public static var empty: String { L10n.tr("ios.newTask.empty") }
+            public static var offline: String { L10n.tr("ios.newTask.offline") }
+            public static var title: String { L10n.tr("ios.newTask.title") }
+            public static var to: String { L10n.tr("ios.newTask.to") }
+            public static var voiceHint: String { L10n.tr("ios.newTask.voiceHint") }
         }
 
         public enum Notifications {
@@ -1709,6 +1743,10 @@ public enum L10n {
                 public static var subtitle: String { L10n.tr("ios.onboarding.welcome.subtitle") }
                 public static var title: String { L10n.tr("ios.onboarding.welcome.title") }
             }
+        }
+
+        public enum QuickAction {
+            public static var newTask: String { L10n.tr("ios.quickAction.newTask") }
         }
 
         public enum Settings {
@@ -1791,6 +1829,20 @@ public enum L10n {
                     public static var tailscale: String { L10n.tr("ios.settings.servers.via.tailscale") }
                 }
             }
+        }
+
+        public enum Share {
+            public static func agentGone(name: String) -> String { L10n.tr("ios.share.agentGone", name) }
+            public static var agentGoneUnnamed: String { L10n.tr("ios.share.agentGoneUnnamed") }
+            public static var done: String { L10n.tr("ios.share.done") }
+            public static var doneButton: String { L10n.tr("ios.share.doneButton") }
+            public static var empty: String { L10n.tr("ios.share.empty") }
+            public static var failed: String { L10n.tr("ios.share.failed") }
+            public static func failedForGood(name: String) -> String { L10n.tr("ios.share.failedForGood", name) }
+            public static var failedForGoodUnnamed: String { L10n.tr("ios.share.failedForGoodUnnamed") }
+            public static func notify(name: String) -> String { L10n.tr("ios.share.notify", name) }
+            public static var picture: String { L10n.tr("ios.share.picture") }
+            public static var title: String { L10n.tr("ios.share.title") }
         }
 
         public enum Tab {

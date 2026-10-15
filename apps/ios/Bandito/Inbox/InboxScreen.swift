@@ -18,6 +18,8 @@ struct InboxScreen: View {
     var openChat: ((UUID, String) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The toast after an answer ("Allowed — Forge goes on"), set by RootView.
+    @Environment(\.answerToast) private var answerToast
     /// The items answered here, hidden at once while the server takes the answer (the daemon's event removes them for good).
     @State private var answered: Set<String> = []
     /// The item whose sheet is open (a snapshot: the sheet shows what was opened).
@@ -30,10 +32,13 @@ struct InboxScreen: View {
             Group {
                 if items.isEmpty {
                     emptyState
+                        .transition(.opacity)
                 } else {
                     list(items)
                 }
             }
+            // Rows that come in or go out (an answer, a new approval) and the empty state animate on the list's ids.
+            .animation(reduceMotion ? nil : BanditoMotion.ease, value: items.map(\.id))
             .navigationTitle(L10n.Ios.Tab.inbox)
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -82,6 +87,7 @@ struct InboxScreen: View {
                 Section {
                     ForEach(section.items) { item in
                         row(item)
+                            .transition(.opacity.combined(with: .move(edge: .trailing)))
                     }
                 } header: {
                     if let title = section.title {
@@ -141,7 +147,17 @@ struct InboxScreen: View {
         }
     }
 
-    private var emptyState: some View {
+    @ViewBuilder private var emptyState: some View {
+        if CrewFacts.emptyNotice(servers: servers) != nil {
+            ConnectionNoticeView.forEmpty(servers: servers)
+                .padding(BanditoSpace.s6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            quietState
+        }
+    }
+
+    private var quietState: some View {
         VStack(spacing: BanditoSpace.s3) {
             CrewAvatar(
                 name: "", look: CrewLook(color: .peach, face: .sleeping, customHex: nil), mood: .sleeping, size: 72)
@@ -164,8 +180,8 @@ struct InboxScreen: View {
         if outcome == .failed { failed = true }
     }
 
-    /// Sends the person's answer to the item's server. A sent answer hides the item (with the brand's ease, none with
-    /// Reduce Motion) and gives a haptic: success for an answer that lets the agent go on, warning for a refusal.
+    /// Sends the person's answer to the item's server. A sent answer hides the item (the list animates its removal) and
+    /// gives a haptic: success for an answer that lets the agent go on, warning for a refusal.
     @discardableResult
     private func act(_ item: InboxItem, _ action: InboxAct) async -> InboxAnswer.Outcome {
         guard let server = servers.first(where: { $0.id == item.serverID }) else { return .failed }
@@ -197,9 +213,17 @@ struct InboxScreen: View {
             } else {
                 generator.notificationOccurred(.success)
             }
-            withAnimation(reduceMotion ? nil : BanditoMotion.ease) {
-                _ = answered.insert(item.id)
+            let toast: AnswerToastMessage
+            switch action {
+            case .allow:
+                toast = AnswerToastMessage(text: L10n.Ios.AnswerToast.allowed(name: item.agentName), allowed: true)
+            case .deny:
+                toast = AnswerToastMessage(text: L10n.Ios.AnswerToast.denied(name: item.agentName), allowed: false)
+            case .submit, .reply:
+                toast = AnswerToastMessage(text: L10n.Ios.AnswerToast.sent(name: item.agentName), allowed: true)
             }
+            answerToast?.show(toast)
+            _ = answered.insert(item.id)
             return .sent
         } catch {
             return .failed

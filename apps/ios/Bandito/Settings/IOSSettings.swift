@@ -54,6 +54,7 @@ final class IOSSettings {
         static let notifyApprovals = "ios.notifications.approvals"
         static let notifyAnswers = "ios.notifications.answers"
         static let notifyErrors = "ios.notifications.errors"
+        static let liveActivities = "ios.notifications.liveActivities"
         static let theme = "ios.appearance.theme"
         static let motion = "ios.appearance.motion"
     }
@@ -84,6 +85,11 @@ final class IOSSettings {
         didSet { defaults.set(notifyErrors, forKey: Key.notifyErrors) }
     }
 
+    /// The Live Activity of a long turn on the lock screen and in the Dynamic Island (on unless the person turns it off).
+    var liveActivities: Bool {
+        didSet { defaults.set(liveActivities, forKey: Key.liveActivities) }
+    }
+
     var theme: AppTheme {
         didSet { defaults.set(theme.rawValue, forKey: Key.theme) }
     }
@@ -100,6 +106,7 @@ final class IOSSettings {
         notifyApprovals = defaults.object(forKey: Key.notifyApprovals) as? Bool ?? true
         notifyAnswers = defaults.object(forKey: Key.notifyAnswers) as? Bool ?? true
         notifyErrors = defaults.object(forKey: Key.notifyErrors) as? Bool ?? true
+        liveActivities = defaults.object(forKey: Key.liveActivities) as? Bool ?? true
         theme = defaults.string(forKey: Key.theme).flatMap(AppTheme.init(rawValue:)) ?? .system
         motion = defaults.string(forKey: Key.motion).flatMap(MotionPreference.init(rawValue:)) ?? .system
     }

@@ -178,11 +178,13 @@ enum WidgetAgentPicker {
     }
 }
 
-/// The links the widgets open: `bandito://inbox`, `bandito://crew`, `bandito://agent/<serverID>/<agentID>`.
+/// The links the widgets and the share extension open: `bandito://inbox`, `bandito://crew`, `bandito://agent/<serverID>/<agentID>`,
+/// `bandito://share/<task id>` (a task the share extension left for the app).
 enum BanditoLink: Equatable, Sendable {
     case inbox
     case crew
     case agent(server: String, id: String)
+    case share(id: UUID)
 
     static let scheme = "bandito"
 
@@ -198,6 +200,10 @@ enum BanditoLink: Equatable, Sendable {
             let parts = url.pathComponents.filter { $0 != "/" }
             guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
             self = .agent(server: parts[0], id: parts[1])
+        case "share":
+            let parts = url.pathComponents.filter { $0 != "/" }
+            guard parts.count == 1, let id = UUID(uuidString: parts[0]) else { return nil }
+            self = .share(id: id)
         default:
             return nil
         }
@@ -214,6 +220,8 @@ enum BanditoLink: Equatable, Sendable {
             let escapedServer = server.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? server
             let escapedID = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
             return URL(string: "\(Self.scheme)://agent/\(escapedServer)/\(escapedID)") ?? Self.crewURL
+        case .share(let id):
+            return URL(string: "\(Self.scheme)://share/\(id.uuidString)") ?? Self.crewURL
         }
     }
 

@@ -11,6 +11,7 @@ struct InboxRow: View, Equatable {
     @ScaledMetric(relativeTo: .body) private var titleSize: CGFloat = 13.5
     @ScaledMetric(relativeTo: .body) private var lineSize: CGFloat = 13
     @ScaledMetric(relativeTo: .body) private var timeSize: CGFloat = 11.5
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     nonisolated static func == (lhs: InboxRow, rhs: InboxRow) -> Bool {
         lhs.item == rhs.item
@@ -18,8 +19,9 @@ struct InboxRow: View, Equatable {
 
     var body: some View {
         let _ = InboxCounters.rowBodyRan()
-        HStack(alignment: .center, spacing: BanditoSpace.s3) {
+        AdaptiveRowLayout {
             CrewAvatar(name: item.agentName, look: item.look, mood: item.mood, size: 44)
+        } content: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(BanditoFont.display(size: titleSize, weight: 600))
@@ -27,7 +29,7 @@ struct InboxRow: View, Equatable {
                     .lineLimit(2)
                 detail
             }
-            Spacer(minLength: BanditoSpace.s2)
+        } trailing: {
             VStack(alignment: .trailing, spacing: 5) {
                 Text(CrewTime.date(ms: item.ts), format: CrewTime.style(ms: item.ts))
                     .font(BanditoFont.text(size: timeSize, weight: 400))
@@ -56,27 +58,29 @@ struct InboxRow: View, Equatable {
     /// The second line: the command (mono, at most two lines), the form's title, the reason of the service, or the
     /// agent's last words.
     @ViewBuilder private var detail: some View {
+        // Two lines at normal sizes, four at accessibility sizes (the line is the preview there).
+        let lines = typeSize.isAccessibilitySize ? 4 : 2
         switch item.kind {
         case .approval(let row):
             Text(row.command ?? row.title)
                 .font(BanditoFont.mono(size: lineSize))
                 .foregroundStyle(Color.Bandito.text2)
-                .lineLimit(2)
+                .lineLimit(lines)
         case .form(let row):
             Text(row.spec.title)
                 .font(BanditoFont.text(size: lineSize, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
-                .lineLimit(2)
+                .lineLimit(lines)
         case .connect(let row):
             Text(row.shownReason ?? row.service)
                 .font(BanditoFont.text(size: lineSize, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
-                .lineLimit(2)
-        case .question(let text, _):
-            Text(text ?? "")
+                .lineLimit(lines)
+        case .question:
+            Text(item.questionLine ?? "")
                 .font(BanditoFont.text(size: lineSize, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
-                .lineLimit(2)
+                .lineLimit(lines)
         }
     }
 }

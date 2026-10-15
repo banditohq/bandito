@@ -27,10 +27,12 @@ struct SettingsTab: View {
     var body: some View {
         NavigationStack {
             List {
-                accountSection
+                // Most used first. With no server yet the account leads: signing in brings the Mac's servers here.
+                if session.current.isEmpty { accountSection }
                 serversSection
                 notificationsSection
                 securitySection
+                if !session.current.isEmpty { accountSection }
                 appearanceSection
                 aboutSection
             }
@@ -135,6 +137,7 @@ struct SettingsTab: View {
             toggleRow(L10n.Ios.Settings.Notifications.approvals, isOn: $settings.notifyApprovals)
             toggleRow(L10n.Ios.Settings.Notifications.answers, isOn: $settings.notifyAnswers)
             toggleRow(L10n.Ios.Settings.Notifications.errors, isOn: $settings.notifyErrors)
+            toggleRow(L10n.Ios.Live.setting, hint: L10n.Ios.Live.settingHint, isOn: $settings.liveActivities)
             switch permission {
             case .allowed:
                 EmptyView()

@@ -33,12 +33,17 @@ and Activity) opens the composer with an agent picker (last used first).
   / Deny. Risky (push, deploy, delete, outside folder) → Approve needs Face ID. Without push service (phase 1) the
   same actions come from local notifications while the app is alive or refreshing in the background.
 - **Task by voice**: long press the New task button → recording starts at once (dictation), release → picker shows the
-  last agent, Send. Share sheet extension: "Send to Bandito agent" for text, links, images, files.
+  last agent, Send. Share sheet extension (built): "Share" → Bandito in any app (text, a link, up to 4 pictures) → pick an
+  agent → Send; Bandito opens on that agent's chat. The extension never reaches a server and never reads a token: it leaves
+  the task in the App Group (`Shared/ShareInbox.swift`, `<group>/Share/<id>/`), opens `bandito://share/<id>` and the app
+  (`Share/ShareImporter.swift`) uploads the pictures and queues the message in `ChatOutbox`; the task is deleted only
+  after it is queued, and one that cannot go yet (pictures, server offline) waits. Tasks older than 7 days are dropped.
+  If the extension cannot open the app it says so and the task goes the next time Bandito is opened. Files are not taken yet.
 - **Read a result**: markdown rendered natively, code blocks horizontally scrollable with copy, long tool groups folded
   ("Ran 7 commands"), changes summary card ("12 files, +240 −30") opening a diff list. Links open in an in-app Safari
   view; ⌘-less phone: long press for "Open in Safari".
 - **A long task**: Live Activity on the lock screen and Dynamic Island while a turn runs > 30 s: agent avatar, what it is
-  doing now ("Running tests"), elapsed time, Stop. Ends with "Done" or "Needs you".
+  doing now ("Running tests"), elapsed time, Stop. Ends with "Done" or "Needs you". (Built: `apps/ios/CLAUDE.md`, "Live Activities"; the switch is in Settings, Notifications.)
 
 ### Connecting a server (built)
 
@@ -83,12 +88,13 @@ Code: `apps/ios/Bandito/Account/`.
 
 ## iOS-native extras (phase order)
 
-1. Actionable notifications (local now, push later), Face ID lock (optional, off by default), haptics on approve/send.
-2. Widgets: small "Needs you: 2" (tap → Inbox), medium "Crew" (4 agents with status), lock screen circular count.
-3. Live Activities for running turns.
-4. App Intents / Shortcuts / Siri: "Ask Forge to …", "What needs me in Bandito".
-5. Share extension.
-6. Spotlight: agents by name.
+1. Actionable notifications (local now, push later), Face ID lock (optional, off by default), haptics on approve/send. Built.
+2. Widgets: small "Needs you: 2" (tap → Inbox), medium "Crew" (4 agents with status), lock screen circular count. Built.
+3. Live Activities for running turns. Built (updated by the app; push updates wait for the APNs key).
+4. App Intents / Shortcuts / Siri: "Ask Forge to …", "What needs me in Bandito". Built. Home screen quick actions:
+   New task, Inbox. Built.
+5. Share extension. Built (see `apps/ios/CLAUDE.md`).
+6. Spotlight: agents by name. Built.
 
 ## Look and feel
 
