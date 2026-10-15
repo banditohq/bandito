@@ -75,6 +75,7 @@ final class RegistrarHarness {
     let defaults: UserDefaults
     let shared: PushShared
     private nonisolated let suite = "dev.bandito.ios.tests.registrar.\(UUID().uuidString)"
+    var retryDelays: (Int) -> Duration? = { _ in nil }
     private(set) var registrar: PushRegistrar!
 
     init(servers: [FakePushServer], handle: String? = "h1", keep: Set<String> = []) {
@@ -86,7 +87,7 @@ final class RegistrarHarness {
             keychain: keychain, device: device, servers: { [unowned self] in self.servers }, isLoaded: { [unowned self] in self.loaded },
             allowed: { [unowned self] in self.allowed }, kinds: { [unowned self] in self.kinds },
             language: { [unowned self] in self.lang }, defaults: defaults, shared: shared, now: { [unowned self] in self.now },
-            retryDelay: nil, keepRefs: keep)
+            retryDelay: { [unowned self] in self.retryDelays($0) }, keepRefs: keep)
     }
 
     deinit {
@@ -343,6 +344,124 @@ final class RegistrarHarness {
     }
 }
 
+@MainActor
+@Suite struct PushRegistrarRetryTests {
+    @Test func theBackoffGrowsFromHalfAMinuteToAnHour() {
+        #expect(PushRegistrar.backoff(attempt: 1) == .seconds(30))
+        #expect(PushRegistrar.backoff(attempt: 2) == .seconds(120))
+        #expect(PushRegistrar.backoff(attempt: 3) == .seconds(600))
+        #expect(PushRegistrar.backoff(attempt: 4) == .seconds(3600))
+        #expect(PushRegistrar.backoff(attempt: 40) == .seconds(3600))
+    }
+
+    @Test func aMissingHandleSchedulesARetryThatGrows() async {
+        let server = FakePushServer("S1")
+        let h = RegistrarHarness(servers: [server], handle: nil)
+        var asked: [Int] = []
+        h.retryDelays = { attempt in
+            asked.append(attempt)
+            return .seconds(3600)
+        }
+        await h.registrar.reconcile()
+        #expect(h.registrar.isRetryScheduled)
+        #expect(asked == [1])
+        h.registrar.cancelRetryForTests()
+        await h.registrar.reconcile()
+        #expect(asked == [1, 2])
+        // The cloud answers: the retry goes and the count starts over.
+        h.device.handle = "h1"
+        await h.registrar.reconcile()
+        #expect(!h.registrar.isRetryScheduled)
+        #expect(h.registrar.failures == 0)
+        #expect(server.registrations.count == 1)
+        h.registrar.cancelRetryForTests()
+    }
+
+    @Test func aFailedRegistrationIsRetriedToo() async {
+        let server = FakePushServer("S1")
+        server.failRegister = true
+        let h = RegistrarHarness(servers: [server])
+        h.retryDelays = { _ in .seconds(3600) }
+        await h.registrar.reconcile()
+        #expect(h.registrar.isRetryScheduled)
+        h.registrar.cancelRetryForTests()
+    }
+
+    @Test func aKeyMadeAnewIsToldToTheDaemonAgain() async throws {
+        let server = FakePushServer("S1")
+        let h = RegistrarHarness(servers: [server])
+        await h.registrar.reconcile()
+        let first = try #require(server.registrations.first?.key)
+        // The key was lost (a Keychain that was wiped): a new one is made, and the daemon gets it.
+        h.keychain.deleteKey(for: "S1")
+        await h.registrar.reconcile()
+        #expect(server.registrations.count == 2)
+        #expect(server.registrations[1].key != first)
+    }
+
+    @Test func theReplacedHandleIsLetGoOnceEveryServerKnowsTheNewOne() async throws {
+        let a = FakePushServer("A")
+        let b = FakePushServer("B")
+        let h = RegistrarHarness(servers: [a, b], handle: "old")
+        try h.keychain.save(PushRegistration(token: "t", env: "sandbox", handle: "old"))
+        await h.registrar.reconcile()
+        try h.keychain.save(PushRegistration(token: "t2", env: "sandbox", handle: "new"))
+        h.device.handle = "new"
+        #expect(h.keychain.previousHandle() == "old")
+        // One server is out of reach: the old handle stays.
+        b.isConnected = false
+        await h.registrar.reconcile()
+        #expect(a.registrations.last?.handle == "new")
+        #expect(h.keychain.previousHandle() == "old")
+        b.isConnected = true
+        await h.registrar.reconcile()
+        #expect(b.registrations.last?.handle == "new")
+        #expect(h.keychain.previousHandle() == nil)
+    }
+}
+
+@MainActor
+@Suite struct PressedServerTests {
+    @Test func theServerOfTheNotificationIsTheOneThatAnswers() async {
+        let one = await IOSDemo.start()
+        let two = await IOSDemo.start()
+        // The same agent id on both: only the server of the notification says which one it is.
+        let agent = one.agents.first!.id
+        #expect(two.agents.contains { $0.id == agent })
+        let source = StaticNotificationSource(servers: [one, two])
+        let second = await source.readyServer(serverRef: two.id.uuidString, agentID: agent)
+        #expect(second?.id == two.id)
+        let first = await source.readyServer(serverRef: one.id.uuidString, agentID: agent)
+        #expect(first?.id == one.id)
+        // No server in the notification (an older local one): the first with the agent.
+        #expect(await source.readyServer(serverRef: nil, agentID: agent)?.id == one.id)
+        #expect(await source.readyServer(serverRef: "", agentID: agent)?.id == one.id)
+    }
+
+    @Test func aServerThatDoesNotKnowTheAgentYetIsStillTheOneNamed() async {
+        let one = await IOSDemo.start()
+        let other = ServerModel(config: ServerConfig(name: "Cold", endpoint: .webSocket(url: URL(string: "ws://127.0.0.1:9/cold")!)))
+        let source = StaticNotificationSource(servers: [one, other])
+        // `other` has no agents (its saved list lacks them): the push names it, so it is it.
+        let found = await source.readyServer(serverRef: other.id.uuidString, agentID: "ghost")
+        #expect(found?.id == other.id)
+        #expect(await source.readyServer(serverRef: nil, agentID: "ghost") == nil)
+    }
+
+    @Test func thePressCarriesItsServerToTheAnswer() async {
+        let one = await IOSDemo.start()
+        let two = await IOSDemo.start()
+        let notifications = IOSNotifications(postingTo: RecordingSink())
+        notifications.source = StaticNotificationSource(servers: [one, two])
+        let agent = one.agents.first!.id
+        let picked = await IOSNotifications.$pressedServerRef.withValue(two.id.uuidString) {
+            await notifications.pressedServer(agentID: agent)
+        }
+        #expect(picked?.id == two.id)
+        #expect(await notifications.pressedServer(agentID: agent)?.id == one.id)
+    }
+}
+
 // MARK: the cloud address
 
 final class FakeCloud: PushCloud, @unchecked Sendable {
@@ -351,13 +470,15 @@ final class FakeCloud: PushCloud, @unchecked Sendable {
     private var _registered: [(token: String, env: String)] = []
     private var _unregistered: [String] = []
     var next: Result<String, Error> = .success("handle-1")
+    /// An answer for one environment, instead of `next`.
+    var byEnv: [String: Result<String, Error>] = [:]
 
     var registered: [(token: String, env: String)] { lock.withLock { _registered } }
     var unregistered: [String] { lock.withLock { _unregistered } }
 
     func register(token: String, env: String) async throws -> String {
         lock.withLock { _registered.append((token, env)) }
-        return try next.get()
+        return try (byEnv[env] ?? next).get()
     }
 
     func unregister(handle: String) async throws {
@@ -437,17 +558,48 @@ final class FakeCloud: PushCloud, @unchecked Sendable {
         #expect(cloud.registered.map(\.env) == ["sandbox", "production"])
     }
 
-    @Test func aConflictDropsTheOldHandleAndIsNotRetried() async throws {
+    @Test func aConflictIsTriedOnceMoreWithTheOtherEnvironmentAndItIsRemembered() async throws {
+        let cloud = FakeCloud()
+        cloud.byEnv = ["production": .failure(PushCloudError.conflict), "sandbox": .success("handle-sb")]
+        let keychain = PushKeychain(secrets: MemoryPushSecrets())
+        let device = device(cloud, keychain: keychain, env: "production")
+        await device.tokenReceived(token)
+        #expect(cloud.registered.map(\.env) == ["production", "sandbox"])
+        #expect(device.handle == "handle-sb")
+        #expect(!device.isUnavailable)
+        #expect(keychain.registration() == PushRegistration(token: "ab01ff", env: "sandbox", handle: "handle-sb", envFixed: true))
+        // The next launch computes `production` again, and the stored answer stands: nothing is asked.
+        let next = self.device(cloud, keychain: keychain, env: "production")
+        await next.tokenReceived(token)
+        #expect(cloud.registered.count == 2)
+        #expect(next.handle == "handle-sb")
+        // A refresh a day later starts from the environment that worked.
+        let clock = Box(Date().addingTimeInterval(PushDevice.refreshInterval + 10))
+        let later = self.device(cloud, keychain: keychain, env: "production", now: { clock.value })
+        await later.tokenReceived(token)
+        #expect(cloud.registered.map(\.env) == ["production", "sandbox", "sandbox"])
+    }
+
+    @Test func aConflictInBothEnvironmentsLeavesNoHandleAndSaysSo() async throws {
         let cloud = FakeCloud()
         let keychain = PushKeychain(secrets: MemoryPushSecrets())
         try keychain.save(PushRegistration(token: "0ld", env: "sandbox", handle: "stale"))
         cloud.next = .failure(PushCloudError.conflict)
         let device = device(cloud, keychain: keychain, env: "production")
+        var told: [Bool] = []
+        device.onUnavailableChange = { told.append($0) }
         await device.tokenReceived(token)
-        #expect(cloud.registered.count == 1)
+        #expect(cloud.registered.map(\.env) == ["production", "sandbox"])
         #expect(cloud.unregistered == ["stale"])
         #expect(device.handle == nil)
+        #expect(device.isUnavailable)
+        #expect(told == [true])
         #expect(keychain.registration() == nil)
+        // The next launch tries again, and the notice goes when it works.
+        cloud.next = .success("handle-1")
+        await device.ensureHandle(force: true)
+        #expect(device.handle == "handle-1")
+        #expect(told == [true, false])
     }
 
     @Test func withoutTheNetworkNothingIsKeptAndTheNextTryComesLater() async {

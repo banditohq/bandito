@@ -13,8 +13,9 @@ enum PushContent {
     /// tests run it.
     static func make(for original: UNNotificationContent, keychain: PushKeychain, shared: PushShared) -> Outcome {
         let fallback = unopened(original)
-        guard let handle = keychain.handle else { return Outcome(content: fallback) }
-        guard let opened = PushCrypto.open(userInfo: original.userInfo, handle: handle, keys: keychain.allKeys()),
+        let handles = keychain.openableHandles()
+        guard !handles.isEmpty else { return Outcome(content: fallback) }
+        guard let opened = PushCrypto.open(userInfo: original.userInfo, handles: handles, keys: keychain.allKeys()),
             let plan = PushNoticeBuilder.plan(
                 plain: opened.plain, serverRef: opened.serverRef, riskyNeedsFaceID: shared.riskyNeedsFaceID)
         else { return Outcome(content: fallback) }

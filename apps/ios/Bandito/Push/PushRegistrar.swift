@@ -65,7 +65,8 @@ final class PushRegistrar {
     private let defaults: UserDefaults
     private let shared: PushShared
     private let now: () -> Date
-    private let retryDelay: Duration?
+    /// How long to wait before the next try after `attempt` failures in a row; nil: no retry (tests).
+    private let retryDelay: (Int) -> Duration?
     /// Servers whose keys are kept though they are not in the list (the debug key of `-push-test-key`).
     private let keepRefs: Set<String>
 
@@ -73,12 +74,33 @@ final class PushRegistrar {
     private var busy = false
     private var pending = false
     private var retry: Task<Void, Never>?
+    /// Failures in a row (a missing handle, a refused registration): the pause grows with it. Reset by a pass with none.
+    private(set) var failures = 0
+    private var failedThisPass = false
+    /// A retry is waiting (tests read it).
+    var isRetryScheduled: Bool { retry != nil }
+
+    /// Tests only: drops a waiting retry.
+    func cancelRetryForTests() {
+        retry?.cancel()
+        retry = nil
+    }
+
+    /// 30 seconds, 2 minutes, 10 minutes, then once an hour.
+    nonisolated static func backoff(attempt: Int) -> Duration? {
+        switch attempt {
+        case ...1: .seconds(30)
+        case 2: .seconds(120)
+        case 3: .seconds(600)
+        default: .seconds(3600)
+        }
+    }
 
     init(
         keychain: PushKeychain, device: PushHandleSource, servers: @escaping () -> [any PushServerAPI],
         isLoaded: @escaping () -> Bool, allowed: @escaping () -> Bool, kinds: @escaping () -> [String],
         language: @escaping () -> String?, defaults: UserDefaults = .standard, shared: PushShared = .shared,
-        now: @escaping () -> Date = { Date() }, retryDelay: Duration? = .seconds(60), keepRefs: Set<String> = []
+        now: @escaping () -> Date = { Date() }, retryDelay: @escaping (Int) -> Duration? = PushRegistrar.backoff, keepRefs: Set<String> = []
     ) {
         self.keychain = keychain
         self.device = device
@@ -112,6 +134,14 @@ final class PushRegistrar {
     }
 
     private func pass() async {
+        failedThisPass = false
+        defer {
+            if failedThisPass { scheduleRetry() } else {
+                failures = 0
+                retry?.cancel()
+                retry = nil
+            }
+        }
         let all = servers()
         if isLoaded() { prune(keeping: Set(all.map(\.pushRef)).union(keepRefs)) }
         let wanted = kinds()
@@ -121,21 +151,49 @@ final class PushRegistrar {
         if enabled, handle == nil, !eligible.isEmpty {
             await device.ensureHandle(force: false)
             handle = device.handle
+            // The cloud could not be reached (or refused): tried again, later and later.
+            if handle == nil { failedThisPass = true }
         }
         var nowConnected: Set<String> = []
+        var allCurrent = true
         for server in eligible {
             // The connection may have dropped while an earlier server was being told.
             guard server.isConnected else { continue }
             let fresh = !connected.contains(server.pushRef)
             nowConnected.insert(server.pushRef)
             if enabled {
-                guard let handle else { continue }
+                guard let handle else {
+                    allCurrent = false
+                    continue
+                }
                 await register(server, handle: handle, kinds: wanted, fresh: fresh)
+                if lastFingerprint(of: server.pushRef) == nil || !isCurrent(server, handle: handle, kinds: wanted) {
+                    allCurrent = false
+                }
             } else {
                 await switchOff(server)
             }
         }
         connected = nowConnected
+        // A server that is out of reach and was registered with an earlier handle still sends with it: the old handle waits.
+        for server in all where !eligible.contains(where: { $0.pushRef == server.pushRef }) {
+            if let handle, let state = stored(server.pushRef), state.fingerprint != Self.offMark,
+                !isCurrent(server, handle: handle, kinds: wanted)
+            {
+                allCurrent = false
+            }
+        }
+        // The handle that was replaced is let go once every server that gets push knows the new one.
+        if enabled, allCurrent, !eligible.isEmpty, let handle, keychain.registration()?.handle == handle {
+            keychain.clearPreviousHandle()
+        }
+    }
+
+    /// Whether the server's last registration was made with this handle, these kinds, this language and the key it has now.
+    private func isCurrent(_ server: any PushServerAPI, handle: String, kinds: [String]) -> Bool {
+        guard let key = keychain.key(for: server.pushRef) else { return false }
+        return stored(server.pushRef)?.fingerprint
+            == Self.fingerprint(handle: handle, kinds: kinds, lang: language(), key: key)
     }
 
     private func register(_ server: any PushServerAPI, handle first: String, kinds: [String], fresh: Bool) async {
@@ -145,12 +203,13 @@ final class PushRegistrar {
             key = try keychain.keyCreating(for: ref)
         } catch {
             Self.log.error("the key of a server could not be kept; push is not registered for it")
+            failedThisPass = true
             return
         }
         var handle = first
         let lang = language()
         let last = stored(ref)
-        var needs = last == nil || last?.fingerprint != Self.fingerprint(handle: handle, kinds: kinds, lang: lang)
+        var needs = last == nil || last?.fingerprint != Self.fingerprint(handle: handle, kinds: kinds, lang: lang, key: key)
             || now().timeIntervalSince(last?.at ?? .distantPast) >= Self.refreshInterval
         if !needs, fresh, let registered = try? await server.pushIsRegistered(), !registered {
             // The daemon let this phone's address go (the cloud said it is unknown): the cloud is asked again, then the daemon.
@@ -159,14 +218,14 @@ final class PushRegistrar {
             needs = true
         }
         guard needs else { return }
-        let fingerprint = Self.fingerprint(handle: handle, kinds: kinds, lang: lang)
+        let fingerprint = Self.fingerprint(handle: handle, kinds: kinds, lang: lang, key: key)
         do {
             try await server.pushRegister(
                 handle: handle, key: key.withUnsafeBytes { Data($0) }, serverRef: ref, kinds: kinds, lang: lang)
             remember(ref, fingerprint)
         } catch {
             Self.log.error("push.register failed; it is tried again")
-            scheduleRetry()
+            failedThisPass = true
         }
     }
 
@@ -178,7 +237,7 @@ final class PushRegistrar {
             remember(ref, Self.offMark)
         } catch {
             Self.log.error("push.unregister failed; it is tried again")
-            scheduleRetry()
+            failedThisPass = true
         }
     }
 
@@ -216,9 +275,11 @@ final class PushRegistrar {
     }
 
     private func scheduleRetry() {
-        guard let retryDelay, retry == nil else { return }
+        guard retry == nil else { return }
+        failures += 1
+        guard let delay = retryDelay(failures) else { return }
         retry = Task { [weak self] in
-            try? await Task.sleep(for: retryDelay)
+            try? await Task.sleep(for: delay)
             guard let self, !Task.isCancelled else { return }
             self.retry = nil
             await self.reconcile()
@@ -227,9 +288,11 @@ final class PushRegistrar {
 
     // MARK: what was told
 
-    /// A hash of what a registration said: the handle, the kinds (in any order) and the language.
-    static func fingerprint(handle: String, kinds: [String], lang: String?) -> String {
-        let text = [handle, kinds.sorted().joined(separator: ","), lang ?? ""].joined(separator: "\n")
+    /// A hash of what a registration said: the handle, the kinds (in any order), the language, and which key it carried
+    /// (the first 8 bytes of the key's SHA-256, so a key made anew is told to the daemon).
+    static func fingerprint(handle: String, kinds: [String], lang: String?, key: SymmetricKey) -> String {
+        let keyID = SHA256.hash(data: key.withUnsafeBytes { Data($0) }).prefix(8).map { String(format: "%02x", $0) }.joined()
+        let text = [handle, kinds.sorted().joined(separator: ","), lang ?? "", keyID].joined(separator: "\n")
         return SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 

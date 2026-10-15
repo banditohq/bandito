@@ -1796,6 +1796,7 @@ public enum L10n {
                 public static var background: String { L10n.tr("ios.settings.notifications.background") }
                 public static var denied: String { L10n.tr("ios.settings.notifications.denied") }
                 public static var errors: String { L10n.tr("ios.settings.notifications.errors") }
+                public static var pushUnavailable: String { L10n.tr("ios.settings.notifications.pushUnavailable") }
             }
 
             public enum Security {

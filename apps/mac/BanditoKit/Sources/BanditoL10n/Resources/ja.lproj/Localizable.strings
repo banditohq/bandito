@@ -1181,9 +1181,10 @@
 "ios.settings.notifications.allow" = "通知を許可";
 "ios.settings.notifications.answers" = "完了した返信";
 "ios.settings.notifications.approvals" = "承認と質問";
-"ios.settings.notifications.background" = "アプリを閉じている間、Bandito は時々確認します。即時の通知は今後のアップデートで届きます。";
+"ios.settings.notifications.background" = "アプリを閉じている間、通知は Bandito クラウド経由で届きます。プッシュ非対応のサーバーは時々確認します。";
 "ios.settings.notifications.denied" = "Bandito の通知は iOS の設定でオフになっています。";
 "ios.settings.notifications.errors" = "エラー";
+"ios.settings.notifications.pushUnavailable" = "プッシュを利用できません。アプリを開くと通知が届きます。";
 "ios.settings.openSettings" = "iOS の設定を開く";
 "ios.settings.security.enableReason" = "Face ID ロックをオンにする";
 "ios.settings.security.faceIDLock" = "Face ID でロック";

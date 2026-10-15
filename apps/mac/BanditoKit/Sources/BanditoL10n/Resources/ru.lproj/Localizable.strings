@@ -1181,9 +1181,10 @@
 "ios.settings.notifications.allow" = "Разрешить уведомления";
 "ios.settings.notifications.answers" = "Готовые ответы";
 "ios.settings.notifications.approvals" = "Одобрения и вопросы";
-"ios.settings.notifications.background" = "Пока приложение закрыто, проверка раз в некоторое время; мгновенные уведомления появятся с обновлением.";
+"ios.settings.notifications.background" = "Пока приложение закрыто, уведомления приходят через облако Bandito. Сервер без push Bandito проверяет время от времени.";
 "ios.settings.notifications.denied" = "Уведомления для Bandito выключены в настройках iOS.";
 "ios.settings.notifications.errors" = "Ошибки";
+"ios.settings.notifications.pushUnavailable" = "Push недоступны — уведомления придут, когда приложение откроется.";
 "ios.settings.openSettings" = "Открыть настройки iOS";
 "ios.settings.security.enableReason" = "Включить блокировку Face ID";
 "ios.settings.security.faceIDLock" = "Блокировка Face ID";

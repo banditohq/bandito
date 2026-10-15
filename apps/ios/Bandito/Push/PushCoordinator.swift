@@ -7,20 +7,24 @@ import os
 /// Push on the phone (docs/IOS_APP.md, Push): asks Apple for a token while notifications are allowed, gives it to the
 /// cloud (`PushDevice`), and tells the connected servers where to send (`PushRegistrar`).
 @MainActor
+@Observable
 final class PushCoordinator {
     static let shared = PushCoordinator()
     private static let log = Logger(subsystem: "dev.bandito", category: "push")
 
-    let device: PushDevice
-    private(set) var registrar: PushRegistrar?
+    @ObservationIgnored let device: PushDevice
+    @ObservationIgnored private(set) var registrar: PushRegistrar?
+    /// The cloud refused this phone's token in both environments: Settings says push is unavailable.
+    private(set) var pushUnavailable = false
     /// Whether the system lets Bandito show notifications. Nothing is asked of Apple, the cloud or a server while it is off.
     private(set) var isAllowed = false
-    private var started = false
+    @ObservationIgnored private var started = false
     /// Asks the system for a token. Replaced in tests.
-    var registerForRemote: @MainActor () -> Void = { UIApplication.shared.registerForRemoteNotifications() }
+    @ObservationIgnored var registerForRemote: @MainActor () -> Void = { UIApplication.shared.registerForRemoteNotifications() }
 
     init(device: PushDevice = PushDevice()) {
         self.device = device
+        device.onUnavailableChange = { [weak self] unavailable in self?.pushUnavailable = unavailable }
     }
 
     /// Wires push to the servers and the settings. Call once, when the app's screens start (not for the demo world).

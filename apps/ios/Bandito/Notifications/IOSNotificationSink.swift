@@ -125,6 +125,7 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
         let action = response.actionIdentifier
         let typed = (response as? UNTextInputNotificationResponse)?.userText ?? ""
         let link = info[ShareReminder.userInfoKey] as? String ?? ""
+        let server = info["server"] as? String
         // The system waits for this handler before it lets a woken app sleep again: an answer from a button (the app may be
         // woken just for it, by a push) is sent first. A slow server must not keep the system waiting: 20 seconds at most.
         let done = CompletionOnce(completionHandler)
@@ -133,8 +134,10 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
                 try? await Task.sleep(for: .seconds(20))
                 done.call()
             }
-            await self?.respond(
-                action: action, agentID: agentID, approvalID: approvalID, risky: risky, typed: typed, link: link)
+            await IOSNotifications.$pressedServerRef.withValue(server) {
+                await self?.respond(
+                    action: action, agentID: agentID, approvalID: approvalID, risky: risky, typed: typed, link: link)
+            }
             limit.cancel()
             done.call()
         }

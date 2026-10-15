@@ -23,7 +23,7 @@ final class PushDevice: PushHandleSource {
     /// The cloud's answer is asked again after this long, so a handle the cloud forgot is replaced.
     static let refreshInterval: TimeInterval = 24 * 3600
     /// A failed attempt is not repeated sooner than this (the cloud allows 30 an hour per address).
-    static let retryInterval: TimeInterval = 60
+    static let retryInterval: TimeInterval = 25
 
     private let keychain: PushKeychain
     private let cloud: PushCloud
@@ -36,6 +36,9 @@ final class PushDevice: PushHandleSource {
     private(set) var handle: String?
     /// Told when the confirmed handle changes (the servers are registered again with the new one).
     var onHandleChange: (@MainActor () -> Void)?
+    /// The cloud refused the token in both environments: no push on this phone until the next launch. Told to Settings.
+    private(set) var isUnavailable = false
+    var onUnavailableChange: (@MainActor (Bool) -> Void)?
 
     private var running: Task<Void, Never>?
     private var lastAttempt: Date?
@@ -78,7 +81,8 @@ final class PushDevice: PushHandleSource {
         guard let token else { return }
         let env = environment()
         let stored = keychain.registration()
-        let matches = stored.map { $0.token == token && $0.env == env } ?? false
+        // An environment the cloud took after refusing the other (409) stays the one that is used for this token.
+        let matches = stored.map { $0.token == token && ($0.env == env || $0.envFixed) } ?? false
         if matches, let stored, !force {
             let age = now().timeIntervalSince(keychain.registeredAt ?? .distantPast)
             if age < Self.refreshInterval {
@@ -92,29 +96,49 @@ final class PushDevice: PushHandleSource {
             return
         }
         lastAttempt = now()
+        let first = matches && stored?.envFixed == true ? stored?.env ?? env : env
         do {
-            let made = try await cloud.register(token: token, env: env)
+            let made = try await registerTryingBoth(token: token, env: first)
+            let registration = PushRegistration(token: token, env: made.env, handle: made.handle, envFixed: made.fixed)
             do {
-                try keychain.save(PushRegistration(token: token, env: env, handle: made), at: now())
+                try keychain.save(registration, at: now())
             } catch {
                 // The push extension reads the handle from the Keychain: without it pushes show the cloud's own text.
                 Self.log.error("the push handle could not be kept in the Keychain")
             }
-            setHandle(made)
-            if let old = stored?.handle, old != made {
+            setUnavailable(false)
+            setHandle(made.handle)
+            if let old = stored?.handle, old != made.handle {
                 // The earlier install's or token's address: the cloud may drop it. Nobody needs to hear about a failure.
                 try? await cloud.unregister(handle: old)
             }
         } catch PushCloudError.conflict {
-            // The cloud holds this token for the other environment. The old address is dropped and nothing more is tried now.
-            Self.log.error("push registration refused: the token is known in the other environment")
+            // Both environments refused: nothing more is tried now (the next launch tries again), and Settings says so.
+            Self.log.error("push registration refused in both environments")
             if let old = stored?.handle { try? await cloud.unregister(handle: old) }
             keychain.clearRegistration()
             setHandle(nil)
+            setUnavailable(true)
         } catch {
             Self.log.error("push registration failed; it is tried again later")
             if matches, let stored { setHandle(stored.handle) }
         }
+    }
+
+    /// The cloud's answer for `env`; on a 409 (it has this token in the other environment) once more with the other one.
+    private func registerTryingBoth(token: String, env: String) async throws -> (handle: String, env: String, fixed: Bool) {
+        do {
+            return (try await cloud.register(token: token, env: env), env, false)
+        } catch PushCloudError.conflict {
+            let other = env == PushEnvironment.sandbox ? PushEnvironment.production : PushEnvironment.sandbox
+            return (try await cloud.register(token: token, env: other), other, true)
+        }
+    }
+
+    private func setUnavailable(_ new: Bool) {
+        guard isUnavailable != new else { return }
+        isUnavailable = new
+        onUnavailableChange?(new)
     }
 
     private func setHandle(_ new: String?) {

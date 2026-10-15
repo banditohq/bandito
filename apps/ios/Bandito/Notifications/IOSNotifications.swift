@@ -32,8 +32,8 @@ final class IOSNotifications {
     /// Where the servers come from. Set once at launch.
     var source: NotificationSource = StaticNotificationSource()
 
-    /// The highest event of a server that a push showed (the extension writes it to the App Group). Replaced in tests.
-    var pushSeq: (UUID) -> Int64 = { PushShared.shared.lastSeq(for: $0.uuidString) }
+    /// Whether a push showed this event of a server (the extension writes the events to the App Group). Replaced in tests.
+    var pushShowed: (UUID, Int64) -> Bool = { PushShared.shared.hasSeen($1, for: $0.uuidString) }
 
     /// The event sequence numbers each server has shown, read by the background check.
     let cursor: NotificationCursor
@@ -54,16 +54,25 @@ final class IOSNotifications {
             windowActive: { [weak self] in self?.isAppActive ?? false },
             selectedAgentID: { nil },
             resolve: { [weak self] agentID, approvalID, decision in
-                guard let server = await self?.source.readyServer(forAgent: agentID) else { throw AgentNotFoundError() }
+                guard let server = await self?.pressedServer(agentID: agentID) else { throw AgentNotFoundError() }
                 try await server.resolve(approvalID, decision, remember: false)
             },
             reply: { [weak self] agentID, text in
-                guard let server = await self?.source.readyServer(forAgent: agentID) else { throw AgentNotFoundError() }
+                guard let server = await self?.pressedServer(agentID: agentID) else { throw AgentNotFoundError() }
                 try await server.send(text, to: agentID, viaButton: true)
             })
         sink.service = service
         sink.riskyNeedsFaceID = { [weak self] in self?.settings?.riskyNeedsFaceID ?? true }
         sink.onRoute = { [weak self] route in self?.route = route }
+    }
+
+    /// The server (`userInfo["server"]`) of the notification whose button is being answered. Task-local: the answer runs in the
+    /// task of the press, so two presses at once do not mix their servers.
+    @TaskLocal static var pressedServerRef: String?
+
+    /// The server an answer from a notification goes to: the one the notification names, else the one with the agent.
+    func pressedServer(agentID: String) async -> ServerModel? {
+        await source.readyServer(serverRef: Self.pressedServerRef, agentID: agentID)
     }
 
     /// The server that has the agent, for an answer sent from a notification.
@@ -110,8 +119,8 @@ final class IOSNotifications {
             service.approvalSettled(approvalID)
         }
         guard event.seq > 0 else { return }
-        // A push already showed this event (and everything before it): a second notice would be a repeat.
-        guard event.seq > pushSeq(server.id) else { return }
+        // A push already showed this very event: a second notice would be a repeat.
+        guard !pushShowed(server.id, event.seq) else { return }
         guard let made = Self.notice(for: event, in: server) else { return }
         guard !isViewingAgent(server: server, agent: event.agentId) else { return }
         service.handle(

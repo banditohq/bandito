@@ -159,6 +159,9 @@ struct SettingsTab: View {
                 footnote(L10n.Ios.Settings.Notifications.background)
                 if permission == .denied {
                     footnote(L10n.Ios.Settings.Notifications.denied)
+                } else if permission == .allowed, PushCoordinator.shared.pushUnavailable {
+                    // The cloud refused this phone's token: notices still come, when the app is open.
+                    footnote(L10n.Ios.Settings.Notifications.pushUnavailable)
                 }
             }
         }

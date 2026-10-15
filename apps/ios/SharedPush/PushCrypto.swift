@@ -35,10 +35,19 @@ enum PushCrypto {
     static func open(
         userInfo: [AnyHashable: Any], handle: String, keys: [(serverRef: String, key: SymmetricKey)]
     ) -> (serverRef: String, plain: Data)? {
+        open(userInfo: userInfo, handles: [handle], keys: keys)
+    }
+
+    /// The same with several handles to try (the current one and the one it replaced a few days ago).
+    static func open(
+        userInfo: [AnyHashable: Any], handles: [String], keys: [(serverRef: String, key: SymmetricKey)]
+    ) -> (serverRef: String, plain: Data)? {
         guard let ct = userInfo["ct"] as? String, let nonce = userInfo["nonce"] as? String else { return nil }
-        for candidate in keys {
-            if let plain = open(ct: ct, nonce: nonce, handle: handle, key: candidate.key) {
-                return (candidate.serverRef, plain)
+        for handle in handles {
+            for candidate in keys {
+                if let plain = open(ct: ct, nonce: nonce, handle: handle, key: candidate.key) {
+                    return (candidate.serverRef, plain)
+                }
             }
         }
         return nil

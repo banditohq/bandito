@@ -176,25 +176,32 @@ language. Code: `apps/ios/Bandito/Push/` (the app side), `apps/ios/SharedPush/` 
   access group on iOS; service `dev.bandito.ios.push`, readable after the first unlock, this device only): one random
   32-byte key per server (`push.key.<serverRef>`, `serverRef` = the server's UUID string), and the cloud address
   (`push.handle`, with the `push.token` and `push.env` it was made for). Plain values the extension reads are in the
-  group's UserDefaults (`PushShared`): `push.seq.<serverRef>` and the Face ID choice for risky approvals.
+  group's UserDefaults (`PushShared`): `push.seen.<serverRef>` (the ring of seen seqs) and the Face ID choice for risky approvals.
 - **Cloud address** (`PushDevice`). While notifications are allowed the app asks Apple for a token at every launch
   (`registerForRemoteNotifications`, from `PushCoordinator`; the permission is read again when the app comes to the front).
   The token (hex) and the environment go to `POST /push/register {apnsToken, env, bundleId}` and the answer's `handle` is kept.
   `env` is `sandbox` on the Simulator and in debug builds; otherwise it is read from `aps-environment` in
   `embedded.mobileprovision` (`development` is sandbox), and a build with no profile (the App Store) is `production`
   (`PushEnvironment`). A new token, a new environment, or a day later registers again; the old handle is unregistered
-  (silently). A 409 (the token is known in the other environment) unregisters the old handle and is not retried. No network
-  or a refusal is retried at the next launch or when a server connects (not sooner than a minute). A handle is used only after
+  (silently). A 409 (the token is known in the other environment) is retried once with the other
+  environment; if that works the environment is kept in the Keychain next to the handle (`push.envFixed`), if not the handle is
+  dropped, the next launch tries again, and Settings > Notifications shows a grey line "Push unavailable" (the app's own
+  notices still work). No network or a refusal is retried at the next launch or when a server connects (not sooner than a
+  minute); while no handle is known the registrar also retries by itself after 30 s, 2 min, 10 min, then every hour. A handle is used only after
   this launch has confirmed it: after a reinstall the Keychain still holds the earlier install's handle and keys.
 - **Servers** (`PushRegistrar`). A server that is connected, has `"push"` in `daemon.info.features`, with a confirmed handle
   and notifications allowed gets `push.register {handle, key, serverRef, kinds, lang}`. `kinds` follow the Notifications
   switches (approvals and questions: "needs you"; `done`: answers; `error`: errors), `lang` is the phone's first language.
-  What was told is remembered per server (a hash of handle, kinds and language, in UserDefaults), so it is repeated only
-  when one of them changes, and once a day. A server that connects is asked `push.status` once: if the daemon lost the
+  What was told is remembered per server (a hash of handle, kinds, language and the first 8 bytes of the SHA-256 of the server's key, in UserDefaults), so it is repeated only
+  when one of them changes (a new key or a forget resets it), and once a day. A server that connects is asked `push.status` once: if the daemon lost the
   registration the cloud is asked again and then the daemon. Notifications off, or every switch off, sends
   `push.unregister` to every connected server (once). A server removed from the phone is told to stop (when reachable;
   disconnecting revokes the device, which removes it on the daemon) and its key is deleted; keys of servers that are not in
   the list are deleted too. Servers without `"push"` are never touched. Demo servers never register.
+- **A replaced handle.** The Keychain keeps the previous handle with its date (`push.handle.prev`, `push.handle.prevAt`). The
+  extension tries the associated data of the current handle, then of the previous one (younger than 7 days), so a push sent
+  before the server learnt the new handle still opens. The previous handle is deleted once every push server the phone has
+  registered carries the new one.
 - **The extension.** It tries each server's key against `ct`/`nonce` (ChaCha20-Poly1305, associated data
   `bandito-push:v1:<handle>`), reads the payload, and builds the notification with the same code as the app (`PhoneNotice`:
   event, then `AgentNotice` and `NotificationContent`, in `SharedPush/PushNotice.swift`): title, text, category
@@ -204,12 +211,13 @@ language. Code: `apps/ios/Bandito/Push/` (the app side), `apps/ios/SharedPush/` 
   one that cannot be opened keeps the cloud's own English text, with the finished category (no buttons). When it runs out of
   time (`serviceExtensionTimeWillExpire`) it shows what it has. The server's name is not used (neither is it in the local
   notice).
-- **No repeats.** The extension writes `push.seq.<serverRef>` (the highest event a push showed) and takes down a local
-  notification of the same event (`<server>:<seq>`). The app's `ingest` makes no local notice for an event whose seq is up to
-  it (the cursor moves as always), so the background check does not repeat a push. A push that arrives while the app is on
+- **No repeats.** The extension records the seq of each event it showed in a ring of the last 200 per server
+  (`push.seen.<serverRef>` in the group's UserDefaults) and takes down a local notification of the same event
+  (`<server>:<seq>`). The app's `ingest` makes no local notice for an event whose seq is in that set (the cursor moves as
+  always); an earlier event whose push never came is still shown. So the background check does not repeat a push. A push that arrives while the app is on
   the screen is not shown (`willPresent` returns no options, as for local notices); the app shows its own.
 - **Buttons with the app closed.** A press on Allow, Deny or Reply wakes the app: it reads the saved servers, connects the
-  one that has the agent, sends the answer, and only then returns to the system (20 seconds at most).
+  one named in the notification's `server` (older notices without it: the one that has the agent), sends the answer, and only then returns to the system (20 seconds at most).
 - **Debug.** `-push-test-key <base64 32 bytes>` (DEBUG) keeps a known key for the server `TEST`; `Documents/push-debug.json`
   holds the token, the handle and the environment. On the Simulator (Apple silicon) a push can be sent with
   `xcrun simctl push <udid> dev.bandito.ios file.apns`, or through the cloud with the handle (`POST /push/send`).

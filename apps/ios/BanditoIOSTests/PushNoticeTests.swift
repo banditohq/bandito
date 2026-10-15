@@ -249,6 +249,24 @@ import UserNotifications
         #expect(none.content.categoryIdentifier == NotificationContent.finishedCategory)
     }
 
+    @Test func aPushSealedWithTheReplacedHandleStillOpensForAWeek() throws {
+        let key = SymmetricKey(size: .bits256)
+        let (shared, cleanup) = shared()
+        defer { cleanup() }
+        let keychain = try keychain(key, handle: "old-handle")
+        let day = Date(timeIntervalSince1970: 1_800_000_000)
+        try keychain.save(PushRegistration(token: "aa", env: "sandbox", handle: "new-handle"), at: day)
+        let info = try Self.push(Self.text(event: Self.approval), key: key, handle: "old-handle")
+        let outcome = PushContent.make(for: original(info), keychain: keychain, shared: shared)
+        #expect(outcome.content.title == L10n.Notify.wantsToRun(name: "Forge"))
+        #expect(keychain.openableHandles(now: day.addingTimeInterval(6 * 24 * 3600)) == ["new-handle", "old-handle"])
+        // Later than a week, or once the servers know the new one, it is let go.
+        #expect(keychain.openableHandles(now: day.addingTimeInterval(8 * 24 * 3600)) == ["new-handle"])
+        keychain.clearPreviousHandle()
+        #expect(keychain.openableHandles(now: day) == ["new-handle"])
+        #expect(PushContent.make(for: original(info), keychain: keychain, shared: shared).content.title == "Bandito")
+    }
+
     @Test func theNotedEventOnlyMovesForward() {
         let (shared, cleanup) = shared()
         defer { cleanup() }
@@ -258,6 +276,7 @@ import UserNotifications
         #expect(shared.lastSeq(for: "S2") == 0)
         shared.forgetSeq(for: "S1")
         #expect(shared.lastSeq(for: "S1") == 0)
+        #expect(!shared.hasSeen(10, for: "S1"))
     }
 }
 
@@ -316,22 +335,39 @@ import UserNotifications
         Event(seq: seq, agentId: "ios-demo-1", ts: 0, body: .error(message: "boom"))
     }
 
-    @Test func anEventUpToTheOneAPushShowedMakesNoLocalNotice() async {
+    @Test func onlyTheEventsAPushShowedMakeNoLocalNotice() async {
         let server = await IOSDemo.start()
         let system = RecordingSink()
         let notifications = IOSNotifications(postingTo: system)
         notifications.source = StaticNotificationSource(servers: [server])
-        var seen: Int64 = 20
-        notifications.pushSeq = { _ in seen }
-        notifications.ingest(failure(seq: 19), from: server)
-        notifications.ingest(failure(seq: 20), from: server)
-        #expect(system.posted.isEmpty)
-        // The cursor moved as always.
-        #expect(notifications.cursor.seq(for: server.id) >= 20)
-        notifications.ingest(failure(seq: 21), from: server)
+        // A push showed event 11 and not event 10 (the daemon dropped it): 10 still gets its notice.
+        var shown: Set<Int64> = [11]
+        notifications.pushShowed = { _, seq in shown.contains(seq) }
+        notifications.ingest(failure(seq: 10), from: server)
         #expect(system.posted.count == 1)
-        seen = 0
-        notifications.ingest(failure(seq: 22), from: server)
+        notifications.ingest(failure(seq: 11), from: server)
+        #expect(system.posted.count == 1)
+        // The cursor moved as always.
+        #expect(notifications.cursor.seq(for: server.id) >= 11)
+        shown = []
+        notifications.ingest(failure(seq: 12), from: server)
         #expect(system.posted.count == 2)
+    }
+
+    @Test func theSharedRingKeepsTheLatestTwoHundred() {
+        let suite = "dev.bandito.ios.tests.ring.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let shared = PushShared(defaults: defaults)
+        shared.noteSeq(11, for: "S1")
+        #expect(shared.hasSeen(11, for: "S1"))
+        #expect(!shared.hasSeen(10, for: "S1"))
+        #expect(!shared.hasSeen(11, for: "S2"))
+        for seq in 100..<(100 + Int64(PushShared.seenLimit) + 5) { shared.noteSeq(seq, for: "S1") }
+        #expect(!shared.hasSeen(11, for: "S1"))
+        #expect(!shared.hasSeen(100, for: "S1"))
+        #expect(shared.hasSeen(105, for: "S1"))
+        #expect(shared.hasSeen(304, for: "S1"))
+        #expect((defaults.array(forKey: PushShared.seenKey("S1")) as? [Int])?.count == PushShared.seenLimit)
     }
 }

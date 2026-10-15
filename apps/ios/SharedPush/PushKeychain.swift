@@ -127,6 +127,9 @@ struct PushRegistration: Equatable, Sendable {
     var token: String
     var env: String
     var handle: String
+    /// The cloud refused `env` for this token (409) and took the other one: this is the one that works, so a later launch
+    /// does not try the first again.
+    var envFixed = false
 }
 
 /// The push secrets of this phone: one 32-byte key per server (`push.key.<serverRef>`), and the cloud address
@@ -139,6 +142,11 @@ struct PushKeychain: Sendable {
     static let tokenAccount = "push.token"
     static let envAccount = "push.env"
     static let registeredAtAccount = "push.registeredAt"
+    static let envFixedAccount = "push.envFixed"
+    static let previousHandleAccount = "push.handle.prev"
+    static let previousHandleAtAccount = "push.handle.prevAt"
+    /// A handle that was replaced is still opened for this long: pushes that were on their way when it changed.
+    static let previousHandleLife: TimeInterval = 7 * 24 * 3600
     static let keyBytes = 32
 
     let secrets: PushSecrets
@@ -205,7 +213,28 @@ struct PushKeychain: Sendable {
         }
         guard let token = text(Self.tokenAccount), let env = text(Self.envAccount), let handle = text(Self.handleAccount)
         else { return nil }
-        return PushRegistration(token: token, env: env, handle: handle)
+        let fixed = (try? secrets.load(account: Self.envFixedAccount)).flatMap { String(data: $0, encoding: .utf8) } == "1"
+        return PushRegistration(token: token, env: env, handle: handle, envFixed: fixed)
+    }
+
+    /// The handle this one replaced, while it is younger than a week: the extension still opens a push sealed with it.
+    func previousHandle(now: Date = Date()) -> String? {
+        guard let handle = (try? secrets.load(account: Self.previousHandleAccount)).flatMap({ String(data: $0, encoding: .utf8) }),
+            !handle.isEmpty,
+            let at = (try? secrets.load(account: Self.previousHandleAtAccount)).flatMap({ String(data: $0, encoding: .utf8) })
+                .flatMap(TimeInterval.init),
+            now.timeIntervalSince1970 - at < Self.previousHandleLife
+        else { return nil }
+        return handle
+    }
+
+    /// The handles a push may be sealed with: the current one, then the one before it.
+    func openableHandles(now: Date = Date()) -> [String] {
+        [handle, previousHandle(now: now)].compactMap { $0 }
+    }
+
+    func clearPreviousHandle() {
+        for account in [Self.previousHandleAccount, Self.previousHandleAtAccount] { try? secrets.save(nil, account: account) }
     }
 
     /// When the cloud last answered a registration, if the Keychain says.
@@ -216,6 +245,12 @@ struct PushKeychain: Sendable {
 
     /// Keeps the registration. The handle goes last: a registration is whole only when it is there.
     func save(_ registration: PushRegistration, at date: Date = Date()) throws {
+        // The handle that is replaced is kept for a while (`previousHandle`).
+        if let old = handle, old != registration.handle {
+            try secrets.save(Data(old.utf8), account: Self.previousHandleAccount)
+            try secrets.save(Data(String(date.timeIntervalSince1970).utf8), account: Self.previousHandleAtAccount)
+        }
+        try secrets.save(registration.envFixed ? Data("1".utf8) : nil, account: Self.envFixedAccount)
         try secrets.save(Data(registration.token.utf8), account: Self.tokenAccount)
         try secrets.save(Data(registration.env.utf8), account: Self.envAccount)
         try secrets.save(Data(String(date.timeIntervalSince1970).utf8), account: Self.registeredAtAccount)
@@ -223,8 +258,9 @@ struct PushKeychain: Sendable {
     }
 
     func clearRegistration() {
-        for account in [Self.handleAccount, Self.tokenAccount, Self.envAccount, Self.registeredAtAccount] {
+        for account in [Self.handleAccount, Self.tokenAccount, Self.envAccount, Self.registeredAtAccount, Self.envFixedAccount] {
             try? secrets.save(nil, account: account)
         }
+        clearPreviousHandle()
     }
 }
