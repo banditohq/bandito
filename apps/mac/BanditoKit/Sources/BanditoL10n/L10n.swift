@@ -1639,6 +1639,14 @@ public enum L10n {
             }
         }
 
+        public enum Live {
+            public static var done: String { L10n.tr("ios.live.done") }
+            public static var failed: String { L10n.tr("ios.live.failed") }
+            public static var setting: String { L10n.tr("ios.live.setting") }
+            public static var settingHint: String { L10n.tr("ios.live.settingHint") }
+            public static var stopFailed: String { L10n.tr("ios.live.stopFailed") }
+        }
+
         public enum NewAgent {
             public static var installTimedOut: String { L10n.tr("ios.newAgent.installTimedOut") }
             public static var tabOne: String { L10n.tr("ios.newAgent.tabOne") }

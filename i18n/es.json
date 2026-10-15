@@ -3507,5 +3507,10 @@
   "account.hidden.show": "Mostrar servidores ocultos ({count})",
   "account.hidden.hint": "Servidores de la cuenta que quitaste de este dispositivo. Muéstralos y volverán.",
   "ios.account.servers.hidden": "Oculto",
-  "ios.account.servers.updateNeeded": "Actualiza Bandito"
+  "ios.account.servers.updateNeeded": "Actualiza Bandito",
+  "ios.live.done": "Listo",
+  "ios.live.failed": "No terminó",
+  "ios.live.stopFailed": "No se pudo detener: sin conexión",
+  "ios.live.setting": "Actividades en vivo en la pantalla de bloqueo",
+  "ios.live.settingHint": "Muestra una tarea que dura más de 30 segundos, con un botón para detenerla."
 }

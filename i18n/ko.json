@@ -3465,5 +3465,10 @@
   "account.hidden.show": "숨긴 서버 표시 ({count})",
   "account.hidden.hint": "이 기기에서 제거한 계정의 서버입니다. 표시하면 다시 나타납니다.",
   "ios.account.servers.hidden": "숨김",
-  "ios.account.servers.updateNeeded": "Bandito 업데이트 필요"
+  "ios.account.servers.updateNeeded": "Bandito 업데이트 필요",
+  "ios.live.done": "완료",
+  "ios.live.failed": "끝내지 못했습니다",
+  "ios.live.stopFailed": "중지할 수 없음: 연결 없음",
+  "ios.live.setting": "잠금 화면의 실시간 현황",
+  "ios.live.settingHint": "30초보다 오래 걸리는 작업을 중지 버튼과 함께 표시합니다."
 }

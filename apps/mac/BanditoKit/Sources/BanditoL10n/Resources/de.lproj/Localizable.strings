@@ -1094,6 +1094,11 @@
 "ios.intent.ask.sent" = "An %1$@ gesendet";
 "ios.intent.needsMe.none" = "Nichts wartet auf Sie";
 "ios.intent.open.inbox" = "Posteingang öffnen";
+"ios.live.done" = "Fertig";
+"ios.live.failed" = "Nicht abgeschlossen";
+"ios.live.setting" = "Live-Aktivitäten auf dem Sperrbildschirm";
+"ios.live.settingHint" = "Zeigt eine Aufgabe, die länger als 30 Sekunden dauert, mit einer Stopp-Taste.";
+"ios.live.stopFailed" = "Anhalten nicht möglich: keine Verbindung";
 "ios.newAgent.installTimedOut" = "Die Installation läuft noch. Versuchen Sie es später erneut.";
 "ios.newAgent.tabOne" = "Ein Agent";
 "ios.newAgent.tabTeams" = "Fertige Teams";

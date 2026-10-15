@@ -3465,5 +3465,10 @@
   "account.hidden.show": "显示已隐藏的服务器（{count}）",
   "account.hidden.hint": "您已从此设备移除的账户服务器。显示它们后会重新出现。",
   "ios.account.servers.hidden": "已隐藏",
-  "ios.account.servers.updateNeeded": "需要更新 Bandito"
+  "ios.account.servers.updateNeeded": "需要更新 Bandito",
+  "ios.live.done": "已完成",
+  "ios.live.failed": "未完成",
+  "ios.live.stopFailed": "无法停止：没有网络连接",
+  "ios.live.setting": "锁屏上的实时活动",
+  "ios.live.settingHint": "显示耗时超过 30 秒的任务，并带有停止按钮。"
 }

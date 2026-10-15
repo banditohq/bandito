@@ -3507,5 +3507,10 @@
   "account.hidden.show": "Afficher les serveurs masqués ({count})",
   "account.hidden.hint": "Serveurs du compte que vous avez retirés de cet appareil. Affichez-les et ils reviennent.",
   "ios.account.servers.hidden": "Masqué",
-  "ios.account.servers.updateNeeded": "Mettez Bandito à jour"
+  "ios.account.servers.updateNeeded": "Mettez Bandito à jour",
+  "ios.live.done": "Terminé",
+  "ios.live.failed": "Non terminé",
+  "ios.live.stopFailed": "Impossible d'arrêter : pas de connexion",
+  "ios.live.setting": "Activités en direct sur l'écran verrouillé",
+  "ios.live.settingHint": "Affiche une tâche qui dure plus de 30 secondes, avec un bouton Arrêter."
 }

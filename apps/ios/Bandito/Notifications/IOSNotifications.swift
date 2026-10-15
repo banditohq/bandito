@@ -87,6 +87,7 @@ final class IOSNotifications {
             server.onLiveEvent = { [weak self, weak server] event in
                 guard let self, let server else { return }
                 self.ingest(event, from: server)
+                TurnActivities.shared.ingest(event, from: server)
             }
         }
         updateBadge()

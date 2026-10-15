@@ -91,6 +91,7 @@ struct RootView: View {
             appLock.scenePhaseChanged(to: phase, enabled: settings.faceIDLock, timeout: settings.lockTimeout)
             notifications.appActiveChanged(phase == .active)
             account.setActive(phase == .active)
+            if phase == .active { TurnActivities.shared.appBecameActive() }
         }
         // An account that is ready ends the onboarding: the servers of the account come to this iPhone without pairing.
         .onChange(of: account.stage == .ready) { _, isReady in
@@ -122,6 +123,10 @@ struct RootView: View {
         }
         .onChange(of: session.current.map(\.id)) { _, ids in
             SpotlightAgentIndex.shared.keepOnly(serverIDs: Set(ids.map(\.uuidString)))
+            TurnActivities.shared.serversChanged(ids: Set(ids))
+        }
+        .onChange(of: settings.liveActivities) { _, enabled in
+            TurnActivities.shared.settingChanged(enabled: enabled)
         }
         .onChange(of: session.current.isEmpty, initial: true) { _, isEmpty in
             if !isEmpty { onboarding.markCompleted() }
@@ -138,6 +143,8 @@ struct RootView: View {
             let arguments = ProcessInfo.processInfo.arguments
             notifications.settings = settings
             notifications.source = SessionNotificationSource(session: session)
+            TurnActivities.shared.configure(
+                servers: { ServerSession.shared.current }, isEnabled: { [settings] in settings.liveActivities })
             AppIntentHub.shared.liveServers = { ServerSession.shared.current }
             WidgetSnapshotWriter.shared.onPicture = { SpotlightAgentIndex.shared.sync($0.directory) }
             WidgetSnapshotWriter.shared.watch { ServerSession.shared.current }
@@ -151,6 +158,11 @@ struct RootView: View {
             if IOSDemo.isRequested(in: arguments) {
                 guard session.current.isEmpty else { return }
                 session.installDemo(await IOSDemo.startServers(withTeam: !IOSDemo.isEmptyRequested(in: arguments)))
+                #if DEBUG
+                if arguments.contains(TurnActivities.demoArgument) {
+                    TurnActivities.shared.runDemo(servers: session.current)
+                }
+                #endif
                 return
             }
             session.loadIfNeeded()
