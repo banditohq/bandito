@@ -27,10 +27,12 @@ struct SettingsTab: View {
     var body: some View {
         NavigationStack {
             List {
-                accountSection
+                // Most used first. With no server yet the account leads: signing in brings the Mac's servers here.
+                if session.current.isEmpty { accountSection }
                 serversSection
                 notificationsSection
                 securitySection
+                if !session.current.isEmpty { accountSection }
                 appearanceSection
                 aboutSection
             }

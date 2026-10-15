@@ -34,6 +34,8 @@ struct RootView: View {
     /// The account screen over the onboarding ("I have a Bandito account").
     @State private var showsAccount = false
     #endif
+    /// "Sign in" was chosen in the connect sheet: the account sheet follows when that sheet has closed.
+    @State private var signsInAfterConnect = false
     @State private var appLock = AppLock()
     /// The approval item the Inbox opens (a notification's route), cleared by the Inbox once it is open.
     @State private var inboxFocus: String?
@@ -159,9 +161,22 @@ struct RootView: View {
                 connect = ConnectRequest(mode: .scanCode)
             }
         }
-        .sheet(item: $connect, onDismiss: { Task { await askNotificationsIfFirstServer() } }) { request in
+        .sheet(item: $connect, onDismiss: {
+            // "Sign in" in the connect sheet: the account sheet opens once this one is gone.
+            if signsInAfterConnect {
+                signsInAfterConnect = false
+                showsAccount = true
+                return
+            }
+            Task { await askNotificationsIfFirstServer() }
+        }) { request in
             ConnectServerView(
-                session: session, incomingLink: $incomingLink, start: request.mode, onClose: { connect = nil })
+                session: session, incomingLink: $incomingLink, start: request.mode,
+                onSignIn: account.signedIn ? nil : {
+                    signsInAfterConnect = true
+                    connect = nil
+                },
+                onClose: { connect = nil })
         }
         .sheet(isPresented: $showsAccount) {
             NavigationStack { AccountScreen(account: account, onClose: { showsAccount = false }) }

@@ -14,16 +14,19 @@ struct ConnectServerView: View {
     /// The way the person chose before the sheet opened (the onboarding's last step).
     let start: OnboardingConnectMode
     let onClose: () -> Void
+    /// Signs in to the Bandito account instead (the servers of the Mac come by themselves); nil when already signed in.
+    let onSignIn: (() -> Void)?
 
     @State private var model: PairModel
 
     init(
         session: ServerSession, incomingLink: Binding<String?>, start: OnboardingConnectMode = .scanCode,
-        onClose: @escaping () -> Void
+        onSignIn: (() -> Void)? = nil, onClose: @escaping () -> Void
     ) {
         self.session = session
         _incomingLink = incomingLink
         self.start = start
+        self.onSignIn = onSignIn
         self.onClose = onClose
         // "Type an address" on the onboarding opens the sheet on the form itself.
         _model = State(initialValue: PairModel(session: session, startsOnTypedForm: start == .typeAddress && incomingLink.wrappedValue == nil))
@@ -34,7 +37,7 @@ struct ConnectServerView: View {
             Group {
                 switch model.phase {
                 case .choose:
-                    ChooseStep(model: model)
+                    ChooseStep(model: model, onSignIn: onSignIn)
                 case .manual:
                     ManualStep(model: model)
                 case .confirmLink(let request, let origin):
@@ -86,6 +89,7 @@ struct ConnectServerView: View {
 /// The scanner, the paste button and the way to type an address.
 private struct ChooseStep: View {
     let model: PairModel
+    let onSignIn: (() -> Void)?
     @State private var access = CameraPermission.current()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -109,6 +113,17 @@ private struct ChooseStep: View {
                         .font(BanditoFont.text(size: 13))
                         .foregroundStyle(Color.Bandito.text3)
                     BrandPasteButton { text in model.submitLink(text, origin: .paste) }
+                    // The hint above offers the account; this is the way to it.
+                    if let onSignIn {
+                        Button {
+                            onSignIn()
+                        } label: {
+                            Label(L10n.Ios.Settings.Account.signIn, systemImage: "person.crop.circle")
+                        }
+                        .buttonStyle(QuietButtonStyle())
+                        .accessibilityHint(L10n.Ios.Settings.Account.signInHint)
+                        .accessibilityIdentifier("connect.signIn")
+                    }
                     Button(L10n.Ios.Connect.Manual.button) { model.showManual() }
                         .buttonStyle(QuietButtonStyle())
                         .accessibilityIdentifier("connect.manualButton")
