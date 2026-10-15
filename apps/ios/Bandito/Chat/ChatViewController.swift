@@ -26,10 +26,10 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     let listLayout = ChatListLayout()
     let composer = ChatComposerView()
     private let jumpButton = UIButton(type: .system)
-    private let banner = UILabel()
+    let banner = ChatBannerLabel()
     private let stateOverlay = ChatStateOverlay()
     /// Follows the keyboard's guide for the box's frame (never constrained to: see `ChatFrameRules`).
-    private let keyboardTracker = UIView()
+    let keyboardTracker = UIView()
     private var emptyHost: UIHostingController<ChatEmptyView>?
     private var dataSource: UICollectionViewDiffableDataSource<Int, String>!
 
@@ -51,8 +51,6 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     /// goes away is lost if the system ends the app while it is in the background.
     private var backgroundObserver: NSObjectProtocol?
     private var screenObservers: [NSObjectProtocol] = []
-    /// The keyboard is on its way down until this time: the box still follows it.
-    private var keyboardHideUntil = Date.distantPast
     /// The message the next send answers.
     private var replyTarget: ReplyTarget?
     /// Messages whose reaction is on its way to the daemon (a second tap waits for the first).
@@ -219,7 +217,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
 
     /// The list and the box by frames (`ChatFrameRules`): the box on the bottom edge, or on the keyboard's top, and the
     /// list in the rest of the room.
-    private func placeViews() {
+    func placeViews() {
         let frames = ChatFrameRules.frames(
             size: view.bounds.size, safeTop: view.safeAreaInsets.top, safeBottom: view.safeAreaInsets.bottom,
             keyboardTop: keyboardTop(), boxHeight: composer.fittingHeight(width: view.bounds.width))
@@ -228,13 +226,46 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         if stateOverlay.frame != frames.list { stateOverlay.frame = frames.list }
     }
 
-    /// The keyboard's top edge in the view, only while the message box has the keyboard (or it is on its way down). The
-    /// system's guide can report a keyboard that is not there for a moment (after a screenshot, after a trait change); a
-    /// box that has no keyboard to sit on never follows it.
-    private func keyboardTop() -> CGFloat? {
-        guard composer.textField.isFirstResponder || Date() < keyboardHideUntil else { return nil }
-        let top = keyboardTracker.frame.minY
-        return top.isFinite ? top : nil
+    /// The keyboard's top edge in the view; nil when the box has no keyboard to sit on.
+    ///
+    /// The keyboard is what its notifications say (`keyboardFrameEndUserInfoKey` of the last show or frame change, in screen
+    /// coordinates, turned into the view's coordinates now). The system's layout guide is trusted only while a finger drags
+    /// the keyboard down (the interactive dismissal sends nothing until it ends), and then only when it is lower than the
+    /// reported frame. At any other time a guide that disagrees (after a screenshot, a trait change) is ignored, so a wrong
+    /// guide can never lift the box. Hidden (`keyboardWillHide`, `keyboardDidHide`): nil, the box is at the bottom.
+    func keyboardTop() -> CGFloat? {
+        guard composer.textField.isFirstResponder, let reported = keyboardFrameInScreen else { return nil }
+        let space = view.window?.screen.coordinateSpace ?? UIScreen.main.coordinateSpace
+        let top = view.convert(reported, from: space).minY
+        guard top.isFinite else { return nil }
+        let guide = keyboardTracker.frame.minY
+        let dragging = collectionView.isTracking || composer.textField.isTracking
+        if dragging, guide.isFinite, guide > top { return guide }
+        return top
+    }
+
+    /// The keyboard frame of the last `keyboardWillShow` / `keyboardWillChangeFrame`, nil once it is hidden.
+    private var keyboardFrameInScreen: CGRect?
+
+    private nonisolated static func keyboardTiming(_ note: Notification) -> (duration: Double, curve: Int) {
+        let info = note.userInfo
+        return (
+            (info?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0,
+            (info?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int) ?? UIView.AnimationCurve.easeInOut.rawValue
+        )
+    }
+
+    /// Takes a keyboard change in and lays the box out in step with the keyboard's own animation.
+    private func keyboardMoved(frame: CGRect?, duration: Double, curve: Int) {
+        keyboardFrameInScreen = frame
+        view.setNeedsLayout()
+        guard duration > 0, view.window != nil, !reduceMotion() else {
+            view.layoutIfNeeded()
+            return
+        }
+        UIView.animate(
+            withDuration: duration, delay: 0, options: [UIView.AnimationOptions(rawValue: UInt(curve << 16)), .beginFromCurrentState]
+        ) { self.view.layoutIfNeeded() }
     }
 
     private func observeScreen() {
@@ -250,14 +281,25 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
                     self?.markReadIfSeen()
                 }
             })
-        screenObservers.append(
-            center.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] note in
-                let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.35
-                MainActor.assumeIsolated {
-                    self?.keyboardHideUntil = Date().addingTimeInterval(max(0.1, duration) + 0.15)
-                    self?.view.setNeedsLayout()
-                }
-            })
+        for name in [UIResponder.keyboardWillShowNotification, UIResponder.keyboardWillChangeFrameNotification] {
+            screenObservers.append(
+                center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                    let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
+                    let timing = Self.keyboardTiming(note)
+                    MainActor.assumeIsolated {
+                        // A frame that starts at the bottom of the screen is a keyboard going away.
+                        let shown = end.flatMap { $0.height > 0 && $0.minY < UIScreen.main.bounds.height - 0.5 ? $0 : nil }
+                        self?.keyboardMoved(frame: shown, duration: timing.duration, curve: timing.curve)
+                    }
+                })
+        }
+        for name in [UIResponder.keyboardWillHideNotification, UIResponder.keyboardDidHideNotification] {
+            screenObservers.append(
+                center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                    let timing = Self.keyboardTiming(note)
+                    MainActor.assumeIsolated { self?.keyboardMoved(frame: nil, duration: timing.duration, curve: timing.curve) }
+                })
+        }
     }
 
     /// A screenshot, or the app coming back: the picture of the screen is laid out again now and once more a moment
@@ -541,7 +583,9 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         let size = jumpButton.sizeThatFits(CGSize(width: 220, height: 40))
         let bottom = collectionView.frame.maxY - 12
         jumpButton.frame = CGRect(x: view.bounds.width - size.width - 14, y: bottom - 38, width: size.width, height: 38)
-        banner.frame = CGRect(x: 0, y: collectionView.frame.minY, width: view.bounds.width, height: 30)
+        let bannerWidth = max(0, view.bounds.width - 2 * BanditoSpace.s3)
+        let bannerHeight = banner.sizeThatFits(CGSize(width: bannerWidth, height: .greatestFiniteMagnitude)).height
+        banner.frame = CGRect(x: BanditoSpace.s3, y: collectionView.frame.minY + BanditoSpace.s2, width: bannerWidth, height: bannerHeight)
     }
 
     // MARK: banner and empty state
@@ -550,6 +594,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         banner.font = BanditoFont.uiText(size: 12.5, weight: 500)
         banner.textColor = UIColor.Bandito.text2
         banner.textAlignment = .center
+        banner.adjustsFontForContentSizeCategory = true
         banner.backgroundColor = UIColor.Bandito.surface2
         banner.isHidden = true
         banner.accessibilityIdentifier = "chat.banner"
@@ -568,13 +613,14 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
             banner.text = L10n.Ios.Chat.Connection.offline
             banner.isHidden = false
         }
+        view.setNeedsLayout()
     }
 
     /// What stands in the list's place: the spinner while the history is read, "Try again" when it could not be, the
     /// invitation of a chat with nothing in it. A list with rows shows none of them.
     func updateOverlays() {
         let hasRows = !model.rows.isEmpty || !order.isEmpty
-        if !hasRows, model.loadFailed {
+        if !hasRows, model.showsFailure {
             spinnerTask?.cancel()
             spinnerTask = nil
             stateOverlay.set(.failed(name: model.agentName))
@@ -585,7 +631,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
                     try? await Task.sleep(for: .milliseconds(300))
                     guard let self, !Task.isCancelled else { return }
                     self.spinnerTask = nil
-                    if self.model.isBusy, self.model.rows.isEmpty, self.order.isEmpty, !self.model.loadFailed {
+                    if self.model.isBusy, self.model.rows.isEmpty, self.order.isEmpty, !self.model.showsFailure {
                         self.stateOverlay.set(.loading)
                     }
                 }
@@ -595,7 +641,7 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
             spinnerTask = nil
             if stateOverlay.mode != .none { stateOverlay.set(.none) }
         }
-        updateEmpty(!hasRows && !model.isBusy && !model.loadFailed)
+        updateEmpty(!hasRows && !model.isBusy && !model.showsFailure)
         markReadIfSeen()
     }
 

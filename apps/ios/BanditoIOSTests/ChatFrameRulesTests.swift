@@ -72,6 +72,26 @@ import Testing
         #expect(negative.box.height == 0 && negative.list.width == 0)
     }
 
+    @Test func theBoxIsNeverHigherThanTheKeyboardsTop() {
+        // The invariant over a grid of screens, keyboards and boxes: the list is never shorter than the room less the
+        // keyboard and the box; the box is on the keyboard or lower, never above it.
+        for height in [CGFloat(320), 390, 667, 844, 1024] {
+            for keyboard in [nil, -50, 0, 80, 200, height / 2, height - 40, height, height + 100, CGFloat.nan] as [CGFloat?] {
+                for box in [CGFloat(0), 44, 60, 140, 400] {
+                    let size = CGSize(width: 390, height: height)
+                    let result = frames(size, top: 90, bottom: 30, keyboard: keyboard, box: box)
+                    let lowest = height - 30
+                    let wanted = keyboard.flatMap { $0.isFinite ? $0 : nil }.map { min(lowest, $0) } ?? lowest
+                    let heightOfBox = result.box.height
+                    #expect(result.box.maxY >= min(wanted, height) - 0.5 || result.box.minY <= 90.5, "h \(height) kb \(String(describing: keyboard)) box \(box): ends \(result.box.maxY), wanted \(wanted)")
+                    #expect(result.list.height >= max(0, wanted - heightOfBox - 90) - 0.5)
+                    #expect(result.box.maxY <= height + 0.5)
+                    #expect(result.list.maxY == result.box.minY)
+                }
+            }
+        }
+    }
+
     // MARK: read
 
     @Test func aListThatFitsIsAtItsEnd() {

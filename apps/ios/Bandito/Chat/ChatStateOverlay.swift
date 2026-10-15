@@ -110,3 +110,35 @@ final class ChatStateOverlay: UIView {
         retry.frame = CGRect(x: midX - buttonSize.width / 2, y: y, width: buttonSize.width, height: buttonSize.height)
     }
 }
+
+/// The line over the list that says the connection is gone or coming back: up to two lines, padded, with rounded corners.
+@MainActor
+final class ChatBannerLabel: UILabel {
+    private let insets = UIEdgeInsets(top: BanditoSpace.s2, left: BanditoSpace.s3, bottom: BanditoSpace.s2, right: BanditoSpace.s3)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        numberOfLines = 2
+        lineBreakMode = .byTruncatingTail
+        layer.cornerRadius = BanditoRadius.md
+        layer.cornerCurve = .continuous
+        clipsToBounds = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func drawText(in rect: CGRect) {
+        super.drawText(in: rect.inset(by: insets))
+    }
+
+    override func textRect(forBounds bounds: CGRect, limitedToNumberOfLines numberOfLines: Int) -> CGRect {
+        let inner = super.textRect(forBounds: bounds.inset(by: insets), limitedToNumberOfLines: numberOfLines)
+        return CGRect(
+            x: inner.minX - insets.left, y: inner.minY - insets.top, width: inner.width + insets.left + insets.right,
+            height: inner.height + insets.top + insets.bottom)
+    }
+
+    override func sizeThatFits(_ size: CGSize) -> CGSize {
+        textRect(forBounds: CGRect(origin: .zero, size: size), limitedToNumberOfLines: numberOfLines).size
+    }
+}

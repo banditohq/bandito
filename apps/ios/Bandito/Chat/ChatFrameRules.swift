@@ -39,6 +39,9 @@ enum ChatFrameRules {
         let highest = min(lowest, top + listRoom + box)
         bottom = max(bottom, highest)
         bottom = max(bottom, top + box)
+        // The invariant: the box is never higher than the keyboard's top (or than the bottom edge when there is none), so the
+        // list is never shorter than `room - keyboard - box`. The floor above only ever moves the box lower.
+        bottom = max(bottom, min(lowest, keyboardTop.flatMap { $0.isFinite ? $0 : nil } ?? lowest))
         let boxTop = bottom - box
         return ChatFrames(
             list: CGRect(x: 0, y: top, width: width, height: max(0, boxTop - top)),

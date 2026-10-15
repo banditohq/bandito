@@ -22,6 +22,15 @@ struct ChatDraftFile: Identifiable {
     }
 }
 
+/// The box's text view tells when its own width changed (it is laid out after the composer is).
+final class WidthWatchingTextView: UITextView {
+    var onWidthChange: (() -> Void)?
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onWidthChange?()
+    }
+}
+
 /// The message box: a field that grows to six lines, a button for files and pictures, one for dictation, one that sends
 /// (and stops a running turn), the agent's quick replies above it and the files being attached. The text is read only
 /// here; the screen is told when the box gets or loses its first character, never at each letter.
@@ -48,7 +57,7 @@ final class ChatComposerView: UIView, UITextViewDelegate {
     /// The person closed the quote of the message they are answering.
     var onCancelReply: (() -> Void)?
 
-    private let field = UITextView()
+    private let field = WidthWatchingTextView()
     private let placeholder = UILabel()
     private let box = UIView()
     private let attachButton = UIButton(type: .system)
@@ -121,6 +130,7 @@ final class ChatComposerView: UIView, UITextViewDelegate {
         field.textContainerInset = UIEdgeInsets(top: 9, left: 12, bottom: 9, right: 0)
         field.textContainer.lineFragmentPadding = 0
         field.delegate = self
+        field.onWidthChange = { [weak self] in self?.fieldWidthChanged() }
         field.isScrollEnabled = false
         field.keyboardDismissMode = .interactive
         field.autocorrectionType = .default
@@ -364,6 +374,16 @@ final class ChatComposerView: UIView, UITextViewDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         updateColors()
+        // A new width (a turned screen, Split View, Stage Manager) wraps the text again: the lines are counted again.
+        fieldWidthChanged()
+    }
+
+    private(set) var lastFieldWidth: CGFloat = 0
+
+    fileprivate func fieldWidthChanged() {
+        guard abs(field.bounds.width - lastFieldWidth) > 0.5 else { return }
+        lastFieldWidth = field.bounds.width
+        resize()
     }
 
 

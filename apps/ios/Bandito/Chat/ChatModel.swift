@@ -75,7 +75,18 @@ final class ChatModel {
     private var cacheTask: Task<Void, Never>?
     /// A reaction the person asked for, drawn before the daemon's event comes back; nil emoji: taken off.
     private var wanted: [Int64: Wanted] = [:]
+    /// Older pages that were read and still showed nothing (counted when a page has come, not when one is asked for).
     private var emptyPages = 0
+    /// Where older pages come from: the server; tests put their own here.
+    struct OlderSource {
+        var hasMore: () -> Bool
+        var read: () async throws -> Void
+    }
+    lazy var olderSource = OlderSource(
+        hasMore: { [unowned self] in server.hasMoreHistory[agentID] == true },
+        read: { [unowned self] in try await server.loadOlder(agentID) })
+    /// The last read of an older page failed.
+    private(set) var olderFailed = false
     /// The most older pages read to find a message when the newest page shows nothing.
     static let emptyPageLimit = 10
 
@@ -154,6 +165,13 @@ final class ChatModel {
     /// "Try again" on the screen that says the history could not be read.
     func retryLoad() {
         guard !reloading else { return }
+        if olderFailed, !loadFailed {
+            olderFailed = false
+            emptyPages = 0
+            onLoadStateChange?()
+            loadOlder()
+            return
+        }
         Task { @MainActor in await load(initial: false) }
     }
 
@@ -187,6 +205,7 @@ final class ChatModel {
                 self.track()
                 // A thread that could not be read comes when the server does.
                 if self.loadFailed, self.server.state == .connected { self.reload() }
+                if self.olderFailed, self.rows.isEmpty, self.server.state == .connected { self.retryLoad() }
                 self.scheduleUpdate()
             }
         }
@@ -299,12 +318,12 @@ final class ChatModel {
     /// The newest page held nothing the list draws (only tool calls, say): older pages are read until something shows
     /// (a few at most), so a long history never opens as an empty chat.
     private func findSomethingToShow(_ nothingShows: Bool) {
-        guard nothingShows, !isLoading, summary.loaded, hasOlder, server.state == .connected, emptyPages < Self.emptyPageLimit
+        guard nothingShows, !isLoading, !olderFailed, summary.loaded, hasOlder, server.state == .connected,
+            emptyPages < Self.emptyPageLimit
         else {
             if !nothingShows { emptyPages = 0 }
             return
         }
-        emptyPages += 1
         loadOlder()
     }
 
@@ -389,26 +408,40 @@ final class ChatModel {
 
     /// Reads the page before the oldest loaded message. The screen keeps what the person reads in place.
     func loadOlder() {
-        guard !loadingOlder, server.hasMoreHistory[agentID] == true, server.state == .connected else { return }
+        guard !loadingOlder, olderSource.hasMore(), server.state == .connected else { return }
         loadingOlder = true
+        olderFailed = false
         onLoadStateChange?()
         Task { @MainActor in
             defer {
                 loadingOlder = false
                 onLoadStateChange?()
             }
-            try? await server.loadOlder(agentID)
+            do {
+                try await olderSource.read()
+                // A page that came and left the list empty counts toward the limit; one that brought rows resets it.
+                if rows.isEmpty { emptyPages += 1 }
+                // Looks again: an empty page may be followed by another, a page with rows is drawn.
+                scheduleUpdate()
+            } catch {
+                olderFailed = true
+            }
         }
     }
 
-    var hasOlder: Bool { server.hasMoreHistory[agentID] == true }
+    var hasOlder: Bool { olderSource.hasMore() }
 
     /// The history is being read, or older pages are being read to find something to show: the screen is not empty, it
     /// is waiting.
     var isBusy: Bool {
         isLoading || loadingOlder
-            || (rows.isEmpty && emptyPages > 0 && emptyPages < Self.emptyPageLimit && hasOlder && server.state == .connected)
+            || (rows.isEmpty && emptyPages > 0 && emptyPages < Self.emptyPageLimit && hasOlder && !olderFailed
+                && server.state == .connected)
     }
+
+    /// Nothing can be shown because a read failed: the history, or the older page that was looked for. The screen says so
+    /// and offers "Try again".
+    var showsFailure: Bool { loadFailed || (olderFailed && rows.isEmpty) }
 
     // MARK: reactions
 

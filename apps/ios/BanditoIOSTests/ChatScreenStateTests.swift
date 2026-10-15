@@ -8,6 +8,7 @@ import UIKit
 
 typealias ChatHost = ChatComposerLayoutTests.Host
 
+
 /// What the chat shows while the history is read, when it cannot be read, and from the copy on disk.
 @MainActor
 @Suite(.serialized) struct ChatSavedHistoryTests {
@@ -404,5 +405,84 @@ typealias ChatHost = ChatComposerLayoutTests.Host
         #expect(cells.contains { $0.contains("🔥") && $0.contains("👍") }, "the reactions are in the message's spoken text: \(cells)")
         #expect(cells.contains { $0.contains("\(L10n.Thread.reply) Talker") }, "the quote is spoken: \(cells)")
         saveShot(host.window, "reactions-and-quote")
+    }
+}
+
+/// Older pages are read to find something to show; a page that fails is a failure the screen says, not a spinner for good.
+@MainActor
+@Suite(.serialized) struct ChatOlderPagesTests {
+    struct Boom: Error {}
+
+    final class Reads: @unchecked Sendable {
+        var count = 0
+        var fail = true
+    }
+
+    /// A connected demo server with no script: it has no changes card to put in an empty chat.
+    func plainServer() async -> ServerModel {
+        let (server, _) = DemoDaemon.server(id: UUID(), name: "Plain", setup: DemoDaemonSetup(agentIDs: []))
+        await server.connect()
+        return server
+    }
+
+    func emptyAgent(on server: ServerModel, id: String) {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        server.installSyntheticAgent(
+            Agent(id: id, name: "Older", role: "r", runtime: .claude, cwd: DemoDaemonFiles.projects, createdAt: now, updatedAt: now, status: .idle),
+            items: [])
+    }
+
+    @Test func aFailedOlderPageIsAFailureWithTryAgainNotASpinner() async {
+        let server = await plainServer()
+        emptyAgent(on: server, id: "older-fail")
+        let reads = Reads()
+        let model = ChatModel(server: server, agentID: "older-fail", engine: ChatLayoutEngine(), outbox: ChatOutbox(file: nil), history: nil)
+        model.olderSource = ChatModel.OlderSource(
+            hasMore: { true },
+            read: {
+                reads.count += 1
+                if reads.fail { throw Boom() }
+            })
+        let host = ChatHost(model: model, server: server, size: ChatComposerLayoutTests.portrait)
+        let failed = await eventually { host.controller.overlayMode == .failed(name: "Older") }
+        #expect(failed, "overlay \(host.controller.overlayMode), busy \(model.isBusy), older failed \(model.olderFailed)")
+        #expect(model.olderFailed && !model.isBusy)
+        #expect(!host.controller.showsEmptyState)
+        // It does not go on asking by itself.
+        let before = reads.count
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(reads.count == before)
+        // "Try again" asks again; this time the page comes with a message.
+        reads.fail = false
+        model.olderSource.read = {
+            reads.count += 1
+            server.apply(Event(seq: 1, agentId: "older-fail", ts: Int64(Date().timeIntervalSince1970 * 1000), body: .messageAssistant(text: "Found it")))
+        }
+        model.retryLoad()
+        let found = await eventually { host.controller.overlayMode == .none && !model.rows.isEmpty }
+        #expect(found)
+        #expect(!model.olderFailed)
+    }
+
+    @Test func onlyPagesThatCameEmptyCountTowardTheLimit() async {
+        let server = await plainServer()
+        emptyAgent(on: server, id: "older-empty")
+        let reads = Reads()
+        reads.fail = false
+        let model = ChatModel(server: server, agentID: "older-empty", engine: ChatLayoutEngine(), outbox: ChatOutbox(file: nil), history: nil)
+        model.olderSource = ChatModel.OlderSource(
+            hasMore: { true },
+            read: {
+                reads.count += 1
+                // The page came and shows nothing.
+            })
+        model.setMetrics(ChatMetrics(width: 390, category: .large))
+        model.start()
+        let stopped = await eventually(8) { reads.count >= ChatModel.emptyPageLimit && !model.isBusy }
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(stopped)
+        #expect(reads.count == ChatModel.emptyPageLimit, "pages read: \(reads.count)")
+        #expect(!model.olderFailed)
+        model.stop()
     }
 }

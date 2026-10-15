@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoDesign
 import Foundation
 import SwiftUI
 import Testing
@@ -49,8 +50,24 @@ func eventually(_ seconds: Double = 3, _ condition: () -> Bool) async -> Bool {
         init(server: ServerModel, agentID: String, size: CGSize, history: ChatHistoryCache? = nil, deferred: Bool = false) {
             model = ChatModel(server: server, agentID: agentID, engine: ChatLayoutEngine(), outbox: ChatOutbox(file: nil), history: history)
             controller = ChatViewController(model: model, settings: IOSSettings())
-            window = UIWindow(frame: CGRect(origin: .zero, size: size))
+            window = Self.makeWindow(size)
             if !deferred { show() }
+        }
+
+        /// The window sits in the app's scene when there is one: only then do the screen's coordinates mean what they do on a phone.
+        static func makeWindow(_ size: CGSize) -> UIWindow {
+            let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+            let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: .zero)
+            window.frame = CGRect(origin: .zero, size: size)
+            return window
+        }
+
+        /// A host over a model the test made (it set things on it first).
+        init(model: ChatModel, server: ServerModel, size: CGSize) {
+            self.model = model
+            controller = ChatViewController(model: model, settings: IOSSettings())
+            window = Self.makeWindow(size)
+            show()
         }
 
         func show() {
@@ -356,5 +373,144 @@ func eventually(_ seconds: Double = 3, _ condition: () -> Bool) async -> Bool {
         await settle()
         check("online")
         window.isHidden = true
+    }
+
+    // MARK: the keyboard
+
+    /// What the system posts when the keyboard comes up (`top` in screen coordinates; the frame reaches the screen's bottom).
+    func postKeyboard(_ name: Notification.Name, top: CGFloat?) {
+        let screen = UIScreen.main.bounds
+        let frame = CGRect(x: 0, y: top ?? screen.height, width: screen.width, height: top.map { screen.height - $0 } ?? 300)
+        NotificationCenter.default.post(
+            name: name, object: nil,
+            userInfo: [
+                UIResponder.keyboardFrameEndUserInfoKey: NSValue(cgRect: frame),
+                UIResponder.keyboardAnimationDurationUserInfoKey: 0.0,
+            ])
+    }
+
+    func openKeyboard(_ host: Host, top: CGFloat = 500) async {
+        host.controller.composer.textField.becomeFirstResponder()
+        postKeyboard(UIResponder.keyboardWillShowNotification, top: top)
+        host.window.layoutIfNeeded()
+    }
+
+    func expectBox(_ host: Host, on top: CGFloat, _ note: String, sourceLocation: SourceLocation = #_sourceLocation) {
+        host.window.layoutIfNeeded()
+        let box = host.controller.composer.frame
+        #expect(abs(box.maxY - top) < 1, "\(note): the box ends at \(box.maxY), the keyboard's top is \(top)", sourceLocation: sourceLocation)
+        #expect(abs(host.controller.collectionView.frame.maxY - box.minY) < 1, "\(note): the list ends at the box", sourceLocation: sourceLocation)
+    }
+
+    @Test func theBoxSitsOnTheKeyboardTheNotificationReports() async {
+        let (server, _) = await IOSDemo.startWithTransport()
+        let id = install(server, id: "keys-1", messages: 10)
+        let host = Host(server: server, agentID: id, size: Self.portrait)
+        await host.settle()
+        await openKeyboard(host)
+        expectBox(host, on: 500, "keyboard open")
+        postKeyboard(UIResponder.keyboardWillHideNotification, top: nil)
+        host.window.layoutIfNeeded()
+        host.controller.composer.textField.resignFirstResponder()
+        expectBoxAtBottom(host, "keyboard hidden")
+        postKeyboard(UIResponder.keyboardDidHideNotification, top: nil)
+        expectBoxAtBottom(host, "keyboard did hide")
+    }
+
+    @Test func aKeyboardTheBoxDidNotAskForIsNotFollowed() async {
+        let (server, _) = await IOSDemo.startWithTransport()
+        let id = install(server, id: "keys-2", messages: 10)
+        let host = Host(server: server, agentID: id, size: Self.portrait)
+        await host.settle()
+        postKeyboard(UIResponder.keyboardWillShowNotification, top: 400)
+        expectBoxAtBottom(host, "a keyboard for another field")
+    }
+
+    @Test func aWrongGuideWhileTheFieldHasTheKeyboardIsIgnored() async {
+        let (server, _) = await IOSDemo.startWithTransport()
+        let id = install(server, id: "keys-3", messages: 10)
+        let host = Host(server: server, agentID: id, size: Self.portrait)
+        await host.settle()
+        await openKeyboard(host)
+        for wrong in [CGFloat(50), 0, -200, 700, 900] {
+            host.controller.keyboardTracker.frame.origin.y = wrong
+            host.controller.placeViews()
+            expectBox(host, on: 500, "the guide says \(wrong)")
+            #expect(host.controller.collectionView.frame.height >= ChatFrameRules.listFloor)
+        }
+    }
+
+    @Test func aScreenshotWithTheKeyboardOpenKeepsTheBoxOnIt() async {
+        let (server, _) = await IOSDemo.startWithTransport()
+        let id = install(server, id: "keys-4", messages: 10)
+        let host = Host(server: server, agentID: id, size: Self.portrait)
+        await host.settle()
+        await openKeyboard(host)
+        NotificationCenter.default.post(name: UIApplication.userDidTakeScreenshotNotification, object: nil)
+        host.controller.keyboardTracker.frame.origin.y = 40
+        expectBox(host, on: 500, "right after the screenshot")
+        try? await Task.sleep(for: .milliseconds(600))
+        host.controller.keyboardTracker.frame.origin.y = 40
+        host.controller.placeViews()
+        // (The simulator may show its own keyboard meanwhile: its notification is then the keyboard.)
+        let top = host.controller.keyboardTop()
+        #expect(top != nil && top! > 300)
+        expectBox(host, on: top ?? 500, "after the system settled")
+    }
+
+    @Test func aTraitChangeWithTheKeyboardOpenKeepsTheBoxOnIt() async {
+        let (server, _) = await IOSDemo.startWithTransport()
+        let id = install(server, id: "keys-5", messages: 10)
+        let host = Host(server: server, agentID: id, size: Self.portrait)
+        await host.settle()
+        await openKeyboard(host)
+        host.controller.overrideUserInterfaceStyle = .light
+        host.controller.traitOverrides.preferredContentSizeCategory = .extraExtraLarge
+        host.controller.keyboardTracker.frame.origin.y = 60
+        host.window.layoutIfNeeded()
+        await host.settle()
+        host.controller.keyboardTracker.frame.origin.y = 60
+        host.controller.placeViews()
+        let top = host.controller.keyboardTop()
+        #expect(top != nil && top! > 300)
+        expectBox(host, on: top ?? 500, "after the traits changed")
+    }
+
+    // MARK: width and the banner
+
+    @Test func aNewWidthCountsTheBoxsLinesAgain() async {
+        let (server, _) = await IOSDemo.startWithTransport()
+        let id = install(server, id: "width-1", messages: 4)
+        let host = Host(server: server, agentID: id, size: Self.portrait)
+        await host.settle()
+        host.controller.composer.text = String(repeating: "word ", count: 40)
+        host.window.layoutIfNeeded()
+        let narrow = host.controller.composer.frame.height
+        host.resize(Self.landscape)
+        await host.settle()
+        let wide = host.controller.composer.frame.height
+        #expect(wide < narrow, "wide \(wide), narrow \(narrow), field \(host.controller.composer.textField.bounds.width), fits \(host.controller.composer.textField.sizeThatFits(CGSize(width: host.controller.composer.textField.bounds.width, height: .greatestFiniteMagnitude)).height), scroll \(host.controller.composer.textField.isScrollEnabled), last \(host.controller.composer.lastFieldWidth), text \(host.controller.composer.text.count)")
+        host.resize(Self.portrait)
+        await host.settle()
+        #expect(abs(host.controller.composer.frame.height - narrow) < 1)
+        expectBoxAtBottom(host, "back to portrait")
+    }
+
+    @Test func theOfflineBannerWrapsToTwoLinesWithMarginsAndRoundedCorners() async {
+        let (server, _) = await IOSDemo.startWithTransport()
+        let id = install(server, id: "banner-1", messages: 4)
+        let host = Host(server: server, agentID: id, size: CGSize(width: 320, height: 640))
+        await server.disconnect()
+        await host.settle()
+        let banner = host.controller.banner
+        host.window.layoutIfNeeded()
+        let one = banner.font.lineHeight
+        #expect(!banner.isHidden)
+        #expect(banner.numberOfLines == 2)
+        #expect(banner.frame.minX == BanditoSpace.s3 && abs(banner.frame.width - (320 - 2 * BanditoSpace.s3)) < 1)
+        #expect(banner.layer.cornerRadius == BanditoRadius.md)
+        #expect(banner.frame.height > one * 1.5 + 2 * BanditoSpace.s2 - 1, "the text wraps: \(banner.frame.height)")
+        #expect(banner.frame.height < one * 2.5 + 2 * BanditoSpace.s2, "and no more than two lines")
+        saveShot(host.window, "offline-banner")
     }
 }
