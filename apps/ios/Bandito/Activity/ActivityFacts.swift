@@ -161,7 +161,7 @@ enum ActivityFacts {
             look: CrewLook(agent: agent),
             kind: entry.kind,
             title: title,
-            line: line.flatMap { $0.isEmpty ? nil : $0 },
+            line: CrewPreview.line(line),
             ts: entry.ts,
             mood: entry.kind == .error ? .error : .idle,
             isUnread: entry.isUnread,

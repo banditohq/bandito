@@ -128,14 +128,11 @@ struct InboxDetailSheet: View {
             Toggle(L10n.Approval.alwaysHere, isOn: $remember)
                 .font(BanditoFont.text(size: 14, weight: 400))
                 .tint(Color.Bandito.signal)
-            HStack(spacing: BanditoSpace.s3) {
-                Button(L10n.Approval.deny) { Task { await send(.deny) } }
-                    .buttonStyle(QuietButtonStyle())
-                    .disabled(busy)
-                Button(L10n.Approval.approve) { Task { await send(.allow(remember: remember)) } }
-                    .buttonStyle(SignalButtonStyle())
-                    .disabled(busy)
-            }
+            AnswerPair(
+                quiet: L10n.Approval.deny, main: L10n.Approval.approve, disabled: busy,
+                quietAction: { Task { await send(.deny) } },
+                mainAction: { Task { await send(.allow(remember: remember)) } }
+            )
             .padding(.top, BanditoSpace.s2)
         }
     }
@@ -209,14 +206,12 @@ struct InboxDetailSheet: View {
                     .font(BanditoFont.text(size: 13, weight: 500))
                     .foregroundStyle(Color.Bandito.danger)
             }
-            HStack(spacing: BanditoSpace.s3) {
-                Button(row.spec.rejectLabel ?? L10n.Approval.deny) { Task { await send(.deny) } }
-                    .buttonStyle(QuietButtonStyle())
-                    .disabled(busy)
-                Button(row.spec.submitLabel ?? L10n.Ios.Inbox.send) { Task { await submitForm(row.spec) } }
-                    .buttonStyle(SignalButtonStyle())
-                    .disabled(busy)
-            }
+            AnswerPair(
+                quiet: row.spec.rejectLabel ?? L10n.Approval.deny,
+                main: row.spec.submitLabel ?? L10n.Ios.Inbox.send, disabled: busy,
+                quietAction: { Task { await send(.deny) } },
+                mainAction: { Task { await submitForm(row.spec) } }
+            )
             .padding(.top, BanditoSpace.s2)
         }
     }
@@ -258,12 +253,16 @@ struct InboxDetailSheet: View {
 
 /// The secondary button of the sheets: a quiet capsule with a hairline, as the Mac's quiet button.
 struct QuietButtonStyle: ButtonStyle {
+    /// The capsule takes the whole width it is offered (a stacked pair of answers), not its label's.
+    var fullWidth = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(BanditoFont.display(size: 14, weight: 600))
             .foregroundStyle(Color.Bandito.text)
             .padding(.horizontal, 22)
             .frame(height: 46)
+            .frame(maxWidth: fullWidth ? .infinity : nil)
             .background(Capsule().fill(Color.Bandito.surface2))
             .overlay(Capsule().stroke(Color.Bandito.text.opacity(0.14), lineWidth: 1))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)

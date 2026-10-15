@@ -39,6 +39,18 @@ import Testing
         #expect(CrewPreview.line("  \n ") == nil)
         #expect(CrewPreview.line(nil) == nil)
     }
+
+    @Test func markdownMarksAreLeftOut() {
+        #expect(CrewPreview.line("The queue now **resends** a `msg`") == "The queue now resends a msg")
+        let heading = CrewPreview.line("# Title\n\n- one\n- two")
+        #expect(heading?.contains("#") == false)
+        #expect(heading?.contains("\n") == false)
+    }
+
+    @Test func emptyTextIsNoLine() {
+        #expect(CrewPreview.line("") == nil)
+        #expect(CrewPreview.line("   ") == nil)
+    }
 }
 
 @Suite struct CrewMoodTests {
@@ -95,7 +107,7 @@ import Testing
         let rows = CrewFacts.build(server: server, pinned: [])
         #expect(rows.count == IOSDemo.team.count)
         #expect(rows.first { $0.name == "Forge" }?.waiting == .approval(title: "git push origin feat/ios-crew"))
-        #expect(rows.first { $0.name == "Watch" }?.waiting == .answer)
+        #expect(rows.first { $0.name == "Watch" }?.waiting == .answer(question: "The server disk is 81% full. Should I clear the cache?"))
         #expect(rows.first { $0.name == "Quill" }?.waiting == nil)
         #expect(rows.first { $0.name == "Scout" }?.waiting == nil)
         await server.disconnect()
@@ -122,6 +134,45 @@ import Testing
         #expect(rows.first { $0.name == "Scout" }?.preview == IOSDemo.unreadReply)
         #expect(rows.first { $0.name == "Watch" }?.preview == "The server disk is 81% full. Should I clear the cache?")
         #expect(rows.allSatisfy { $0.preview != nil })
+        await server.disconnect()
+    }
+
+    /// An open form counts as waiting even when the agent is in error, not "needs you" (the Inbox lists it too).
+    @Test func anOpenFormOnAnAgentInErrorIsWaiting() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "waiting-form"
+        server.installSyntheticAgent(
+            Agent(
+                id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: 1, updatedAt: 1, status: .error),
+            items: [.form(FormRow(formId: "f1", spec: FormSpec(title: "Deploy?", fields: []), ts: 1))])
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.waiting == .form)
+        await server.disconnect()
+    }
+
+    /// An agent that needs the person with no approval or form asks its question: the card shows the text, Markdown-free.
+    @Test func anAgentThatNeedsYouWaitsWithItsQuestion() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "waiting-question"
+        server.installSyntheticAgent(
+            Agent(
+                id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: 1, updatedAt: 1, status: .needsYou),
+            items: [.assistant(id: "s1", text: "Should I push **main**?", ts: 1)])
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.waiting
+            == .answer(question: "Should I push main?"))
+        await server.disconnect()
+    }
+
+    @Test func anIdleAgentWithNothingPendingWaitsForNothing() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "waiting-none"
+        server.installSyntheticAgent(
+            Agent(
+                id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: 1, updatedAt: 1, status: .idle),
+            items: [.assistant(id: "s1", text: "Done.", ts: 1)])
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.waiting == nil)
         await server.disconnect()
     }
 

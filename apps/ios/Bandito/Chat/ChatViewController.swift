@@ -512,8 +512,13 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     private func setUpComposer() {
         composer.onSend = { [weak self] text, files in self?.sendFromComposer(text, files) }
         composer.onStop = { [weak self] in
-            self?.notifications.notificationOccurred(.warning)
-            self?.model.interrupt()
+            guard let self else { return }
+            self.notifications.notificationOccurred(.warning)
+            Task {
+                if await self.model.interrupt() { return }
+                self.notifications.notificationOccurred(.error)
+                self.explainStopFailed()
+            }
         }
         composer.onQuickReply = { [weak self] shown in
             guard let self else { return }
@@ -837,6 +842,13 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     private func stopDictation() {
         dictation?.stop()
         composer.setDictating(false)
+    }
+
+    /// The stop did not reach the agent: the person hears it in words, not only in a buzz.
+    private func explainStopFailed() {
+        let alert = UIAlertController(title: nil, message: L10n.Ios.Chat.stopFailed, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: L10n.Common.close, style: .default))
+        present(alert, animated: !reduceMotion())
     }
 
     private func explainDenied(_ message: String, settingsButton: Bool = true) {

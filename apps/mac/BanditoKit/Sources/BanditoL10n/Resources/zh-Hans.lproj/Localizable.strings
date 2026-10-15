@@ -1001,6 +1001,7 @@
 "ios.chat.openSettings" = "打开设置";
 "ios.chat.retry" = "重试";
 "ios.chat.sending" = "正在发送…";
+"ios.chat.stopFailed" = "无法停止：与服务器没有连接。连接恢复后请再试一次。";
 "ios.chat.tools.hide" = "隐藏命令";
 "ios.chat.tools.show" = "显示命令";
 "ios.chat.uncertain" = "不确定是否送达";
@@ -1063,6 +1064,7 @@
 "ios.crew.emptyMessage" = "这台服务器还没有代理。创建第一个，让团队开始工作。";
 "ios.crew.emptyTitle" = "还没有代理";
 "ios.crew.lead" = "主理人";
+"ios.crew.moreInInbox" = "收件箱里还有 %1$lld 项";
 "ios.crew.needsYou" = "等待你处理";
 "ios.crew.noMessages" = "还没有消息";
 "ios.crew.openChat" = "打开与 %1$@ 的聊天";

@@ -1001,6 +1001,7 @@
 "ios.chat.openSettings" = "Открыть настройки";
 "ios.chat.retry" = "Повторить";
 "ios.chat.sending" = "Отправляется…";
+"ios.chat.stopFailed" = "Не получилось остановить: нет связи с сервером. Попробуйте ещё раз, когда связь вернётся.";
 "ios.chat.tools.hide" = "Скрыть команды";
 "ios.chat.tools.show" = "Показать команды";
 "ios.chat.uncertain" = "Не уверены, дошло ли";
@@ -1063,6 +1064,7 @@
 "ios.crew.emptyMessage" = "На этом сервере нет агентов. Создайте первого, чтобы команда начала работать.";
 "ios.crew.emptyTitle" = "Агентов пока нет";
 "ios.crew.lead" = "Главный";
+"ios.crew.moreInInbox" = "Ещё %1$lld — во Входящих";
 "ios.crew.needsYou" = "Ждут вас";
 "ios.crew.noMessages" = "Сообщений пока нет";
 "ios.crew.openChat" = "Открыть чат с %1$@";

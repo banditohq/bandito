@@ -1001,6 +1001,7 @@
 "ios.chat.openSettings" = "Ouvrir les Réglages";
 "ios.chat.retry" = "Réessayer";
 "ios.chat.sending" = "Envoi…";
+"ios.chat.stopFailed" = "Impossible d'arrêter : pas de connexion au serveur. Réessayez quand la connexion sera rétablie.";
 "ios.chat.tools.hide" = "Masquer les commandes";
 "ios.chat.tools.show" = "Afficher les commandes";
 "ios.chat.uncertain" = "On ne sait pas si c’est arrivé";
@@ -1063,6 +1064,7 @@
 "ios.crew.emptyMessage" = "Ce serveur n'a pas d'agent. Créez le premier pour que l'équipe se mette au travail.";
 "ios.crew.emptyTitle" = "Aucun agent pour l'instant";
 "ios.crew.lead" = "Chef";
+"ios.crew.moreInInbox" = "%1$lld de plus dans la Boîte de réception";
 "ios.crew.needsYou" = "En attente de vous";
 "ios.crew.noMessages" = "Pas encore de messages";
 "ios.crew.openChat" = "Ouvrir le chat avec %1$@";

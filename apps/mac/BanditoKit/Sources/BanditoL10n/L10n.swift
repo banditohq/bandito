@@ -1433,6 +1433,7 @@ public enum L10n {
             public static var openSettings: String { L10n.tr("ios.chat.openSettings") }
             public static var retry: String { L10n.tr("ios.chat.retry") }
             public static var sending: String { L10n.tr("ios.chat.sending") }
+            public static var stopFailed: String { L10n.tr("ios.chat.stopFailed") }
             public static var uncertain: String { L10n.tr("ios.chat.uncertain") }
             public static var waitingForConnection: String { L10n.tr("ios.chat.waitingForConnection") }
 
@@ -1583,6 +1584,7 @@ public enum L10n {
             public static var emptyMessage: String { L10n.tr("ios.crew.emptyMessage") }
             public static var emptyTitle: String { L10n.tr("ios.crew.emptyTitle") }
             public static var lead: String { L10n.tr("ios.crew.lead") }
+            public static func moreInInbox(count: Int) -> String { L10n.tr("ios.crew.moreInInbox", count) }
             public static var needsYou: String { L10n.tr("ios.crew.needsYou") }
             public static var noMessages: String { L10n.tr("ios.crew.noMessages") }
             public static func openChat(name: String) -> String { L10n.tr("ios.crew.openChat", name) }

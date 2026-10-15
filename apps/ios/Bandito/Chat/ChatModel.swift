@@ -282,8 +282,15 @@ final class ChatModel {
         return true
     }
 
-    func interrupt() {
-        Task { try? await server.interrupt(agentID) }
+    /// Asks the agent to stop. True when the request went out; false when it did not (no connection), so the
+    /// screen can say so.
+    func interrupt() async -> Bool {
+        do {
+            try await server.interrupt(agentID)
+            return true
+        } catch {
+            return false
+        }
     }
 
     func retry(queueID: String) { outbox.retry(queueID) }

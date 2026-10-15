@@ -9,6 +9,8 @@ struct CrewScreen: View {
     let servers: [ServerModel]
     let settings: IOSSettings
     let onConnect: () -> Void
+    /// Switches to the Inbox tab (the "Ещё N" line of the waiting agents).
+    let onShowInbox: () -> Void
     /// An agent a `bandito://agent/...` link asked for: the screen opens its row, as a tap on the row does.
     var focus: CrewFocus?
 
@@ -34,7 +36,8 @@ struct CrewScreen: View {
                         onChoose: { chosenServerID = $0; path = NavigationPath() },
                         open: { path.append($0) },
                         details: { path.append(AgentDetailRoute(agentID: $0)) },
-                        onCreate: { newAgent = NewAgentStart(tab: .teams) }
+                        onCreate: { newAgent = NewAgentStart(tab: .teams) },
+                        showInbox: onShowInbox
                     )
                     .id(server.id)
                 } else {
@@ -164,6 +167,11 @@ struct CrewList: View {
     let details: (String) -> Void
     /// Opens the sheet that makes an agent (the empty state's button).
     let onCreate: () -> Void
+    /// Switches to the Inbox tab, where every waiting item is.
+    let showInbox: () -> Void
+
+    /// The waiting agents shown as cards; the rest is one line that opens the Inbox.
+    private static let waitingCardLimit = 2
 
     @State private var pinned: [String] = []
 
@@ -178,17 +186,38 @@ struct CrewList: View {
 
             if !waiting.isEmpty {
                 Section {
-                    ForEach(waiting) { facts in
+                    ForEach(waiting.prefix(Self.waitingCardLimit)) { facts in
                         // A button, not a link: the card is full width, with no disclosure chevron of the list.
                         Button {
                             open(CrewRoute(agentID: facts.id, name: facts.name))
                         } label: {
                             NeedsYouCard(facts: facts)
-                                .padding(.vertical, BanditoSpace.s1)
                         }
                         .buttonStyle(.plain)
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
+                        .listRowInsets(cardInsets)
+                    }
+                    if waiting.count > Self.waitingCardLimit {
+                        Button {
+                            showInbox()
+                        } label: {
+                            HStack(spacing: BanditoSpace.s2) {
+                                Text(L10n.Ios.Crew.moreInInbox(count: waiting.count - Self.waitingCardLimit))
+                                    .font(BanditoFont.text(size: 14, weight: 500))
+                                    .foregroundStyle(Color.Bandito.signal)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(Color.Bandito.signal)
+                                    .accessibilityHidden(true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(cardInsets)
                     }
                 } header: {
                     CrewSectionLabel(title: L10n.Ios.Crew.needsYou, waiting: true)
@@ -247,6 +276,11 @@ struct CrewList: View {
         .task(id: server.id) {
             pinned = CrewPins.load(server.id)
         }
+    }
+
+    /// The insets of a waiting card or its line: one step of `s1` above and below, so two cards are `s2` apart.
+    private var cardInsets: EdgeInsets {
+        EdgeInsets(top: BanditoSpace.s1, leading: BanditoSpace.s4, bottom: BanditoSpace.s1, trailing: BanditoSpace.s4)
     }
 
     /// The server's name under the large title: a menu to choose another server when there are several.

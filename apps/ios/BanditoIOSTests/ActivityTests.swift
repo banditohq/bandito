@@ -122,6 +122,14 @@ import Testing
         await server.disconnect()
     }
 
+    /// The reply's line in the timeline is the plain text: no Markdown marks, one line.
+    @Test func aReplyLineHasNoMarkdown() async {
+        let (server, _) = await makeServer(items: [.assistant(id: "s1", text: "The queue now **resends** a `msg`", ts: now)])
+        let row = ActivityFacts.days(servers: [server], filter: .all).flatMap(\.rows).first
+        #expect(row?.line == "The queue now resends a msg")
+        await server.disconnect()
+    }
+
     @Test func aRowRoutesToItsAgentAndEvent() async {
         let (server, _) = await makeServer(items: [.assistant(id: "s1", text: "Mine", ts: now)])
         let row = ActivityFacts.days(servers: [server], filter: .all).flatMap(\.rows).first

@@ -114,11 +114,12 @@ struct NeedsYouCard: View {
                     .font(BanditoFont.display(size: nameSize, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(2)
-                // No line limit: at large type sizes the request wraps, it is not cut.
+                // No line limit for a request: at large type sizes it wraps, it is not cut. A question is three lines at most.
                 Text(waitingLine)
                     .font(BanditoFont.text(size: lineSize, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .multilineTextAlignment(.leading)
+                    .lineLimit(isQuestion ? 3 : nil)
             }
             Spacer(minLength: BanditoSpace.s2)
             Image(systemName: "arrow.right")
@@ -136,11 +137,19 @@ struct NeedsYouCard: View {
         .accessibilityHint(L10n.Ios.Crew.openChat(name: facts.name))
     }
 
+    /// The question the agent asks, when it asks one in text.
+    private var isQuestion: Bool {
+        if case .answer(let question?) = facts.waiting { return true }
+        return false
+    }
+
+    /// The question itself when the agent asked one; else what it waits for, in words.
     private var waitingLine: String {
         switch facts.waiting {
         case .approval(let title): L10n.Ios.Crew.wantsToRun(name: facts.name, command: title)
         case .form: L10n.Ios.Crew.waitingForm(name: facts.name)
-        case .answer, nil: L10n.Ios.Crew.waitingAnswer(name: facts.name)
+        case .answer(let question?): question
+        case .answer(nil), nil: L10n.Ios.Crew.waitingAnswer(name: facts.name)
         }
     }
 }

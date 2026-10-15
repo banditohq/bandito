@@ -49,7 +49,9 @@ struct RootView: View {
         let showsOnboarding = onboarding.shows(hasServers: !servers.isEmpty)
         ZStack {
             TabView(selection: $tab) {
-                CrewScreen(servers: servers, settings: settings, onConnect: openConnect, focus: crewFocus)
+                CrewScreen(
+                    servers: servers, settings: settings, onConnect: openConnect, onShowInbox: { tab = .inbox },
+                    focus: crewFocus)
                     .id(dynamicTypeSize)
                     .tabItem { Label(L10n.Ios.Tab.crew, systemImage: "person.3") }
                     .tag(AppTab.crew)
