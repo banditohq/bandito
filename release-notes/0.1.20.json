@@ -1,0 +1,131 @@
+{
+  "version": "0.1.20",
+  "date": "2026-10-16",
+  "items": [
+    {
+      "icon": "bubble.left.and.text.bubble.right.fill",
+      "title": {
+        "en": "A chat that behaves",
+        "ru": "Чат, который ведёт себя как надо",
+        "de": "Ein Chat, der sich benimmt",
+        "es": "Un chat que se comporta",
+        "fr": "Un chat qui se tient bien",
+        "ja": "きちんと動くチャット",
+        "ko": "제대로 동작하는 채팅",
+        "pt-BR": "Um chat que se comporta",
+        "zh-Hans": "表现可靠的聊天"
+      },
+      "text": {
+        "en": "On the iPhone the message box stays at the bottom, always. Hold a message to react, reply with a quote, copy, select text or share. With no connection the chat shows its recent history.",
+        "ru": "На iPhone поле ввода всегда внизу. Зажмите сообщение, чтобы поставить реакцию, ответить с цитатой, скопировать, выделить текст или поделиться. Без связи чат показывает недавнюю историю.",
+        "de": "Auf dem iPhone bleibt das Eingabefeld immer unten. Halten Sie eine Nachricht gedrückt, um zu reagieren, mit Zitat zu antworten, zu kopieren, Text auszuwählen oder zu teilen. Ohne Verbindung zeigt der Chat seinen jüngsten Verlauf.",
+        "es": "En el iPhone el campo de texto se queda siempre abajo. Mantenga pulsado un mensaje para reaccionar, responder con cita, copiar, seleccionar texto o compartir. Sin conexión, el chat muestra su historial reciente.",
+        "fr": "Sur l’iPhone, le champ de saisie reste toujours en bas. Maintenez un message pour réagir, répondre en citant, copier, sélectionner le texte ou partager. Sans connexion, le chat affiche son historique récent.",
+        "ja": "iPhone の入力欄は常に下に。メッセージを長押しすると、リアクション、引用して返信、コピー、テキストを選択、共有ができます。接続がなくても最近の履歴が表示されます。",
+        "ko": "iPhone에서 입력창이 항상 아래에 있습니다. 메시지를 길게 눌러 반응하고, 인용해 답장하고, 복사하고, 텍스트를 선택하거나 공유하세요. 연결이 없어도 최근 기록이 보입니다.",
+        "pt-BR": "No iPhone o campo de mensagem fica sempre embaixo. Toque e segure uma mensagem para reagir, responder com citação, copiar, selecionar texto ou compartilhar. Sem conexão, o chat mostra o histórico recente.",
+        "zh-Hans": "iPhone 上的输入框始终在底部。长按消息可以回应、引用回复、复制、选择文本或分享。没有网络时，聊天会显示最近的记录。"
+      }
+    },
+    {
+      "icon": "bell.and.waves.left.and.right.fill",
+      "title": {
+        "en": "Notifications like a messenger",
+        "ru": "Уведомления как в мессенджере",
+        "de": "Mitteilungen wie im Messenger",
+        "es": "Notificaciones como en un mensajero",
+        "fr": "Des notifications comme une messagerie",
+        "ja": "メッセンジャーのような通知",
+        "ko": "메신저 같은 알림",
+        "pt-BR": "Notificações como num mensageiro",
+        "zh-Hans": "像聊天软件一样的通知"
+      },
+      "text": {
+        "en": "A finished task now shows the agent's name and what it wrote, right in the notification. When an agent has nothing to say, nothing arrives.",
+        "ru": "Готовая задача теперь показывает имя агента и то, что он написал, прямо в уведомлении. Если агенту нечего сказать — ничего не приходит.",
+        "de": "Eine erledigte Aufgabe zeigt jetzt den Namen des Agenten und was er geschrieben hat, direkt in der Mitteilung. Hat ein Agent nichts zu sagen, kommt nichts.",
+        "es": "Una tarea terminada muestra ahora el nombre del agente y lo que escribió, en la propia notificación. Si un agente no tiene nada que decir, no llega nada.",
+        "fr": "Une tâche terminée affiche désormais le nom de l’agent et ce qu’il a écrit, directement dans la notification. Quand un agent n’a rien à dire, rien n’arrive.",
+        "ja": "完了したタスクは、エージェントの名前と書いた内容を通知にそのまま表示します。伝えることがないときは何も届きません。",
+        "ko": "완료된 작업은 이제 알림에 에이전트 이름과 쓴 내용을 바로 보여 줍니다. 에이전트가 할 말이 없으면 아무것도 오지 않습니다.",
+        "pt-BR": "Uma tarefa concluída agora mostra o nome do agente e o que ele escreveu, direto na notificação. Quando um agente não tem nada a dizer, nada chega.",
+        "zh-Hans": "完成的任务会直接在通知里显示智能体的名字和它写的内容。智能体没有要说的时，不会收到通知。"
+      }
+    },
+    {
+      "icon": "checkmark.circle.fill",
+      "title": {
+        "en": "Read once, read everywhere",
+        "ru": "Прочитали раз — прочитано везде",
+        "de": "Einmal gelesen, überall gelesen",
+        "es": "Leído una vez, leído en todas partes",
+        "fr": "Lu une fois, lu partout",
+        "ja": "一度読めばどこでも既読",
+        "ko": "한 번 읽으면 어디서나 읽음",
+        "pt-BR": "Leu uma vez, lido em todo lugar",
+        "zh-Hans": "一处已读，处处已读"
+      },
+      "text": {
+        "en": "A chat you read on the iPhone is read on the Mac too, and the other way round. Badges and dots go out as soon as you open a chat.",
+        "ru": "Чат, прочитанный на iPhone, прочитан и на Mac, и наоборот. Бейджи и точки гаснут, как только вы открыли чат.",
+        "de": "Ein auf dem iPhone gelesener Chat ist auch auf dem Mac gelesen und umgekehrt. Kennzeichen und Punkte verschwinden, sobald Sie einen Chat öffnen.",
+        "es": "Un chat leído en el iPhone queda leído también en el Mac, y al revés. Los globos y puntos se apagan en cuanto abre un chat.",
+        "fr": "Un chat lu sur l’iPhone l’est aussi sur le Mac, et inversement. Les pastilles et points disparaissent dès que vous ouvrez un chat.",
+        "ja": "iPhone で読んだチャットは Mac でも既読に、その逆も同じです。チャットを開くとすぐにバッジや点が消えます。",
+        "ko": "iPhone에서 읽은 채팅은 Mac에서도 읽음으로 표시되고, 반대도 마찬가지입니다. 채팅을 열면 배지와 점이 바로 사라집니다.",
+        "pt-BR": "Um chat lido no iPhone fica lido também no Mac, e vice-versa. Indicadores e pontos somem assim que você abre um chat.",
+        "zh-Hans": "在 iPhone 上读过的聊天在 Mac 上也会标为已读，反之亦然。打开聊天后，角标和圆点会立即消失。"
+      }
+    },
+    {
+      "icon": "iphone.and.arrow.forward",
+      "title": {
+        "en": "Add an iPhone in one tap",
+        "ru": "Добавить iPhone в одно касание",
+        "de": "Ein iPhone mit einem Tipp hinzufügen",
+        "es": "Añadir un iPhone con un toque",
+        "fr": "Ajouter un iPhone d’un geste",
+        "ja": "ワンタップで iPhone を追加",
+        "ko": "한 번에 iPhone 추가",
+        "pt-BR": "Adicione um iPhone com um toque",
+        "zh-Hans": "一键添加 iPhone"
+      },
+      "text": {
+        "en": "The account window on the Mac is smaller and clearer. “Add iPhone or iPad” shows the code at once and opens phone access on your servers by itself.",
+        "ru": "Окно аккаунта на Mac стало компактнее и понятнее. «Добавить iPhone или iPad» сразу показывает код и само открывает доступ телефона к вашим серверам.",
+        "de": "Das Kontofenster auf dem Mac ist kleiner und klarer. „iPhone oder iPad hinzufügen“ zeigt sofort den Code und öffnet den Telefonzugang zu Ihren Servern von selbst.",
+        "es": "La ventana de la cuenta en el Mac es más pequeña y clara. «Añadir iPhone o iPad» muestra el código al instante y abre por sí sola el acceso del teléfono a sus servidores.",
+        "fr": "La fenêtre du compte sur le Mac est plus compacte et plus claire. « Ajouter un iPhone ou un iPad » affiche le code tout de suite et ouvre seul l’accès du téléphone à vos serveurs.",
+        "ja": "Mac のアカウント画面がコンパクトでわかりやすくなりました。「iPhone または iPad を追加」はすぐにコードを表示し、サーバーへの iPhone のアクセスも自動で有効にします。",
+        "ko": "Mac의 계정 창이 더 작고 명확해졌습니다. ‘iPhone 또는 iPad 추가’는 코드를 바로 보여 주고 서버에 대한 휴대폰 접근도 알아서 켭니다.",
+        "pt-BR": "A janela da conta no Mac ficou menor e mais clara. “Adicionar iPhone ou iPad” mostra o código na hora e libera sozinho o acesso do celular aos seus servidores.",
+        "zh-Hans": "Mac 上的账户窗口更紧凑、更清晰。“添加 iPhone 或 iPad”会立即显示代码，并自动为你的服务器开启手机访问。"
+      }
+    },
+    {
+      "icon": "arrow.down.circle.fill",
+      "title": {
+        "en": "Updates show up right away",
+        "ru": "Обновления видно сразу",
+        "de": "Updates erscheinen sofort",
+        "es": "Las actualizaciones aparecen al momento",
+        "fr": "Les mises à jour apparaissent tout de suite",
+        "ja": "アップデートがすぐ表示",
+        "ko": "업데이트가 바로 표시",
+        "pt-BR": "As atualizações aparecem na hora",
+        "zh-Hans": "更新立即可见"
+      },
+      "text": {
+        "en": "The Mac checks for a new version when you come back to the app or wake it, so the update banner lights up without a restart.",
+        "ru": "Mac проверяет новую версию, когда вы возвращаетесь в приложение или будите компьютер, — плашка обновления загорается без перезапуска.",
+        "de": "Der Mac sucht nach einer neuen Version, wenn Sie zur App zurückkehren oder ihn aufwecken, sodass das Update-Banner ohne Neustart erscheint.",
+        "es": "El Mac busca una versión nueva cuando vuelve a la app o lo despierta, así el aviso de actualización aparece sin reiniciar.",
+        "fr": "Le Mac cherche une nouvelle version quand vous revenez dans l’app ou le réveillez : le bandeau de mise à jour s’allume sans redémarrage.",
+        "ja": "アプリに戻ったときや Mac のスリープ解除時に新しいバージョンを確認するので、再起動しなくてもアップデートのバナーが表示されます。",
+        "ko": "앱으로 돌아오거나 Mac을 깨우면 새 버전을 확인하므로, 다시 시작하지 않아도 업데이트 배너가 켜집니다.",
+        "pt-BR": "O Mac procura uma nova versão quando você volta ao app ou o desperta, então o aviso de atualização aparece sem reiniciar.",
+        "zh-Hans": "回到应用或唤醒 Mac 时会检查新版本，无需重启，更新提示就会亮起。"
+      }
+    }
+  ]
+}

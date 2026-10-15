@@ -26,8 +26,14 @@ struct InboxRow: View, Equatable {
                 Text(title)
                     .font(BanditoFont.display(size: titleSize, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
-                    .lineLimit(2)
+                    // At large sizes the time takes the width; a third line keeps the verb whole.
+                    .lineLimit(largeType ? 3 : 2)
                 detail
+                // At large sizes the mark moves under the line, so the title keeps the row's width.
+                if item.isRisky && largeType {
+                    RiskMark()
+                        .padding(.top, 2)
+                }
             }
         } trailing: {
             VStack(alignment: .trailing, spacing: 5) {
@@ -36,7 +42,7 @@ struct InboxRow: View, Equatable {
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                     .fixedSize()
-                if item.isRisky {
+                if item.isRisky && !largeType {
                     RiskMark()
                 }
             }
@@ -45,6 +51,8 @@ struct InboxRow: View, Equatable {
         .accessibilityElement(children: .combine)
         .accessibilityHint(L10n.Ios.Inbox.openHint)
     }
+
+    private var largeType: Bool { typeSize >= .xLarge }
 
     private var title: String {
         switch item.kind {
