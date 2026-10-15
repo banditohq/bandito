@@ -116,9 +116,9 @@ import Testing
     }
 
     @Test func theSystemRemovesAnEndedActivityAfterFifteenMinutesOrAnHour() {
-        #expect(Rules.dismissal(for: .done) == 15 * 60)
-        #expect(Rules.dismissal(for: .failed) == 15 * 60)
-        #expect(Rules.dismissal(for: .needsYou) == 60 * 60)
+        #expect(Rules.dismissal(for: .done) == TimeInterval(15 * 60))
+        #expect(Rules.dismissal(for: .failed) == TimeInterval(15 * 60))
+        #expect(Rules.dismissal(for: .needsYou) == TimeInterval(60 * 60))
         #expect(Rules.dismissal(for: .running) == nil)
         #expect(Rules.isFinal(.done) && Rules.isFinal(.failed))
         #expect(!Rules.isFinal(.running) && !Rules.isFinal(.needsYou))
