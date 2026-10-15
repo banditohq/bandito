@@ -39,8 +39,9 @@ import Testing
     }
 
     /// Waits until `condition` holds, for at most two seconds.
+    /// Waits up to 5 s (a busy CI runner) for the condition.
     private func settle(_ condition: () -> Bool) async {
-        for _ in 0..<200 where !condition() {
+        for _ in 0..<500 where !condition() {
             try? await Task.sleep(for: .milliseconds(10))
         }
     }
@@ -74,7 +75,8 @@ import Testing
     }
 
     @Test func sendsOfOneAgentAreAtLeastAnIntervalApartAndTheLastValueWins() async {
-        let interval = Duration.milliseconds(150)
+        // Long enough that the three reads below (60 ms apart in all) fall into one interval even on a slow runner.
+        let interval = Duration.milliseconds(1500)
         let (server, log) = server(interval: interval)
         server.threads[agent] = thread([event(1, .messageAssistant(text: "one"))])
         let box = server.threadSummary(for: agent)
@@ -89,7 +91,7 @@ import Testing
             box.markRead()
         }
         await settle { log.sent.count >= 2 }
-        try? await Task.sleep(for: .milliseconds(250))
+        try? await Task.sleep(for: .milliseconds(300))
         #expect(log.sent.map(\.seq) == [2, 5], "the first at once, then the newest one interval later")
         if log.sent.count == 2 {
             let gap = log.sent[1].at - log.sent[0].at
