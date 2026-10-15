@@ -43,6 +43,8 @@ import UIKit
                 id: streamer, name: "Stream", role: "Speed", runtime: .claude, cwd: DemoDaemonFiles.projects,
                 createdAt: now, updatedAt: now, status: .working),
             items: [])
+        // The reply streams inside a running turn, so the row shows its working line (and its live timer) all along.
+        server.apply(Event(seq: 0, agentId: streamer, ts: now, body: .turnStarted(turnId: "speed", source: .user)))
 
         let before = CrewCounters.rowBodies
         // In the app's own scene, so that the list is laid out and its rows are built (a window outside a scene is not).

@@ -35,10 +35,11 @@ struct CrewWorking: Equatable {
     let activity: AgentActivity
     let since: Date
 
-    /// Nil when no turn runs, when it has no start, or when the agent is paused (it sleeps then).
+    /// Nil when no turn runs, when it has no start, when the agent is paused (it sleeps then), or when the server is not
+    /// connected (a turn cut by a lost connection is never seen ending, so its timer would run forever).
     @MainActor
-    init?(summary: AgentThreadState, paused: Bool) {
-        guard !paused, summary.turnRunning, let start = summary.turnStartedAt else { return nil }
+    init?(summary: AgentThreadState, paused: Bool, connected: Bool) {
+        guard connected, !paused, summary.turnRunning, let start = summary.turnStartedAt else { return nil }
         activity = AgentActivity.current(running: summary.unfinishedTools)
         since = CrewTime.date(ms: start)
     }
@@ -207,7 +208,7 @@ enum CrewFacts {
                 isPinned: pins.contains(agent.id),
                 isPaused: agent.paused,
                 waiting: waiting(waitingItems[agent.id]),
-                working: CrewWorking(summary: summary, paused: agent.paused))
+                working: CrewWorking(summary: summary, paused: agent.paused, connected: server.state == .connected))
         }
     }
 

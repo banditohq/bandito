@@ -83,12 +83,13 @@ Code: `apps/ios/Bandito/Account/`.
 
 ## iOS-native extras (phase order)
 
-1. Actionable notifications (local now, push later), Face ID lock (optional, off by default), haptics on approve/send.
-2. Widgets: small "Needs you: 2" (tap → Inbox), medium "Crew" (4 agents with status), lock screen circular count.
-3. Live Activities for running turns.
-4. App Intents / Shortcuts / Siri: "Ask Forge to …", "What needs me in Bandito".
+1. Actionable notifications (local now, push later), Face ID lock (optional, off by default), haptics on approve/send. Built.
+2. Widgets: small "Needs you: 2" (tap → Inbox), medium "Crew" (4 agents with status), lock screen circular count. Built.
+3. Live Activities for running turns. Built (updated by the app; push updates wait for the APNs key).
+4. App Intents / Shortcuts / Siri: "Ask Forge to …", "What needs me in Bandito". Built. Home screen quick actions:
+   New task, Inbox. Built.
 5. Share extension.
-6. Spotlight: agents by name.
+6. Spotlight: agents by name. Built.
 
 ## Look and feel
 

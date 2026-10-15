@@ -73,8 +73,9 @@ struct ChatHeader: View {
                     .font(BanditoFont.display(size: 14.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
-                if let working = CrewWorking(summary: summary, paused: agent?.paused ?? false),
-                   server.state == .connected, status != .needsYou {
+                if let working = CrewWorking(
+                    summary: summary, paused: agent?.paused ?? false, connected: server.state == .connected),
+                   status != .needsYou {
                     // The same line as the Crew row: what the turn does now, and its live time.
                     WorkingLine(activity: working.activity, since: working.since, size: 11.5)
                 } else {

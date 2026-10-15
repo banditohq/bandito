@@ -341,4 +341,20 @@ import Testing
         #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working == nil)
         await server.disconnect()
     }
+
+    @Test func aPausedAgentOrALostServerShowsNoRunningTurn() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "working-cut"
+        installAgent(server, id: id)
+        server.apply(Event(seq: 0, agentId: id, ts: 1_700_000_000_000, body: .turnStarted(turnId: "t1", source: .user)))
+        await waitUntil { server.threadSummary(for: id).turnRunning }
+        let summary = server.threadSummary(for: id)
+        #expect(CrewWorking(summary: summary, paused: false, connected: true) != nil)
+        #expect(CrewWorking(summary: summary, paused: true, connected: true) == nil)
+        #expect(CrewWorking(summary: summary, paused: false, connected: false) == nil)
+        // The connection ends in the middle of the turn: the row stops its timer instead of counting forever.
+        await server.disconnect()
+        #expect(server.threadSummary(for: id).turnRunning)
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working == nil)
+    }
 }

@@ -13,7 +13,7 @@ SwiftPM package `apps/mac/BanditoKit` (`BanditoKit` core, `BanditoDesign` tokens
   `~/.cache/bandito-ios/<checkout>`; the log of a failed build is there too.
 - Tests: `xcodebuild -project apps/ios/BanditoIOS.xcodeproj -scheme BanditoIOS -destination 'platform=iOS Simulator,id=<udid>' -derivedDataPath ~/.cache/bandito-ios/<checkout> -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO "BUILD_DIR=<same>/Build/Products" "OBJROOT=<same>/Build/Intermediates.noindex" test`. Swift Testing, hosted in the app (`@testable import Bandito`: the module is named after the product).
 - Screenshots: `bash apps/ios/scripts/shot.sh <out.png> [launch args]` boots the shared simulator headless, installs, launches, and writes `<out>.png` and `<out>_s.png` (800 px). `-demo` shows the demo team.
-- The simulator is one, shared: `D7E3834B-1BA6-4071-9131-9FDEDE135C81` (iPhone 17 Pro). Do not create others. At the end of a task: `xcrun simctl shutdown all`.
+- The simulator is one, shared: `D7E3834B-1BA6-4071-9131-9FDEDE135C81` (iPhone 17 Pro). Do not create others. Never boot or shut down a simulator another agent may use: `simctl shutdown all` only when nobody else is working.
 - The owner's Mac may be asleep: never touch `~/.bandito`, `/Applications/Bandito.app` or anything outside the simulator.
   Interaction with the simulator is through XCUITest; screenshots through `xcrun simctl io`. Close Simulator.app when done.
 - After a Swift build: `git checkout -- apps/mac/BanditoKit/Package.resolved` (the build rewrites it).
@@ -90,6 +90,27 @@ The screen every day. Read the rules before changing it; each came from the Mac'
 - Debug launch arguments: `-chat <agent>` (Crew), `-chat-draft <text>`, `-chat-send <text>`, `-chat-top`, `-chat-row <id part>`.
   The demo agents answer (`Demo/DemoChatScript.swift`: commands, a streamed reply, an approval for Forge, two buttons).
 
+## New task (`NewTask/`)
+
+- The floating button is on the roots of Crew and Activity only (environment `newTaskAction`, set by RootView) and only
+  when some server has an agent. It is the main button of the design system: cream with the orange dot, the floating
+  shadow. A tap opens the sheet; a press held 0.35 s opens it with the dictation on (it fires while the finger is down;
+  the flags reset through `@GestureState`, so the next tap is never swallowed).
+- `NewTaskRules` (pure, tested) orders the agents (last used first), says when Send is enabled and whether the
+  microphone is offered. Sending opens the agent's chat with the task (`LinksAndNewTaskUITests`).
+- The app icon's actions (`QuickActions.swift`: New task, Inbox) are set in code and read by a small app delegate and a
+  scene delegate; `bandito://` links keep working through the scene delegate. With Face ID lock on, an action waits for
+  the unlock.
+
+## Crew details
+
+- "Waits for you" shows at most two cards (`CrewWaitingSplit`, from `InboxRules`) and "N more — in the Inbox". An
+  approval is answered right on the card through `InboxAnswer` (Face ID when the lock asks for it, as in the Inbox).
+- A running agent shows what it does now and for how long (`WorkingLine`, `AgentActivity.current(running:)`), in the row
+  and the chat header; the timer is `Text(timerInterval:)`, so the list does not redraw every second.
+- Rows switch to a stacked layout at accessibility text sizes (`AdaptiveRowLayout`); button pairs use `AnswerPair`
+  (`ViewThatFits`: side by side, else stacked). Previews show plain text (`MessageBlocks.plainText`), not markdown.
+
 ## Live Activities (`LiveActivity/`, `Shared/TurnActivity*.swift`)
 
 - A turn that runs 30 seconds gets an activity (agent avatar, "what it does now", time, Stop); it ends on Done, Needs you
@@ -106,8 +127,6 @@ The screen every day. Read the rules before changing it; each came from the Mac'
 
 ## Known gaps before a release
 
-- `AppIcon` is `brand/png/icon-1024.png` with an alpha channel; App Store Connect rejects an icon with alpha: flatten it
-  before the first upload.
 - `bandito://pair…` opens the connect sheet (shown and confirmed before anything is sent); the other `bandito://` links (`inbox`, `crew`, `agent/<server>/<agent>`) are read by `BanditoLink` (`Shared/WidgetSnapshot.swift`) and opened in `RootView`: the tab switches, and an agent opens its chat in the Crew (`CrewFocus`). A notification's press and the Inbox sheet's chat button take the same way.
 - Not in the chat yet: reactions, reply quotes and mentions (the Mac has them), pictures that other clients sent (the daemon's file route is not reachable over `.direct`, so only pictures this phone sent show; others are a tile with the name), and a thread cache for a cold start without a connection (threads live in memory).
 - The agent card (`Agent/AgentDetailView.swift`) and the creation sheet (`Agent/NewAgentSheet.swift`, `OneAgentForm.swift`)
