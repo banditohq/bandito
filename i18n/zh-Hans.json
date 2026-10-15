@@ -3280,6 +3280,8 @@
   "shortcut.title.askAgent": "询问代理",
   "shortcut.title.openAgent": "打开代理",
   "shortcut.title.agentType": "代理",
+  "shortcut.title.stop": "停止",
+  "shortcut.title.server": "服务器",
   "shortcut.title.messageParam": "消息",
   "shortcut.phrase.whatNeedsMe": "在${applicationName}里什么在等我处理",
   "shortcut.phrase.askAgent": "在${applicationName}中询问${agent}",
@@ -3468,7 +3470,8 @@
   "ios.account.servers.updateNeeded": "需要更新 Bandito",
   "ios.live.done": "已完成",
   "ios.live.failed": "未完成",
-  "ios.live.stopFailed": "无法停止：没有网络连接",
+  "ios.live.stopNoConnection": "无法停止：没有网络连接",
+  "ios.live.stopFailed": "无法停止。请在应用中重试。",
   "ios.live.setting": "锁屏上的实时活动",
   "ios.live.settingHint": "显示耗时超过 30 秒的任务，并带有停止按钮。"
 }

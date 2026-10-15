@@ -27,9 +27,15 @@ enum TurnActivityRules {
         case restart
     }
 
+    /// The phase the rules see for an activity on screen: an ended one counts as done whatever it last showed (a turn
+    /// that ended while "needs you" must not keep the agent from getting its next activity).
+    static func effectivePhase(shown: Phase, ended: Bool) -> Phase {
+        ended ? .done : shown
+    }
+
     /// Whether a turn that has run for `elapsed` seconds gets an activity now.
-    /// - existing: the phase of this agent's activity, nil without one.
-    /// - running: how many activities are running or waiting for the person (all agents).
+    /// - existing: the phase of this agent's activity (`effectivePhase`), nil without one.
+    /// - running: how many activities are on screen, all agents: running, waiting for the person, or ended and not yet removed.
     /// - dismissedThisTurn: the person swiped this turn's activity away; it does not come back for the same turn.
     static func startAction(
         elapsed: TimeInterval, appActive: Bool, enabled: Bool, existing: Phase?, running: Int, dismissedThisTurn: Bool

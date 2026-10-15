@@ -1098,7 +1098,8 @@
 "ios.live.failed" = "끝내지 못했습니다";
 "ios.live.setting" = "잠금 화면의 실시간 현황";
 "ios.live.settingHint" = "30초보다 오래 걸리는 작업을 중지 버튼과 함께 표시합니다.";
-"ios.live.stopFailed" = "중지할 수 없음: 연결 없음";
+"ios.live.stopFailed" = "중지하지 못했습니다. 앱에서 다시 시도해 주세요.";
+"ios.live.stopNoConnection" = "중지할 수 없음: 연결 없음";
 "ios.newAgent.installTimedOut" = "설치가 아직 진행 중입니다. 잠시 후 다시 시도하세요.";
 "ios.newAgent.tabOne" = "에이전트 하나";
 "ios.newAgent.tabTeams" = "바로 쓸 수 있는 팀";

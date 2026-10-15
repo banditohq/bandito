@@ -73,6 +73,8 @@ enum TurnStopRelay {
 }
 
 /// The Stop button of the activity: interrupts the agent's turn through its server.
+/// The titles are App Intents metadata: their English text is the key of `shortcut.title.*` in i18n/*.json, so they stay
+/// literals (the metadata reads literals only). The button's own label is `L10n.Thread.stop`.
 struct StopTurnIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Stop"
     static let isDiscoverable = false

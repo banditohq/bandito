@@ -1645,6 +1645,7 @@ public enum L10n {
             public static var setting: String { L10n.tr("ios.live.setting") }
             public static var settingHint: String { L10n.tr("ios.live.settingHint") }
             public static var stopFailed: String { L10n.tr("ios.live.stopFailed") }
+            public static var stopNoConnection: String { L10n.tr("ios.live.stopNoConnection") }
         }
 
         public enum NewAgent {

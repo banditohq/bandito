@@ -3322,6 +3322,8 @@
   "shortcut.title.askAgent": "Perguntar a um agente",
   "shortcut.title.openAgent": "Abrir um agente",
   "shortcut.title.agentType": "Agente",
+  "shortcut.title.stop": "Parar",
+  "shortcut.title.server": "Servidor",
   "shortcut.title.messageParam": "Mensagem",
   "shortcut.phrase.whatNeedsMe": "O que precisa de mim no ${applicationName}",
   "shortcut.phrase.askAgent": "Pergunte a ${agent} no ${applicationName}",
@@ -3510,7 +3512,8 @@
   "ios.account.servers.updateNeeded": "Atualize o Bandito",
   "ios.live.done": "Pronto",
   "ios.live.failed": "Não terminou",
-  "ios.live.stopFailed": "Não foi possível parar: sem conexão",
+  "ios.live.stopNoConnection": "Não foi possível parar: sem conexão",
+  "ios.live.stopFailed": "Não foi possível parar. Tente no aplicativo.",
   "ios.live.setting": "Atividades ao vivo na tela de bloqueio",
   "ios.live.settingHint": "Mostra uma tarefa que dura mais de 30 segundos, com um botão Parar."
 }

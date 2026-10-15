@@ -1098,7 +1098,8 @@
 "ios.live.failed" = "Non terminé";
 "ios.live.setting" = "Activités en direct sur l'écran verrouillé";
 "ios.live.settingHint" = "Affiche une tâche qui dure plus de 30 secondes, avec un bouton Arrêter.";
-"ios.live.stopFailed" = "Impossible d'arrêter : pas de connexion";
+"ios.live.stopFailed" = "Impossible d'arrêter. Réessayez dans l'application.";
+"ios.live.stopNoConnection" = "Impossible d'arrêter : pas de connexion";
 "ios.newAgent.installTimedOut" = "L'installation est toujours en cours. Réessayez plus tard.";
 "ios.newAgent.tabOne" = "Un agent";
 "ios.newAgent.tabTeams" = "Équipes prêtes";

@@ -45,6 +45,21 @@ import Testing
         #expect(start(existing: .done, running: 3) == .restart)
     }
 
+    @Test func anEndedActivityCountsAsDoneWhateverItShowed() {
+        #expect(Rules.effectivePhase(shown: .needsYou, ended: true) == .done)
+        #expect(Rules.effectivePhase(shown: .failed, ended: true) == .done)
+        #expect(Rules.effectivePhase(shown: .running, ended: true) == .done)
+        #expect(Rules.effectivePhase(shown: .needsYou, ended: false) == .needsYou)
+        #expect(Rules.effectivePhase(shown: .running, ended: false) == .running)
+    }
+
+    @Test func aNewTurnAfterAnEndedNeedsYouActivityGetsAFreshOne() {
+        // The agent's needs-you activity ended (its turn finished while it waited): its next long turn is not blocked.
+        let existing = Rules.effectivePhase(shown: .needsYou, ended: true)
+        #expect(start(existing: existing) == .restart)
+        #expect(start(existing: existing, running: 3) == .restart)
+    }
+
     @Test func aSwipedAwayActivityDoesNotComeBackInTheSameTurn() {
         #expect(start(dismissed: true) == .none)
         #expect(start(existing: .done, dismissed: true) == .none)

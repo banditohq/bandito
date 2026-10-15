@@ -1098,7 +1098,8 @@
 "ios.live.failed" = "Не закончил";
 "ios.live.setting" = "Живые действия на экране блокировки";
 "ios.live.settingHint" = "Показывает задачу, которая идёт дольше 30 секунд, с кнопкой «Стоп».";
-"ios.live.stopFailed" = "Не удалось остановить: нет связи";
+"ios.live.stopFailed" = "Не удалось остановить. Попробуйте в приложении.";
+"ios.live.stopNoConnection" = "Не удалось остановить: нет связи";
 "ios.newAgent.installTimedOut" = "Установка всё ещё идёт. Попробуйте позже.";
 "ios.newAgent.tabOne" = "Один агент";
 "ios.newAgent.tabTeams" = "Готовые команды";
