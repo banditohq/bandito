@@ -25,8 +25,11 @@ final class WizardServer: PhoneWizardServer {
     init(name: String) { wizardName = name }
 
     func relayStatus() async throws -> RelayStatus { status }
+    /// Makes the daemon refuse to turn the relay on (the access fails for this server).
+    var enableFails = false
     func relayEnable(url: String, sid: String, secret: String) async throws -> RelayStatus {
         enableCalls += 1
+        if enableFails { throw RPCError(code: RPCError.disconnected, message: "x") }
         status = RelayStatus(enabled: true, connected: true, sid: sid)
         return status
     }

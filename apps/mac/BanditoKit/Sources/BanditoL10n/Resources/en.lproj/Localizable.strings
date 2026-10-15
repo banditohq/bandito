@@ -2090,6 +2090,9 @@
 "perfCheck.summary.all" = "Every page meets the target.";
 "perfCheck.target" = "Target: 95%% of frames done within 8.3 ms, under 1%% over 16.7 ms, no freeze of 100 ms.";
 "perfCheck.title" = "Smoothness check";
+"phoneWizard.access.enabling" = "Turning on phone access…";
+"phoneWizard.access.failed" = "Could not turn on phone access on %1$@";
+"phoneWizard.access.ready" = "The iPhone will see the servers: %1$@";
 "phoneWizard.done.action" = "Done";
 "phoneWizard.done.body" = "“%1$@” is connected to “%2$@” through the Bandito cloud.";
 "phoneWizard.done.title" = "Done, the iPhone is connected";

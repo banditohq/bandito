@@ -3042,6 +3042,12 @@ public enum L10n {
         public static var via: String { L10n.tr("phoneWizard.via") }
         public static var waiting: String { L10n.tr("phoneWizard.waiting") }
 
+        public enum Access {
+            public static var enabling: String { L10n.tr("phoneWizard.access.enabling") }
+            public static func failed(names: String) -> String { L10n.tr("phoneWizard.access.failed", names) }
+            public static func ready(names: String) -> String { L10n.tr("phoneWizard.access.ready", names) }
+        }
+
         public enum Done {
             public static var action: String { L10n.tr("phoneWizard.done.action") }
             public static func body(device: String, server: String) -> String { L10n.tr("phoneWizard.done.body", device, server) }

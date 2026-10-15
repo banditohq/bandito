@@ -2090,6 +2090,9 @@
 "perfCheck.summary.all" = "모든 페이지가 목표를 충족합니다.";
 "perfCheck.target" = "목표: 프레임 95%%가 8.3ms 안에 완료, 16.7ms 초과는 1%% 미만, 100ms 멈춤 없음.";
 "perfCheck.title" = "부드러움 검사";
+"phoneWizard.access.enabling" = "iPhone 접근을 켜는 중…";
+"phoneWizard.access.failed" = "%1$@에서 iPhone 접근을 켜지 못했습니다";
+"phoneWizard.access.ready" = "iPhone에서 다음 서버가 보입니다: %1$@";
 "phoneWizard.done.action" = "완료";
 "phoneWizard.done.body" = "“%1$@”이(가) Bandito 클라우드를 통해 “%2$@”에 연결되었습니다.";
 "phoneWizard.done.title" = "완료되었습니다. iPhone이 연결되었습니다";

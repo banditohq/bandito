@@ -2090,6 +2090,9 @@
 "perfCheck.summary.all" = "Все страницы соответствуют цели.";
 "perfCheck.target" = "Цель: 95%% кадров готовы за 8,3 мс, меньше 1%% дольше 16,7 мс, ни одного подвисания на 100 мс.";
 "perfCheck.title" = "Проверка плавности";
+"phoneWizard.access.enabling" = "Доступ с iPhone включается…";
+"phoneWizard.access.failed" = "Не удалось включить доступ на %1$@";
+"phoneWizard.access.ready" = "iPhone увидит серверы: %1$@";
 "phoneWizard.done.action" = "Готово";
 "phoneWizard.done.body" = "«%1$@» подключён к «%2$@» через облако Bandito.";
 "phoneWizard.done.title" = "Готово, iPhone подключён";

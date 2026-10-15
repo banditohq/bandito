@@ -2090,6 +2090,9 @@
 "perfCheck.summary.all" = "所有页面都达到了目标。";
 "perfCheck.target" = "目标：95%% 的帧在 8.3 毫秒内完成，超过 16.7 毫秒的少于 1%%，没有 100 毫秒的卡顿。";
 "perfCheck.title" = "流畅度检查";
+"phoneWizard.access.enabling" = "正在开启 iPhone 访问…";
+"phoneWizard.access.failed" = "无法在 %1$@ 上开启 iPhone 访问";
+"phoneWizard.access.ready" = "iPhone 将能看到这些服务器：%1$@";
 "phoneWizard.done.action" = "完成";
 "phoneWizard.done.body" = "“%1$@”已通过 Bandito 云连接到“%2$@”。";
 "phoneWizard.done.title" = "完成，iPhone 已连接";

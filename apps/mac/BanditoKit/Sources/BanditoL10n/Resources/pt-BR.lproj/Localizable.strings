@@ -2090,6 +2090,9 @@
 "perfCheck.summary.all" = "Todas as páginas atingem a meta.";
 "perfCheck.target" = "Meta: 95%% dos quadros prontos em 8,3 ms, menos de 1%% acima de 16,7 ms, nenhum travamento de 100 ms.";
 "perfCheck.title" = "Teste de fluidez";
+"phoneWizard.access.enabling" = "Ativando o acesso pelo iPhone…";
+"phoneWizard.access.failed" = "Não foi possível ativar o acesso pelo iPhone em %1$@";
+"phoneWizard.access.ready" = "O iPhone vai ver os servidores: %1$@";
 "phoneWizard.done.action" = "Concluir";
 "phoneWizard.done.body" = "“%1$@” está conectado a “%2$@” pela nuvem do Bandito.";
 "phoneWizard.done.title" = "Pronto, o iPhone está conectado";

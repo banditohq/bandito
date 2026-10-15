@@ -2090,6 +2090,9 @@
 "perfCheck.summary.all" = "Chaque page atteint l’objectif.";
 "perfCheck.target" = "Objectif : 95 %% des images prêtes en 8,3 ms, moins de 1 %% au-delà de 16,7 ms, aucun blocage de 100 ms.";
 "perfCheck.title" = "Test de fluidité";
+"phoneWizard.access.enabling" = "Activation de l'accès depuis l'iPhone…";
+"phoneWizard.access.failed" = "Impossible d'activer l'accès depuis l'iPhone sur %1$@";
+"phoneWizard.access.ready" = "L'iPhone verra les serveurs : %1$@";
 "phoneWizard.done.action" = "Terminé";
 "phoneWizard.done.body" = "« %1$@ » est connecté à « %2$@ » via le cloud Bandito.";
 "phoneWizard.done.title" = "Terminé, l’iPhone est connecté";

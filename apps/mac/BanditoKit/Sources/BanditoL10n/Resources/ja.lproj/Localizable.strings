@@ -2090,6 +2090,9 @@
 "perfCheck.summary.all" = "すべてのページが目標を満たしています。";
 "perfCheck.target" = "目標: 95%% のフレームが 8.3 ms 以内、16.7 ms 超は 1%% 未満、100 ms の固まりはゼロ。";
 "perfCheck.title" = "なめらかさのチェック";
+"phoneWizard.access.enabling" = "iPhone からのアクセスを有効にしています…";
+"phoneWizard.access.failed" = "%1$@ で iPhone からのアクセスを有効にできませんでした";
+"phoneWizard.access.ready" = "iPhone から次のサーバーが見えます: %1$@";
 "phoneWizard.done.action" = "完了";
 "phoneWizard.done.body" = "「%1$@」は Bandito クラウド経由で「%2$@」に接続されました。";
 "phoneWizard.done.title" = "完了しました。iPhone を接続しました";

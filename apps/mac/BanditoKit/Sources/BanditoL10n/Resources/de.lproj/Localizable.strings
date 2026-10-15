@@ -2090,6 +2090,9 @@
 "perfCheck.summary.all" = "Jede Seite erreicht das Ziel.";
 "perfCheck.target" = "Ziel: 95 %% der Bilder in 8,3 ms fertig, unter 1 %% über 16,7 ms, kein Hänger von 100 ms.";
 "perfCheck.title" = "Flüssigkeitstest";
+"phoneWizard.access.enabling" = "Zugriff mit dem iPhone wird eingeschaltet…";
+"phoneWizard.access.failed" = "Zugriff mit dem iPhone konnte auf %1$@ nicht eingeschaltet werden";
+"phoneWizard.access.ready" = "Das iPhone sieht die Server: %1$@";
 "phoneWizard.done.action" = "Fertig";
 "phoneWizard.done.body" = "„%1$@“ ist über die Bandito-Cloud mit „%2$@“ verbunden.";
 "phoneWizard.done.title" = "Fertig, das iPhone ist verbunden";

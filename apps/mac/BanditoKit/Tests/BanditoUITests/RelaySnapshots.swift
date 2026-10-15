@@ -65,6 +65,17 @@ extension ScreenWorkSuites {
             try each("wizard-problem", width: 420) { _ in AnyView(ConnectPhoneWizard(preview: .problem(.noServer))) }
         }
 
+        /// The connect wizard on the join code: the phone access on two servers (turned on, and one that failed).
+        @Test(.enabled(if: RelaySnapshots.directory != nil)) func wizardJoin() throws {
+            let showing = JoinQRModel.preview(.showing(link: LayoutAuditSnapshots.joinPreviewLink, expiresAt: Date().addingTimeInterval(272)))
+            try each("wizard-join", width: 420) { _ in
+                AnyView(ConnectPhoneWizard(previewJoin: showing, previewAccess: .ready(["home", "my-home"])))
+            }
+            try each("wizard-join-failed", width: 420) { _ in
+                AnyView(ConnectPhoneWizard(previewJoin: showing, previewAccess: .failed(["my-home"])))
+            }
+        }
+
         @Test(.enabled(if: RelaySnapshots.directory != nil)) func joinSheet() throws {
             let link = LayoutAuditSnapshots.joinPreviewLink
             let phases: [(String, JoinQRModel.Phase)] = [
