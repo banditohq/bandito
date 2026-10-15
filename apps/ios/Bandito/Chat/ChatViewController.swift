@@ -44,6 +44,9 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     /// Whether an update is being applied (tests wait on it).
     var isApplying: Bool { applying }
     private var visible = false
+    /// Keeps the draft when the app leaves the screen for the background: a draft that is only saved when the screen
+    /// goes away is lost if the system ends the app while it is in the background.
+    private var backgroundObserver: NSObjectProtocol?
     private var dictation: ChatDictation?
     private var dictationBase = ""
     private let reduceMotion = { UIAccessibility.isReduceMotionEnabled }
@@ -115,6 +118,11 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
         model.start()
         trackFrame()
         restoreDraft()
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.saveDraft() }
+        }
         #if DEBUG
         ChatLaunchHooks.apply(to: self)
         #endif
@@ -136,7 +144,10 @@ final class ChatViewController: UIViewController, UICollectionViewDelegate, Chat
     }
 
     deinit {
-        MainActor.assumeIsolated { model.stop() }
+        MainActor.assumeIsolated {
+            model.stop()
+            if let backgroundObserver { NotificationCenter.default.removeObserver(backgroundObserver) }
+        }
     }
 
     // MARK: layout
