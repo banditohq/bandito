@@ -68,6 +68,8 @@ struct AnswerPair: View {
     var quietID: String?
     var mainID: String?
     var disabled = false
+    /// The main answer is on its way: its label gives way to a spinner of the same size (the buttons stay off).
+    var mainBusy = false
     let quietAction: () -> Void
     let mainAction: () -> Void
 
@@ -92,10 +94,19 @@ struct AnswerPair: View {
     }
 
     private func mainButton(fullWidth: Bool) -> some View {
-        Button(main, action: mainAction)
-            .buttonStyle(SignalButtonStyle(fullWidth: fullWidth))
-            .disabled(disabled)
-            .optionalAccessibilityIdentifier(mainID)
+        Button(action: mainAction) {
+            Text(main)
+                .opacity(mainBusy ? 0 : 1)
+                .overlay {
+                    if mainBusy {
+                        ProgressView()
+                            .tint(Color.Bandito.bg)
+                    }
+                }
+        }
+        .buttonStyle(SignalButtonStyle(fullWidth: fullWidth))
+        .disabled(disabled || mainBusy)
+        .optionalAccessibilityIdentifier(mainID)
     }
 }
 

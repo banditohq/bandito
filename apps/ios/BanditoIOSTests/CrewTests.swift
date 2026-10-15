@@ -261,3 +261,32 @@ import Testing
         await server.disconnect()
     }
 }
+
+/// The card of a waiting agent answers its approval: the answered one leaves, the agent's next one is shown, and only an
+/// approval gets the two answers (a form, a question or a connect request keeps the card that opens the chat).
+@MainActor @Suite struct CrewAnswerCardTests {
+    /// The demo's Forge has two approvals: the risky push first, then the test run.
+    @Test func anAnsweredApprovalLeavesTheAgentsNextOne() async {
+        let server = await IOSDemo.start()
+        #expect(
+            CrewFacts.build(server: server, pinned: []).first { $0.name == "Forge" }?.waiting
+                == .approval(title: "git push origin feat/ios-crew"))
+        let answered: Set<String> = ["approval-ios-demo-approval-1"]
+        let rows = CrewFacts.build(server: server, pinned: [], answered: answered)
+        #expect(rows.first { $0.name == "Forge" }?.waiting == .approval(title: "swift test -q"))
+        let forge = server.sortedAgents.first { $0.name == "Forge" }?.id ?? ""
+        #expect(CrewFacts.waitingItems(of: server, answered: answered)[forge]?.id == "approval-ios-demo-approval-2")
+        await server.disconnect()
+    }
+
+    @Test func onlyAnApprovalGetsTheTwoAnswers() async {
+        let server = await IOSDemo.start()
+        let items = CrewFacts.waitingItems(of: server)
+        func agentID(_ name: String) -> String { server.sortedAgents.first { $0.name == name }?.id ?? "" }
+        #expect(CrewFacts.approvalItem(items[agentID("Forge")])?.id == "approval-ios-demo-approval-1")
+        #expect(CrewFacts.approvalItem(items[agentID("Quill")]) == nil)
+        #expect(CrewFacts.approvalItem(items[agentID("Watch")]) == nil)
+        #expect(CrewFacts.approvalItem(items[agentID("Scout")]) == nil)
+        await server.disconnect()
+    }
+}

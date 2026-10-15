@@ -166,13 +166,13 @@ enum CrewWaitingSplit {
 /// Builds the rows of the Crew screen from a server. Reads each agent's thread summary, never its thread.
 @MainActor
 enum CrewFacts {
-    static func build(server: ServerModel, pinned: [String]) -> [CrewAgentFacts] {
+    /// `answered`: the Inbox items the person answered from this screen, hidden at once (the daemon's event removes them
+    /// later). An agent with a second approval then waits for that one.
+    static func build(server: ServerModel, pinned: [String], answered: Set<String> = []) -> [CrewAgentFacts] {
         let pins = Set(pinned)
         let lead = server.leadAgentID
         let agents = CrewOrder.ordered(server.sortedAgents, id: \.id, lead: lead, pinned: pins)
-        // What waits for the person is the Inbox's own list: an agent waits exactly when it has an item there.
-        let waitingItems = Dictionary(
-            InboxRules.items(in: [server]).map { ($0.agentID, $0) }, uniquingKeysWith: { first, _ in first })
+        let waitingItems = waitingItems(of: server, answered: answered)
         return agents.map { agent in
             let summary = server.threadSummary(for: agent.id)
             let status = server.status(of: agent.id)
@@ -197,6 +197,20 @@ enum CrewFacts {
     /// finished turn, else the last update. The same rule as the Mac's `AgentPreview.timestamp`.
     static func activity(agent: Agent, lastItemTimestamp: Int64?) -> Int64 {
         [lastItemTimestamp, agent.lastMessage?.ts].compactMap { $0 }.max() ?? agent.lastTurnAt ?? agent.updatedAt
+    }
+
+    /// The first Inbox item of each agent that is not answered yet. What waits for the person is the Inbox's own list: an
+    /// agent waits exactly when it has an item there.
+    static func waitingItems(of server: ServerModel, answered: Set<String> = []) -> [String: InboxItem] {
+        let items = InboxRules.items(in: [server]).filter { !answered.contains($0.id) }
+        return Dictionary(items.map { ($0.agentID, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// The approval a card answers with its two buttons: the agent's waiting item when that one is an approval. A form,
+    /// a question or a connect request has no buttons on the card (the card opens the chat).
+    static func approvalItem(_ item: InboxItem?) -> InboxItem? {
+        guard let item, case .approval = item.kind else { return nil }
+        return item
     }
 
     /// What the agent waits for: the kind of its Inbox item, nil when it has none (it waits for nothing).
