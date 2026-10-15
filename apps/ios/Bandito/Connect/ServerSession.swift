@@ -288,7 +288,18 @@ final class ServerSession {
         } else {
             Task { @MainActor in
                 await model.connect()
-                onFirstConnected(model)
+                if model.state == .connected {
+                    onFirstConnected(model)
+                    return
+                }
+                // The first attempt failed and the model keeps trying: the cursor starts at the server's tail on the
+                // first success. Started at once, it found no tail, and the first background check showed every event
+                // the server ever had.
+                model.onStateChange = { [weak self, weak model] state in
+                    guard state == .connected, let self, let model else { return }
+                    model.onStateChange = nil
+                    self.onFirstConnected(model)
+                }
             }
         }
     }

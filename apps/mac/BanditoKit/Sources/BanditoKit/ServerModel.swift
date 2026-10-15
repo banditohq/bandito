@@ -647,11 +647,11 @@ public final class ServerModel: Identifiable {
             var attempt = 0
             while !Task.isCancelled {
                 attempt += 1
-                guard let model = self else { return }
-                model.state = .reconnecting(attempt: attempt)
-                let delay = model.reconnectDelay(attempt)
+                // The model is held only around each step, never during the wait: a model let go meanwhile ends the loop.
+                guard let delay = self?.beginReconnect(attempt: attempt) else { return }
                 try? await Task.sleep(for: delay)
                 if Task.isCancelled { return }
+                guard let model = self else { return }
                 do {
                     try await model.open()
                     model.reconnectTask = nil
@@ -670,6 +670,11 @@ public final class ServerModel: Identifiable {
                 }
             }
         }
+    }
+
+    private func beginReconnect(attempt: Int) -> Duration {
+        state = .reconnecting(attempt: attempt)
+        return reconnectDelay(attempt)
     }
 
     func noteDecodeFailure() {
