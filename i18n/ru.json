@@ -3601,5 +3601,10 @@
   "account.hidden.show": "Показать скрытые серверы ({count})",
   "account.hidden.hint": "Серверы аккаунта, которые вы убрали с этого устройства. Покажите их, и они появятся снова.",
   "ios.account.servers.hidden": "Скрыт",
-  "ios.account.servers.updateNeeded": "Нужно обновить Bandito"
+  "ios.account.servers.updateNeeded": "Нужно обновить Bandito",
+  "ios.share.title": "Отправить в Bandito",
+  "ios.share.empty": "Откройте Bandito и подключите сервер",
+  "ios.share.done": "Готово. Откройте Bandito — сообщение уйдёт само",
+  "ios.share.failed": "Не удалось сохранить сообщение. Попробуйте ещё раз.",
+  "ios.share.picture": "Прикреплённая картинка"
 }

@@ -1193,6 +1193,11 @@
 "ios.settings.servers.via.cloud" = "Bandito cloud";
 "ios.settings.servers.via.lan" = "LAN";
 "ios.settings.servers.via.tailscale" = "Tailscale";
+"ios.share.done" = "Done. Open Bandito and the message will be sent on its own";
+"ios.share.empty" = "Open Bandito and connect a server";
+"ios.share.failed" = "Could not save the message. Try again.";
+"ios.share.picture" = "Attached picture";
+"ios.share.title" = "Send to Bandito";
 "ios.tab.activity" = "Activity";
 "ios.tab.comingSoon" = "Coming soon";
 "ios.tab.crew" = "Crew";

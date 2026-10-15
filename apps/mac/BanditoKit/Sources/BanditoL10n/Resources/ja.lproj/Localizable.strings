@@ -1193,6 +1193,11 @@
 "ios.settings.servers.via.cloud" = "Bandito クラウド";
 "ios.settings.servers.via.lan" = "LAN";
 "ios.settings.servers.via.tailscale" = "Tailscale";
+"ios.share.done" = "完了しました。Banditoを開くと、メッセージは自動で送信されます";
+"ios.share.empty" = "Banditoを開いて、サーバーを接続してください";
+"ios.share.failed" = "メッセージを保存できませんでした。もう一度お試しください。";
+"ios.share.picture" = "添付された画像";
+"ios.share.title" = "Banditoに送信";
 "ios.tab.activity" = "アクティビティ";
 "ios.tab.comingSoon" = "近日公開";
 "ios.tab.crew" = "クルー";

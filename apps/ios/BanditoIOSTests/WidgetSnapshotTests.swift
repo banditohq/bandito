@@ -121,6 +121,15 @@ import Testing
         #expect(BanditoLink(url: agentURL) == .agent(server: "6F0B2C1E-8D7A-4C3B-9A51-0B1D2E3F4A5B", id: "forge"))
     }
 
+    @Test func theShareLinkNamesATaskAndOnlyAValidOne() throws {
+        let id = UUID()
+        #expect(BanditoLink(url: BanditoLink.share(id: id).url) == .share(id: id))
+        #expect(BanditoLink.share(id: id).url.absoluteString == "bandito://share/\(id.uuidString)")
+        for text in ["bandito://share", "bandito://share/not-a-uuid", "bandito://share/\(id.uuidString)/more"] {
+            #expect(BanditoLink(url: try #require(URL(string: text))) == nil, "\(text) is not a share link")
+        }
+    }
+
     @Test func aLinkBuiltByTheWidgetIsReadBack() {
         let link = BanditoLink.agent(server: "6F0B2C1E-8D7A-4C3B-9A51-0B1D2E3F4A5B", id: "scout one")
         #expect(BanditoLink(url: link.url) == link)

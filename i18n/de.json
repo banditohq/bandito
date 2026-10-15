@@ -3515,5 +3515,10 @@
   "account.hidden.show": "Ausgeblendete Server anzeigen ({count})",
   "account.hidden.hint": "Server des Kontos, die du von diesem Gerät entfernt hast. Zeige sie an, und sie kommen zurück.",
   "ios.account.servers.hidden": "Ausgeblendet",
-  "ios.account.servers.updateNeeded": "Bandito aktualisieren"
+  "ios.account.servers.updateNeeded": "Bandito aktualisieren",
+  "ios.share.title": "An Bandito senden",
+  "ios.share.empty": "Öffne Bandito und verbinde einen Server",
+  "ios.share.done": "Fertig. Öffne Bandito, dann wird die Nachricht von selbst gesendet",
+  "ios.share.failed": "Die Nachricht konnte nicht gespeichert werden. Versuche es noch einmal.",
+  "ios.share.picture": "Angehängtes Bild"
 }

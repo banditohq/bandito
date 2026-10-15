@@ -3474,5 +3474,10 @@
   "account.hidden.show": "非表示のサーバーを表示（{count}）",
   "account.hidden.hint": "このデバイスから削除したアカウントのサーバーです。表示すると、再び追加されます。",
   "ios.account.servers.hidden": "非表示",
-  "ios.account.servers.updateNeeded": "Bandito の更新が必要"
+  "ios.account.servers.updateNeeded": "Bandito の更新が必要",
+  "ios.share.title": "Banditoに送信",
+  "ios.share.empty": "Banditoを開いて、サーバーを接続してください",
+  "ios.share.done": "完了しました。Banditoを開くと、メッセージは自動で送信されます",
+  "ios.share.failed": "メッセージを保存できませんでした。もう一度お試しください。",
+  "ios.share.picture": "添付された画像"
 }

@@ -3516,5 +3516,10 @@
   "account.hidden.show": "Show hidden servers ({count})",
   "account.hidden.hint": "Servers of the account that you removed from this device. Show them and they come back.",
   "ios.account.servers.hidden": "Hidden",
-  "ios.account.servers.updateNeeded": "Update Bandito"
+  "ios.account.servers.updateNeeded": "Update Bandito",
+  "ios.share.title": "Send to Bandito",
+  "ios.share.empty": "Open Bandito and connect a server",
+  "ios.share.done": "Done. Open Bandito and the message will be sent on its own",
+  "ios.share.failed": "Could not save the message. Try again.",
+  "ios.share.picture": "Attached picture"
 }

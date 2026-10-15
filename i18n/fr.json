@@ -3516,5 +3516,10 @@
   "account.hidden.show": "Afficher les serveurs masqués ({count})",
   "account.hidden.hint": "Serveurs du compte que vous avez retirés de cet appareil. Affichez-les et ils reviennent.",
   "ios.account.servers.hidden": "Masqué",
-  "ios.account.servers.updateNeeded": "Mettez Bandito à jour"
+  "ios.account.servers.updateNeeded": "Mettez Bandito à jour",
+  "ios.share.title": "Envoyer à Bandito",
+  "ios.share.empty": "Ouvrez Bandito et connectez un serveur",
+  "ios.share.done": "C’est fait. Ouvrez Bandito, le message partira tout seul",
+  "ios.share.failed": "Impossible d’enregistrer le message. Réessayez.",
+  "ios.share.picture": "Image jointe"
 }

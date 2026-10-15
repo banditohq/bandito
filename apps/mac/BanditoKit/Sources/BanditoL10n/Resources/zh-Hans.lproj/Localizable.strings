@@ -1193,6 +1193,11 @@
 "ios.settings.servers.via.cloud" = "Bandito 云";
 "ios.settings.servers.via.lan" = "局域网";
 "ios.settings.servers.via.tailscale" = "Tailscale";
+"ios.share.done" = "完成。打开 Bandito，消息会自动发送。";
+"ios.share.empty" = "请打开 Bandito 并连接服务器";
+"ios.share.failed" = "无法保存消息，请重试。";
+"ios.share.picture" = "附带的图片";
+"ios.share.title" = "发送到 Bandito";
 "ios.tab.activity" = "动态";
 "ios.tab.comingSoon" = "即将推出";
 "ios.tab.crew" = "团队";

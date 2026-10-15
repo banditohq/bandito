@@ -3516,5 +3516,10 @@
   "account.hidden.show": "Mostrar servidores ocultos ({count})",
   "account.hidden.hint": "Servidores de la cuenta que quitaste de este dispositivo. Muéstralos y volverán.",
   "ios.account.servers.hidden": "Oculto",
-  "ios.account.servers.updateNeeded": "Actualiza Bandito"
+  "ios.account.servers.updateNeeded": "Actualiza Bandito",
+  "ios.share.title": "Enviar a Bandito",
+  "ios.share.empty": "Abre Bandito y conecta un servidor",
+  "ios.share.done": "Listo. Abre Bandito y el mensaje se enviará solo",
+  "ios.share.failed": "No se pudo guardar el mensaje. Inténtalo de nuevo.",
+  "ios.share.picture": "Imagen adjunta"
 }
