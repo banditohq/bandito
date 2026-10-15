@@ -170,8 +170,9 @@ struct ActivityRow: View, Equatable {
 
     var body: some View {
         let _ = ActivityCounters.rowBodyRan()
-        HStack(alignment: .top, spacing: BanditoSpace.s3) {
+        AdaptiveRowLayout(alignment: .top) {
             CrewAvatar(name: facts.agentName, look: facts.look, mood: facts.mood, size: 36)
+        } content: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(facts.title)
                     .font(BanditoFont.display(size: titleSize, weight: 600))
@@ -184,7 +185,7 @@ struct ActivityRow: View, Equatable {
                         .multilineTextAlignment(.leading)
                 }
             }
-            Spacer(minLength: BanditoSpace.s2)
+        } trailing: {
             VStack(alignment: .trailing, spacing: 6) {
                 Text(CrewTime.date(ms: facts.ts), format: CrewTime.style(ms: facts.ts))
                     .font(BanditoFont.text(size: timeSize, weight: 400))

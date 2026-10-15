@@ -33,6 +33,7 @@ struct CrewAgentRow: View, Equatable {
     @ScaledMetric(relativeTo: .body) private var nameSize: CGFloat = 13.5
     @ScaledMetric(relativeTo: .body) private var lineSize: CGFloat = 13
     @ScaledMetric(relativeTo: .body) private var timeSize: CGFloat = 11.5
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     nonisolated static func == (lhs: CrewAgentRow, rhs: CrewAgentRow) -> Bool {
         lhs.facts == rhs.facts
@@ -40,12 +41,13 @@ struct CrewAgentRow: View, Equatable {
 
     var body: some View {
         let _ = CrewCounters.rowBodyRan()
-        HStack(alignment: .center, spacing: BanditoSpace.s3) {
+        AdaptiveRowLayout {
             CrewAvatar(name: facts.name, look: facts.look, mood: facts.mood, size: 44)
                 .overlay(alignment: .bottomTrailing) {
                     StatusDot(status: facts.status)
                         .offset(x: 3, y: 3)
                 }
+        } content: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(facts.name)
@@ -63,9 +65,9 @@ struct CrewAgentRow: View, Equatable {
                 Text(facts.preview ?? L10n.Ios.Crew.noMessages)
                     .font(BanditoFont.text(size: lineSize, weight: facts.unread > 0 ? 500 : 400))
                     .foregroundStyle(facts.unread > 0 ? Color.Bandito.text2 : Color.Bandito.text3)
-                    .lineLimit(1)
+                    .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
             }
-            Spacer(minLength: BanditoSpace.s2)
+        } trailing: {
             VStack(alignment: .trailing, spacing: 5) {
                 Text(CrewTime.date(ms: facts.activityMs), format: CrewTime.style(ms: facts.activityMs))
                     .font(BanditoFont.text(size: timeSize, weight: 400))
@@ -99,9 +101,10 @@ struct NeedsYouCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .body) private var nameSize: CGFloat = 13.5
     @ScaledMetric(relativeTo: .body) private var lineSize: CGFloat = 14
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(alignment: .center, spacing: BanditoSpace.s3) {
+        AdaptiveRowLayout {
             CrewAvatar(name: facts.name, look: facts.look, mood: .needsYou, size: 44)
                 .overlay {
                     if !reduceMotion {
@@ -109,19 +112,21 @@ struct NeedsYouCard: View {
                             .accessibilityHidden(true)
                     }
                 }
+        } content: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(facts.name)
                     .font(BanditoFont.display(size: nameSize, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(2)
-                // No line limit for a request: at large type sizes it wraps, it is not cut. A question is three lines at most.
+                // No line limit for a request: at large type sizes it wraps, it is not cut. A question is three lines at most
+                // (four at accessibility sizes).
                 Text(waitingLine)
                     .font(BanditoFont.text(size: lineSize, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .multilineTextAlignment(.leading)
-                    .lineLimit(isQuestion ? 3 : nil)
+                    .lineLimit(isQuestion ? (typeSize.isAccessibilitySize ? 4 : 3) : nil)
             }
-            Spacer(minLength: BanditoSpace.s2)
+        } trailing: {
             Image(systemName: "arrow.right")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text)

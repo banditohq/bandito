@@ -109,3 +109,51 @@ private extension View {
         }
     }
 }
+
+/// A list row whose text stays readable at the largest type sizes. At normal sizes the leading view, the text and the
+/// trailing view sit side by side. At accessibility sizes the leading and trailing views share the top line and the text
+/// takes the full width below them, so it wraps instead of breaking word by word in a narrow column. The views are the
+/// same in both; only their place moves.
+struct AdaptiveRowLayout<Leading: View, Content: View, Trailing: View>: View {
+    private let alignment: VerticalAlignment
+    private let leading: Leading
+    private let content: Content
+    private let trailing: Trailing
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    init(
+        alignment: VerticalAlignment = .center,
+        @ViewBuilder leading: () -> Leading,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.alignment = alignment
+        self.leading = leading()
+        self.content = content()
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: BanditoSpace.s2) {
+                HStack(alignment: .top, spacing: BanditoSpace.s3) {
+                    leading
+                    Spacer(minLength: BanditoSpace.s2)
+                    trailing
+                }
+                content
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            HStack(alignment: alignment, spacing: BanditoSpace.s3) {
+                leading
+                content
+                Spacer(minLength: BanditoSpace.s2)
+                trailing
+            }
+        }
+    }
+}
