@@ -1202,9 +1202,13 @@
 "ios.settings.servers.via.cloud" = "Pela nuvem do Bandito";
 "ios.settings.servers.via.lan" = "Rede local";
 "ios.settings.servers.via.tailscale" = "Tailscale";
+"ios.share.agentGone" = "%1$@ não existe mais — a mensagem não foi enviada";
 "ios.share.done" = "Pronto. Abra o Bandito e a mensagem será enviada sozinha";
+"ios.share.doneButton" = "Concluir";
 "ios.share.empty" = "Abra o Bandito e conecte um servidor";
 "ios.share.failed" = "Não foi possível salvar a mensagem. Tente novamente.";
+"ios.share.failedForGood" = "Não foi possível enviar as imagens para %1$@. Tente novamente.";
+"ios.share.notify" = "Abra para enviar a tarefa para %1$@";
 "ios.share.picture" = "Imagem anexada";
 "ios.share.title" = "Enviar para o Bandito";
 "ios.tab.activity" = "Atividade";

@@ -91,10 +91,29 @@ enum ShareLoader {
     static func prepare(source: CGImageSource?) -> PreparedImage? {
         guard let source else { return nil }
         guard let big = thumbnail(source, maxPixel: ShareRules.maxPixel),
-              let jpeg = UIImage(cgImage: big).jpegData(compressionQuality: ShareRules.jpegQuality),
+              let jpeg = flattened(big).jpegData(compressionQuality: ShareRules.jpegQuality),
               let small = thumbnail(source, maxPixel: 240)
         else { return nil }
         return PreparedImage(jpeg: jpeg, thumbnail: UIImage(cgImage: small))
+    }
+
+    /// A JPEG has no transparency: a picture that has some (a PNG, a screenshot with cut corners) is drawn on white, or
+    /// its see-through parts would turn black.
+    static func flattened(_ image: CGImage) -> UIImage {
+        switch image.alphaInfo {
+        case .none, .noneSkipFirst, .noneSkipLast:
+            return UIImage(cgImage: image)
+        default:
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = true
+            let size = CGSize(width: image.width, height: image.height)
+            return UIGraphicsImageRenderer(size: size, format: format).image { context in
+                UIColor.white.setFill()
+                context.fill(CGRect(origin: .zero, size: size))
+                UIImage(cgImage: image).draw(in: CGRect(origin: .zero, size: size))
+            }
+        }
     }
 
     private static func thumbnail(_ source: CGImageSource, maxPixel: Int) -> CGImage? {

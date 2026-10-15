@@ -4,8 +4,20 @@ import Foundation
 // the task (the agent, the text, the pictures) into a folder of the App Group and opens the app, which sends it through
 // its own queue. The app and the extension both compile this file, so they agree on the folder.
 
+/// A picture that is already on the server: what `ChatOutbox` needs to attach it. Kept in `task.json`, so a task that
+/// is tried again does not upload the same picture twice.
+struct SharedUpload: Codable, Equatable, Sendable {
+    let path: String
+    let name: String
+    let size: Int64
+    let mime: String
+}
+
 /// One message a person shared to an agent from another app.
 struct SharedTask: Codable, Equatable, Sendable {
+    /// After this many failed uploads (with the server connected) the task is dropped.
+    static let maxAttempts = 5
+
     let id: UUID
     /// The server's id (a UUID string), as the widget snapshot names it. Never an address.
     let serverID: String
@@ -14,6 +26,43 @@ struct SharedTask: Codable, Equatable, Sendable {
     /// File names of the pictures inside the task's folder (`0.jpg`, `1.jpg`, ...), in the order they were shared.
     let images: [String]
     let createdAt: Date
+    /// The agent's name when it was shared, for the notice that says what became of the task. Empty in old files.
+    var agentName: String = ""
+    /// Failed picture uploads so far. Old files have none: 0.
+    var attempts: Int = 0
+    /// The pictures that are on the server already, by file name.
+    var uploaded: [String: SharedUpload] = [:]
+
+    init(
+        id: UUID, serverID: String, agentID: String, text: String, images: [String], createdAt: Date,
+        agentName: String = "", attempts: Int = 0, uploaded: [String: SharedUpload] = [:]
+    ) {
+        self.id = id
+        self.serverID = serverID
+        self.agentID = agentID
+        self.text = text
+        self.images = images
+        self.createdAt = createdAt
+        self.agentName = agentName
+        self.attempts = attempts
+        self.uploaded = uploaded
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        serverID = try c.decode(String.self, forKey: .serverID)
+        agentID = try c.decode(String.self, forKey: .agentID)
+        text = try c.decode(String.self, forKey: .text)
+        images = try c.decode([String].self, forKey: .images)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        agentName = try c.decodeIfPresent(String.self, forKey: .agentName) ?? ""
+        attempts = try c.decodeIfPresent(Int.self, forKey: .attempts) ?? 0
+        uploaded = try c.decodeIfPresent([String: SharedUpload].self, forKey: .uploaded) ?? [:]
+    }
+
+    /// The name to say in a notice: the agent's, else its id.
+    var displayName: String { agentName.isEmpty ? agentID : agentName }
 }
 
 /// The folder `<App Group>/Share/`: each task is a sub-folder named by its id, with `task.json` and its pictures.
@@ -44,7 +93,8 @@ struct ShareInbox: Sendable {
     func save(_ task: SharedTask, images: [Data]) throws -> SharedTask {
         let stored = SharedTask(
             id: task.id, serverID: task.serverID, agentID: task.agentID, text: task.text,
-            images: images.indices.map { "\($0).jpg" }, createdAt: task.createdAt)
+            images: images.indices.map { "\($0).jpg" }, createdAt: task.createdAt, agentName: task.agentName,
+            attempts: task.attempts, uploaded: task.uploaded)
         let directory = folder(task.id)
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -59,6 +109,15 @@ struct ShareInbox: Sendable {
             throw error
         }
         return stored
+    }
+
+    /// Writes the task's `task.json` again (its attempts and uploaded pictures changed). Nothing happens when the task's
+    /// folder is gone.
+    func update(_ task: SharedTask) {
+        let file = folder(task.id).appendingPathComponent(Self.taskFileName)
+        guard FileManager.default.fileExists(atPath: file.path),
+              let data = try? Self.encoder.encode(task) else { return }
+        try? data.write(to: file, options: Self.writeOptions)
     }
 
     /// The tasks waiting, the oldest first. A folder without a readable `task.json` is skipped.

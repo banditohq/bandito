@@ -3532,5 +3532,9 @@
   "ios.share.empty": "Open Bandito and connect a server",
   "ios.share.done": "Done. Open Bandito and the message will be sent on its own",
   "ios.share.failed": "Could not save the message. Try again.",
-  "ios.share.picture": "Attached picture"
+  "ios.share.picture": "Attached picture",
+  "ios.share.agentGone": "{name} is gone — the message was not sent",
+  "ios.share.failedForGood": "Couldn’t send the pictures to {name}. Try again.",
+  "ios.share.notify": "Open to send the task to {name}",
+  "ios.share.doneButton": "Done"
 }

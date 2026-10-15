@@ -940,6 +940,17 @@ public final class ServerModel: Identifiable {
         }
     }
 
+    /// Reads `agents.list` now and returns when the list is updated (or the read failed). One read already in flight is
+    /// waited for first, so the answer is not older than the call. For a screen that must know whether an agent exists.
+    public func refreshAgentsNow() async {
+        var waited = 0
+        while agentsRefreshing, waited < 50 {
+            try? await Task.sleep(for: .milliseconds(100))
+            waited += 1
+        }
+        await runAgentsRefresh()
+    }
+
     /// Called when the app comes back to the front. Re-reads the agents when the last read is older than
     /// `agentsStaleAfter`: a daemon from before `agent_changed` sends no event for changes made elsewhere.
     public func refreshAgentsIfStale(now: Date = Date()) {

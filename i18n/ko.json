@@ -3490,5 +3490,9 @@
   "ios.share.empty": "Bandito를 열고 서버를 연결하세요",
   "ios.share.done": "완료되었습니다. Bandito를 열면 메시지가 자동으로 전송됩니다",
   "ios.share.failed": "메시지를 저장하지 못했습니다. 다시 시도하세요.",
-  "ios.share.picture": "첨부된 이미지"
+  "ios.share.picture": "첨부된 이미지",
+  "ios.share.agentGone": "{name}이(가) 더 이상 없습니다. 메시지가 전송되지 않았습니다",
+  "ios.share.failedForGood": "{name}에게 이미지를 보내지 못했습니다. 다시 시도하세요.",
+  "ios.share.notify": "앱을 열어 {name}에게 작업을 보내세요",
+  "ios.share.doneButton": "완료"
 }

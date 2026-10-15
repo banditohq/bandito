@@ -1202,9 +1202,13 @@
 "ios.settings.servers.via.cloud" = "通过 Bandito 云";
 "ios.settings.servers.via.lan" = "局域网";
 "ios.settings.servers.via.tailscale" = "Tailscale";
+"ios.share.agentGone" = "%1$@ 已不存在，消息未发送";
 "ios.share.done" = "完成。打开 Bandito，消息会自动发送。";
+"ios.share.doneButton" = "完成";
 "ios.share.empty" = "请打开 Bandito 并连接服务器";
 "ios.share.failed" = "无法保存消息，请重试。";
+"ios.share.failedForGood" = "无法向 %1$@ 发送图片，请重试。";
+"ios.share.notify" = "打开应用，将任务发送给 %1$@";
 "ios.share.picture" = "附带的图片";
 "ios.share.title" = "发送到 Bandito";
 "ios.tab.activity" = "动态";

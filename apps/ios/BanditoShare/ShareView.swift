@@ -19,15 +19,15 @@ struct ShareView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: BanditoSpace.s3) {
             HStack(spacing: BanditoSpace.s3) {
-                Button(model.agents.isEmpty || model.stage == .savedNotOpened ? L10n.Common.close : L10n.Common.cancel) {
-                    if model.stage == .savedNotOpened { model.finish() } else { model.cancel() }
+                if model.stage != .saved {
+                    Button(model.agents.isEmpty ? L10n.Common.close : L10n.Common.cancel) { model.cancel() }
+                        .font(BanditoFont.text(size: 16))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .lineLimit(1)
+                        .fixedSize()
                 }
-                .font(BanditoFont.text(size: 16))
-                .foregroundStyle(Color.Bandito.text2)
-                .lineLimit(1)
-                .fixedSize()
                 Spacer(minLength: BanditoSpace.s2)
-                if !model.agents.isEmpty && model.stage != .savedNotOpened {
+                if !model.agents.isEmpty && model.stage != .saved {
                     Button(action: model.send) { Text(L10n.Thread.send).lineLimit(1).fixedSize() }
                         .buttonStyle(ShareSendStyle())
                         .disabled(!model.canSend)
@@ -47,11 +47,31 @@ struct ShareView: View {
     private var content: some View {
         if model.agents.isEmpty {
             message(L10n.Ios.Share.empty)
-        } else if model.stage == .savedNotOpened {
-            message(L10n.Ios.Share.done)
+        } else if model.stage == .saved {
+            saved
         } else {
             form
         }
+    }
+
+    /// After Send: the message is saved, Bandito sends it once it is open. A check mark, the words, and Done.
+    private var saved: some View {
+        VStack(spacing: BanditoSpace.s4) {
+            Spacer()
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 52))
+                .foregroundStyle(Color.Bandito.ok)
+                .accessibilityHidden(true)
+            Text(L10n.Ios.Share.done)
+                .font(BanditoFont.text(size: 16))
+                .foregroundStyle(Color.Bandito.text)
+                .multilineTextAlignment(.center)
+            Button(action: model.finish) { Text(L10n.Ios.Share.doneButton).lineLimit(1).fixedSize() }
+                .buttonStyle(ShareSendStyle())
+            Spacer()
+        }
+        .padding(BanditoSpace.s6)
+        .frame(maxWidth: .infinity)
     }
 
     private func message(_ text: String) -> some View {

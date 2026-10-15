@@ -1202,9 +1202,13 @@
 "ios.settings.servers.via.cloud" = "Bandito クラウド経由";
 "ios.settings.servers.via.lan" = "ローカルネットワーク";
 "ios.settings.servers.via.tailscale" = "Tailscale";
+"ios.share.agentGone" = "%1$@はもういません。メッセージは送信されませんでした";
 "ios.share.done" = "完了しました。Banditoを開くと、メッセージは自動で送信されます";
+"ios.share.doneButton" = "完了";
 "ios.share.empty" = "Banditoを開いて、サーバーを接続してください";
 "ios.share.failed" = "メッセージを保存できませんでした。もう一度お試しください。";
+"ios.share.failedForGood" = "%1$@に画像を送信できませんでした。もう一度お試しください。";
+"ios.share.notify" = "アプリを開いて%1$@にタスクを送信";
 "ios.share.picture" = "添付された画像";
 "ios.share.title" = "Banditoに送信";
 "ios.tab.activity" = "アクティビティ";

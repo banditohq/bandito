@@ -132,6 +132,12 @@ The screen every day. Read the rules before changing it; each came from the Mac'
 - The app side is `Share/ShareImporter.swift` (drained on a `.share` link, on `.active`, when servers load and when one
   connects; not while Face ID covers the app). Remove a task only after `ChatOutbox.enqueue`.
 - `ShareView` and `ShareModel` are also compiled into the app for `-share-preview` (DEBUG; `-share-empty` for no agents).
+- `NSExtensionActivationSupportsImageWithMaxCount` is 4: with 5 or more photos selected the system does not offer Bandito at
+  all (the rule is all-or-nothing, the extension cannot take the first four). Text and one link have no such limit.
+- The extension always ends on the saved screen (a check, "Done"): opening the app from it does not work on iOS 18+, so it
+  leaves a local reminder (`share-<id>`, only if notifications are allowed) whose press opens `bandito://share/<id>`.
+  The importer takes the reminder down. A task is dropped (with a toast) when its agent is gone after one list refresh, or
+  after 5 failed uploads (`SharedTask.attempts`); uploaded pictures are kept in `task.json` and not sent twice.
 - The extension has a ~120 MB memory limit: pictures are read one at a time and shrunk with ImageIO (`ShareLoader`).
 
 ## Known gaps before a release

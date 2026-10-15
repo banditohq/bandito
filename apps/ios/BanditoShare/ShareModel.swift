@@ -2,6 +2,7 @@ import BanditoL10n
 import Observation
 import SwiftUI
 import UIKit
+import UserNotifications
 
 /// What the host app handed to the extension, read item by item.
 struct SharedContent: Sendable {
@@ -20,8 +21,9 @@ struct PreparedImage: Identifiable, @unchecked Sendable {
 enum ShareStage: Equatable {
     case editing
     case saving
-    /// Saved, but the extension could not open Bandito: the person opens it.
-    case savedNotOpened
+    /// Saved. Opening Bandito from here is not reliable (iOS 18 and later), so the sheet always says so and waits for
+    /// the person to press Done.
+    case saved
     case failed
 }
 
@@ -37,6 +39,8 @@ final class ShareModel {
 
     /// Opens Bandito with a link; false when the extension has no way to. Set by the controller.
     var openApp: (URL) async -> Bool = { _ in false }
+    /// Leaves a reminder that the task waits (a local notification). Replaced in tests and the preview.
+    var remind: (SharedTask) async -> Void = { await ShareModel.scheduleReminder(for: $0) }
     var finish: () -> Void = {}
     var cancel: () -> Void = {}
 
@@ -86,7 +90,8 @@ final class ShareModel {
     private func save(agent: WidgetSnapshot.Listing, inbox: ShareInbox) async {
         let task = SharedTask(
             id: UUID(), serverID: agent.server, agentID: agent.id,
-            text: text.trimmingCharacters(in: .whitespacesAndNewlines), images: [], createdAt: Date())
+            text: text.trimmingCharacters(in: .whitespacesAndNewlines), images: [], createdAt: Date(),
+            agentName: agent.name)
         do {
             try inbox.save(task, images: images.map(\.jpeg))
         } catch {
@@ -94,11 +99,28 @@ final class ShareModel {
             return
         }
         defaults?.set(ShareRules.key(agent), forKey: ShareRules.lastKey)
-        if await openApp(BanditoLink.share(id: task.id).url) {
-            finish()
-        } else {
-            stage = .savedNotOpened
-        }
+        // The saved screen comes at once and stays. The reminder is set first (it is what brings the person back when
+        // the app does not open), then Bandito is asked to open: if it does, good.
+        stage = .saved
+        await remind(task)
+        _ = await openApp(BanditoLink.share(id: task.id).url)
+    }
+
+    /// A local notification one second from now, "Open to send the task to Forge", whose press opens the share link.
+    /// Only when the app may show notifications (authorized or provisional): the extension never asks.
+    static func scheduleReminder(for task: SharedTask) async {
+        let center = UNUserNotificationCenter.current()
+        let status = await center.notificationSettings().authorizationStatus
+        guard status == .authorized || status == .provisional else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Bandito"
+        content.body = L10n.Ios.Share.notify(name: task.displayName)
+        content.sound = .default
+        content.userInfo = [ShareReminder.userInfoKey: BanditoLink.share(id: task.id).url.absoluteString]
+        let request = UNNotificationRequest(
+            identifier: ShareReminder.identifier(for: task.id), content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))
+        try? await center.add(request)
     }
 
     func dismissFailure() {

@@ -1824,9 +1824,13 @@ public enum L10n {
         }
 
         public enum Share {
+            public static func agentGone(name: String) -> String { L10n.tr("ios.share.agentGone", name) }
             public static var done: String { L10n.tr("ios.share.done") }
+            public static var doneButton: String { L10n.tr("ios.share.doneButton") }
             public static var empty: String { L10n.tr("ios.share.empty") }
             public static var failed: String { L10n.tr("ios.share.failed") }
+            public static func failedForGood(name: String) -> String { L10n.tr("ios.share.failedForGood", name) }
+            public static func notify(name: String) -> String { L10n.tr("ios.share.notify", name) }
             public static var picture: String { L10n.tr("ios.share.picture") }
             public static var title: String { L10n.tr("ios.share.title") }
         }

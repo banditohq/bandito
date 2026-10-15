@@ -184,6 +184,9 @@ struct RootView: View {
             notifications.attach(session.current)
             ChatOutbox.shared.attach(session.current)
             ShareImporter.shared.attach(.live(session: session))
+            ShareImporter.shared.onNotice = { notice in
+                answerToast.show(AnswerToastMessage(text: notice.text, allowed: false))
+            }
             importSharedTasks()
         }
         // A server that comes online lets the tasks with pictures go.
@@ -315,9 +318,10 @@ struct RootView: View {
             return
         }
         pendingShare = nil
-        guard let target = ShareImporter.shared.target(of: id) else { return }
         Task {
+            // The task is sent (or dropped) first: a task whose agent is gone opens no chat.
             await ShareImporter.shared.drain()
+            guard let target = ShareImporter.shared.target(of: id) else { return }
             // A link that started the app can arrive before the saved servers are read: the chat opens once its server is there.
             var waited = 0
             while !session.current.contains(where: { $0.id == target.server }), waited < 30 {
@@ -360,6 +364,8 @@ struct RootView: View {
         case .approval(let approvalID, _):
             inboxFocus = IOSNotifications.inboxItemID(approvalID: approvalID)
             tab = .inbox
+        case .link(let url):
+            if let link = BanditoLink(url: url) { openLink(link) }
         }
         notifications.consumeRoute()
     }

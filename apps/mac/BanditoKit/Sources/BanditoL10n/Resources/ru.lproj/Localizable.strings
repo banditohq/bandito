@@ -1202,9 +1202,13 @@
 "ios.settings.servers.via.cloud" = "Через облако Bandito";
 "ios.settings.servers.via.lan" = "Локальная сеть";
 "ios.settings.servers.via.tailscale" = "Tailscale";
+"ios.share.agentGone" = "%1$@ больше нет — сообщение не отправлено";
 "ios.share.done" = "Готово. Откройте Bandito — сообщение уйдёт само";
+"ios.share.doneButton" = "Готово";
 "ios.share.empty" = "Откройте Bandito и подключите сервер";
 "ios.share.failed" = "Не удалось сохранить сообщение. Попробуйте ещё раз.";
+"ios.share.failedForGood" = "Не удалось отправить %1$@ картинки — попробуйте ещё раз";
+"ios.share.notify" = "Откройте, чтобы отправить задачу %1$@";
 "ios.share.picture" = "Прикреплённая картинка";
 "ios.share.title" = "Отправить в Bandito";
 "ios.tab.activity" = "Активность";

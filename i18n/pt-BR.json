@@ -3532,5 +3532,9 @@
   "ios.share.empty": "Abra o Bandito e conecte um servidor",
   "ios.share.done": "Pronto. Abra o Bandito e a mensagem será enviada sozinha",
   "ios.share.failed": "Não foi possível salvar a mensagem. Tente novamente.",
-  "ios.share.picture": "Imagem anexada"
+  "ios.share.picture": "Imagem anexada",
+  "ios.share.agentGone": "{name} não existe mais — a mensagem não foi enviada",
+  "ios.share.failedForGood": "Não foi possível enviar as imagens para {name}. Tente novamente.",
+  "ios.share.notify": "Abra para enviar a tarefa para {name}",
+  "ios.share.doneButton": "Concluir"
 }
