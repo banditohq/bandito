@@ -261,3 +261,55 @@ import Testing
         await server.disconnect()
     }
 }
+
+/// What a running turn does now, on the Crew row and in the chat header: the newest unfinished tool decides, and the
+/// start of the turn is the timer's.
+@MainActor
+@Suite struct CrewWorkingTests {
+    private func waitUntil(_ limit: Int = 100, _ done: () -> Bool) async {
+        var waited = 0
+        while !done(), waited < limit {
+            try? await Task.sleep(for: .milliseconds(10))
+            waited += 1
+        }
+    }
+
+    private func installAgent(_ server: ServerModel, id: String) {
+        server.installSyntheticAgent(
+            Agent(
+                id: id, name: "Forge", role: "Builder", runtime: .claude, cwd: DemoDaemonFiles.projects,
+                createdAt: 1, updatedAt: 1, status: .working),
+            items: [])
+    }
+
+    @Test func aRunningCommandOfATurnReadsAsRunningACommand() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "working-command"
+        installAgent(server, id: id)
+        server.apply(Event(seq: 0, agentId: id, ts: 1_700_000_000_000, body: .turnStarted(turnId: "t1", source: .user)))
+        server.apply(Event(
+            seq: 0, agentId: id, ts: 1_700_000_001_000,
+            body: .toolCall(callId: "c1", tool: "Bash", title: "swift test", input: .null)))
+        await waitUntil { CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working != nil }
+        let working = CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working
+        #expect(working?.activity == .command)
+        #expect(working?.since == CrewTime.date(ms: 1_700_000_000_000))
+        await server.disconnect()
+    }
+
+    @Test func aTurnWithoutAStartOrWithNoTurnHasNoWorking() async {
+        let server = await IOSDemo.start(withTeam: false)
+        let id = "working-none"
+        installAgent(server, id: id)
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working == nil)
+        server.apply(Event(seq: 0, agentId: id, ts: 1_700_000_000_000, body: .turnStarted(turnId: "t1", source: .user)))
+        await waitUntil { server.threadSummary(for: id).turnRunning }
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working?.activity == .thinking)
+        server.apply(Event(
+            seq: 0, agentId: id, ts: 1_700_000_002_000,
+            body: .turnCompleted(turnId: "t1", status: .ok, usage: nil, costUsd: nil)))
+        await waitUntil { CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working == nil }
+        #expect(CrewFacts.build(server: server, pinned: []).first { $0.id == id }?.working == nil)
+        await server.disconnect()
+    }
+}

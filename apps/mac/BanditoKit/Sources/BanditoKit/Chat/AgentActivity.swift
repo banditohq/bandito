@@ -42,6 +42,15 @@ public enum AgentActivity: Equatable {
         return .thinking
     }
 
+    /// The same rule over the unfinished tool calls of a thread summary (`unfinishedTools`, oldest first): the newest one
+    /// still running decides; with none running, the agent is thinking.
+    public static func current(running tools: [ToolRow]) -> AgentActivity {
+        for row in tools.reversed() where row.ok == nil {
+            return forTool(row.tool)
+        }
+        return .thinking
+    }
+
     /// The localized caption of this activity.
     public var title: String {
         switch self {

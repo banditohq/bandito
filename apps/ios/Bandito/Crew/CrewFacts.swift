@@ -25,6 +25,23 @@ struct CrewAgentFacts: Equatable, Identifiable {
     let isPaused: Bool
     /// What the agent waits for from the person, nil when it waits for nothing.
     let waiting: CrewWaiting?
+    /// What a running turn does now and since when, nil when no turn runs.
+    let working: CrewWorking?
+}
+
+/// What a running turn does now, and since when. Changes only when the activity or the start of the turn does, not at
+/// every streamed token.
+struct CrewWorking: Equatable {
+    let activity: AgentActivity
+    let since: Date
+
+    /// Nil when no turn runs, when it has no start, or when the agent is paused (it sleeps then).
+    @MainActor
+    init?(summary: AgentThreadState, paused: Bool) {
+        guard !paused, summary.turnRunning, let start = summary.turnStartedAt else { return nil }
+        activity = AgentActivity.current(running: summary.unfinishedTools)
+        since = CrewTime.date(ms: start)
+    }
 }
 
 /// What an agent waits for from the person.
@@ -189,7 +206,8 @@ enum CrewFacts {
                 isLead: agent.id == lead,
                 isPinned: pins.contains(agent.id),
                 isPaused: agent.paused,
-                waiting: waiting(waitingItems[agent.id]))
+                waiting: waiting(waitingItems[agent.id]),
+                working: CrewWorking(summary: summary, paused: agent.paused))
         }
     }
 

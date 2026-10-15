@@ -62,10 +62,14 @@ struct CrewAgentRow: View, Equatable {
                     }
                     RoleChip(text: facts.role)
                 }
-                Text(facts.preview ?? L10n.Ios.Crew.noMessages)
-                    .font(BanditoFont.text(size: lineSize, weight: facts.unread > 0 ? 500 : 400))
-                    .foregroundStyle(facts.unread > 0 ? Color.Bandito.text2 : Color.Bandito.text3)
-                    .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
+                if let working = facts.working {
+                    WorkingLine(activity: working.activity, since: working.since, size: lineSize)
+                } else {
+                    Text(facts.preview ?? L10n.Ios.Crew.noMessages)
+                        .font(BanditoFont.text(size: lineSize, weight: facts.unread > 0 ? 500 : 400))
+                        .foregroundStyle(facts.unread > 0 ? Color.Bandito.text2 : Color.Bandito.text3)
+                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
+                }
             }
         } trailing: {
             VStack(alignment: .trailing, spacing: 5) {
@@ -85,12 +89,50 @@ struct CrewAgentRow: View, Equatable {
         .accessibilityValue(accessibilityValue)
     }
 
-    /// Role, status word, unread count: what a VoiceOver user hears after the name.
+    /// Role, status word, what the turn does now, unread count: what a VoiceOver user hears after the name. The elapsed
+    /// time is left out: it would be read out again every second.
     private var accessibilityValue: String {
         var parts = [facts.role, facts.status.label]
+        if let working = facts.working { parts.append(working.activity.title) }
         if facts.unread > 0 { parts.append(L10n.Ios.Crew.unread(count: facts.unread)) }
         if facts.isLead { parts.append(L10n.Ios.Crew.lead) }
         return parts.joined(separator: ", ")
+    }
+}
+
+/// What a running turn does now, with its live elapsed time: "Запускает команду · 1:12". One line, the title is cut at its
+/// tail; at accessibility sizes the time goes under the title and the title wraps. The time is hidden from VoiceOver (it
+/// would be read every second); the title is spoken.
+struct WorkingLine: View {
+    let activity: AgentActivity
+    let since: Date
+    /// The size of the line, already scaled by the caller.
+    let size: CGFloat
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let stacked = typeSize.isAccessibilitySize
+        let line = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))
+        line {
+            Text(activity.title)
+                .font(BanditoFont.text(size: size, weight: 500))
+                .foregroundStyle(Color.Bandito.ok)
+                .lineLimit(stacked ? nil : 1)
+            HStack(spacing: 4) {
+                Text("·")
+                    .font(BanditoFont.text(size: size, weight: 500))
+                    .foregroundStyle(Color.Bandito.text3)
+                Text(timerInterval: since...Date.distantFuture, countsDown: false)
+                    .font(BanditoFont.mono(size: size))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityHidden(true)
+        }
     }
 }
 

@@ -69,6 +69,18 @@ import Testing
         #expect(AgentActivity.current(in: items) == .coding)
     }
 
+    @Test func unfinishedToolsDecideTheActivity() {
+        let bash = ToolRow(callId: "c1", tool: "Bash", title: "swift test")
+        let patch = ToolRow(callId: "c2", tool: "apply_patch", title: "edit")
+        let done = ToolRow(callId: "c3", tool: "apply_patch", title: "edit", ok: true)
+        #expect(AgentActivity.current(running: []) == .thinking)
+        #expect(AgentActivity.current(running: [bash]) == .command)
+        #expect(AgentActivity.current(running: [bash, patch]) == .coding)
+        // The edit finished, so the command still running decides.
+        #expect(AgentActivity.current(running: [bash, done]) == .command)
+        #expect(AgentActivity.current(running: [done]) == .thinking)
+    }
+
     @Test func elapsedSecondsCountsWholeSeconds() {
         let now = Date(timeIntervalSince1970: 1_700_000_012.5)
         #expect(AgentActivity.elapsedSeconds(since: 1_700_000_000_000, now: now) == 12)
