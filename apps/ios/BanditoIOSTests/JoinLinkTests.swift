@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import CryptoKit
 import Foundation
 import Testing
@@ -42,11 +43,19 @@ import Testing
 
         model.submitLink(link(), origin: .scan)
         model.submitLink("look: \(link(name: "Other"))", origin: .paste)
-        #expect(got.map(\.macName) == ["Studio 🦝", "Other"])
+        // The camera sees a code many times a second: it is handed on once.
+        #expect(got.map(\.macName) == ["Studio 🦝"])
         #expect(model.phase == .choose, "a join link is not a server: the screen stays")
 
         model.submitLink("bandito://pair?v=1&code=otter-lava-mint-orbit-crane-fig&name=Studio&host=10.0.0.2:7879&fp=\(String(repeating: "ab", count: 32))", origin: .paste)
         if case .confirmLink = model.phase {} else { Issue.record("a pairing link still asks first") }
-        #expect(got.count == 2)
+        #expect(got.count == 1)
+    }
+
+    @Test func theQuestionNamesTheMacOrSaysMacWhenTheCodeHasNoName() {
+        let named = JoinTicket.make(macPublicKey: Curve25519.KeyAgreement.PrivateKey().publicKey, macName: "Studio 🦝")
+        let bare = JoinTicket.make(macPublicKey: Curve25519.KeyAgreement.PrivateKey().publicKey, macName: "\u{202E}")
+        #expect(JoinConfirmSheet.displayName(named) == "Studio 🦝")
+        #expect(JoinConfirmSheet.displayName(bare) == L10n.Ios.Join.defaultMac)
     }
 }

@@ -3541,6 +3541,9 @@
   "ios.join.foreign.title": "이 키는 이 Mac에서 온 것이 아닙니다",
   "ios.join.foreign.text": "수락하지 않았습니다. 다른 기기에서 보낸 것이라면 코드를 직접 비교하세요.",
   "ios.join.compare": "코드를 직접 비교",
-  "ios.join.already": "이미 로그인되어 있습니다. 곧 서버가 표시됩니다",
-  "joinQR.expired": "코드가 만료되었습니다. 새 코드를 표시하세요."
+  "ios.join.already": "이미 계정에 로그인되어 있습니다. 다른 계정으로 로그인하려면 먼저 설정에서 로그아웃하세요.",
+  "joinQR.expired": "코드가 만료되었습니다. 새 코드를 표시하세요.",
+  "ios.join.confirm.title": "Mac “{mac}”(으)로 로그인할까요?",
+  "ios.join.confirm.text": "이 QR 코드가 지금 내 Mac에 표시되어 있는 경우에만 로그인하세요.",
+  "ios.join.confirm.action": "로그인"
 }

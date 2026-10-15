@@ -3541,6 +3541,9 @@
   "ios.join.foreign.title": "このキーはこの Mac から届いたものではありません",
   "ios.join.foreign.text": "受け入れていません。別のデバイスから送られた場合は、コードを手動で照合してください。",
   "ios.join.compare": "コードを手動で照合",
-  "ios.join.already": "すでにサインイン済みです。サーバーがまもなく表示されます",
-  "joinQR.expired": "コードの有効期限が切れました。新しいコードを表示してください。"
+  "ios.join.already": "すでにアカウントにサインインしています。別のアカウントに入るには、先に設定でサインアウトしてください。",
+  "joinQR.expired": "コードの有効期限が切れました。新しいコードを表示してください。",
+  "ios.join.confirm.title": "Mac「{mac}」でサインインしますか?",
+  "ios.join.confirm.text": "このQRコードがいま自分のMacに表示されている場合のみサインインしてください。",
+  "ios.join.confirm.action": "サインイン"
 }

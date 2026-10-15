@@ -1111,10 +1111,13 @@
 "ios.intent.ask.sent" = "An %1$@ gesendet";
 "ios.intent.needsMe.none" = "Nichts wartet auf Sie";
 "ios.intent.open.inbox" = "Posteingang öffnen";
-"ios.join.already" = "Du bist schon angemeldet – deine Server erscheinen gleich";
+"ios.join.already" = "Du bist bereits in einem Konto angemeldet. Um dich in einem anderen anzumelden, melde dich zuerst in den Einstellungen ab.";
 "ios.join.button" = "Mit einem Mac anmelden";
 "ios.join.buttonHint" = "Am Mac: Einstellungen → Konto → iPhone hinzufügen";
 "ios.join.compare" = "Code manuell vergleichen";
+"ios.join.confirm.action" = "Anmelden";
+"ios.join.confirm.text" = "Melde dich nur an, wenn dieser QR-Code gerade auf deinem Mac angezeigt wird.";
+"ios.join.confirm.title" = "Über den Mac „%1$@“ anmelden?";
 "ios.join.defaultMac" = "Mac";
 "ios.join.expired" = "Der Code ist abgelaufen – zeige am Mac einen neuen an";
 "ios.join.foreign.text" = "Er wurde nicht akzeptiert. Falls ihn ein anderes deiner Geräte gesendet hat, vergleiche die Codes von Hand.";

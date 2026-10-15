@@ -1111,10 +1111,13 @@
 "ios.intent.ask.sent" = "%1$@に送信しました";
 "ios.intent.needsMe.none" = "あなたを待っているものはありません";
 "ios.intent.open.inbox" = "受信トレイを開く";
-"ios.join.already" = "すでにサインイン済みです。サーバーがまもなく表示されます";
+"ios.join.already" = "すでにアカウントにサインインしています。別のアカウントに入るには、先に設定でサインアウトしてください。";
 "ios.join.button" = "Mac でサインイン";
 "ios.join.buttonHint" = "Mac で:設定 → アカウント → iPhone を追加";
 "ios.join.compare" = "コードを手動で照合";
+"ios.join.confirm.action" = "サインイン";
+"ios.join.confirm.text" = "このQRコードがいま自分のMacに表示されている場合のみサインインしてください。";
+"ios.join.confirm.title" = "Mac「%1$@」でサインインしますか?";
 "ios.join.defaultMac" = "Mac";
 "ios.join.expired" = "コードの有効期限が切れました。Mac で新しいコードを表示してください";
 "ios.join.foreign.text" = "受け入れていません。別のデバイスから送られた場合は、コードを手動で照合してください。";

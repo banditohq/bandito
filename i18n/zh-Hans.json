@@ -3541,6 +3541,9 @@
   "ios.join.foreign.title": "密钥并非来自这台 Mac",
   "ios.join.foreign.text": "未接受该密钥。如果是你的另一台设备发来的，请手动核对代码。",
   "ios.join.compare": "手动核对代码",
-  "ios.join.already": "你已登录，服务器很快就会出现",
-  "joinQR.expired": "二维码已过期。请显示新的二维码。"
+  "ios.join.already": "你已登录账户。若要登录其他账户，请先在“设置”中退出登录。",
+  "joinQR.expired": "二维码已过期。请显示新的二维码。",
+  "ios.join.confirm.title": "通过 Mac“{mac}”登录?",
+  "ios.join.confirm.text": "仅当此二维码正由你的 Mac 当前显示时才登录。",
+  "ios.join.confirm.action": "登录"
 }

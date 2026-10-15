@@ -115,3 +115,57 @@ struct JoinScannerSheet: View {
     }
     #endif
 }
+
+/// "Sign in via Mac “Studio”?" Asked before a code that came from outside is used: only the person who sees that Mac's
+/// screen right now should say yes. For an iPhone that is in an account already it only says so.
+struct JoinConfirmSheet: View {
+    let ticket: JoinTicket
+    let alreadySignedIn: Bool
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: BanditoSpace.s5) {
+            if alreadySignedIn {
+                Text(L10n.Ios.Join.already)
+                    .font(BanditoFont.text(size: 16))
+                    .foregroundStyle(Color.Bandito.text)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("join.already")
+                Button(L10n.Common.close, action: onCancel)
+                    .buttonStyle(SignalButtonStyle(fullWidth: true))
+                    .accessibilityIdentifier("join.already.close")
+            } else {
+                VStack(spacing: BanditoSpace.s3) {
+                    Text(L10n.Ios.Join.Confirm.title(mac: JoinConfirmSheet.displayName(ticket)))
+                        .font(BanditoFont.display(size: 20, weight: 700))
+                        .foregroundStyle(Color.Bandito.text)
+                        .multilineTextAlignment(.center)
+                        .accessibilityIdentifier("join.confirm.title")
+                    Text(L10n.Ios.Join.Confirm.text)
+                        .font(BanditoFont.text(size: 15))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .multilineTextAlignment(.center)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: BanditoSpace.s3) {
+                    Button(L10n.Ios.Join.Confirm.action, action: onConfirm)
+                        .buttonStyle(SignalButtonStyle(fullWidth: true))
+                        .accessibilityIdentifier("join.confirm.yes")
+                    Button(L10n.Common.cancel, action: onCancel)
+                        .buttonStyle(QuietButtonStyle(fullWidth: true))
+                        .accessibilityIdentifier("join.confirm.cancel")
+                }
+            }
+        }
+        .padding(BanditoSpace.s5)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Color.Bandito.bg.ignoresSafeArea())
+    }
+
+    /// The Mac's name, or "Mac" when the code carried none.
+    static func displayName(_ ticket: JoinTicket) -> String {
+        ticket.macName.isEmpty ? L10n.Ios.Join.defaultMac : ticket.macName
+    }
+}

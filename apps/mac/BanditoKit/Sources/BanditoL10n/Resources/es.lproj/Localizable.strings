@@ -1111,10 +1111,13 @@
 "ios.intent.ask.sent" = "Enviado a %1$@";
 "ios.intent.needsMe.none" = "Nada te necesita";
 "ios.intent.open.inbox" = "Abrir bandeja";
-"ios.join.already" = "Ya has iniciado sesión: tus servidores aparecerán";
+"ios.join.already" = "Ya has iniciado sesión en una cuenta. Para entrar en otra, cierra sesión primero en Ajustes.";
 "ios.join.button" = "Iniciar sesión con un Mac";
 "ios.join.buttonHint" = "En el Mac: Ajustes → Cuenta → Añadir iPhone";
 "ios.join.compare" = "Comparar el código a mano";
+"ios.join.confirm.action" = "Iniciar sesión";
+"ios.join.confirm.text" = "Inicia sesión solo si este código QR lo está mostrando tu Mac ahora mismo.";
+"ios.join.confirm.title" = "¿Iniciar sesión con el Mac «%1$@»?";
 "ios.join.defaultMac" = "Mac";
 "ios.join.expired" = "El código ha caducado: muestra uno nuevo en el Mac";
 "ios.join.foreign.text" = "No se aceptó. Si lo envió otro de tus dispositivos, compara los códigos a mano.";

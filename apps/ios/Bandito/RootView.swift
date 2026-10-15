@@ -54,6 +54,10 @@ struct RootView: View {
     @State private var pendingShare: UUID?
     /// A `bandito://join` code that waits for Face ID: the sign-in starts once the app is open.
     @State private var pendingJoin: JoinTicket?
+    /// The question before a sign-in by a code that came from outside (the camera app, a pasted link, the connect scanner).
+    @State private var joinConfirm: JoinConfirmRequest?
+    /// A code read while another sheet was open: the question follows once that sheet has closed.
+    @State private var confirmAfterSheet: JoinTicket?
     /// Toasts about shared tasks that were dropped while Face ID covered the app: shown once it is open.
     @State private var pendingNotices: [ShareNotice] = []
     /// The first run's progress; the flow covers the app until a server is paired (docs/IOS_APP.md, Onboarding).
@@ -150,7 +154,7 @@ struct RootView: View {
                 runPendingQuickAction()
                 answerToast.showInTurn(pendingNotices.map { AnswerToastMessage(text: $0.text, allowed: false) })
                 pendingNotices = []
-                if let ticket = pendingJoin { openJoin(ticket) }
+                if let ticket = pendingJoin { askJoin(ticket) }
                 if let id = pendingShare { openShared(id) } else { importSharedTasks() }
             }
         }
@@ -162,7 +166,7 @@ struct RootView: View {
             } else if url.scheme?.lowercased() == "bandito", url.host?.lowercased() == "join" {
                 // A code from a Mac, read by the camera app: this iPhone signs in with it, or says the code is no good.
                 if let ticket = JoinTicket.parse(url) {
-                    openJoin(ticket)
+                    askJoin(ticket)
                 } else {
                     answerToast.show(AnswerToastMessage(text: L10n.Ios.Join.expired, allowed: false))
                 }
@@ -248,6 +252,11 @@ struct RootView: View {
         }
         .sheet(item: $connect, onDismiss: {
             // "Sign in" in the connect sheet: the account sheet opens once this one is gone.
+            if let ticket = confirmAfterSheet {
+                confirmAfterSheet = nil
+                askJoin(ticket)
+                return
+            }
             if signsInAfterConnect {
                 signsInAfterConnect = false
                 showsAccount = true
@@ -261,13 +270,29 @@ struct RootView: View {
                     signsInAfterConnect = true
                     connect = nil
                 },
-                onJoin: { openJoin($0) },
+                onJoin: { askJoin($0) },
                 onClose: { connect = nil })
                 .preferredColorScheme(settings.theme.colorScheme ?? shownScheme)
         }
-        .sheet(isPresented: $showsAccount) {
+        .sheet(isPresented: $showsAccount, onDismiss: {
+            if let ticket = confirmAfterSheet {
+                confirmAfterSheet = nil
+                askJoin(ticket)
+            }
+        }) {
             NavigationStack { AccountScreen(account: account, onClose: { showsAccount = false }) }
                 .preferredColorScheme(.dark)
+        }
+        .sheet(item: $joinConfirm) { request in
+            JoinConfirmSheet(
+                ticket: request.ticket, alreadySignedIn: request.alreadySignedIn,
+                onConfirm: {
+                    joinConfirm = nil
+                    startJoin(request.ticket)
+                },
+                onCancel: { joinConfirm = nil })
+                .presentationDetents([.medium])
+                .preferredColorScheme(settings.theme.colorScheme ?? shownScheme)
         }
         .sheet(isPresented: $asksNotifications) {
             NotificationAskSheet(onDone: { asksNotifications = false })
@@ -366,33 +391,43 @@ struct RootView: View {
         crewFocus = CrewFocus(serverID: serverID, agentID: agentID, request: UUID())
     }
 
-    /// "Sign in with a Mac": a code was read (by the camera app, the connect sheet's scanner or a paste). A phone that is
-    /// signed in already is not signed in again: it says so and asks for its servers. Otherwise the account screen shows
-    /// the sign-in. Behind the lock the code waits for Face ID.
-    private func openJoin(_ ticket: JoinTicket) {
+    /// "Sign in with a Mac": a code came from outside the sign-in screen (the camera app, a pasted link, the connect sheet's
+    /// scanner). Nothing is sent until the person says yes: a code on a poster or in a message would sign this iPhone in to
+    /// somebody else's account. A phone that is in an account already does not sign in again: it says so. Behind the lock
+    /// the code waits for Face ID.
+    private func askJoin(_ ticket: JoinTicket) {
         guard !appLock.isLocked else {
             pendingJoin = ticket
             return
         }
         pendingJoin = nil
+        // Two sheets cannot be open at once: the question follows when the one that is open has closed.
+        if connect != nil {
+            confirmAfterSheet = ticket
+            connect = nil
+            return
+        }
+        if showsAccount {
+            confirmAfterSheet = ticket
+            showsAccount = false
+            return
+        }
         Task {
             // A link that started the app finds the stored session not read yet.
             if account.stage == .loading { await account.start() }
-            if account.stage == .ready {
-                connect = nil
-                account.openFastWindow()
-                answerToast.show(AnswerToastMessage(text: L10n.Ios.Join.already, allowed: true))
-                return
-            }
-            // Two sheets cannot be open at once: the account sheet follows when the connect sheet has closed.
-            if connect != nil {
-                signsInAfterConnect = true
-                connect = nil
-            } else {
-                showsAccount = true
-            }
-            await account.join(ticket)
+            joinConfirm = JoinConfirmRequest(ticket: ticket, alreadySignedIn: account.stage == .ready)
         }
+    }
+
+    /// "Sign in" in the question: the account screen shows the wait.
+    private func startJoin(_ ticket: JoinTicket) {
+        // The account may have become ready while the question was open.
+        if account.stage == .ready {
+            joinConfirm = JoinConfirmRequest(ticket: ticket, alreadySignedIn: true)
+            return
+        }
+        showsAccount = true
+        Task { await account.join(ticket) }
     }
 
     /// Opens the connect sheet on the camera (the Crew's and Settings' "Connect a server").
@@ -497,4 +532,11 @@ struct ComingSoonTab: View {
 struct ConnectRequest: Identifiable {
     let id = UUID()
     let mode: OnboardingConnectMode
+}
+
+/// The question before a sign-in by a code from outside (or the answer that this iPhone is in an account already).
+struct JoinConfirmRequest: Identifiable {
+    let id = UUID()
+    let ticket: JoinTicket
+    let alreadySignedIn: Bool
 }

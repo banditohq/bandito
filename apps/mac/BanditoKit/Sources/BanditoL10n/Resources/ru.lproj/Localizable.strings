@@ -1111,10 +1111,13 @@
 "ios.intent.ask.sent" = "Отправлено: %1$@";
 "ios.intent.needsMe.none" = "Ничего не ждёт";
 "ios.intent.open.inbox" = "Открыть входящие";
-"ios.join.already" = "Вы уже в аккаунте — серверы появятся";
+"ios.join.already" = "Вы уже вошли в аккаунт. Чтобы войти в другой, сначала выйдите в Настройках.";
 "ios.join.button" = "Войти с помощью Mac";
 "ios.join.buttonHint" = "На Mac: Настройки → Аккаунт → Добавить iPhone";
 "ios.join.compare" = "Сравнить код вручную";
+"ios.join.confirm.action" = "Войти";
+"ios.join.confirm.text" = "Войдите, только если этот QR-код показывает ваш Mac прямо сейчас.";
+"ios.join.confirm.title" = "Войти через Mac «%1$@»?";
 "ios.join.defaultMac" = "Mac";
 "ios.join.expired" = "Код устарел — покажите на Mac новый";
 "ios.join.foreign.text" = "Мы его не приняли. Если его прислало другое ваше устройство, сверьте коды вручную.";

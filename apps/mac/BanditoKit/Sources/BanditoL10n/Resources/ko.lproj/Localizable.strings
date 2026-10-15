@@ -1111,10 +1111,13 @@
 "ios.intent.ask.sent" = "%1$@에게 보냈어요";
 "ios.intent.needsMe.none" = "나를 기다리는 것이 없어요";
 "ios.intent.open.inbox" = "받은 편지함 열기";
-"ios.join.already" = "이미 로그인되어 있습니다. 곧 서버가 표시됩니다";
+"ios.join.already" = "이미 계정에 로그인되어 있습니다. 다른 계정으로 로그인하려면 먼저 설정에서 로그아웃하세요.";
 "ios.join.button" = "Mac으로 로그인";
 "ios.join.buttonHint" = "Mac에서: 설정 → 계정 → iPhone 추가";
 "ios.join.compare" = "코드를 직접 비교";
+"ios.join.confirm.action" = "로그인";
+"ios.join.confirm.text" = "이 QR 코드가 지금 내 Mac에 표시되어 있는 경우에만 로그인하세요.";
+"ios.join.confirm.title" = "Mac “%1$@”(으)로 로그인할까요?";
 "ios.join.defaultMac" = "Mac";
 "ios.join.expired" = "코드가 만료되었습니다. Mac에서 새 코드를 표시하세요";
 "ios.join.foreign.text" = "수락하지 않았습니다. 다른 기기에서 보낸 것이라면 코드를 직접 비교하세요.";

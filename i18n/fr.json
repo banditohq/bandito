@@ -3583,6 +3583,9 @@
   "ios.join.foreign.title": "La clé ne vient pas de ce Mac",
   "ios.join.foreign.text": "Il n’a pas été accepté. S’il vient d’un autre de vos appareils, comparez les codes à la main.",
   "ios.join.compare": "Comparer le code manuellement",
-  "ios.join.already": "Vous êtes déjà connecté : vos serveurs vont apparaître",
-  "joinQR.expired": "Le code a expiré. Affichez-en un nouveau."
+  "ios.join.already": "Vous êtes déjà connecté à un compte. Pour vous connecter à un autre, déconnectez-vous d’abord dans les Réglages.",
+  "joinQR.expired": "Le code a expiré. Affichez-en un nouveau.",
+  "ios.join.confirm.title": "Se connecter via le Mac « {mac} » ?",
+  "ios.join.confirm.text": "Ne vous connectez que si ce code QR est affiché en ce moment par votre Mac.",
+  "ios.join.confirm.action": "Se connecter"
 }

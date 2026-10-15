@@ -1111,10 +1111,13 @@
 "ios.intent.ask.sent" = "已发送给 %1$@";
 "ios.intent.needsMe.none" = "没有需要你处理的事";
 "ios.intent.open.inbox" = "打开收件箱";
-"ios.join.already" = "你已登录，服务器很快就会出现";
+"ios.join.already" = "你已登录账户。若要登录其他账户，请先在“设置”中退出登录。";
 "ios.join.button" = "用 Mac 登录";
 "ios.join.buttonHint" = "在 Mac 上：设置 → 账户 → 添加 iPhone";
 "ios.join.compare" = "手动核对代码";
+"ios.join.confirm.action" = "登录";
+"ios.join.confirm.text" = "仅当此二维码正由你的 Mac 当前显示时才登录。";
+"ios.join.confirm.title" = "通过 Mac“%1$@”登录?";
 "ios.join.defaultMac" = "Mac";
 "ios.join.expired" = "二维码已过期，请在 Mac 上显示新的二维码";
 "ios.join.foreign.text" = "未接受该密钥。如果是你的另一台设备发来的，请手动核对代码。";

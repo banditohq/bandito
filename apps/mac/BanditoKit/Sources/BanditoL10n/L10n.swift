@@ -1675,6 +1675,12 @@ public enum L10n {
             public static var other: String { L10n.tr("ios.join.other") }
             public static var silent: String { L10n.tr("ios.join.silent") }
 
+            public enum Confirm {
+                public static var action: String { L10n.tr("ios.join.confirm.action") }
+                public static var text: String { L10n.tr("ios.join.confirm.text") }
+                public static func title(mac: String) -> String { L10n.tr("ios.join.confirm.title", mac) }
+            }
+
             public enum Foreign {
                 public static var text: String { L10n.tr("ios.join.foreign.text") }
                 public static var title: String { L10n.tr("ios.join.foreign.title") }

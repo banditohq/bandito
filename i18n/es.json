@@ -3583,6 +3583,9 @@
   "ios.join.foreign.title": "La clave no vino de este Mac",
   "ios.join.foreign.text": "No se aceptó. Si lo envió otro de tus dispositivos, compara los códigos a mano.",
   "ios.join.compare": "Comparar el código a mano",
-  "ios.join.already": "Ya has iniciado sesión: tus servidores aparecerán",
-  "joinQR.expired": "El código ha caducado. Muestra uno nuevo."
+  "ios.join.already": "Ya has iniciado sesión en una cuenta. Para entrar en otra, cierra sesión primero en Ajustes.",
+  "joinQR.expired": "El código ha caducado. Muestra uno nuevo.",
+  "ios.join.confirm.title": "¿Iniciar sesión con el Mac «{mac}»?",
+  "ios.join.confirm.text": "Inicia sesión solo si este código QR lo está mostrando tu Mac ahora mismo.",
+  "ios.join.confirm.action": "Iniciar sesión"
 }

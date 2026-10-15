@@ -3583,6 +3583,9 @@
   "ios.join.foreign.title": "The key did not come from this Mac",
   "ios.join.foreign.text": "It was not accepted. If another of your devices sent it, compare the codes by hand.",
   "ios.join.compare": "Compare the code manually",
-  "ios.join.already": "You are already signed in — your servers will appear",
-  "joinQR.expired": "The code ran out. Show a new one."
+  "ios.join.already": "You are already signed in to an account. To sign in to another one, sign out first in Settings.",
+  "joinQR.expired": "The code ran out. Show a new one.",
+  "ios.join.confirm.title": "Sign in via Mac “{mac}”?",
+  "ios.join.confirm.text": "Sign in only if this QR code is shown by your Mac right now.",
+  "ios.join.confirm.action": "Sign in"
 }

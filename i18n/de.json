@@ -3582,6 +3582,9 @@
   "ios.join.foreign.title": "Der Schlüssel kam nicht von diesem Mac",
   "ios.join.foreign.text": "Er wurde nicht akzeptiert. Falls ihn ein anderes deiner Geräte gesendet hat, vergleiche die Codes von Hand.",
   "ios.join.compare": "Code manuell vergleichen",
-  "ios.join.already": "Du bist schon angemeldet – deine Server erscheinen gleich",
-  "joinQR.expired": "Der Code ist abgelaufen. Zeige einen neuen an."
+  "ios.join.already": "Du bist bereits in einem Konto angemeldet. Um dich in einem anderen anzumelden, melde dich zuerst in den Einstellungen ab.",
+  "joinQR.expired": "Der Code ist abgelaufen. Zeige einen neuen an.",
+  "ios.join.confirm.title": "Über den Mac „{mac}“ anmelden?",
+  "ios.join.confirm.text": "Melde dich nur an, wenn dieser QR-Code gerade auf deinem Mac angezeigt wird.",
+  "ios.join.confirm.action": "Anmelden"
 }
