@@ -16,8 +16,11 @@ final class AppUpdater {
     /// How long after launch the background check runs.
     private static let launchCheckDelay: Duration = .seconds(5)
     /// How often a quiet check runs while the app is open. Sparkle's own schedule does not go below an hour, so the
-    /// app keeps its own: a new version shows in the banner within half an hour of its release.
-    static let periodicCheckInterval: Duration = .seconds(30 * 60)
+    /// app keeps its own: a new version shows in the banner within ten minutes of its release, and at once when the
+    /// person comes back to the app or the Mac wakes (`quietCheck`).
+    static let periodicCheckInterval: Duration = .seconds(10 * 60)
+    /// The least time between two quiet checks, so switching apps back and forth does not fetch the feed each time.
+    static let quietCheckGap: Duration = .seconds(2 * 60)
 
     private let channels = UpdateChannelDelegate()
     private let driver: UpdateUserDriver
@@ -26,6 +29,10 @@ final class AppUpdater {
     /// item does nothing.
     private var started = false
     private var preferencesObserver: NSObjectProtocol?
+    private var activationObserver: NSObjectProtocol?
+    private var wakeObserver: NSObjectProtocol?
+    /// When the last quiet check started (`quietCheck`).
+    private var lastQuietCheck: ContinuousClock.Instant?
     private var launchCheck: Task<Void, Never>?
     private var periodicCheck: Task<Void, Never>?
 
@@ -51,6 +58,17 @@ final class AppUpdater {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyAutomaticChecks() }
         }
+        // Back to the app, or the Mac woke up: a release that came out meanwhile shows without a restart.
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.quietCheck() }
+        }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.quietCheck() }
+        }
         scheduleLaunchCheck()
         schedulePeriodicChecks()
     }
@@ -67,20 +85,27 @@ final class AppUpdater {
         guard AppUpdatePreferences.automaticChecks() else { return }
         launchCheck = Task { [weak self] in
             do { try await Task.sleep(for: Self.launchCheckDelay) } catch { return }
-            guard let self, AppUpdatePreferences.automaticChecks() else { return }
-            self.updater.checkForUpdatesInBackground()
+            self?.quietCheck()
         }
     }
 
-    /// Every half hour, a quiet check while automatic checks are on. Sparkle skips a check while another one or an
+    /// A background check when automatic checks are on, Sparkle is free (no check, offer or install under way) and
+    /// the last quiet check is at least `quietCheckGap` old. A found update shows in the banner; nothing else does.
+    private func quietCheck(now: ContinuousClock.Instant = .now) {
+        guard started, AppUpdatePreferences.automaticChecks(), updater.canCheckForUpdates else { return }
+        if let last = lastQuietCheck, now - last < Self.quietCheckGap { return }
+        lastQuietCheck = now
+        updater.checkForUpdatesInBackground()
+    }
+
+    /// Every ten minutes, a quiet check while automatic checks are on. Sparkle skips a check while another one or an
     /// install is under way, so a tick during an update does nothing.
     private func schedulePeriodicChecks() {
         periodicCheck = Task { [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(for: Self.periodicCheckInterval) } catch { return }
                 guard let self else { return }
-                guard AppUpdatePreferences.automaticChecks(), self.updater.canCheckForUpdates else { continue }
-                self.updater.checkForUpdatesInBackground()
+                self.quietCheck()
             }
         }
     }
