@@ -68,7 +68,7 @@ struct BanditoApp: App {
                 }
                 .task {
                     // The daemons' update checks are re-read hourly, and the Server screen re-reads on open.
-                    await model.refreshDaemonInfoHourly()
+                    await model.refreshDaemonInfoPeriodically()
                 }
                 .task {
                     // Agents made elsewhere show up when the app comes back to the front.

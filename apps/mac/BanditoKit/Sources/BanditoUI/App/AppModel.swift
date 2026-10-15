@@ -37,6 +37,10 @@ public final class AppModel {
             for server in servers where server.state == .connected {
                 server.refreshAgentsIfStale()
             }
+            // A server release that came out while the app was in the back shows now (the daemon caches its check).
+            for server in reachableServers {
+                Task { await server.refreshDaemonUpdateCheck() }
+            }
         }
         #endif
     }
@@ -424,11 +428,12 @@ public final class AppModel {
         await server.connect()
     }
 
-    /// Re-reads every connected server's `daemon.info` once an hour, so the update offer follows the daemon's own
-    /// check (the daemon checks every 24 hours). Runs until the caller's task is cancelled.
-    public func refreshDaemonInfoHourly() async {
+    /// Re-reads every connected server's `daemon.info` every 15 minutes and asks for a fresh update check, so a new
+    /// server release shows in the banner soon after it is out (the daemon itself checks only every 24 hours; its
+    /// answer to `daemon.update_check` is cached for 10 minutes). Runs until the caller's task is cancelled.
+    public func refreshDaemonInfoPeriodically() async {
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(3600))
+            try? await Task.sleep(for: .seconds(15 * 60))
             for server in reachableServers {
                 await server.refreshInfo()
                 await server.refreshDaemonUpdateCheck()

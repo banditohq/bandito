@@ -31,8 +31,8 @@ extension ServerModel {
     }
 
     /// Asks the daemon for its check when it is needed: this server is not this Mac (its daemon is replaced from the
-    /// app bundle), the daemon has the `update` feature, and `daemon.info` carries no offer. Run on connect, every hour
-    /// and when the Server screen opens.
+    /// app bundle), the daemon has the `update` feature, and `daemon.info` carries no offer. Run on connect, every 15 minutes, when the
+    /// app comes to the front and when the Server screen opens.
     public func refreshDaemonUpdateCheck() async {
         guard !LocalDaemonUpgrade.isThisMac(config), supports("update"), DaemonUpdateOffer.offer(for: info) == nil
         else { return }
