@@ -1424,6 +1424,12 @@ public enum L10n {
             }
         }
 
+        public enum AnswerToast {
+            public static func allowed(name: String) -> String { L10n.tr("ios.answerToast.allowed", name) }
+            public static func denied(name: String) -> String { L10n.tr("ios.answerToast.denied", name) }
+            public static func sent(name: String) -> String { L10n.tr("ios.answerToast.sent", name) }
+        }
+
         public enum Chat {
             public static var copyLink: String { L10n.tr("ios.chat.copyLink") }
             public static var discard: String { L10n.tr("ios.chat.discard") }

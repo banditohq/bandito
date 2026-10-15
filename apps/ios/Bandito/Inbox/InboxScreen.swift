@@ -18,6 +18,8 @@ struct InboxScreen: View {
     var openChat: ((UUID, String) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The toast after an answer ("Allowed — Forge goes on"), set by RootView.
+    @Environment(\.answerToast) private var answerToast
     /// The items answered here, hidden at once while the server takes the answer (the daemon's event removes them for good).
     @State private var answered: Set<String> = []
     /// The item whose sheet is open (a snapshot: the sheet shows what was opened).
@@ -201,6 +203,16 @@ struct InboxScreen: View {
             } else {
                 generator.notificationOccurred(.success)
             }
+            let toast: AnswerToastMessage
+            switch action {
+            case .allow:
+                toast = AnswerToastMessage(text: L10n.Ios.AnswerToast.allowed(name: item.agentName), allowed: true)
+            case .deny:
+                toast = AnswerToastMessage(text: L10n.Ios.AnswerToast.denied(name: item.agentName), allowed: false)
+            case .submit, .reply:
+                toast = AnswerToastMessage(text: L10n.Ios.AnswerToast.sent(name: item.agentName), allowed: true)
+            }
+            answerToast?.show(toast)
             _ = answered.insert(item.id)
             return .sent
         } catch {

@@ -968,6 +968,9 @@
 "ios.agent.delete.button" = "에이전트 삭제";
 "ios.agent.error" = "저장하지 못했습니다: %1$@";
 "ios.agent.noSchedules" = "아직 예약된 실행이 없습니다.";
+"ios.answerToast.allowed" = "허용됨 — %1$@ 계속 진행";
+"ios.answerToast.denied" = "거부됨 — %1$@에게 전달됩니다";
+"ios.answerToast.sent" = "%1$@에게 보냄";
 "ios.chat.approval.allowed" = "허용함";
 "ios.chat.approval.denied" = "거부함";
 "ios.chat.approval.failed" = "답변을 보내지 못했습니다. 연결을 확인하고 다시 시도해 주세요.";

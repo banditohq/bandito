@@ -968,6 +968,9 @@
 "ios.agent.delete.button" = "Удалить агента";
 "ios.agent.error" = "Не сохранилось: %1$@";
 "ios.agent.noSchedules" = "Расписаний пока нет.";
+"ios.answerToast.allowed" = "Разрешено — %1$@ продолжает";
+"ios.answerToast.denied" = "Отклонено — %1$@ узнает";
+"ios.answerToast.sent" = "Отправлено — %1$@";
 "ios.chat.approval.allowed" = "Разрешено";
 "ios.chat.approval.denied" = "Отклонено";
 "ios.chat.approval.failed" = "Не удалось отправить ответ. Проверьте связь и попробуйте ещё раз.";

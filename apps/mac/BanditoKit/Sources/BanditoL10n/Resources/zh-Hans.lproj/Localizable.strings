@@ -968,6 +968,9 @@
 "ios.agent.delete.button" = "删除代理";
 "ios.agent.error" = "无法保存：%1$@";
 "ios.agent.noSchedules" = "还没有定时任务。";
+"ios.answerToast.allowed" = "已允许 — %1$@ 继续执行";
+"ios.answerToast.denied" = "已拒绝 — %1$@ 会收到通知";
+"ios.answerToast.sent" = "已发送给 %1$@";
 "ios.chat.approval.allowed" = "已允许";
 "ios.chat.approval.denied" = "已拒绝";
 "ios.chat.approval.failed" = "无法发送您的回答。请检查连接后重试。";

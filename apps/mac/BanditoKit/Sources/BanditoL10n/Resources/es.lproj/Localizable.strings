@@ -968,6 +968,9 @@
 "ios.agent.delete.button" = "Eliminar agente";
 "ios.agent.error" = "No se pudo guardar: %1$@";
 "ios.agent.noSchedules" = "Todavía no hay horarios.";
+"ios.answerToast.allowed" = "Permitido — %1$@ continúa";
+"ios.answerToast.denied" = "Rechazado — %1$@ lo sabrá";
+"ios.answerToast.sent" = "Enviado a %1$@";
 "ios.chat.approval.allowed" = "Permitido";
 "ios.chat.approval.denied" = "Rechazado";
 "ios.chat.approval.failed" = "No se pudo enviar tu respuesta. Revisa la conexión e inténtalo de nuevo.";

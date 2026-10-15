@@ -178,6 +178,8 @@ struct CrewList: View {
 
     @State private var pinned: [String] = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The toast after an answer ("Allowed — Forge goes on"), set by RootView.
+    @Environment(\.answerToast) private var answerToast
     /// The Inbox items answered from this list, hidden at once while the server takes the answer.
     @State private var answered: Set<String> = []
     /// The item whose answer is on its way: its card shows a spinner and every answer is off until it ends.
@@ -316,6 +318,10 @@ struct CrewList: View {
             switch outcome {
             case .sent:
                 UINotificationFeedbackGenerator().notificationOccurred(allow ? .success : .warning)
+                let text = allow
+                    ? L10n.Ios.AnswerToast.allowed(name: item.agentName)
+                    : L10n.Ios.AnswerToast.denied(name: item.agentName)
+                answerToast?.show(AnswerToastMessage(text: text, allowed: allow))
                 withAnimation(reduceMotion ? nil : BanditoMotion.ease) {
                     _ = answered.insert(item.id)
                 }
