@@ -53,6 +53,10 @@ struct InboxScreen: View {
         .onChange(of: focus.wrappedValue) { _, id in
             openFocused(id, in: InboxRules.items(in: servers))
         }
+        // A focus that waits for its item (a notice pressed on a cold start) opens once the item is listed.
+        .onChange(of: InboxRules.items(in: servers).map(\.id)) { _, _ in
+            openFocused(focus.wrappedValue, in: InboxRules.items(in: servers))
+        }
         .task(id: servers.map(\.id)) {
             openFocused(focus.wrappedValue, in: InboxRules.items(in: servers))
             await loadUnlistedAgents()
@@ -63,12 +67,11 @@ struct InboxScreen: View {
         }
     }
 
-    /// Opens the sheet of the focused item when it is in the list, then clears the focus (a notice's route).
+    /// Opens the sheet of the focused item when it is in the list, then clears the focus (a notice's route). A focus whose
+    /// item is not listed yet stays until it is.
     private func openFocused(_ id: String?, in items: [InboxItem]) {
-        guard let id else { return }
-        if let item = items.first(where: { $0.id == id }) {
-            opened = item
-        }
+        guard let id, let item = InboxRules.focusedItem(id, in: items) else { return }
+        opened = item
         focus.wrappedValue = nil
     }
 

@@ -173,6 +173,15 @@ final class FakeAuthenticator: BiometricAuthenticating {
     }
 
     /// Waits (a few seconds at most) until the condition holds: the demo daemon answers on its own queue.
+    /// A notice pressed on a cold start names an item the list does not have yet: the focus waits for it.
+    @Test func aFocusWaitsForItsItemToBeListed() {
+        let server = UUID()
+        let listed = item("approval-ap1", server: server, name: "Mac", ts: 1, kind: .approval(approval("ap1", reason: "")))
+        #expect(InboxRules.focusedItem("approval-ap1", in: []) == nil)
+        #expect(InboxRules.focusedItem("approval-ap1", in: [listed]) == listed)
+        #expect(InboxRules.focusedItem("approval-other", in: [listed]) == nil)
+    }
+
     private func waitUntil(_ condition: () -> Bool) async {
         for _ in 0..<60 where !condition() {
             try? await Task.sleep(for: .milliseconds(50))

@@ -143,4 +143,15 @@ import Testing
         #expect(servers.first?.agents.count == IOSDemo.team.count)
         for server in servers { await server.disconnect() }
     }
+
+    /// A widget or Spotlight link on a cold start names an agent the servers have not listed yet: it waits for it.
+    @MainActor @Test func aFocusWaitsForItsAgentToBeListed() async throws {
+        let server = await IOSDemo.start()
+        let agentID = try #require(server.agents.first?.id)
+        let focus = CrewFocus(serverID: server.id, agentID: agentID, request: UUID())
+        #expect(focus.isListed(in: []) == false)
+        #expect(focus.isListed(in: [server]))
+        #expect(CrewFocus(serverID: server.id, agentID: "no-such", request: UUID()).isListed(in: [server]) == false)
+        await server.disconnect()
+    }
 }

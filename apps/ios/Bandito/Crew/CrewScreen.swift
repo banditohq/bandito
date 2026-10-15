@@ -18,6 +18,8 @@ struct CrewScreen: View {
     @State private var path = NavigationPath()
     /// The creation sheet, while it is open: the tab it opens on. A new value is a new sheet.
     @State private var newAgent: NewAgentStart?
+    /// The request of the focus that is already open: a link opens once, even when its agent is listed later.
+    @State private var openedRequest: UUID?
     #if DEBUG
     @State private var hooksOpened = false
     #endif
@@ -69,6 +71,10 @@ struct CrewScreen: View {
         .task(id: focus) {
             open(focus)
         }
+        // On a cold start a widget or Spotlight link comes before the agents are listed: it waits for them.
+        .onChange(of: servers.map { $0.agents.map(\.id) }) { _, _ in
+            open(focus)
+        }
         #if DEBUG
         .onChange(of: servers.count, initial: true) { _, _ in openScreenshotHooks() }
         #endif
@@ -107,11 +113,14 @@ struct CrewScreen: View {
         servers.first { $0.id == chosenServerID } ?? servers.first
     }
 
-    /// Opens the agent a link named: its server is shown, and its row is opened. An agent that is not there is ignored.
+    /// Opens the agent a link named: its server is shown, and its row is opened, once per request. An agent that is not
+    /// listed yet waits (a cold start); one that never comes is ignored.
     private func open(_ focus: CrewFocus?) {
-        guard let focus, let server = servers.first(where: { $0.id == focus.serverID }),
+        guard let focus, focus.request != openedRequest, focus.isListed(in: servers),
+              let server = servers.first(where: { $0.id == focus.serverID }),
               let agent = server.agents.first(where: { $0.id == focus.agentID })
         else { return }
+        openedRequest = focus.request
         chosenServerID = server.id
         path = NavigationPath([CrewRoute(agentID: agent.id, name: agent.name)])
     }
@@ -129,6 +138,13 @@ struct CrewFocus: Equatable {
     let serverID: UUID
     let agentID: String
     let request: UUID
+
+    /// Whether the focus's agent is listed on its server now. A link that arrives before the servers are connected is not.
+    @MainActor func isListed(in servers: [ServerModel]) -> Bool {
+        servers.contains { server in
+            server.id == serverID && server.agents.contains { $0.id == agentID }
+        }
+    }
 }
 
 /// The agent card opened from the Crew list ("Details" in the context menu).
