@@ -27,18 +27,18 @@ fresh
 "$bump" 9.8.7 --check --root "$work/root" > /dev/null || fail "check after bump"
 ok
 
-# Exactly four files differ: the three desktop files by one line each, the iPhone project.yml by its two targets.
+# Exactly four files differ: the three desktop files by one line each, the iPhone project.yml by its four targets.
 for f in apps/mac/project.yml daemon/Cargo.toml daemon/Cargo.lock; do
   changed="$(diff "$repo/$f" "$work/root/$f" | grep -c '^>' || true)"
   [ "$changed" = 1 ] || fail "$f: $changed lines changed, expected 1"
 done
 ok
 changed="$(diff "$repo/apps/ios/project.yml" "$work/root/apps/ios/project.yml" | grep -c '^>' || true)"
-[ "$changed" = 2 ] || fail "apps/ios/project.yml: $changed lines changed, expected 2"
+[ "$changed" = 4 ] || fail "apps/ios/project.yml: $changed lines changed, expected 4"
 ok
 grep -q '^        MARKETING_VERSION: 9.8.7$' "$work/root/apps/mac/project.yml" || fail "project.yml line/indent"
 ok
-[ "$(grep -c '^        MARKETING_VERSION: 9.8.7$' "$work/root/apps/ios/project.yml")" = 2 ] || fail "ios: both targets not 9.8.7"
+[ "$(grep -c '^        MARKETING_VERSION: 9.8.7$' "$work/root/apps/ios/project.yml")" = 4 ] || fail "ios: all four targets not 9.8.7"
 ok
 
 # Only the bandito entry in the lock moved; the other packages keep their versions.
@@ -89,7 +89,7 @@ awk '!d && /^[[:space:]]*MARKETING_VERSION:/ { sub(/9\.8\.7/, "0.1.15"); d = 1 }
 if "$bump" 9.8.7 --check --root "$work/root" > /dev/null 2>&1; then fail "check passed with a stale iPhone target"; fi
 ok
 
-# The two iPhone targets disagree before the run: refuse, write nothing.
+# The iPhone targets disagree before the run: refuse, write nothing.
 fresh
 awk '!d && /^[[:space:]]*MARKETING_VERSION:/ { sub(/[0-9]+\.[0-9]+\.[0-9]+/, "9.9.9"); d = 1 } { print }' \
   "$work/root/apps/ios/project.yml" > "$work/split" && cat "$work/split" > "$work/root/apps/ios/project.yml"

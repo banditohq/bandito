@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Sets (or checks) the Bandito version in the places that must agree:
 #   apps/mac/project.yml   MARKETING_VERSION
-#   apps/ios/project.yml   MARKETING_VERSION, in both targets (BanditoIOS and BanditoWidgets)
+#   apps/ios/project.yml   MARKETING_VERSION, in all four targets (BanditoIOS, BanditoWidgets, BanditoShare, BanditoNotify)
 #   daemon/Cargo.toml      [package] version
 #   daemon/Cargo.lock      the `bandito` package entry
 #
@@ -55,8 +55,9 @@ read_yml() {
   [ "$n" = 1 ] || { echo "bump-version: expected one MARKETING_VERSION in $yml, found $n" >&2; return 1; }
   grep -E '^[[:space:]]*MARKETING_VERSION:' "$yml" | sed -E 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([^"[:space:]]+)"?[[:space:]]*$/\1/'
 }
-# The iPhone app has two targets (BanditoIOS, BanditoWidgets); both must have the same version, and there must be
-# exactly two. A third target means this script needs a look, so it fails loudly.
+# The iPhone app ships four targets (BanditoIOS, BanditoWidgets, BanditoShare, BanditoNotify); all must have the same
+# version, and there must be exactly four: an extension with another version is refused by App Store Connect. A fifth
+# target means this script needs a look, so it fails loudly.
 read_ios() {
   awk '
     /^[[:space:]]*MARKETING_VERSION:/ {
@@ -67,8 +68,8 @@ read_ios() {
       if (n == 1) first = v
       else if (v != first) differ = 1
     }
-    END { if (n != 2 || differ) exit 1; print first }
-  ' "$ios" || { echo "bump-version: expected two MARKETING_VERSION in $ios (BanditoIOS, BanditoWidgets), equal to each other" >&2; return 1; }
+    END { if (n != 4 || differ) exit 1; print first }
+  ' "$ios" || { echo "bump-version: expected four MARKETING_VERSION in $ios (BanditoIOS, BanditoWidgets, BanditoShare, BanditoNotify), equal to each other" >&2; return 1; }
 }
 read_toml() {
   awk '
