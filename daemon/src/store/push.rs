@@ -4,15 +4,16 @@
 use super::{Store, now_ms};
 use anyhow::Result;
 use rusqlite::{OptionalExtension, Row, params};
+use zeroize::Zeroizing;
 
 /// One phone's push registration. `key` is a secret: it is never serialized, printed or logged.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct PushTarget {
     pub device_id: String,
     /// The address at bandito.dev.
     pub handle: String,
-    /// 32 bytes.
-    pub key: Vec<u8>,
+    /// 32 bytes, zeroed when dropped.
+    pub key: Zeroizing<Vec<u8>>,
     /// How the phone names this server.
     pub server_ref: String,
     /// The kinds the phone wants, comma separated (see `push::PushKind`).
@@ -37,7 +38,7 @@ fn from_row(r: &Row) -> rusqlite::Result<PushTarget> {
     Ok(PushTarget {
         device_id: r.get(0)?,
         handle: r.get(1)?,
-        key: r.get(2)?,
+        key: Zeroizing::new(r.get::<_, Vec<u8>>(2)?),
         server_ref: r.get(3)?,
         kinds: r.get(4)?,
         lang: r.get(5)?,
@@ -127,7 +128,7 @@ mod tests {
         let list = s.push_list().unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].handle, "h2");
-        assert_eq!(list[0].key, vec![2; 32]);
+        assert_eq!(list[0].key.as_slice(), &[2; 32]);
         assert_eq!(list[0].lang.as_deref(), Some("ru"));
         assert_eq!(list[0].created_at, first.created_at);
         assert!(list[0].updated_at >= first.updated_at);

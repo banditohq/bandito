@@ -5,8 +5,8 @@
 //! phone's own app would have made a local notification for ([`push_kind`]), it encrypts a small JSON payload with the
 //! phone's key (ChaCha20-Poly1305) and posts it to the cloud, which hands it to APNs. The cloud never sees the text.
 //!
-//! Sending never blocks the hub or an RPC: events are queued (256 at most; a full queue drops the event) and sent by
-//! `curl` subprocesses, a few at a time. Logs carry the kind and the status code, never the handle, the key, the text
+//! Sending never blocks the hub or an RPC for long: events wait in two queues (approvals and questions first, 256 each;
+//! `done` and `error` after them, dropped when full) and are sent by `curl` subprocesses, a few at a time. Logs carry the kind and the status code, never the handle, the key, the text
 //! or a token.
 
 use crate::event::{AgentChange, AgentStatus, Event, EventBody, TurnStatus};
@@ -18,22 +18,36 @@ use base64::engine::general_purpose::STANDARD;
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce};
 use serde_json::{Value, json};
+use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Semaphore, broadcast, mpsc};
 
 /// The cloud API, without a trailing slash. `BANDITO_PUSH_URL` replaces it (tests, a staging cloud).
 pub const DEFAULT_BASE_URL: &str = "https://bandito.dev/api/v1";
-/// The most events waiting to be sent; more are dropped.
+/// The most events waiting in each of the two queues.
 const QUEUE: usize = 256;
+/// How long a full high queue is waited for before the event is dropped.
+const HIGH_WAIT: Duration = Duration::from_secs(1);
+/// A phone gets an `error` push for one agent at most this often (more are dropped).
+const ERROR_EVERY: Duration = Duration::from_secs(30);
+/// A phone gets a `done` push for one agent at most this often (more are dropped).
+const DONE_EVERY: Duration = Duration::from_secs(10);
+/// After a 429 nothing is sent to that phone for this long.
+const RATE_PAUSE: Duration = Duration::from_secs(60);
+/// The most approvals and questions kept for a phone during a pause (the oldest go first).
+const DEFERRED_MAX: usize = 20;
 /// Sends running at the same time.
 const PARALLEL: usize = 4;
 /// The most bytes of plaintext. The cloud takes 2700 bytes of ciphertext; the tag adds 16.
 pub const MAX_PLAINTEXT: usize = 2600;
 /// Heavy strings in a payload are cut to this many characters when it does not fit.
 const CUT_CHARS: usize = 300;
+/// The longest server name (`serverRef`) the daemon accepts.
+const SERVER_REF_CHARS: usize = 64;
 /// The longest agent name that goes into a payload.
 const NAME_CHARS: usize = 100;
 /// The most bytes of the cloud's answer that are read.
@@ -62,6 +76,20 @@ impl PushKind {
         PushKind::Error,
         PushKind::Connect,
     ];
+
+    /// Approvals and questions wait for the person: they go first and are kept through a pause.
+    fn urgent(self) -> bool {
+        matches!(self, PushKind::Approval | PushKind::Question)
+    }
+
+    /// The least time between two pushes of this kind for one phone and one agent.
+    fn min_gap(self) -> Option<Duration> {
+        match self {
+            PushKind::Error => Some(ERROR_EVERY),
+            PushKind::Done => Some(DONE_EVERY),
+            _ => None,
+        }
+    }
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -105,14 +133,14 @@ pub struct Ctx {
 /// The push an event makes, if any: the same rules as the phone's local notifications
 /// (`IOSNotifications.notice(for:)` and `AgentNotice.notice(for:in:)`), so a closed app and an open one tell the same.
 /// - an approval waiting -> `approval`;
-/// - a form, or a connect request -> `question`;
+/// - a form -> `question` (a connect request has no local notification either, so no push);
 /// - the agent needs the person with nothing else waiting (its own question) -> `question`;
 /// - a turn that ended well, unless it was quiet -> `done`;
 /// - an error -> `error`.
 pub fn push_kind(ev: &Event, ctx: &Ctx) -> Option<PushKind> {
     match &ev.body {
         EventBody::ApprovalRequested { .. } => Some(PushKind::Approval),
-        EventBody::FormRequested { .. } | EventBody::IntegrationRequested { .. } => Some(PushKind::Question),
+        EventBody::FormRequested { .. } => Some(PushKind::Question),
         EventBody::AgentStatus {
             status: AgentStatus::NeedsYou,
             ..
@@ -129,6 +157,9 @@ pub fn push_kind(ev: &Event, ctx: &Ctx) -> Option<PushKind> {
 
 /// `s` cut to `max` characters, the last one being `…` when something was cut.
 fn cut(s: &str, max: usize) -> String {
+    if max == 0 {
+        return String::new();
+    }
     if s.chars().count() <= max {
         return s.to_string();
     }
@@ -206,16 +237,40 @@ pub fn build_payload(server_ref: &str, ev: &Event, agent_name: &str) -> String {
         return text;
     }
     // 4. Only what names the thing.
+    let (kind, parts) = ev.body.to_parts();
     let mut ids = serde_json::Map::new();
-    if let Some(map) = ev.body.to_parts().1.as_object() {
+    if let Some(map) = parts.as_object() {
         for key in ["approval_id", "form_id", "request_id"] {
             if let Some(v) = map.get(key) {
-                ids.insert(key.to_string(), v.clone());
+                let mut v = v.clone();
+                cut_strings(&mut v);
+                ids.insert(key.to_string(), v);
             }
         }
     }
-    let event = json!({ "kind": ev.body.to_parts().0, "payload": ids });
-    envelope(server_ref, ev, agent_name, &event)
+    let text = envelope(server_ref, ev, agent_name, &json!({ "kind": kind, "payload": ids }));
+    if text.len() <= MAX_PLAINTEXT {
+        return text;
+    }
+    // 5. The last word: the kind alone, with the server name and the agent name cut to what they may be.
+    let event = json!({ "kind": kind });
+    for (srv, name) in [(SERVER_REF_CHARS, NAME_CHARS), (16, 0), (0, 0)] {
+        let text = json!({
+            "v": 1,
+            "srv": cut(server_ref, srv),
+            "seq": ev.seq,
+            "agent": ev.agent_id,
+            "name": cut(agent_name, name),
+            "ts": ev.ts,
+            "event": event,
+        })
+        .to_string();
+        if text.len() <= MAX_PLAINTEXT {
+            return text;
+        }
+    }
+    // An agent id this long cannot exist (ids are UUIDs); the phone still gets the kind and the sequence number.
+    json!({ "v": 1, "seq": ev.seq, "ts": ev.ts, "event": event }).to_string()
 }
 
 // ---- encryption ----
@@ -267,7 +322,13 @@ impl Tracker {
         }
     }
 
-    /// Reads what waits now from the store: at start, and after the task fell behind.
+    /// Forgets what was known and reads what waits now from the store: at start, and after the task fell behind (an
+    /// answer that came in the missed events must not keep an agent's question from being told).
+    fn reseed(&mut self, store: &Store) {
+        self.open.clear();
+        self.seed(store);
+    }
+
     fn seed(&mut self, store: &Store) {
         match store.approval_list_pending(None) {
             Ok(list) => list
@@ -325,28 +386,79 @@ impl Tracker {
 
 // ---- the task ----
 
+/// The task's clock, in milliseconds since it was made. Tests move it by hand ([`Clock::advance`]).
+#[derive(Debug, Clone)]
+pub struct Clock {
+    start: Instant,
+    skew_ms: Arc<AtomicU64>,
+}
+
+impl Default for Clock {
+    fn default() -> Self {
+        Self {
+            start: Instant::now(),
+            skew_ms: Arc::new(AtomicU64::new(0)),
+        }
+    }
+}
+
+impl Clock {
+    fn now_ms(&self) -> u64 {
+        self.start.elapsed().as_millis() as u64 + self.skew_ms.load(Ordering::Relaxed)
+    }
+
+    /// Moves the clock forward (tests).
+    pub fn advance(&self, by: Duration) {
+        self.skew_ms.fetch_add(by.as_millis() as u64, Ordering::Relaxed);
+    }
+}
+
 /// Where and how the task sends.
 #[derive(Debug, Clone)]
 pub struct Config {
     pub base_url: String,
     /// The wait before the one retry.
     pub retry_delay: Duration,
+    /// Time for the pauses and the gaps between pushes.
+    pub clock: Clock,
+    /// How often the sender looks at the clock when nothing arrives (a pause ends, deferred pushes go).
+    pub tick: Duration,
+}
+
+/// Whether `url` is plain http to this machine: the only http the task accepts.
+fn is_loopback_http(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("http://") else {
+        return false;
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    // `http://127.0.0.1@evil.example` has a user part: not loopback.
+    if authority.contains('@') {
+        return false;
+    }
+    let host = match authority.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or_default(),
+        None => authority.split(':').next().unwrap_or_default(),
+    };
+    matches!(host, "localhost" | "127.0.0.1" | "::1")
 }
 
 impl Config {
-    /// `BANDITO_PUSH_URL` when it is an http(s) address, else the cloud.
+    /// `BANDITO_PUSH_URL` when it is an https address, or http to this machine; else the cloud.
     pub fn from_env() -> Self {
         let base_url = match std::env::var("BANDITO_PUSH_URL") {
-            Ok(v) if v.starts_with("https://") || v.starts_with("http://") => v.trim_end_matches('/').to_string(),
-            Ok(v) if !v.trim().is_empty() => {
-                tracing::warn!("BANDITO_PUSH_URL is not an http(s) address: ignored");
+            Ok(v) if v.starts_with("https://") || is_loopback_http(&v) => v.trim_end_matches('/').to_string(),
+            Ok(v) if v.trim().is_empty() => DEFAULT_BASE_URL.to_string(),
+            Ok(_) => {
+                tracing::warn!("BANDITO_PUSH_URL is not https or http to this machine: ignored");
                 DEFAULT_BASE_URL.to_string()
             }
-            _ => DEFAULT_BASE_URL.to_string(),
+            Err(_) => DEFAULT_BASE_URL.to_string(),
         };
         Self {
             base_url,
             retry_delay: Duration::from_secs(2),
+            clock: Clock::default(),
+            tick: Duration::from_secs(1),
         }
     }
 }
@@ -355,8 +467,19 @@ impl Config {
 struct Job {
     device_id: String,
     handle: String,
+    agent_id: String,
     kind: PushKind,
     body: String,
+}
+
+/// The two queues in front of the sender.
+struct Queues {
+    /// Approvals and questions.
+    high: mpsc::Sender<Job>,
+    /// `done` and `error`.
+    low: mpsc::Sender<Job>,
+    /// How long a full high queue is waited for.
+    high_wait: Duration,
 }
 
 /// Starts the task: it listens to the hub from now on (an event from before a registration is never sent later) and
@@ -370,21 +493,27 @@ pub fn spawn_with(hub: &Hub, config: Config) -> tokio::task::JoinHandle<()> {
     let mut rx = hub.subscribe();
     let store = hub.store.clone();
     let mut tracker = Tracker::default();
-    tracker.seed(&store);
-    let (tx, jobs) = mpsc::channel::<Job>(QUEUE);
-    tokio::spawn(send_loop(jobs, store.clone(), config));
+    tracker.reseed(&store);
+    let (high, high_rx) = mpsc::channel::<Job>(QUEUE);
+    let (low, low_rx) = mpsc::channel::<Job>(QUEUE);
+    let queues = Queues {
+        high,
+        low,
+        high_wait: HIGH_WAIT,
+    };
+    tokio::spawn(send_loop(high_rx, low_rx, store.clone(), config));
     tokio::spawn(async move {
         loop {
             match rx.recv().await {
                 Ok(ev) => {
                     let ctx = tracker.observe(&ev);
                     if let Some(kind) = push_kind(&ev, &ctx) {
-                        enqueue(&store, &tx, &ev, kind);
+                        enqueue(&store, &queues, &ev, kind).await;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
                     tracing::warn!(missed = n, "push: the task fell behind, some events were not looked at");
-                    tracker.seed(&store);
+                    tracker.reseed(&store);
                 }
                 Err(broadcast::error::RecvError::Closed) => break,
             }
@@ -392,8 +521,9 @@ pub fn spawn_with(hub: &Hub, config: Config) -> tokio::task::JoinHandle<()> {
     })
 }
 
-/// Encrypts the event for each phone that wants `kind` and queues the requests.
-fn enqueue(store: &Store, tx: &mpsc::Sender<Job>, ev: &Event, kind: PushKind) {
+/// Encrypts the event for each phone that wants `kind` and queues the requests. A full low queue drops the event at
+/// once; a full high queue is waited for up to `high_wait`.
+async fn enqueue(store: &Store, queues: &Queues, ev: &Event, kind: PushKind) {
     let targets = match store.push_list() {
         Ok(t) => t,
         Err(e) => {
@@ -413,19 +543,27 @@ fn enqueue(store: &Store, tx: &mpsc::Sender<Job>, ev: &Event, kind: PushKind) {
         _ => String::new(),
     };
     for target in targets {
-        match request_body(&target, kind, ev, &name) {
-            Ok(body) => {
-                let job = Job {
-                    device_id: target.device_id,
-                    handle: target.handle,
-                    kind,
-                    body,
-                };
-                if tx.try_send(job).is_err() {
-                    tracing::warn!(kind = kind.as_str(), "push: the queue is full or closed, event dropped");
-                }
+        let body = match request_body(&target, kind, ev, &name) {
+            Ok(body) => body,
+            Err(e) => {
+                tracing::warn!(kind = kind.as_str(), "push: {e:#}");
+                continue;
             }
-            Err(e) => tracing::warn!(kind = kind.as_str(), "push: {e:#}"),
+        };
+        let job = Job {
+            device_id: target.device_id.clone(),
+            handle: target.handle.clone(),
+            agent_id: ev.agent_id.clone(),
+            kind,
+            body,
+        };
+        let queued = if kind.urgent() {
+            queues.high.send_timeout(job, queues.high_wait).await.is_ok()
+        } else {
+            queues.low.try_send(job).is_ok()
+        };
+        if !queued {
+            tracing::warn!(kind = kind.as_str(), "push: the queue is full, event dropped");
         }
     }
 }
@@ -443,17 +581,128 @@ fn request_body(target: &PushTarget, kind: PushKind, ev: &Event, agent_name: &st
     Ok(body.to_string())
 }
 
-async fn send_loop(mut jobs: mpsc::Receiver<Job>, store: Arc<Store>, config: Config) {
+/// What the sender keeps for one phone.
+#[derive(Default)]
+struct Gate {
+    /// No sending to this phone until then (after a 429), in clock milliseconds.
+    paused_until: Option<u64>,
+    /// Approvals and questions that came during the pause, oldest first.
+    deferred: VecDeque<Job>,
+}
+
+/// The sender: takes jobs (the high queue first), keeps the gaps between pushes and the pause after a 429, and runs
+/// the requests a few at a time.
+struct Sender {
+    config: Arc<Config>,
+    gates: HashMap<String, Gate>,
+    /// When the last `done` or `error` of a (phone, agent, kind) was let through.
+    last: HashMap<(String, String, PushKind), u64>,
+    /// Jobs whose pause has ended, to be sent before anything new.
+    ready: VecDeque<Job>,
+}
+
+impl Sender {
+    fn new(config: Arc<Config>) -> Self {
+        Self {
+            config,
+            gates: HashMap::new(),
+            last: HashMap::new(),
+            ready: VecDeque::new(),
+        }
+    }
+
+    /// A phone's pause begins now.
+    fn pause(&mut self, device_id: &str) {
+        let until = self.config.clock.now_ms() + RATE_PAUSE.as_millis() as u64;
+        self.gates.entry(device_id.to_string()).or_default().paused_until = Some(until);
+    }
+
+    /// Ends the pauses that are over; their deferred jobs become ready. Forgets old gaps.
+    fn release(&mut self) {
+        let now = self.config.clock.now_ms();
+        for gate in self.gates.values_mut() {
+            if gate.paused_until.is_some_and(|t| t <= now) {
+                gate.paused_until = None;
+                self.ready.extend(gate.deferred.drain(..));
+            }
+        }
+        self.gates
+            .retain(|_, g| g.paused_until.is_some() || !g.deferred.is_empty());
+        let longest = ERROR_EVERY.max(DONE_EVERY).as_millis() as u64;
+        self.last.retain(|_, t| now.saturating_sub(*t) < longest);
+    }
+
+    /// The job, if it may go out now. In a pause an urgent one is kept and a `done` or `error` is dropped; a `done` or
+    /// `error` closer than its gap to the last one is dropped.
+    fn admit(&mut self, job: Job) -> Option<Job> {
+        let now = self.config.clock.now_ms();
+        let gate = self.gates.entry(job.device_id.clone()).or_default();
+        if gate.paused_until.is_some_and(|t| t > now) {
+            if job.kind.urgent() {
+                if gate.deferred.len() >= DEFERRED_MAX {
+                    gate.deferred.pop_front();
+                }
+                gate.deferred.push_back(job);
+            }
+            return None;
+        }
+        if let Some(gap) = job.kind.min_gap() {
+            let key = (job.device_id.clone(), job.agent_id.clone(), job.kind);
+            if self
+                .last
+                .get(&key)
+                .is_some_and(|t| now.saturating_sub(*t) < gap.as_millis() as u64)
+            {
+                tracing::debug!(kind = job.kind.as_str(), "push: too soon after the last one, dropped");
+                return None;
+            }
+            self.last.insert(key, now);
+        }
+        Some(job)
+    }
+}
+
+async fn send_loop(mut high: mpsc::Receiver<Job>, mut low: mpsc::Receiver<Job>, store: Arc<Store>, config: Config) {
     let slots = Arc::new(Semaphore::new(PARALLEL));
     let config = Arc::new(config);
-    while let Some(job) = jobs.recv().await {
+    let (report, mut limited) = mpsc::unbounded_channel::<String>();
+    let mut sender = Sender::new(config.clone());
+    let mut tick = tokio::time::interval(config.tick);
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        // A free slot first, so that what is sent next is chosen as late as possible: the high queue wins.
         let Ok(permit) = slots.clone().acquire_owned().await else {
             break;
         };
+        sender.release();
+        let job = if let Some(job) = sender.ready.pop_front() {
+            Some(job)
+        } else {
+            tokio::select! {
+                biased;
+                Some(device_id) = limited.recv() => {
+                    sender.pause(&device_id);
+                    None
+                }
+                job = high.recv() => match job {
+                    Some(job) => sender.admit(job),
+                    None => break,
+                },
+                job = low.recv() => match job {
+                    Some(job) => sender.admit(job),
+                    None => break,
+                },
+                _ = tick.tick() => None,
+            }
+        };
+        let Some(job) = job else {
+            continue;
+        };
         let store = store.clone();
         let config = config.clone();
+        let report = report.clone();
         tokio::spawn(async move {
-            deliver(&store, &config, job).await;
+            deliver(&store, &config, job, &report).await;
             drop(permit);
         });
     }
@@ -488,7 +737,7 @@ fn still_registered(store: &Store, job: &Job) -> bool {
 }
 
 /// Sends one request; one more try after `retry_delay` on a network error or a 5xx (not 503).
-async fn deliver(store: &Store, config: &Config, job: Job) {
+async fn deliver(store: &Store, config: &Config, job: Job, report: &mpsc::UnboundedSender<String>) {
     let kind = job.kind.as_str();
     for attempt in 0..2 {
         // A device revoked or re-registered while the request waited gets nothing.
@@ -510,6 +759,10 @@ async fn deliver(store: &Store, config: &Config, job: Job) {
                 }
                 Verdict::Drop => {
                     tracing::warn!(kind, status, "push not sent");
+                    if status == 429 {
+                        // The sender pauses this phone for a minute.
+                        let _ = report.send(job.device_id.clone());
+                    }
                     return;
                 }
                 Verdict::Retry => {
@@ -659,7 +912,7 @@ mod tests {
     }
 
     #[test]
-    fn a_form_and_a_connect_request_are_questions() {
+    fn a_form_is_a_question_and_a_connect_request_makes_no_push() {
         let c = Ctx::default();
         assert_eq!(push_kind(&ev(form()), &c), Some(PushKind::Question));
         let connect = EventBody::IntegrationRequested {
@@ -667,7 +920,11 @@ mod tests {
             service: "github".into(),
             reason: None,
         };
-        assert_eq!(push_kind(&ev(connect), &c), Some(PushKind::Question));
+        assert_eq!(
+            push_kind(&ev(connect), &c),
+            None,
+            "the phone makes no local notification for it"
+        );
     }
 
     #[test]
@@ -1114,20 +1371,30 @@ mod tests {
         }
     }
 
+    fn config(base_url: &str, clock: &Clock) -> Config {
+        Config {
+            base_url: base_url.to_string(),
+            retry_delay: Duration::from_millis(50),
+            clock: clock.clone(),
+            tick: Duration::from_millis(20),
+        }
+    }
+
     fn setup(cloud: &Cloud) -> (Hub, String) {
+        let (hub, agent, _) = setup_clock(cloud);
+        (hub, agent)
+    }
+
+    /// Like `setup`, with the clock of the sender (moved by hand to pass the gaps and the pauses).
+    fn setup_clock(cloud: &Cloud) -> (Hub, String, Clock) {
+        let clock = Clock::default();
         let store = Arc::new(Store::open_in_memory().unwrap());
         let hub = Hub::new(store.clone());
         let new_agent: NewAgent =
             serde_json::from_value(json!({ "name": "Forge", "runtime": RuntimeKind::Claude })).unwrap();
         let agent = store.agent_create(new_agent).unwrap().id;
-        spawn_with(
-            &hub,
-            Config {
-                base_url: cloud.base_url.clone(),
-                retry_delay: Duration::from_millis(50),
-            },
-        );
-        (hub, agent)
+        spawn_with(&hub, config(&cloud.base_url, &clock));
+        (hub, agent, clock)
     }
 
     fn ok_reply(_: &Value) -> (u16, String) {
@@ -1333,7 +1600,7 @@ mod tests {
             }
         })
         .await;
-        let (hub, agent) = setup(&cloud);
+        let (hub, agent, clock) = setup_clock(&cloud);
         let a = hub.store.device_add("A", "ta").unwrap();
         let b = hub.store.device_add("B", "tb").unwrap();
         hub.store
@@ -1351,6 +1618,7 @@ mod tests {
         );
         assert!(hub.store.push_get(&b.id).unwrap().is_some());
         // Nothing more goes to the forgotten one.
+        clock.advance(ERROR_EVERY + Duration::from_secs(1));
         hub.emit(
             &agent,
             EventBody::Error {
@@ -1432,18 +1700,363 @@ mod tests {
         };
         let store = Arc::new(Store::open_in_memory().unwrap());
         let hub = Hub::new(store.clone());
-        spawn_with(
-            &hub,
-            Config {
-                base_url: dead,
-                retry_delay: Duration::from_millis(20),
-            },
-        );
+        spawn_with(&hub, config(&dead, &Clock::default()));
         let d = store.device_add("A", "ta").unwrap();
         store.push_upsert(&d.id, "h", &[1; 32], "s", "error", None).unwrap();
         hub.emit("a", EventBody::Error { message: "boom".into() });
         hub.emit("a", EventBody::Error { message: "boom".into() });
         settle().await;
         assert!(store.push_get(&d.id).unwrap().is_some());
+    }
+
+    // ---- after a lag, the gaps, the pause, the queues ----
+
+    #[test]
+    fn after_a_lag_what_was_answered_meanwhile_is_forgotten() {
+        let store = Store::open_in_memory().unwrap();
+        let new_agent: NewAgent =
+            serde_json::from_value(json!({ "name": "Forge", "runtime": RuntimeKind::Claude })).unwrap();
+        let agent = store.agent_create(new_agent).unwrap().id;
+        let waiting = store.approval_create(&agent, "c1", "Bash", "Run", json!({})).unwrap();
+        let mut t = Tracker::default();
+        t.reseed(&store);
+        let status = Event {
+            seq: 5,
+            agent_id: agent.clone(),
+            ts: 1,
+            body: needs_you(),
+        };
+        assert!(t.observe(&status).other_pending, "the approval waits");
+        // The answer comes in the events the task missed: the store has it, the task does not.
+        store
+            .approval_resolve(&waiting.id, crate::event::Decision::Allow)
+            .unwrap();
+        assert!(t.observe(&status).other_pending, "still believed to wait");
+        t.reseed(&store);
+        let ctx = t.observe(&status);
+        assert!(!ctx.other_pending);
+        assert_eq!(push_kind(&status, &ctx), Some(PushKind::Question));
+    }
+
+    #[test]
+    fn a_waiting_connect_request_keeps_needs_you_from_being_a_question() {
+        let mut t = Tracker::default();
+        let connect = EventBody::IntegrationRequested {
+            request_id: "r".into(),
+            service: "github".into(),
+            reason: None,
+        };
+        t.observe(&ev(connect));
+        let ctx = t.observe(&ev(needs_you()));
+        assert_eq!(push_kind(&ev(needs_you()), &ctx), None);
+    }
+
+    #[test]
+    fn plain_http_is_for_this_machine_only() {
+        for ok in [
+            "http://127.0.0.1:8080/api/v1",
+            "http://localhost/api/v1",
+            "http://localhost:9",
+            "http://[::1]:8080/x",
+        ] {
+            assert!(is_loopback_http(ok), "{ok}");
+        }
+        for bad in [
+            "http://example.com/api",
+            "http://127.0.0.1.example.com/api",
+            "http://127.0.0.1@evil.example/api",
+            "http://localhost.evil.example",
+            "https://localhost/api",
+            "ftp://127.0.0.1",
+            "",
+        ] {
+            assert!(!is_loopback_http(bad), "{bad}");
+        }
+    }
+
+    fn job(device: &str, agent: &str, kind: PushKind, body: &str) -> Job {
+        Job {
+            device_id: device.into(),
+            handle: "h".into(),
+            agent_id: agent.into(),
+            kind,
+            body: body.into(),
+        }
+    }
+
+    fn sender(clock: &Clock) -> Sender {
+        Sender::new(Arc::new(config("http://127.0.0.1:1", clock)))
+    }
+
+    #[test]
+    fn gaps_between_pushes_are_kept_per_phone_agent_and_kind() {
+        let clock = Clock::default();
+        let mut s = sender(&clock);
+        let go = |s: &mut Sender, d: &str, a: &str, k: PushKind| s.admit(job(d, a, k, "")).is_some();
+        assert!(go(&mut s, "d1", "a1", PushKind::Error));
+        for _ in 0..4 {
+            assert!(!go(&mut s, "d1", "a1", PushKind::Error), "too soon");
+        }
+        // Another agent, another phone, another kind: each has its own gap.
+        assert!(go(&mut s, "d1", "a2", PushKind::Error));
+        assert!(go(&mut s, "d2", "a1", PushKind::Error));
+        assert!(go(&mut s, "d1", "a1", PushKind::Done));
+        assert!(!go(&mut s, "d1", "a1", PushKind::Done));
+        // Approvals and questions have no gap.
+        assert!(go(&mut s, "d1", "a1", PushKind::Approval));
+        assert!(go(&mut s, "d1", "a1", PushKind::Approval));
+        // `done` is free again after 10 s, `error` only after 30 s.
+        clock.advance(Duration::from_secs(11));
+        assert!(go(&mut s, "d1", "a1", PushKind::Done));
+        assert!(!go(&mut s, "d1", "a1", PushKind::Error));
+        clock.advance(Duration::from_secs(20));
+        assert!(go(&mut s, "d1", "a1", PushKind::Error));
+    }
+
+    #[test]
+    fn a_pause_keeps_the_last_twenty_urgent_pushes_and_drops_the_rest() {
+        let clock = Clock::default();
+        let mut s = sender(&clock);
+        s.pause("d1");
+        for i in 0..25 {
+            assert!(s.admit(job("d1", "a", PushKind::Approval, &format!("m{i}"))).is_none());
+        }
+        assert!(s.admit(job("d1", "a", PushKind::Question, "q")).is_none());
+        assert!(s.admit(job("d1", "a", PushKind::Done, "done")).is_none());
+        assert!(s.admit(job("d1", "a", PushKind::Error, "error")).is_none());
+        // Another phone is not paused.
+        assert!(s.admit(job("d2", "a", PushKind::Approval, "other")).is_some());
+        clock.advance(Duration::from_secs(59));
+        s.release();
+        assert!(s.ready.is_empty(), "the pause is a minute");
+        clock.advance(Duration::from_secs(2));
+        s.release();
+        let bodies: Vec<&str> = s.ready.iter().map(|j| j.body.as_str()).collect();
+        assert_eq!(bodies.len(), DEFERRED_MAX);
+        assert_eq!(bodies[0], "m6", "the oldest were pushed out");
+        assert_eq!(bodies[DEFERRED_MAX - 2], "m24");
+        assert_eq!(bodies[DEFERRED_MAX - 1], "q");
+        // After the pause new pushes go straight out again.
+        assert!(s.admit(job("d1", "a", PushKind::Done, "done")).is_some());
+    }
+
+    #[tokio::test]
+    async fn five_errors_in_a_row_make_one_push() {
+        let cloud = cloud(ok_reply).await;
+        let (hub, agent, _clock) = setup_clock(&cloud);
+        let d = hub.store.device_add("A", "ta").unwrap();
+        hub.store.push_upsert(&d.id, "h", &[1; 32], "s", "error", None).unwrap();
+        for i in 0..5 {
+            hub.emit(
+                &agent,
+                EventBody::Error {
+                    message: format!("boom {i}"),
+                },
+            );
+        }
+        cloud.wait_for(1).await;
+        settle().await;
+        assert_eq!(cloud.count(), 1);
+    }
+
+    #[tokio::test]
+    async fn after_a_429_approvals_wait_for_the_pause_and_done_is_dropped() {
+        let calls = Arc::new(Mutex::new(0u32));
+        let counter = calls.clone();
+        let cloud = cloud(move |_| {
+            let mut n = counter.lock().unwrap();
+            *n += 1;
+            if *n == 1 {
+                (429, "{\"error\":\"rate_limited\"}".into())
+            } else {
+                (200, "{\"ok\":true}".into())
+            }
+        })
+        .await;
+        let (hub, agent, clock) = setup_clock(&cloud);
+        let d = hub.store.device_add("A", "ta").unwrap();
+        hub.store
+            .push_upsert(&d.id, "h", &[1; 32], "s", "approval,done", None)
+            .unwrap();
+        hub.emit(&agent, approval(Some("first".into()), None, None));
+        cloud.wait_for(1).await;
+        settle().await;
+        // The pause has begun: an approval is kept, a done is dropped.
+        hub.emit(&agent, approval(Some("second".into()), None, None));
+        hub.emit(&agent, completed(TurnStatus::Ok));
+        settle().await;
+        assert_eq!(cloud.count(), 1, "nothing goes during the pause");
+        clock.advance(RATE_PAUSE + Duration::from_secs(1));
+        cloud.wait_for(2).await;
+        settle().await;
+        let got = cloud.for_handle("h", &[1; 32]);
+        assert_eq!(got.len(), 2, "the done was not kept");
+        assert_eq!(got[1].0, "approval");
+        assert_eq!(got[1].3["event"]["payload"]["command"], "second");
+        // And the phone is not paused any more.
+        hub.emit(&agent, completed(TurnStatus::Ok));
+        cloud.wait_for(3).await;
+    }
+
+    fn queues(cap: usize, wait: Duration) -> (Queues, mpsc::Receiver<Job>, mpsc::Receiver<Job>) {
+        let (high, high_rx) = mpsc::channel(cap);
+        let (low, low_rx) = mpsc::channel(cap);
+        (
+            Queues {
+                high,
+                low,
+                high_wait: wait,
+            },
+            high_rx,
+            low_rx,
+        )
+    }
+
+    #[tokio::test]
+    async fn a_full_low_queue_does_not_touch_the_high_one() {
+        let store = Store::open_in_memory().unwrap();
+        let d = store.device_add("A", "ta").unwrap();
+        store
+            .push_upsert(&d.id, "h", &[1; 32], "s", "approval,done,error", None)
+            .unwrap();
+        let (q, mut high_rx, mut low_rx) = queues(3, Duration::from_millis(20));
+        for i in 0..10 {
+            let e = Event {
+                seq: i,
+                agent_id: "a".into(),
+                ts: 1,
+                body: EventBody::Error { message: "x".into() },
+            };
+            enqueue(&store, &q, &e, PushKind::Error).await;
+        }
+        let ap = Event {
+            seq: 100,
+            agent_id: "a".into(),
+            ts: 1,
+            body: approval(None, None, None),
+        };
+        let started = Instant::now();
+        enqueue(&store, &q, &ap, PushKind::Approval).await;
+        assert!(
+            started.elapsed() < Duration::from_millis(15),
+            "the high queue did not wait"
+        );
+        assert_eq!(high_rx.try_recv().unwrap().kind, PushKind::Approval);
+        let mut low = 0;
+        while low_rx.try_recv().is_ok() {
+            low += 1;
+        }
+        assert_eq!(low, 3, "the rest of the low ones were dropped");
+    }
+
+    #[tokio::test]
+    async fn a_full_high_queue_waits_a_little_and_then_drops() {
+        let store = Store::open_in_memory().unwrap();
+        let d = store.device_add("A", "ta").unwrap();
+        store.push_upsert(&d.id, "h", &[1; 32], "s", "approval", None).unwrap();
+        let (q, mut high_rx, _low_rx) = queues(1, Duration::from_millis(60));
+        let ap = |seq| Event {
+            seq,
+            agent_id: "a".into(),
+            ts: 1,
+            body: approval(None, None, None),
+        };
+        enqueue(&store, &q, &ap(1), PushKind::Approval).await;
+        let started = Instant::now();
+        enqueue(&store, &q, &ap(2), PushKind::Approval).await;
+        assert!(started.elapsed() >= Duration::from_millis(50), "it waited");
+        assert_eq!(high_rx.try_recv().unwrap().kind, PushKind::Approval);
+        assert!(high_rx.try_recv().is_err(), "the second was dropped");
+        // A slot that frees while it waits is used.
+        enqueue(&store, &q, &ap(3), PushKind::Approval).await;
+        let waiting = tokio::spawn({
+            let (store, q) = (Arc::new(store), q);
+            async move {
+                let e = Event {
+                    seq: 4,
+                    agent_id: "a".into(),
+                    ts: 1,
+                    body: approval(None, None, None),
+                };
+                enqueue(&store, &q, &e, PushKind::Approval).await;
+            }
+        });
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(high_rx.try_recv().is_ok());
+        waiting.await.unwrap();
+        assert!(high_rx.try_recv().is_ok(), "the waiting one got in");
+    }
+
+    // ---- the worst payload ----
+
+    #[test]
+    fn the_worst_input_still_fits_the_cloud_after_encrypting() {
+        let name = "😀\"".repeat(50);
+        assert_eq!(name.chars().count(), 100);
+        let server_ref = "🛰\"".repeat(32);
+        let fields: Vec<FormField> = (0..50)
+            .map(|i| FormField {
+                id: format!("поле-{i}"),
+                label: "ключ\"значение\\ ".repeat(70),
+                field_type: FieldType::Text,
+                options: Some(vec!["日本語".repeat(300)]),
+                required: true,
+                default: Some(json!("😀".repeat(1000))),
+                placeholder: Some("é".repeat(1000)),
+                help: Some("\"".repeat(1000)),
+            })
+            .collect();
+        let form = EventBody::FormRequested {
+            form_id: "f".repeat(300),
+            title: "Заголовок \"формы\"".repeat(100),
+            intro: Some("😀".repeat(1000)),
+            kind: FormKind::Question,
+            fields,
+            submit_label: Some("ok".repeat(500)),
+            reject_label: None,
+        };
+        let diff = "строка 日本語 \"quote\" 😀\n".repeat(400);
+        let approval = approval(
+            Some(diff.clone()),
+            Some(diff.clone()),
+            Some(json!({ "a": diff, "b": [diff.clone(), diff] })),
+        );
+        let error = EventBody::Error {
+            message: "😀\"\\".repeat(2000),
+        };
+        for body in [form, approval, error] {
+            let e = ev(body);
+            let text = build_payload(&server_ref, &e, &name);
+            assert!(text.len() <= MAX_PLAINTEXT, "{} bytes", text.len());
+            let v = parse(&text);
+            assert_eq!(v["seq"], 42);
+            assert!(v["event"]["kind"].is_string());
+            let ct = seal(&[3; 32], "handle", &[0; 12], text.as_bytes()).unwrap();
+            assert!(ct.len() <= 2700, "{} bytes", ct.len());
+        }
+    }
+
+    #[test]
+    fn the_last_word_is_the_kind_alone() {
+        // An absurd agent id and server name that no step before can shorten enough.
+        let e = Event {
+            seq: 7,
+            agent_id: "a".repeat(2000),
+            ts: 1,
+            body: approval(None, None, None),
+        };
+        let text = build_payload(&"s".repeat(64), &e, &"n".repeat(100));
+        assert!(text.len() <= MAX_PLAINTEXT);
+        let v = parse(&text);
+        assert_eq!(v["event"]["kind"], "approval.requested");
+        let e = Event {
+            seq: 7,
+            agent_id: "a".repeat(3000),
+            ts: 1,
+            body: approval(None, None, None),
+        };
+        let text = build_payload("s", &e, "n");
+        assert!(text.len() <= MAX_PLAINTEXT);
+        assert_eq!(parse(&text)["event"]["kind"], "approval.requested");
     }
 }

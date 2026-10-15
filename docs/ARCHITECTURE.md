@@ -1499,10 +1499,10 @@ An account is optional: without one the app works on one Mac. With one, every de
 
 **Which events.** The ones for which the phone's own app would make a local notification (`IOSNotifications.notice(for:)`, `AgentNotice.notice`), as the pure function `push::push_kind`:
 - `approval.requested` -> `approval`;
-- `form_requested` and `integration_requested` -> `question`; an `agent.status` of `needs_you` while the agent has no approval, form or connect request waiting (its own question) -> `question`;
+- `form_requested` -> `question`; an `agent.status` of `needs_you` while the agent has no approval, form or connect request waiting (its own question) -> `question`;
 - `turn.completed` with status `ok`, unless a `turn.quiet` came for that turn -> `done`;
 - `error` -> `error`;
-- `connect` is accepted in `kinds` but nothing sends it yet.
+- `integration_requested` (a connect request) makes no push, as it makes no local notification on the iPhone; it only counts as something that waits. `connect` is accepted in `kinds` but nothing sends it yet.
 
 Only events that happen after the phone registered are sent. A phone gets only the kinds it listed; two phones get two separate pushes, each with its own key.
 
@@ -1513,11 +1513,15 @@ Only events that happen after the phone registered are sent. A phone gets only t
  "event":{"kind":"approval.requested","payload":{ ... }}}
 ```
 
-`event` is the event's body exactly as `events.since` sends it, so the phone decodes it with the same code. When the text is longer than 2600 bytes the daemon shortens it in steps until it fits: `diff`, `input`, `command` and `message` cut to 300 characters (the last one `…`); every string of the payload cut to 300; `input` and `diff` removed; at the end `payload` keeps only `approval_id`, `form_id` or `request_id`, and the phone fetches the event (`events.since`) when it connects.
+`event` is the event's body exactly as `events.since` sends it, so the phone decodes it with the same code. When the text is longer than 2600 bytes the daemon shortens it in steps until it fits: `diff`, `input`, `command` and `message` cut to 300 characters (the last one `…`); every string of the payload cut to 300; `input` and `diff` removed; then `payload` keeps only `approval_id`, `form_id` or `request_id`; and, as the very last step, only `{v, srv, seq, agent, ts, event: {kind}}` with `srv` and `name` cut. The text is never longer than 2600 bytes, so `ct` is at most 2616 bytes; the phone fetches the event (`events.since`) when it connects.
 
 **Encryption.** ChaCha20-Poly1305 (IETF, 12-byte nonce). Key: the 32 bytes of the row. Nonce: 12 random bytes per message. Associated data: the UTF-8 text `bandito-push:v1:<handle>`. `ct` is base64 (standard, padded) of the ciphertext followed by the 16-byte tag; `nonce` is base64 of the 12 bytes. Tested against the RFC 8439 section 2.8.2 vector.
 
-**Sending.** One background task listens to the hub; for each event and target it builds the body `{handle, kind, ct, nonce, collapseId: "b<seq>", threadId: <agent id>}` and queues it (256 at most; when full the event is dropped, so the hub and the RPC never wait). Up to 4 requests run at once, each is `curl` (the body goes in on stdin, 10 s limit) to `POST https://bandito.dev/api/v1/push/send`; the environment variable `BANDITO_PUSH_URL` replaces the base address (tests, a staging cloud; `http://` is accepted only from it). Answers: 2xx sent; `410`, or `404` with `unknown_handle`, remove that target (the phone registers again); `429`, `400`, `503` and anything else are dropped without a retry; a network error or another `5xx` is tried once more after 2 s. A device revoked or re-registered while its request waits gets nothing. An unreachable cloud changes nothing else: the daemon goes on and no error reaches the apps. Logs have the kind and the status code only, never the handle, the key, the text or a token. The task starts with the daemon (not in safe mode); targets live in the database, so a restart keeps them.
+**Sending.** One background task listens to the hub; for each event and target it builds the body `{handle, kind, ct, nonce, collapseId: "b<seq>", threadId: <agent id>}` and queues it. There are two queues of 256: approvals and questions (high), `done` and `error` (low). A full low queue drops the event at once; a full high queue is waited for up to 1 s, then the event is dropped (the log says so, with the kind only). The sender takes from the high queue first and runs up to 4 requests at once, each `curl` (the body goes in on stdin, 10 s limit) to `POST https://bandito.dev/api/v1/push/send`. `BANDITO_PUSH_URL` replaces the base address (tests, a staging cloud): `https://` anywhere, `http://` only for `127.0.0.1`, `[::1]` and `localhost`; anything else is ignored with a warning.
+
+**Limits.** For one phone and one agent an `error` push goes out at most every 30 s and a `done` at most every 10 s; the extra ones are dropped. Approvals and questions have no gap. A `429` pauses sending to that phone for 60 s: approvals and questions that come meanwhile wait in a list of 20 (the oldest are pushed out) and go after the pause; `done` and `error` of the pause are dropped.
+
+**Answers.** 2xx sent; `410`, or `404` with `unknown_handle`, remove that target (the phone registers again); `429` (pause, see above), `400`, `503` and anything else are dropped without a retry; a network error or another `5xx` is tried once more after 2 s. A device revoked or re-registered while its request waits gets nothing. An unreachable cloud changes nothing else: the daemon goes on and no error reaches the apps. Logs have the kind and the status code only, never the handle, the key, the text or a token. The key is held in memory that is zeroed when dropped. After the task fell behind the hub (a lag), it forgets what it knew of waiting approvals and forms and reads it again from the database. The task starts with the daemon (not in safe mode); targets live in the database, so a restart keeps them.
 
 ## Screen
 

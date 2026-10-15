@@ -8,6 +8,7 @@ use crate::push::PushKind;
 use base64::Engine;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use zeroize::{Zeroize, Zeroizing};
 
 const HANDLE_MAX: usize = 256;
 const SERVER_REF_MAX: usize = 64;
@@ -47,12 +48,13 @@ fn clean(s: &str) -> bool {
     !s.chars().any(char::is_control)
 }
 
-fn decode_key(text: &str) -> Result<Vec<u8>, RpcError> {
+fn decode_key(text: &str) -> Result<Zeroizing<Vec<u8>>, RpcError> {
     use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD};
     let text = text.trim();
     let bytes = [&STANDARD, &STANDARD_NO_PAD, &URL_SAFE, &URL_SAFE_NO_PAD]
         .iter()
         .find_map(|engine| engine.decode(text).ok())
+        .map(Zeroizing::new)
         .ok_or_else(|| invalid("key is not base64"))?;
     if bytes.len() != KEY_BYTES {
         return Err(invalid("key must be 32 bytes"));
@@ -67,11 +69,14 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let device = caller(peer)?;
             let RegisterParams {
                 handle,
-                key,
+                mut key,
                 server_ref,
                 kinds,
                 lang,
             } = params(p)?;
+            // The text of the key is wiped at once, the decoded bytes when they are dropped.
+            let decoded = decode_key(&key);
+            key.zeroize();
             if handle.is_empty() || handle.chars().count() > HANDLE_MAX || !clean(&handle) {
                 return Err(invalid("handle must be 1 to 256 characters"));
             }
@@ -95,7 +100,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             if wanted.is_empty() {
                 return Err(invalid("kinds must name at least one kind"));
             }
-            let key = decode_key(&key)?;
+            let key = decoded?;
             store
                 .push_upsert(
                     device,
@@ -179,7 +184,7 @@ mod tests {
         );
         assert_eq!(status(&me).await.unwrap(), json!({ "registered": true }));
         let row = store.push_get(id).unwrap().unwrap();
-        assert_eq!(row.key, vec![5; 32]);
+        assert_eq!(row.key.as_slice(), &[5; 32]);
         assert_eq!(
             (row.handle.as_str(), row.server_ref.as_str(), row.kinds.as_str()),
             ("h-1", "home", "approval,done")
@@ -192,7 +197,7 @@ mod tests {
         assert_eq!(store.push_list().unwrap().len(), 1);
         let row = store.push_get(id).unwrap().unwrap();
         assert_eq!(
-            (row.handle.as_str(), row.kinds.as_str(), row.key.clone()),
+            (row.handle.as_str(), row.kinds.as_str(), row.key.to_vec()),
             ("h-2", "error", vec![6; 32])
         );
         let other = phone(&store, "t2");
