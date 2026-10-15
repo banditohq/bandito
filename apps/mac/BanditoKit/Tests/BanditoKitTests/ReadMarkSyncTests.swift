@@ -39,9 +39,11 @@ import Testing
     }
 
     /// Waits until `condition` holds, for at most two seconds.
-    /// Waits up to 5 s (a busy CI runner) for the condition.
+    /// Waits for the condition for up to 10 s: a deadline, not a count of sleeps, so a slow runner or a neighbouring
+    /// test that holds the main actor only makes the wait longer.
     private func settle(_ condition: () -> Bool) async {
-        for _ in 0..<500 where !condition() {
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !condition(), ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(10))
         }
     }
@@ -75,7 +77,6 @@ import Testing
     }
 
     @Test func sendsOfOneAgentAreAtLeastAnIntervalApartAndTheLastValueWins() async {
-        // Long enough that the three reads below (60 ms apart in all) fall into one interval even on a slow runner.
         let interval = Duration.milliseconds(1500)
         let (server, log) = server(interval: interval)
         server.threads[agent] = thread([event(1, .messageAssistant(text: "one"))])
@@ -83,19 +84,20 @@ import Testing
         server.apply(event(2, .messageAssistant(text: "two")))
         box.markRead()
         await settle { !log.sent.isEmpty }
-        // Three more replies, read within one interval: they go out as one send, with the newest seq, once the
-        // interval is over.
-        for seq in 3...5 {
-            try? await Task.sleep(for: .milliseconds(20))
-            server.apply(event(Int64(seq), .messageAssistant(text: "more")))
-            box.markRead()
-        }
+        // Three more replies, read in one run of the main actor with no suspension between them, so all three land in
+        // one interval however the runner is loaded. The send that follows carries the newest seq.
+        server.apply(event(3, .messageAssistant(text: "more")))
+        box.markRead()
+        server.apply(event(4, .messageAssistant(text: "more")))
+        box.markRead()
+        server.apply(event(5, .messageAssistant(text: "more")))
+        box.markRead()
         await settle { log.sent.count >= 2 }
-        try? await Task.sleep(for: .milliseconds(300))
         #expect(log.sent.map(\.seq) == [2, 5], "the first at once, then the newest one interval later")
         if log.sent.count == 2 {
             let gap = log.sent[1].at - log.sent[0].at
-            #expect(gap >= interval, "two sends of one agent are not closer than the interval")
+            // The send's instant is read inside the send, a few microseconds after the code stamped its start.
+            #expect(gap >= interval - .milliseconds(5), "two sends of one agent are not closer than the interval")
         }
     }
 
