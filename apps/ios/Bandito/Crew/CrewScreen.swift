@@ -2,6 +2,7 @@ import BanditoDesign
 import BanditoKit
 import BanditoL10n
 import SwiftUI
+import UIKit
 
 /// Crew, the home tab: the agents that wait for the person on top, then the team. The server switcher sits in the title
 /// area under the large title (a menu when there is more than one server).
@@ -31,7 +32,7 @@ struct CrewScreen: View {
             Group {
                 if let server = currentServer {
                     CrewList(
-                        server: server, servers: servers,
+                        server: server, servers: servers, riskyNeedsFaceID: settings.riskyNeedsFaceID,
                         // The path is reset here, not on a change of the chosen server: a widget's link sets both.
                         onChoose: { chosenServerID = $0; path = NavigationPath() },
                         open: { path.append($0) },
@@ -161,6 +162,10 @@ struct AgentDetailRoute: Hashable {
 struct CrewList: View {
     let server: ServerModel
     let servers: [ServerModel]
+    /// The setting: a risky approval asks for Face ID before it is allowed (the rule is `InboxAnswer`'s, as in the Inbox).
+    let riskyNeedsFaceID: Bool
+    /// The owner's check for risky approvals (Face ID, else the passcode).
+    var authenticator: any BiometricAuthenticating = DeviceAuthenticator()
     let onChoose: (UUID) -> Void
     /// Opens an agent's chat (the screen's navigation path).
     let open: (CrewRoute) -> Void
@@ -172,10 +177,18 @@ struct CrewList: View {
     let showInbox: () -> Void
 
     @State private var pinned: [String] = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The Inbox items answered from this list, hidden at once while the server takes the answer.
+    @State private var answered: Set<String> = []
+    /// The item whose answer is on its way: its card shows a spinner and every answer is off until it ends.
+    @State private var answering: String?
+    /// Why an answer did not go through, by item: shown under its card.
+    @State private var problems: [String: String] = [:]
 
     var body: some View {
-        let rows = CrewFacts.build(server: server, pinned: pinned)
+        let rows = CrewFacts.build(server: server, pinned: pinned, answered: answered)
         let waiting = rows.filter { $0.waiting != nil }
+        let approvals = CrewFacts.waitingItems(of: server, answered: answered)
         List {
             serverSwitch
                 .listRowBackground(Color.clear)
@@ -186,13 +199,18 @@ struct CrewList: View {
                 let split = CrewWaitingSplit.split(waiting)
                 Section {
                     ForEach(split.shown) { facts in
-                        // A button, not a link: the card is full width, with no disclosure chevron of the list.
-                        Button {
-                            open(CrewRoute(agentID: facts.id, name: facts.name))
-                        } label: {
-                            NeedsYouCard(facts: facts)
-                        }
-                        .buttonStyle(.plain)
+                        let item = CrewFacts.approvalItem(approvals[facts.id])
+                        // The card's top is a button that opens the chat; its answers are beside it, not inside it.
+                        NeedsYouCard(
+                            facts: facts, approval: item,
+                            answering: item != nil && answering == item?.id,
+                            disabled: answering != nil,
+                            problem: item.flatMap { problems[$0.id] },
+                            onOpen: { open(CrewRoute(agentID: facts.id, name: facts.name)) },
+                            onAllow: { if let item { Task { await answer(item, allow: true) } } },
+                            onDeny: { if let item { Task { await answer(item, allow: false) } } }
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .listRowInsets(cardInsets)
@@ -274,6 +292,43 @@ struct CrewList: View {
         }
         .task(id: server.id) {
             pinned = CrewPins.load(server.id)
+        }
+    }
+
+    /// Sends the person's answer to an approval, as the Inbox does (`InboxAnswer`: a risky one waits for Face ID, and a
+    /// cancelled check sends nothing). One answer at a time: a second tap meanwhile does nothing. A sent answer hides the
+    /// item with the brand's ease (none with Reduce Motion) and gives a haptic, success to allow and warning to refuse.
+    private func answer(_ item: InboxItem, allow: Bool) async {
+        guard answering == nil else { return }
+        answering = item.id
+        problems[item.id] = nil
+        defer { answering = nil }
+        do {
+            let outcome: InboxAnswer.Outcome
+            if allow {
+                outcome = try await InboxAnswer.allow(
+                    item, server: server, remember: false, riskyNeedsFaceID: riskyNeedsFaceID,
+                    authenticator: authenticator, reason: L10n.Ios.Inbox.faceIDReason)
+            } else {
+                try await InboxAnswer.deny(item, server: server)
+                outcome = .sent
+            }
+            switch outcome {
+            case .sent:
+                UINotificationFeedbackGenerator().notificationOccurred(allow ? .success : .warning)
+                withAnimation(reduceMotion ? nil : BanditoMotion.ease) {
+                    _ = answered.insert(item.id)
+                }
+            case .notConfirmed:
+                // The person cancelled the check: nothing was sent, and nothing is said.
+                break
+            case .cannotConfirm:
+                problems[item.id] = L10n.Ios.Settings.Security.unavailable
+            case .failed:
+                problems[item.id] = L10n.Ios.Inbox.failed
+            }
+        } catch {
+            problems[item.id] = L10n.Ios.Inbox.failed
         }
     }
 

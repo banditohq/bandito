@@ -94,9 +94,22 @@ struct CrewAgentRow: View, Equatable {
     }
 }
 
-/// A waiting agent: its avatar pulses in signal, one line says what it waits for, an arrow opens its chat.
+/// A waiting agent: its avatar pulses in signal, one line says what it waits for, an arrow opens its chat. An approval
+/// also has the two answers under the line. The top part is the button that opens the chat; the answers are its siblings
+/// in the same card, so a tap on an answer never opens the chat.
 struct NeedsYouCard: View {
     let facts: CrewAgentFacts
+    /// The approval the two answers send; nil for a form, a question or a connect request (no answers, the card only opens).
+    var approval: InboxItem?
+    /// The answer to `approval` is on its way: the main answer shows a spinner.
+    var answering = false
+    /// Another card's answer is on its way: both answers are off.
+    var disabled = false
+    /// Why the last answer did not go through, under the answers.
+    var problem: String?
+    let onOpen: () -> Void
+    var onAllow: () -> Void = {}
+    var onDeny: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .body) private var nameSize: CGFloat = 13.5
@@ -104,6 +117,36 @@ struct NeedsYouCard: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        VStack(alignment: .leading, spacing: BanditoSpace.s3) {
+            Button(action: onOpen) {
+                top
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(L10n.Ios.Crew.openChat(name: facts.name))
+
+            if approval != nil {
+                AnswerPair(
+                    quiet: L10n.Approval.deny, main: L10n.Approval.approve,
+                    quietID: "crew.card.deny", mainID: "crew.card.approve",
+                    disabled: disabled || answering, mainBusy: answering,
+                    quietAction: onDeny, mainAction: onAllow
+                )
+                if let problem {
+                    Text(problem)
+                        .font(BanditoFont.text(size: 12, weight: 500))
+                        .foregroundStyle(Color.Bandito.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .padding(BanditoSpace.s3)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.Bandito.surface1))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.Bandito.text.opacity(0.08), lineWidth: 1))
+    }
+
+    private var top: some View {
         AdaptiveRowLayout {
             CrewAvatar(name: facts.name, look: facts.look, mood: .needsYou, size: 44)
                 .overlay {
@@ -135,11 +178,7 @@ struct NeedsYouCard: View {
                 .overlay(Circle().stroke(Color.Bandito.text.opacity(0.14), lineWidth: 1))
                 .accessibilityHidden(true)
         }
-        .padding(BanditoSpace.s3)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.Bandito.surface1))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.Bandito.text.opacity(0.08), lineWidth: 1))
         .accessibilityElement(children: .combine)
-        .accessibilityHint(L10n.Ios.Crew.openChat(name: facts.name))
     }
 
     /// The question the agent asks, when it asks one in text.
