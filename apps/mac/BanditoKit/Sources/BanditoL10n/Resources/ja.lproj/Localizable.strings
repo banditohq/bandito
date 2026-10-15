@@ -1064,6 +1064,11 @@
 "ios.connect.trust.body" = "この iPhone はまだこのサーバーを知りません。下のフィンガープリントを Mac の「設定」→「サーバー」→ iPhone のものと比べ、同じ場合のみ接続してください。";
 "ios.connect.trust.title" = "これはあなたのサーバーですか？";
 "ios.connect.working" = "接続中…";
+"ios.connection.cachedLine" = "オフラインです。以前の内容を表示しています";
+"ios.connection.connecting" = "%1$@ に接続しています…";
+"ios.connection.offlineHint" = "Mac の電源が入っていて、Bandito が起動していることを確認してください";
+"ios.connection.offlineTitle" = "%1$@ に接続できません";
+"ios.connection.retry" = "再試行";
 "ios.crew.createAgent" = "エージェントを作成";
 "ios.crew.emptyMessage" = "このサーバーにはエージェントがいません。最初のエージェントを作って、チームを動かしましょう。";
 "ios.crew.emptyTitle" = "まだエージェントがいません";

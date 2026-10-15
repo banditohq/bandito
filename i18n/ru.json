@@ -3617,5 +3617,10 @@
   "ios.share.empty": "Откройте Bandito и подключите сервер",
   "ios.share.done": "Готово. Откройте Bandito — сообщение уйдёт само",
   "ios.share.failed": "Не удалось сохранить сообщение. Попробуйте ещё раз.",
-  "ios.share.picture": "Прикреплённая картинка"
+  "ios.share.picture": "Прикреплённая картинка",
+  "ios.connection.connecting": "Подключаемся к {name}…",
+  "ios.connection.offlineTitle": "Нет связи с {name}",
+  "ios.connection.offlineHint": "Проверьте, что Mac включён и Bandito на нём запущен",
+  "ios.connection.retry": "Повторить",
+  "ios.connection.cachedLine": "Нет связи — показываем, что было раньше"
 }

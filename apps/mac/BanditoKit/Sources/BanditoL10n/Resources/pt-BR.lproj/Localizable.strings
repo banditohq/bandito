@@ -1064,6 +1064,11 @@
 "ios.connect.trust.body" = "Este iPhone ainda não conhece este servidor. Compare a impressão digital abaixo com a do seu Mac (Ajustes → Servidores → iPhone). Conecte só se forem iguais.";
 "ios.connect.trust.title" = "Este é o seu servidor?";
 "ios.connect.working" = "Conectando…";
+"ios.connection.cachedLine" = "Sem conexão — mostrando o que havia antes";
+"ios.connection.connecting" = "Conectando a %1$@…";
+"ios.connection.offlineHint" = "Verifique se o Mac está ligado e se o Bandito está em execução nele";
+"ios.connection.offlineTitle" = "Sem conexão com %1$@";
+"ios.connection.retry" = "Tentar de novo";
 "ios.crew.createAgent" = "Criar agente";
 "ios.crew.emptyMessage" = "Este servidor não tem agentes. Crie o primeiro para a equipe começar a trabalhar.";
 "ios.crew.emptyTitle" = "Nenhum agente ainda";

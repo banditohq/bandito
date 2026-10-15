@@ -3532,5 +3532,10 @@
   "ios.share.empty": "Open Bandito and connect a server",
   "ios.share.done": "Done. Open Bandito and the message will be sent on its own",
   "ios.share.failed": "Could not save the message. Try again.",
-  "ios.share.picture": "Attached picture"
+  "ios.share.picture": "Attached picture",
+  "ios.connection.connecting": "Connecting to {name}…",
+  "ios.connection.offlineTitle": "Can't reach {name}",
+  "ios.connection.offlineHint": "Check that the Mac is on and Bandito is running on it",
+  "ios.connection.retry": "Try again",
+  "ios.connection.cachedLine": "Offline — showing what was there before"
 }

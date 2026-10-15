@@ -3490,5 +3490,10 @@
   "ios.share.empty": "Banditoを開いて、サーバーを接続してください",
   "ios.share.done": "完了しました。Banditoを開くと、メッセージは自動で送信されます",
   "ios.share.failed": "メッセージを保存できませんでした。もう一度お試しください。",
-  "ios.share.picture": "添付された画像"
+  "ios.share.picture": "添付された画像",
+  "ios.connection.connecting": "{name} に接続しています…",
+  "ios.connection.offlineTitle": "{name} に接続できません",
+  "ios.connection.offlineHint": "Mac の電源が入っていて、Bandito が起動していることを確認してください",
+  "ios.connection.retry": "再試行",
+  "ios.connection.cachedLine": "オフラインです。以前の内容を表示しています"
 }

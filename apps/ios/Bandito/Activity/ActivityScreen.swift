@@ -87,7 +87,15 @@ struct ActivityList: View {
     }
 
     /// Nothing in the timeline: the sleeping raccoon and "All quiet for now". A filter with nothing in it says so in a line.
-    private var emptyState: some View {
+    @ViewBuilder private var emptyState: some View {
+        if filter == .all, CrewFacts.emptyNotice(servers: servers) != nil {
+            ConnectionNoticeView.forEmpty(servers: servers)
+        } else {
+            quietState
+        }
+    }
+
+    private var quietState: some View {
         VStack(spacing: BanditoSpace.s3) {
             if filter == .all {
                 CrewAvatar(

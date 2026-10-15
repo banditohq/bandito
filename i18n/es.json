@@ -3532,5 +3532,10 @@
   "ios.share.empty": "Abre Bandito y conecta un servidor",
   "ios.share.done": "Listo. Abre Bandito y el mensaje se enviará solo",
   "ios.share.failed": "No se pudo guardar el mensaje. Inténtalo de nuevo.",
-  "ios.share.picture": "Imagen adjunta"
+  "ios.share.picture": "Imagen adjunta",
+  "ios.connection.connecting": "Conectando con {name}…",
+  "ios.connection.offlineTitle": "Sin conexión con {name}",
+  "ios.connection.offlineHint": "Comprueba que el Mac esté encendido y que Bandito se esté ejecutando en él",
+  "ios.connection.retry": "Reintentar",
+  "ios.connection.cachedLine": "Sin conexión: se muestra lo que había antes"
 }

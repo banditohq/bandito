@@ -3490,5 +3490,10 @@
   "ios.share.empty": "Bandito를 열고 서버를 연결하세요",
   "ios.share.done": "완료되었습니다. Bandito를 열면 메시지가 자동으로 전송됩니다",
   "ios.share.failed": "메시지를 저장하지 못했습니다. 다시 시도하세요.",
-  "ios.share.picture": "첨부된 이미지"
+  "ios.share.picture": "첨부된 이미지",
+  "ios.connection.connecting": "{name}에 연결하는 중…",
+  "ios.connection.offlineTitle": "{name}에 연결할 수 없습니다",
+  "ios.connection.offlineHint": "Mac이 켜져 있고 Bandito가 실행 중인지 확인하세요",
+  "ios.connection.retry": "다시 시도",
+  "ios.connection.cachedLine": "오프라인 상태입니다. 이전 내용을 보여 드립니다"
 }

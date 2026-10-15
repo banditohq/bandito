@@ -121,6 +121,7 @@ struct RootView: View {
             if phase == .active { importSharedTasks() }
             notifications.appActiveChanged(phase == .active)
             account.setActive(phase == .active)
+            if phase == .background { session.saveAgentCaches() }
             if phase == .active { TurnActivities.shared.appBecameActive() }
         }
         // An account that is ready ends the onboarding: the servers of the account come to this iPhone without pairing.

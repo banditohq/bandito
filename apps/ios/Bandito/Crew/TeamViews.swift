@@ -168,3 +168,58 @@ struct AdaptiveRowLayout<Leading: View, Content: View, Trailing: View>: View {
         }
     }
 }
+
+/// "Can't reach the server" or "Connecting…", in place of an empty state that would say something untrue (no agents,
+/// nothing waits, all quiet) while the phone is not connected.
+struct ConnectionNoticeView: View {
+    enum Kind: Equatable {
+        case connecting
+        case offline
+    }
+
+    let kind: Kind
+    let serverName: String
+    let retry: () -> Void
+
+    var body: some View {
+        VStack(spacing: BanditoSpace.s3) {
+            switch kind {
+            case .connecting:
+                ProgressView()
+                    .tint(Color.Bandito.text2)
+                Text(L10n.Ios.Connection.connecting(name: serverName))
+                    .font(BanditoFont.text(size: 13.5))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .multilineTextAlignment(.center)
+            case .offline:
+                CrewAvatar(
+                    name: "", look: CrewLook(color: .peach, face: .sleeping, customHex: nil), mood: .sleeping, size: 72)
+                Text(L10n.Ios.Connection.offlineTitle(name: serverName))
+                    .font(BanditoFont.display(size: 16.5, weight: 600))
+                    .foregroundStyle(Color.Bandito.text)
+                    .multilineTextAlignment(.center)
+                Text(L10n.Ios.Connection.offlineHint)
+                    .font(BanditoFont.text(size: 13.5))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .multilineTextAlignment(.center)
+                Button(L10n.Ios.Connection.retry, action: retry)
+                    .buttonStyle(QuietButtonStyle())
+                    .accessibilityIdentifier("connection.retry")
+                    .padding(.top, BanditoSpace.s2)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, BanditoSpace.s6)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// The view for an empty screen (Inbox, Activity), nil when the phone is connected somewhere.
+    @MainActor @ViewBuilder
+    static func forEmpty(servers: [ServerModel]) -> some View {
+        if let found = CrewFacts.emptyNotice(servers: servers) {
+            ConnectionNoticeView(
+                kind: found.notice == .connecting ? .connecting : .offline, serverName: found.server.config.name,
+                retry: { Task { await found.server.connect() } })
+        }
+    }
+}

@@ -147,7 +147,17 @@ struct InboxScreen: View {
         }
     }
 
-    private var emptyState: some View {
+    @ViewBuilder private var emptyState: some View {
+        if CrewFacts.emptyNotice(servers: servers) != nil {
+            ConnectionNoticeView.forEmpty(servers: servers)
+                .padding(BanditoSpace.s6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            quietState
+        }
+    }
+
+    private var quietState: some View {
         VStack(spacing: BanditoSpace.s3) {
             CrewAvatar(
                 name: "", look: CrewLook(color: .peach, face: .sleeping, customHex: nil), mood: .sleeping, size: 72)

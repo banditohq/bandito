@@ -181,6 +181,39 @@ enum CrewWaitingSplit {
     }
 }
 
+/// What the screens say about the connection to a server, when it matters.
+enum CrewConnectionNotice: Equatable {
+    /// Connected: nothing to say.
+    case none
+    /// The first attempt is under way and there is nothing to show yet.
+    case connecting
+    /// Not connected, and no list to show.
+    case offline
+    /// Not connected, and the list shown is the saved copy of an earlier one.
+    case offlineWithCache
+}
+
+extension CrewFacts {
+    nonisolated static func notice(state: ConnectionState, agentsReadAt: Date?, fromCache: Bool) -> CrewConnectionNotice {
+        if state == .connected { return .none }
+        if fromCache { return .offlineWithCache }
+        if state == .connecting, agentsReadAt == nil { return .connecting }
+        return .offline
+    }
+
+    /// What an empty Inbox or Activity says instead of "nothing waits": set when no server is connected, about the first
+    /// one that is not. Nil when some server is connected (the emptiness is true) or there is no server.
+    @MainActor
+    static func emptyNotice(servers: [ServerModel]) -> (notice: CrewConnectionNotice, server: ServerModel)? {
+        guard !servers.isEmpty, !servers.contains(where: { $0.state == .connected }) else { return nil }
+        for server in servers {
+            let notice = notice(state: server.state, agentsReadAt: server.agentsReadAt, fromCache: server.agentsFromCache)
+            if notice != .none { return (notice, server) }
+        }
+        return nil
+    }
+}
+
 /// Builds the rows of the Crew screen from a server. Reads each agent's thread summary, never its thread.
 @MainActor
 enum CrewFacts {

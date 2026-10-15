@@ -1064,6 +1064,11 @@
 "ios.connect.trust.body" = "Dieses iPhone kennt diesen Server noch nicht. Vergleiche den Fingerabdruck unten mit dem auf deinem Mac (Einstellungen → Server → iPhone). Verbinde nur, wenn sie gleich sind.";
 "ios.connect.trust.title" = "Ist das dein Server?";
 "ios.connect.working" = "Verbinde …";
+"ios.connection.cachedLine" = "Keine Verbindung – es wird angezeigt, was zuvor da war";
+"ios.connection.connecting" = "Verbinde mit %1$@ …";
+"ios.connection.offlineHint" = "Prüfen Sie, ob der Mac eingeschaltet ist und Bandito darauf läuft";
+"ios.connection.offlineTitle" = "%1$@ ist nicht erreichbar";
+"ios.connection.retry" = "Erneut versuchen";
 "ios.crew.createAgent" = "Agent anlegen";
 "ios.crew.emptyMessage" = "Auf diesem Server gibt es keine Agenten. Legen Sie den ersten an, damit die Crew loslegt.";
 "ios.crew.emptyTitle" = "Noch keine Agenten";
