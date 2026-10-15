@@ -61,10 +61,12 @@ struct ConnectServerView: View {
                     case .done:
                         EmptyView()
                     default:
+                        // Not while a pairing runs: cancelling it can leave the device on the server with no token here.
                         Button(L10n.Common.close) {
                             model.cancel()
                             onClose()
                         }
+                        .disabled(model.isWorking)
                     }
                 }
             }
