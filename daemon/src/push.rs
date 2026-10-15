@@ -131,9 +131,30 @@ pub struct Ctx {
     pub quiet_turn: bool,
     /// The agent has an approval, a form or a connect request waiting, which has its own push.
     pub other_pending: bool,
-    /// The plain text of the turn's last message (cut to 400 characters). Set on `turn.completed` only: a done needs
-    /// it, and it is the text the notification shows.
-    pub answer: Option<String>,
+    /// The reply of the turn that ended with this event (`turn.completed` only).
+    pub reply: Reply,
+}
+
+/// The reply of a turn that ended, as its done push takes it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Reply {
+    /// The tracker does not know the turn (its start was not seen: a restart, or events were missed): the done goes out
+    /// without text.
+    #[default]
+    Unknown,
+    /// The turn's start was seen and it wrote no text: nothing is sent.
+    Silent,
+    /// The plain text of the turn's last message (cut to 400 characters).
+    Text(String),
+}
+
+impl Reply {
+    fn text(&self) -> Option<&str> {
+        match self {
+            Reply::Text(t) => Some(t),
+            _ => None,
+        }
+    }
 }
 
 /// The push an event makes, if any: the same rules as the phone's local notifications
@@ -141,7 +162,7 @@ pub struct Ctx {
 /// - an approval waiting -> `approval`;
 /// - a form -> `question` (a connect request has no local notification either, so no push);
 /// - the agent needs the person with nothing else waiting (its own question) -> `question`;
-/// - a turn that ended well, unless it was quiet or wrote no text -> `done` (with the text);
+/// - a turn that ended well, unless it was quiet or its start was seen and it wrote no text -> `done` (with the text);
 /// - an error -> `error`.
 pub fn push_kind(ev: &Event, ctx: &Ctx) -> Option<PushKind> {
     match &ev.body {
@@ -153,7 +174,7 @@ pub fn push_kind(ev: &Event, ctx: &Ctx) -> Option<PushKind> {
         } if !ctx.other_pending => Some(PushKind::Question),
         EventBody::TurnCompleted {
             status: TurnStatus::Ok, ..
-        } if !ctx.quiet_turn && ctx.answer.as_deref().is_some_and(|t| !t.is_empty()) => Some(PushKind::Done),
+        } if !ctx.quiet_turn && ctx.reply != Reply::Silent => Some(PushKind::Done),
         EventBody::Error { .. } => Some(PushKind::Error),
         _ => None,
     }
@@ -390,8 +411,16 @@ fn seal_b64(key: &[u8], handle: &str, plaintext: &[u8]) -> Result<(String, Strin
 struct Tracker {
     open: HashMap<String, HashSet<String>>,
     quiet: HashSet<String>,
-    /// The plain text of each agent's last message in its running turn (cut to [`TEXT_CHARS`]).
-    answers: HashMap<String, String>,
+    /// The running turn of each agent.
+    running: HashMap<String, Running>,
+}
+
+/// What the tracker knows of an agent's running turn: whether its start was seen, and the plain text of its last
+/// message (empty when it wrote none).
+#[derive(Debug, Default)]
+struct Running {
+    started: bool,
+    answer: String,
 }
 
 impl Tracker {
@@ -412,6 +441,7 @@ impl Tracker {
     /// answer that came in the missed events must not keep an agent's question from being told).
     fn reseed(&mut self, store: &Store) {
         self.open.clear();
+        self.running.clear();
         self.seed(store);
     }
 
@@ -440,13 +470,23 @@ impl Tracker {
     fn observe(&mut self, ev: &Event) -> Ctx {
         let agent = ev.agent_id.as_str();
         let mut quiet_turn = false;
-        let mut answer: Option<String> = None;
+        let mut reply = Reply::Unknown;
         match &ev.body {
             EventBody::TurnStarted { .. } => {
-                self.answers.remove(agent);
+                self.running.insert(
+                    agent.to_string(),
+                    Running {
+                        started: true,
+                        answer: String::new(),
+                    },
+                );
             }
             EventBody::MessageAssistant { text } => {
-                self.answers.insert(agent.to_string(), cut(&plain(text), TEXT_CHARS));
+                let shown = cut(&plain(text), TEXT_CHARS);
+                // A message with no text says nothing: the turn keeps the text it had.
+                if !shown.is_empty() {
+                    self.running.entry(agent.to_string()).or_default().answer = shown;
+                }
             }
             EventBody::ApprovalRequested { approval_id, .. } => self.add(agent, format!("a:{approval_id}")),
             EventBody::ApprovalResolved { approval_id, .. } | EventBody::ApprovalWithdrawn { approval_id } => {
@@ -464,20 +504,25 @@ impl Tracker {
             }
             EventBody::TurnCompleted { turn_id, .. } => {
                 quiet_turn = self.quiet.remove(turn_id);
-                answer = self.answers.remove(agent);
+                reply = match self.running.remove(agent) {
+                    None => Reply::Unknown,
+                    Some(r) if !r.answer.is_empty() => Reply::Text(r.answer),
+                    Some(r) if r.started => Reply::Silent,
+                    Some(_) => Reply::Unknown,
+                };
             }
             EventBody::AgentChanged {
                 action: AgentChange::Deleted,
             } => {
                 self.open.remove(agent);
-                self.answers.remove(agent);
+                self.running.remove(agent);
             }
             _ => {}
         }
         Ctx {
             quiet_turn,
             other_pending: self.open.contains_key(agent),
-            answer,
+            reply,
         }
     }
 }
@@ -606,7 +651,7 @@ pub fn spawn_with(hub: &Hub, config: Config) -> tokio::task::JoinHandle<()> {
                 Ok(ev) => {
                     let ctx = tracker.observe(&ev);
                     if let Some(kind) = push_kind(&ev, &ctx) {
-                        enqueue(&store, &queues, &ev, kind, ctx.answer.as_deref()).await;
+                        enqueue(&store, &queues, &ev, kind, ctx.reply.text()).await;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -1054,7 +1099,7 @@ mod tests {
     #[test]
     fn only_a_turn_that_ended_well_with_text_and_was_not_quiet_is_done() {
         let said = Ctx {
-            answer: Some("Готово".into()),
+            reply: Reply::Text("Готово".into()),
             ..Ctx::default()
         };
         assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &said), Some(PushKind::Done));
@@ -1062,20 +1107,66 @@ mod tests {
         assert_eq!(push_kind(&ev(completed(TurnStatus::Interrupted)), &said), None);
         let quiet = Ctx {
             quiet_turn: true,
-            answer: Some("Готово".into()),
+            reply: Reply::Text("Готово".into()),
             ..Ctx::default()
         };
         assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &quiet), None);
     }
 
     #[test]
-    fn a_turn_that_wrote_no_text_makes_no_done() {
-        assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &Ctx::default()), None);
-        let blank = Ctx {
-            answer: Some(String::new()),
+    fn a_turn_whose_start_was_seen_and_wrote_no_text_makes_no_done() {
+        let silent = Ctx {
+            reply: Reply::Silent,
             ..Ctx::default()
         };
-        assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &blank), None);
+        assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &silent), None);
+    }
+
+    #[test]
+    fn a_turn_the_tracker_does_not_know_is_not_silenced() {
+        // After a restart or a lag the start is not seen: the done goes out, as before, without text.
+        assert_eq!(
+            push_kind(&ev(completed(TurnStatus::Ok)), &Ctx::default()),
+            Some(PushKind::Done)
+        );
+        let mut t = Tracker::default();
+        let c = t.observe(&ev(completed(TurnStatus::Ok)));
+        assert_eq!(c.reply, Reply::Unknown);
+        assert_eq!(push_kind(&ev(completed(TurnStatus::Ok)), &c), Some(PushKind::Done));
+        // Lagged: the running turn is forgotten, so its completion is not silenced either.
+        let store = Store::open_in_memory().unwrap();
+        t.observe(&ev(turn_started()));
+        t.observe(&ev(EventBody::MessageAssistant {
+            text: "первое".into()
+        }));
+        t.reseed(&store);
+        assert_eq!(t.observe(&ev(completed(TurnStatus::Ok))).reply, Reply::Unknown);
+    }
+
+    #[test]
+    fn a_text_seen_without_its_start_is_sent_with_the_text() {
+        let mut t = Tracker::default();
+        t.observe(&ev(EventBody::MessageAssistant {
+            text: "Готово".into()
+        }));
+        assert_eq!(
+            t.observe(&ev(completed(TurnStatus::Ok))).reply,
+            Reply::Text("Готово".into())
+        );
+    }
+
+    #[test]
+    fn a_blank_message_does_not_replace_the_turns_text() {
+        let mut t = Tracker::default();
+        t.observe(&ev(turn_started()));
+        t.observe(&ev(EventBody::MessageAssistant {
+            text: "осмысленный текст".into(),
+        }));
+        t.observe(&ev(EventBody::MessageAssistant { text: "** **\n".into() }));
+        assert_eq!(
+            t.observe(&ev(completed(TurnStatus::Ok))).reply,
+            Reply::Text("осмысленный текст".into())
+        );
     }
 
     #[test]
@@ -1089,12 +1180,12 @@ mod tests {
             text: "**второе**".into(),
         }));
         assert_eq!(
-            t.observe(&ev(completed(TurnStatus::Ok))).answer.as_deref(),
-            Some("второе")
+            t.observe(&ev(completed(TurnStatus::Ok))).reply,
+            Reply::Text("второе".into())
         );
         // The next turn wrote nothing: it has no text, whatever the turn before wrote.
         t.observe(&ev(turn_started()));
-        assert_eq!(t.observe(&ev(completed(TurnStatus::Ok))).answer, None);
+        assert_eq!(t.observe(&ev(completed(TurnStatus::Ok))).reply, Reply::Silent);
     }
 
     #[test]
