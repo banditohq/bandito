@@ -9,7 +9,17 @@ struct ConnectPhoneWizard: View {
     @Environment(AppModel.self) private var app
     @Environment(AccountHub.self) private var hub
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var model: ConnectPhoneModel?
+    /// Signed in, approved and holding the sync key: the iPhone can sign in with a scan (`JoinQRModel`) instead of the
+    /// pairing code. The pairing code stays one click away, and the cloud access the wizard prepares is the same.
+    @State private var joinAllowed = false
+    /// The check above has an answer: until then the scan step waits instead of showing a code that may be swapped.
+    @State private var joinChecked = false
+    @State private var useJoin = true
+    @State private var joinModel: JoinQRModel?
+    /// The join model to show without asking anybody (the layout audit and the screenshots).
+    var previewJoin: JoinQRModel?
     /// A state to show without asking anybody (the layout audit and the screenshots).
     var preview: ConnectPhoneModel.Step?
     var previewServerName: String = ""
@@ -31,9 +41,22 @@ struct ConnectPhoneWizard: View {
         .task { await begin() }
         .onChange(of: model?.step) { _, step in
             // The cloud is on and the code shows: tell the account at once, so the iPhone that signs in finds the server.
-            if case .scan = step { hub.requestAccessCycle() }
+            if case .scan = step {
+                hub.requestAccessCycle()
+                if joinAllowed, useJoin { Task { await enterJoin() } }
+            }
         }
-        .onDisappear { model?.cancel() }
+        .animation(reduceMotion ? nil : BanditoMotion.ease, value: joinModel?.phase)
+        .onDisappear {
+            model?.cancel()
+            joinModel?.close()
+        }
+    }
+
+    /// The model whose code is on screen, when the scan step shows the join code.
+    private var shownJoin: JoinQRModel? {
+        if let previewJoin { return previewJoin }
+        return joinAllowed && useJoin ? joinModel : nil
     }
 
     private var step: ConnectPhoneModel.Step? { preview ?? model?.step }
@@ -124,6 +147,32 @@ struct ConnectPhoneWizard: View {
     }
 
     @ViewBuilder private func scan(_ state: PhoneAccessRules.PairState) -> some View {
+        if previewJoin != nil || (joinAllowed && useJoin) {
+            joinScan
+        } else if !joinChecked, preview == nil {
+            preparing(.connecting)
+        } else {
+            pairScan(state)
+        }
+    }
+
+    /// The join code in place of the pairing code (the person is signed in here): the iPhone signs in by scanning it.
+    @ViewBuilder private var joinScan: some View {
+        VStack(spacing: 14) {
+            if let shownJoin {
+                JoinQRContent(model: shownJoin)
+            } else {
+                preparing(.connecting)
+            }
+            if previewJoin == nil {
+                Button(L10n.PhoneWizard.usePairCode) { leaveJoin() }
+                    .banditoButton(.link)
+                    .font(BanditoFont.text(size: 12, weight: 400))
+            }
+        }
+    }
+
+    @ViewBuilder private func pairScan(_ state: PhoneAccessRules.PairState) -> some View {
         switch state {
         case .ready(let link, let code, _, let minutes, _):
             VStack(spacing: 14) {
@@ -166,6 +215,14 @@ struct ConnectPhoneWizard: View {
                         .foregroundStyle(Color.Bandito.text2)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                if joinAllowed {
+                    Button(L10n.PhoneWizard.useAccount) {
+                        useJoin = true
+                        Task { await enterJoin() }
+                    }
+                    .banditoButton(.link)
+                    .font(BanditoFont.text(size: 12, weight: 400))
                 }
                 Button {
                     SystemActions.open(IPhoneApp.requestInvite)
@@ -234,6 +291,10 @@ struct ConnectPhoneWizard: View {
     @ViewBuilder private var actions: some View {
         ActionRow {
             switch step {
+            case .scan where shownJoin != nil:
+                if let shownJoin {
+                    JoinQRButtons(model: shownJoin, close: { dismiss() })
+                }
             case .scan(let state):
                 if case .ready = state {
                     Button(L10n.ServerSettings.Phone.Pair.new) { model?.newCode() }
@@ -271,6 +332,28 @@ struct ConnectPhoneWizard: View {
         let name: String
     }
 
+    /// Makes the join code (once) and starts it. Called when the scan step is reached or the person picks it.
+    private func enterJoin() async {
+        guard joinAllowed, joinModel == nil, preview == nil else { return }
+        let close = dismiss
+        guard let made = try? await JoinQRFactory.make(hub: hub, onFinished: { close() }) else {
+            // The keys cannot be read: the pairing code stays.
+            joinAllowed = false
+            return
+        }
+        // The person went back to the pairing code, or left, while the model was made.
+        guard joinModel == nil, useJoin else { return }
+        joinModel = made
+        made.start()
+    }
+
+    /// Back to the pairing code: the join ticket is cancelled.
+    private func leaveJoin() {
+        useJoin = false
+        joinModel?.close()
+        joinModel = nil
+    }
+
     private func begin() async {
         guard preview == nil, model == nil else { return }
         let hub = hub
@@ -286,5 +369,9 @@ struct ConnectPhoneWizard: View {
             })
         model = made
         made.start()
+        joinAllowed = await JoinQRFactory.blocker(of: hub) == nil
+        joinChecked = true
+        // The cloud may have been ready already: the join code shows without waiting for another change of the step.
+        if joinAllowed, useJoin, case .scan = made.step { await enterJoin() }
     }
 }

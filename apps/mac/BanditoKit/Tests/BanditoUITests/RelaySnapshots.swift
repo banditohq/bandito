@@ -65,6 +65,19 @@ extension ScreenWorkSuites {
             try each("wizard-problem", width: 420) { _ in AnyView(ConnectPhoneWizard(preview: .problem(.noServer))) }
         }
 
+        @Test(.enabled(if: RelaySnapshots.directory != nil)) func joinSheet() throws {
+            let link = LayoutAuditSnapshots.joinPreviewLink
+            let phases: [(String, JoinQRModel.Phase)] = [
+                ("join-qr", .showing(link: link, expiresAt: Date().addingTimeInterval(272))),
+                ("join-added", .added(name: "Anna’s iPhone")),
+                ("join-bad-proof", .badProof(removed: true)),
+                ("join-blocked", .blocked(.notApproved)),
+            ]
+            for (name, phase) in phases {
+                try each(name, width: 420) { _ in AnyView(JoinQRSheet(preview: .preview(phase))) }
+            }
+        }
+
         @Test(.enabled(if: RelaySnapshots.directory != nil)) func settings() throws {
             try each("settings-cloud-on", width: 560) { env in
                 env.serverInfo(features: ["server_settings", "phone_access", "pairing", "relay"])

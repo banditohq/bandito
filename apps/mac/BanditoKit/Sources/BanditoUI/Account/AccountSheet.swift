@@ -23,6 +23,7 @@ struct AccountSheet: View {
     @State private var lastSynced: Date?
     @State private var syncing = false
     @State private var connectingPhone = false
+    @State private var joiningPhone: JoinQRRequest?
     @FocusState private var nicknameFocused: Bool
     /// A photo picked for the profile, framed in the sheet until it is saved.
     @State private var photoFraming: CGImage?
@@ -50,6 +51,9 @@ struct AccountSheet: View {
         .task { await reload() }
         .banditoSheet(isPresented: $connectingPhone, dismissOnOutsideClick: false) {
             ConnectPhoneWizard()
+        }
+        .banditoSheet(item: $joiningPhone, dismissOnOutsideClick: false) { _ in
+            JoinQRSheet()
         }
         .confirmationDialog(
             L10n.Account.SignOut.title,
@@ -377,17 +381,42 @@ struct AccountSheet: View {
                 ForEach(me.devices, id: \.id) { device in
                     deviceRow(device)
                 }
-                Button {
-                    connectingPhone = true
-                } label: {
-                    Label(L10n.Account.Devices.connectPhone, systemImage: "iphone.gen3")
-                        .font(BanditoFont.text(size: 12.5, weight: 500))
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        addIPhoneButton
+                        connectPhoneButton
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        addIPhoneButton
+                        connectPhoneButton
+                    }
                 }
-                .banditoButton(.quiet())
-                .fixedSize()
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+
+    /// «Добавить iPhone или iPad»: the join QR code, the iPhone signs in with a scan.
+    private var addIPhoneButton: some View {
+        Button {
+            joiningPhone = JoinQRRequest()
+        } label: {
+            Label(L10n.Account.Devices.addIPhone, systemImage: "qrcode")
+                .font(BanditoFont.text(size: 12.5, weight: 500))
+        }
+        .banditoButton(.quiet())
+        .fixedSize()
+    }
+
+    private var connectPhoneButton: some View {
+        Button {
+            connectingPhone = true
+        } label: {
+            Label(L10n.Account.Devices.connectPhone, systemImage: "iphone.gen3")
+                .font(BanditoFont.text(size: 12.5, weight: 500))
+        }
+        .banditoButton(.quiet())
+        .fixedSize()
     }
 
     private func deviceRow(_ device: AccountDevice) -> some View {
