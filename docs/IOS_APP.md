@@ -93,7 +93,7 @@ Code: `apps/ios/Bandito/Account/`.
 3. Live Activities for running turns. Built (updated by the app; push updates wait for the APNs key).
 4. App Intents / Shortcuts / Siri: "Ask Forge to …", "What needs me in Bandito". Built. Home screen quick actions:
    New task, Inbox. Built.
-5. Share extension.
+5. Share extension. Built (see `apps/ios/CLAUDE.md`).
 6. Spotlight: agents by name. Built.
 
 ## Look and feel
