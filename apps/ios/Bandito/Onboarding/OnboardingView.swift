@@ -54,7 +54,7 @@ struct OnboardingView: View {
             .transition(.opacity)
         }
         .background(Color.Bandito.bg.ignoresSafeArea())
-        .preferredColorScheme(.dark)
+        // Dark always: RootView sets the scheme while the onboarding shows (one place, see there).
     }
 
     /// Moves to `target` (nil: nowhere) on the brand's fast curve; under Reduce Motion the step changes at once.

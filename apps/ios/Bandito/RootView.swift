@@ -8,6 +8,9 @@ import SwiftUI
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The scheme the screen shows now (the setting, or the system's). The sheets that RootView opens take it
+    /// explicitly: they do not follow the tabs' scheme by themselves (the New task sheet came up dark in light).
+    @Environment(\.colorScheme) private var shownScheme
     /// The servers: the paired ones (saved list and Keychain tokens), or the `-demo` world.
     @State private var session = ServerSession.shared
     /// The connect sheet, with the way the person chose before it opened (the sheet is built from this value, not from
@@ -80,7 +83,6 @@ struct RootView: View {
                     .tabItem { Label(L10n.Settings.title, systemImage: "gearshape") }
                     .tag(AppTab.settings)
             }
-            .preferredColorScheme(settings.theme.colorScheme)
 
             if showsOnboarding {
                 OnboardingView(store: onboarding, motion: settings.motion, onConnect: { mode in
@@ -90,6 +92,9 @@ struct RootView: View {
                     .transition(.opacity)
             }
         }
+        // One place decides the scheme: the onboarding is always dark, the app follows the setting. A second
+        // preference inside the onboarding stayed on the sheets opened after it (the New task sheet was dark in light).
+        .preferredColorScheme(showsOnboarding ? .dark : settings.theme.colorScheme)
         .animation(BanditoMotion.ease, value: showsOnboarding)
         .overlay {
             if appLock.isLocked {
@@ -214,6 +219,7 @@ struct RootView: View {
                     connect = nil
                 },
                 onClose: { connect = nil })
+                .preferredColorScheme(settings.theme.colorScheme ?? shownScheme)
         }
         .sheet(isPresented: $showsAccount) {
             NavigationStack { AccountScreen(account: account, onClose: { showsAccount = false }) }
@@ -227,6 +233,7 @@ struct RootView: View {
             NewTaskSheet(
                 servers: servers, startsDictating: request.dictate,
                 onFinish: { newTaskFollowUp = $0 })
+                .preferredColorScheme(settings.theme.colorScheme ?? shownScheme)
         }
     }
 
