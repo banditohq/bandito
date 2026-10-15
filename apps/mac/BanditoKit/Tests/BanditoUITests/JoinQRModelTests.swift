@@ -82,7 +82,7 @@ actor FakeJoinBackend: JoinQRBackend {
         return false
     }
 
-    private func ticket(of model: JoinQRModel) -> JoinTicket? {
+    private func shownTicket(of model: JoinQRModel) -> JoinTicket? {
         guard case .showing(let link, _) = model.phase else { return nil }
         return JoinTicket.parse(link)
     }
@@ -100,7 +100,7 @@ actor FakeJoinBackend: JoinQRBackend {
         let model = make(backend)
         model.start()
         #expect(await wait(model, isShowing))
-        let ticket = try #require(ticket(of: model))
+        let ticket = try #require(shownTicket(of: model))
         #expect(ticket.macName == "Studio 🦝")
         #expect(await backend.created == [ticket.ticketHash])
         model.close()
@@ -144,7 +144,7 @@ actor FakeJoinBackend: JoinQRBackend {
         let model = make(backend, flags: flags)
         model.start()
         #expect(await wait(model, isShowing))
-        let ticket = try #require(ticket(of: model))
+        let ticket = try #require(shownTicket(of: model))
         await backend.setStatus(claimed(ticket))
         #expect(await wait(model) { $0 == .added(name: "Anna’s iPhone") })
         let approvals = await backend.approvals
@@ -163,7 +163,7 @@ actor FakeJoinBackend: JoinQRBackend {
         let model = make(backend)
         model.start()
         #expect(await wait(model, isShowing))
-        let ticket = try #require(ticket(of: model))
+        let ticket = try #require(shownTicket(of: model))
         await backend.setStatus(claimed(ticket, proofOK: false))
         #expect(await wait(model) { $0 == .badProof(removed: true) })
         #expect(await backend.approvals.isEmpty)
@@ -177,7 +177,7 @@ actor FakeJoinBackend: JoinQRBackend {
         let model = make(backend)
         model.start()
         #expect(await wait(model, isShowing))
-        let ticket = try #require(ticket(of: model))
+        let ticket = try #require(shownTicket(of: model))
         await backend.setStatus(claimed(ticket, proofOK: false))
         #expect(await wait(model) { $0 == .badProof(removed: false) })
         #expect(await backend.approvals.isEmpty)
@@ -189,7 +189,7 @@ actor FakeJoinBackend: JoinQRBackend {
         let model = make(backend)
         model.start()
         #expect(await wait(model, isShowing))
-        let ticket = try #require(ticket(of: model))
+        let ticket = try #require(shownTicket(of: model))
         // The proof is good for the device keys of `phoneKey`, but the cloud reports another public key.
         let other = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation.base64EncodedString()
         let proof = JoinProof.make(macKey: ticket.macKey, publicKey: phoneKey, signingKey: phoneSigning)
@@ -208,7 +208,7 @@ actor FakeJoinBackend: JoinQRBackend {
         let model = make(backend)
         model.start()
         #expect(await wait(model, isShowing))
-        let ticket = try #require(ticket(of: model))
+        let ticket = try #require(shownTicket(of: model))
         await backend.setStatus(claimed(ticket))
         #expect(await wait(model) { $0 == .added(name: "Anna’s iPhone") })
         #expect(await backend.approvals.count == 3)
@@ -221,7 +221,7 @@ actor FakeJoinBackend: JoinQRBackend {
         let model = make(backend)
         model.start()
         #expect(await wait(model, isShowing))
-        let ticket = try #require(ticket(of: model))
+        let ticket = try #require(shownTicket(of: model))
         await backend.setStatus(claimed(ticket))
         #expect(await wait(model) { $0 == .added(name: "Anna’s iPhone") })
         model.close()
@@ -233,7 +233,7 @@ actor FakeJoinBackend: JoinQRBackend {
         let model = make(backend)
         model.start()
         #expect(await wait(model, isShowing))
-        let ticket = try #require(ticket(of: model))
+        let ticket = try #require(shownTicket(of: model))
         await backend.setStatus(claimed(ticket))
         #expect(await wait(model) { if case .failed = $0 { true } else { false } })
         #expect(await backend.approvals.count == 1)
@@ -245,7 +245,7 @@ actor FakeJoinBackend: JoinQRBackend {
         let model = make(backend, hasKey: false)
         model.start()
         #expect(await wait(model, isShowing))
-        let ticket = try #require(ticket(of: model))
+        let ticket = try #require(shownTicket(of: model))
         await backend.setStatus(claimed(ticket))
         #expect(await wait(model) { if case .failed = $0 { true } else { false } })
         #expect(await backend.approvals.isEmpty)
