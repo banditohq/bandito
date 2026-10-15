@@ -296,6 +296,8 @@ public final class ServerModel: Identifiable {
     public private(set) var agents: [Agent] = []
     /// When `agents` was last read from the daemon (`agents.list`); nil until the first read.
     public private(set) var agentsReadAt: Date?
+    /// Whether `agents` came from a saved copy (`seedCachedAgents`) and has not been read from the daemon yet.
+    public private(set) var agentsFromCache = false
     /// Agent changes that arrive close together are answered by one `agents.list` after this delay.
     public nonisolated static let agentsRefreshDelay: Duration = .milliseconds(300)
     /// Coming back to the front re-reads the agents when the last read is older than this (seconds).
@@ -841,6 +843,15 @@ public final class ServerModel: Identifiable {
         Int64(Date().timeIntervalSince1970 * 1000)
     }
 
+    /// Shows a saved copy of the agent list before the first read (a phone that starts without a connection). It is
+    /// taken only while nothing was read and nothing is listed; `agentsReadAt` stays nil, so the list still counts as
+    /// unread for everything that waits for a real one.
+    public func seedCachedAgents(_ cached: [Agent]) {
+        guard agentsReadAt == nil, agents.isEmpty, !cached.isEmpty else { return }
+        agents = cached
+        agentsFromCache = true
+    }
+
     private func setAgents(_ list: [Agent]) {
         // The performance scenarios' synthetic agents survive a refresh of the list.
         agents =
@@ -848,6 +859,7 @@ public final class ServerModel: Identifiable {
             ? list
             : list + syntheticAgents.values.filter { s in !list.contains { $0.id == s.id } }.sorted { $0.name < $1.name }
         agentsReadAt = Date()
+        agentsFromCache = false
     }
 
     /// Agents that exist only in the app, for the performance scenarios (the QA command `perf` and the smoothness
