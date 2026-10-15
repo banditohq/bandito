@@ -37,4 +37,18 @@ final class LinksAndNewTaskUITests: XCTestCase {
         XCTAssertTrue(sent.waitForExistence(timeout: 10), "the chat of the agent opens with the task")
         app.terminate()
     }
+
+    func testLongPressOpensTheSheetAndTheNextTapStillWorks() {
+        continueAfterFailure = false
+        let app = launchDemo()
+        let button = app.buttons["newTask.button"]
+        button.press(forDuration: 1.0)
+        let send = app.buttons["newTask.send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5), "a long press opens the sheet")
+        app.buttons["Close"].firstMatch.tap()
+        XCTAssertTrue(send.waitForNonExistence(timeout: 5))
+        button.tap()
+        XCTAssertTrue(send.waitForExistence(timeout: 5), "the next short tap is not swallowed")
+        app.terminate()
+    }
 }
