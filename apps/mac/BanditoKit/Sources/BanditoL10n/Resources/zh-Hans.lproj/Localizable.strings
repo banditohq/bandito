@@ -15,11 +15,9 @@
 "account.device.menu" = "设备操作";
 "account.device.online" = "在线";
 "account.devices.addIPhone" = "添加 iPhone 或 iPad";
-"account.devices.connectPhone" = "连接 iPhone";
 "account.hidden.hint" = "您已从此设备移除的账户服务器。显示它们后会重新出现。";
 "account.hidden.show" = "显示已隐藏的服务器（%1$lld）";
 "account.links.help" = "帮助与反馈";
-"account.links.settings" = "应用设置";
 "account.method.email" = "邮箱";
 "account.method.github" = "GitHub";
 "account.nickname.edit" = "编辑昵称";

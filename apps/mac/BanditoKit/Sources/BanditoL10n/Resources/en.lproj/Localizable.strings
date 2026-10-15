@@ -15,11 +15,9 @@
 "account.device.menu" = "Device actions";
 "account.device.online" = "online";
 "account.devices.addIPhone" = "Add iPhone or iPad";
-"account.devices.connectPhone" = "Connect iPhone";
 "account.hidden.hint" = "Servers of the account that you removed from this device. Show them and they come back.";
 "account.hidden.show" = "Show hidden servers (%1$lld)";
 "account.links.help" = "Help and feedback";
-"account.links.settings" = "App settings";
 "account.method.email" = "Email";
 "account.method.github" = "GitHub";
 "account.nickname.edit" = "Edit nickname";

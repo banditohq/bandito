@@ -15,11 +15,9 @@
 "account.device.menu" = "Действия с устройством";
 "account.device.online" = "в сети";
 "account.devices.addIPhone" = "Добавить iPhone или iPad";
-"account.devices.connectPhone" = "Подключить iPhone";
 "account.hidden.hint" = "Серверы аккаунта, которые вы убрали с этого устройства. Покажите их, и они появятся снова.";
 "account.hidden.show" = "Показать скрытые серверы (%1$lld)";
 "account.links.help" = "Помощь и обратная связь";
-"account.links.settings" = "Настройки приложения";
 "account.method.email" = "Почта";
 "account.method.github" = "GitHub";
 "account.nickname.edit" = "Изменить ник";

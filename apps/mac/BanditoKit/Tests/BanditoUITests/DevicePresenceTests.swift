@@ -1,3 +1,4 @@
+@testable import BanditoL10n
 @testable import BanditoUI
 import Foundation
 import Testing
@@ -25,5 +26,19 @@ import Testing
 
     @Test func aDeviceWithoutATimeSaysNothing() {
         #expect(DevicePresence.line(current: false, lastSeen: nil, now: now) == .none)
+    }
+}
+
+/// The times of the account's lines follow the app's language, not the system's.
+@Suite struct AccountTimeTests {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func aPastTimeReadsInTheAppLanguage() {
+        let sixDaysAgo = now.addingTimeInterval(-6 * 86_400)
+        let russian = L10n.withLanguageForTests("ru") { AccountTime.ago(sixDaysAgo, now: now) }
+        let english = L10n.withLanguageForTests("en") { AccountTime.ago(sixDaysAgo, now: now) }
+        #expect(russian.contains("назад"))
+        #expect(english.contains("ago"))
+        #expect(english.contains("6"))
     }
 }

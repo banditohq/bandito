@@ -23,7 +23,6 @@ struct AccountSheet: View {
     @State private var lastSynced: Date?
     @State private var syncing = false
     @State private var connectingPhone = false
-    @State private var joiningPhone: JoinQRRequest?
     @State private var codeOpen = false
     @State private var avatarHovered = false
     @State private var photoOptionsOpen = false
@@ -42,21 +41,11 @@ struct AccountSheet: View {
         .frame(width: ProfileSheetLayout.width, alignment: .leading)
         .background(Color.Bandito.surface2)
         .overlay(alignment: .topTrailing) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-            }
-            .banditoButton(.icon(size: 28, label: L10n.Common.close))
-            .help(L10n.Common.close)
-            .padding(12)
+            headerButtons
         }
         .task { await reload() }
         .banditoSheet(isPresented: $connectingPhone, dismissOnOutsideClick: false) {
             ConnectPhoneWizard()
-        }
-        .banditoSheet(item: $joiningPhone, dismissOnOutsideClick: false) { _ in
-            JoinQRSheet()
         }
         .confirmationDialog(
             L10n.Account.SignOut.title,
@@ -85,17 +74,6 @@ struct AccountSheet: View {
             Button(L10n.Common.cancel, role: .cancel) {}
         } message: { _ in
             Text(L10n.Account.Device.disconnectMessage)
-        }
-        .confirmationDialog(
-            L10n.Account.Photo.change,
-            isPresented: $photoOptionsOpen,
-            titleVisibility: .hidden
-        ) {
-            Button(L10n.Account.Photo.choose) { pickPhoto() }
-            if hub.avatar.image != nil {
-                Button(L10n.Account.Photo.remove) { removePhoto() }
-            }
-            Button(L10n.Common.cancel, role: .cancel) {}
         }
     }
 
@@ -142,6 +120,35 @@ struct AccountSheet: View {
 
     // MARK: - Header
 
+    /// The round «?» (help, a mail to the team) and the close cross, in the top right corner.
+    private var headerButtons: some View {
+        HStack(spacing: BanditoSpace.s2) {
+            if let help = URL(string: "mailto:hello@bandito.dev") {
+                roundButton("questionmark", label: L10n.Account.Links.help) {
+                    SystemActions.open(help)
+                }
+            }
+            roundButton("xmark", label: L10n.Common.close) {
+                dismiss()
+            }
+        }
+        .padding(BanditoSpace.s3)
+    }
+
+    private func roundButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(width: 28, height: 28)
+                .background(Color.Bandito.text.opacity(0.03), in: Circle())
+                .overlay(Circle().stroke(Color.Bandito.text.opacity(0.08), lineWidth: 1))
+        }
+        .banditoButton(.row(cornerRadius: 14, hoverOpacity: 0.08))
+        .help(label)
+        .accessibilityLabel(label)
+    }
+
     /// One row: the photo on the left, the name with its pencil, the e-mail under it (with the GitHub mark when the
     /// person signs in with GitHub), and the colour choice when there is no photo. The trailing space keeps the name
     /// clear of the close button.
@@ -156,17 +163,14 @@ struct AccountSheet: View {
                     nicknameLine(name: name, me: me)
                 }
                 emailLine(me)
-                if hub.avatar.image == nil {
-                    colorChoice.padding(.top, BanditoSpace.s1)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.trailing, BanditoSpace.s8)
     }
 
-    /// The profile photo, 56 pt. A click asks what to do with it: choose a photo, or remove the one there is. A camera
-    /// badge shows while the pointer is over it.
+    /// The profile photo, 56 pt. A click opens its options: choose a photo, remove the one there is, and, without a
+    /// photo, the colour of the letter. A camera badge shows while the pointer is over it.
     private func avatarButton(name: String?) -> some View {
         let size = ProfileSheetLayout.avatarSize
         return Button {
@@ -188,8 +192,49 @@ struct AccountSheet: View {
         }
         .banditoButton(.row(cornerRadius: size / 2, hoverOpacity: 0.05))
         .onHover { avatarHovered = $0 }
+        .popover(isPresented: $photoOptionsOpen, arrowEdge: .bottom) {
+            photoOptions
+        }
         .help(L10n.Account.Photo.change)
         .accessibilityLabel(L10n.Account.Photo.change)
+    }
+
+    /// The photo's dialog: the colour choice (only without a photo: the letter is what it colours), then choose or
+    /// remove the photo.
+    private var photoOptions: some View {
+        VStack(alignment: .leading, spacing: BanditoSpace.s3) {
+            if hub.avatar.image == nil {
+                colorChoice
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                groupDivider
+            }
+            photoOptionRow(L10n.Account.Photo.choose) {
+                photoOptionsOpen = false
+                pickPhoto()
+            }
+            if hub.avatar.image != nil {
+                photoOptionRow(L10n.Account.Photo.remove) {
+                    photoOptionsOpen = false
+                    removePhoto()
+                }
+            }
+        }
+        .padding(BanditoSpace.s3)
+        .frame(width: 240, alignment: .leading)
+    }
+
+    private func photoOptionRow(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(BanditoFont.text(size: 13, weight: 500))
+                .foregroundStyle(Color.Bandito.text)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, BanditoSpace.s2)
+                .padding(.vertical, BanditoSpace.s2)
+                .contentShape(Rectangle())
+        }
+        .banditoButton(.row(cornerRadius: 8))
     }
 
     /// The name; a click on it or on the pencil edits it in place.
@@ -332,14 +377,10 @@ struct AccountSheet: View {
     /// One card: the devices of the account, one line each, and the main action at its foot.
     private func devicesCard(_ me: Me) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: BanditoSpace.s2) {
-                SectionLabel(L10n.Account.Section.devices)
-                Spacer(minLength: BanditoSpace.s2)
-                connectPhoneButton
-            }
-            .padding(.horizontal, BanditoSpace.s4)
-            .padding(.top, BanditoSpace.s3)
-            .padding(.bottom, BanditoSpace.s2)
+            SectionLabel(L10n.Account.Section.devices)
+                .padding(.horizontal, BanditoSpace.s4)
+                .padding(.top, BanditoSpace.s3)
+                .padding(.bottom, BanditoSpace.s2)
             ForEach(Array(me.devices.enumerated()), id: \.element.id) { index, device in
                 if index > 0 { groupDivider }
                 deviceRow(device)
@@ -352,26 +393,15 @@ struct AccountSheet: View {
         .banditoCard()
     }
 
-    /// «Добавить iPhone или iPad»: the join QR code, the iPhone signs in with a scan. The main action of the sheet.
+    /// «Добавить iPhone или iPad»: the main action of the sheet, a cream pill. It opens the connect wizard, which turns
+    /// on the phone access by itself and shows the join QR code first when the account can sign a phone in.
     private var addIPhoneButton: some View {
-        Button {
-            joiningPhone = JoinQRRequest()
-        } label: {
-            Label(L10n.Account.Devices.addIPhone, systemImage: "qrcode")
-        }
-        .banditoButton(.signal(fillsWidth: true))
-    }
-
-    /// The wizard that connects an iPhone through the cloud. Still reachable from this card; see the report.
-    private var connectPhoneButton: some View {
         Button {
             connectingPhone = true
         } label: {
-            Label(L10n.Account.Devices.connectPhone, systemImage: "iphone.gen3")
-                .font(BanditoFont.text(size: 12, weight: 500))
+            Label(L10n.Account.Devices.addIPhone, systemImage: "qrcode")
         }
-        .banditoButton(.quiet(size: .compact))
-        .fixedSize()
+        .banditoButton(.lightPill())
     }
 
     private func deviceRow(_ device: AccountDevice) -> some View {
@@ -426,7 +456,7 @@ struct AccountSheet: View {
         case .online:
             return L10n.Account.Device.online
         case .lastSeen(let date):
-            return L10n.Account.Device.lastSeen(when: date.formatted(.relative(presentation: .named)))
+            return L10n.Account.Device.lastSeen(when: AccountTime.ago(date))
         case .none:
             return nil
         }
@@ -513,7 +543,7 @@ struct AccountSheet: View {
             } else {
                 Group {
                     if let lastSynced {
-                        Text(L10n.Account.Sync.done(when: lastSynced.formatted(.relative(presentation: .named))))
+                        Text(L10n.Account.Sync.done(when: AccountTime.ago(lastSynced)))
                     } else {
                         Text(L10n.Account.Sync.synced)
                     }
@@ -539,8 +569,8 @@ struct AccountSheet: View {
 
     // MARK: - Foot
 
-    /// Sign-out on the left, the reset (danger) on the right, both small. Help is a quiet link under them: the Mac's
-    /// Settings are in the application menu (⌘,), and help is not.
+    /// Sign-out on the left, the reset (danger) on the right, both small. The Mac's Settings are in the application
+    /// menu (⌘,); help is the round «?» in the head of the sheet.
     private var actions: some View {
         VStack(alignment: .leading, spacing: BanditoSpace.s3) {
             HStack(spacing: BanditoSpace.s4) {
@@ -567,14 +597,6 @@ struct AccountSheet: View {
                 } onSignInAgain: {
                     Task { await signOut() }
                 }
-            }
-            if let help = URL(string: "mailto:hello@bandito.dev") {
-                Button(L10n.Account.Links.help) {
-                    SystemActions.open(help)
-                }
-                .banditoButton(.link)
-                .font(BanditoFont.text(size: 11.5, weight: 500))
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -701,6 +723,18 @@ struct AccountSheet: View {
         case .lilac: L10n.Account.Color.lilac
         case .cream: L10n.Account.Color.cream
         }
+    }
+}
+
+/// Times in the account's lines, in the app's language (`L10n.locale`), not the system's.
+enum AccountTime {
+    /// «6 days ago» / «6 дней назад» for a past moment.
+    static func ago(_ date: Date, now: Date = Date()) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = L10n.locale
+        formatter.dateTimeStyle = .named
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: now)
     }
 }
 

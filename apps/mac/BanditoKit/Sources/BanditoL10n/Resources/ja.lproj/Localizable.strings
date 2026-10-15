@@ -15,11 +15,9 @@
 "account.device.menu" = "デバイスの操作";
 "account.device.online" = "オンライン";
 "account.devices.addIPhone" = "iPhone または iPad を追加";
-"account.devices.connectPhone" = "iPhone を接続";
 "account.hidden.hint" = "このデバイスから削除したアカウントのサーバーです。表示すると、再び追加されます。";
 "account.hidden.show" = "非表示のサーバーを表示（%1$lld）";
 "account.links.help" = "ヘルプとフィードバック";
-"account.links.settings" = "アプリの設定";
 "account.method.email" = "メール";
 "account.method.github" = "GitHub";
 "account.nickname.edit" = "ニックネームを編集";

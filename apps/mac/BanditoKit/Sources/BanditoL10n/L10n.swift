@@ -88,7 +88,6 @@ public enum L10n {
 
         public enum Devices {
             public static var addIPhone: String { L10n.tr("account.devices.addIPhone") }
-            public static var connectPhone: String { L10n.tr("account.devices.connectPhone") }
         }
 
         public enum Hidden {
@@ -98,7 +97,6 @@ public enum L10n {
 
         public enum Links {
             public static var help: String { L10n.tr("account.links.help") }
-            public static var settings: String { L10n.tr("account.links.settings") }
         }
 
         public enum Method {

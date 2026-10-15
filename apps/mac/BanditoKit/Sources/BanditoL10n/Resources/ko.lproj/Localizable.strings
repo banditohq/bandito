@@ -15,11 +15,9 @@
 "account.device.menu" = "기기 작업";
 "account.device.online" = "온라인";
 "account.devices.addIPhone" = "iPhone 또는 iPad 추가";
-"account.devices.connectPhone" = "iPhone 연결";
 "account.hidden.hint" = "이 기기에서 제거한 계정의 서버입니다. 표시하면 다시 나타납니다.";
 "account.hidden.show" = "숨긴 서버 표시 (%1$lld)";
 "account.links.help" = "도움말 및 피드백";
-"account.links.settings" = "앱 설정";
 "account.method.email" = "이메일";
 "account.method.github" = "GitHub";
 "account.nickname.edit" = "닉네임 편집";
