@@ -242,6 +242,17 @@ import Testing
 
     // MARK: description
 
+    @Test func aJoinLinkInsideAMessageIsFound() throws {
+        let ticket = madeTicket(name: "Studio 🦝")
+        let found = try #require(JoinTicket.find(in: "Sign in here:\n\(ticket.link.absoluteString)\nthanks"))
+        #expect(found.ticketHash == ticket.ticketHash)
+        #expect(found.macName == "Studio 🦝")
+        #expect(JoinTicket.find(in: "BANDITO://JOIN?v=1") == nil)
+        #expect(JoinTicket.find(in: "bandito://pair?v=1&code=x") == nil)
+        #expect(JoinTicket.find(in: "no link at all") == nil)
+        #expect(JoinTicket.find(in: "") == nil)
+    }
+
     @Test func theSecretIsNotPrintedInAnyDescription() {
         let ticket = fixedTicket()
         let text = "\(ticket) \(String(reflecting: ticket))"

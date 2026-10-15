@@ -89,6 +89,14 @@ public struct JoinTicket: Sendable, CustomStringConvertible, CustomDebugStringCo
         return parse(url)
     }
 
+    /// The ticket of the first `bandito://join…` word of a text, so a link pasted inside a message still works. Nil when
+    /// there is no such word or it is not a valid ticket.
+    public static func find(in text: String) -> JoinTicket? {
+        guard let word = text.split(whereSeparator: { $0.isWhitespace }).first(where: { $0.lowercased().hasPrefix("bandito://join") })
+        else { return nil }
+        return parse(String(word))
+    }
+
     /// Whether the envelope was sealed by this Mac: the SHA-256 of its sender key is `macKeyHash`. The comparison
     /// is in constant time.
     public func isFromMac(envelope: Data) -> Bool {
@@ -163,6 +171,14 @@ public struct ClaimedDevice: Sendable, Equatable, Decodable {
     public var publicKey: String
     /// The device's Ed25519 signing key (base64).
     public var signingKey: String
+
+    public init(id: String, name: String, platform: String, publicKey: String, signingKey: String) {
+        self.id = id
+        self.name = name
+        self.platform = platform
+        self.publicKey = publicKey
+        self.signingKey = signingKey
+    }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, platform
