@@ -851,7 +851,14 @@ public final class ServerModel: Identifiable {
     /// unread for everything that waits for a real one.
     public func seedCachedAgents(_ cached: [Agent]) {
         guard agentsReadAt == nil, agents.isEmpty, !cached.isEmpty else { return }
-        agents = cached
+        // What an agent was doing or waited for when the copy was saved is not true any more: only the team is shown.
+        agents = cached.map { agent in
+            var agent = agent
+            agent.status = nil
+            agent.pendingApprovals = 0
+            agent.pendingApprovalIds = []
+            return agent
+        }
         agentsFromCache = true
     }
 

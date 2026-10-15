@@ -21,7 +21,12 @@ struct AgentListCache {
         guard let data = try? JSONEncoder().encode(agents) else { return }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try data.write(to: file(serverID), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var url = file(serverID)
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            // A copy of what the Mac has: it can be read again, so it stays out of the phone's backup.
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try? url.setResourceValues(values)
         } catch {
             // A copy that cannot be kept is only a missing convenience.
         }

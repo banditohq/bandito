@@ -45,8 +45,8 @@ import Testing
 }
 
 @Suite struct CrewConnectionNoticeTests {
-    private func notice(_ state: ConnectionState, read: Bool = false, cache: Bool = false) -> CrewConnectionNotice {
-        CrewFacts.notice(state: state, agentsReadAt: read ? Date() : nil, fromCache: cache)
+    private func notice(_ state: ConnectionState, cache: Bool = false, disabled: Bool = false) -> CrewConnectionNotice {
+        CrewFacts.notice(state: state, fromCache: cache, disabled: disabled)
     }
 
     @Test func connectedSaysNothing() {
@@ -64,7 +64,16 @@ import Testing
         // No "Offline" flash for the half second every launch takes to connect.
         #expect(notice(.connecting, cache: true) == .none)
         #expect(notice(.disconnected, cache: true) == .none)
-        #expect(notice(.connecting, read: true) == .none)
+    }
+
+    @Test func aRetryOfAnEmptyTeamSaysConnectingNotCreateAnAgent() {
+        // The list was read once (empty) and the link dropped: "Try again" connects, the screen says so.
+        #expect(notice(.connecting) == .connecting)
+    }
+
+    @Test func aServerSwitchedOffIsOfflineNotConnectingForEver() {
+        #expect(notice(.disconnected, disabled: true) == .offline)
+        #expect(notice(.disconnected, cache: true, disabled: true) == .offlineWithCache)
     }
 
     @Test func aLostLinkWithASavedListIsOfflineWithCache() {
@@ -75,7 +84,6 @@ import Testing
     @Test func otherwiseNotConnectedIsOffline() {
         #expect(notice(.reconnecting(attempt: 2)) == .offline)
         #expect(notice(.failed(.noAnswer)) == .offline)
-        #expect(notice(.reconnecting(attempt: 2), read: true) == .offline)
     }
 }
 

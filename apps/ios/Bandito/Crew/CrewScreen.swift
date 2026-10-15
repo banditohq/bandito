@@ -192,7 +192,7 @@ struct CrewList: View {
         let waiting = rows.filter { $0.waiting != nil }
         let approvals = CrewFacts.waitingItems(of: server, answered: answered)
         let notice = CrewFacts.notice(
-            state: server.state, agentsReadAt: server.agentsReadAt, fromCache: server.agentsFromCache)
+            state: server.state, fromCache: server.agentsFromCache, disabled: server.config.disabled)
         List {
             serverSwitch
                 .listRowBackground(Color.clear)

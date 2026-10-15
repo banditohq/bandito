@@ -68,6 +68,18 @@ func eventPage(_ seqs: ClosedRange<Int>) -> String {
         #expect(model.agents.map(\.id) == ["a1"])
     }
 
+    @Test func aSavedAgentKeepsNoStaleStatusOrApprovals() {
+        let (model, _) = makeModel([])
+        var saved = Agent(id: "a1", name: "Forge", runtime: .claude, cwd: "/work")
+        saved.status = .needsYou
+        saved.pendingApprovals = 2
+        saved.pendingApprovalIds = ["p1", "p2"]
+        model.seedCachedAgents([saved])
+        #expect(model.agents.first?.status == nil)
+        #expect(model.agents.first?.pendingApprovals == 0)
+        #expect(model.agents.first?.pendingApprovalIds.isEmpty == true)
+    }
+
     @Test func aSavedAgentListNeverReplacesOneThatWasRead() async throws {
         let fake = FakeTransport(handlers: daemonHandlers())
         let (model, _) = makeModel([fake])

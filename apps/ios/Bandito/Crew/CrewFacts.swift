@@ -194,15 +194,16 @@ enum CrewConnectionNotice: Equatable {
 }
 
 extension CrewFacts {
-    nonisolated static func notice(state: ConnectionState, agentsReadAt: Date?, fromCache: Bool) -> CrewConnectionNotice {
+    nonisolated static func notice(state: ConnectionState, fromCache: Bool, disabled: Bool = false) -> CrewConnectionNotice {
+        // A server switched off in Settings is never connected: it must not say "Connecting…" for ever.
+        if disabled { return fromCache ? .offlineWithCache : .offline }
         switch state {
         case .connected:
             return .none
         case .connecting, .disconnected:
             // Every launch passes here before its first answer: a saved team is shown quietly (the server's dot is grey),
             // never "Offline" for the half second a connection takes. `.disconnected` is the state before `connect()`.
-            if fromCache || agentsReadAt != nil { return .none }
-            return .connecting
+            return fromCache ? .none : .connecting
         case .reconnecting, .failed:
             return fromCache ? .offlineWithCache : .offline
         }
@@ -213,11 +214,11 @@ extension CrewFacts {
     @MainActor
     static func emptyNotice(servers: [ServerModel]) -> (notice: CrewConnectionNotice, server: ServerModel)? {
         guard !servers.isEmpty, !servers.contains(where: { $0.state == .connected }) else { return nil }
-        for server in servers {
-            let notice = notice(state: server.state, agentsReadAt: server.agentsReadAt, fromCache: server.agentsFromCache)
-            if notice != .none { return (notice, server) }
-        }
-        return nil
+        // No server is connected, so nothing here is known yet: an empty Inbox or Activity never says "nothing waits"
+        // then, even while a saved team is shown quietly on the Crew.
+        guard let server = servers.first(where: { !$0.config.disabled }) ?? servers.first else { return nil }
+        let notice = notice(state: server.state, fromCache: server.agentsFromCache, disabled: server.config.disabled)
+        return (notice == .none ? .connecting : notice, server)
     }
 }
 
