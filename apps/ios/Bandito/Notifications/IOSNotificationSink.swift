@@ -105,14 +105,16 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
         }
     }
 
-    /// The chat was read on another device: the delivered notices of that chat go, the ones that wait for an answer stay.
-    func removeDelivered(agentID: String, serverID: UUID) {
+    /// The chat was read to `readSeq` on another device: the delivered notices of that chat up to that seq go.
+    func removeDelivered(agentID: String, serverID: UUID, upTo readSeq: Int64) {
         UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
             let identifiers = delivered
-                .filter {
-                    Self.clearsWhenRead(
-                        threadID: $0.request.content.threadIdentifier, userInfo: $0.request.content.userInfo,
-                        agentID: agentID, serverID: serverID)
+                .filter { note in
+                    let content = note.request.content
+                    return Self.clearsWhenRead(
+                        identifier: note.request.identifier, threadID: content.threadIdentifier,
+                        categoryID: content.categoryIdentifier, userInfo: content.userInfo,
+                        agentID: agentID, serverID: serverID, readSeq: readSeq)
                 }
                 .map(\.request.identifier)
             guard !identifiers.isEmpty else { return }
@@ -120,16 +122,32 @@ final class IOSNotificationSink: NSObject, NotificationService.Sink, UNUserNotif
         }
     }
 
-    /// Whether a delivered notice goes when its chat is read on another device. It must belong to that chat (its thread
-    /// is the agent, and its server is that server when it names one). An approval or a question stays: the person still
-    /// has to answer it.
+    /// The categories of notices that wait for an answer: an approval in any of its forms, a form, a question (what a
+    /// `needs_you` status shows). They stay until they are answered, even when the chat was read elsewhere.
+    nonisolated static let waitingCategories: Set<String> = [
+        NotificationContent.approvalCategory, NotificationContent.approvalReviewCategory, PhoneNotice.riskyCategory,
+        NotificationContent.formCategory, NotificationContent.questionCategory,
+    ]
+
+    /// Whether a delivered notice goes when its chat is read to `readSeq` on another device. It must belong to that chat
+    /// (its thread is the agent; its server is that one when it names a server id), it must not wait for an answer, and
+    /// its seq (from `<server>:<seq>`) must be at or below the mark. A notice whose seq cannot be read stays.
     nonisolated static func clearsWhenRead(
-        threadID: String, userInfo: [AnyHashable: Any], agentID: String, serverID: UUID
+        identifier: String, threadID: String, categoryID: String, userInfo: [AnyHashable: Any],
+        agentID: String, serverID: UUID, readSeq: Int64
     ) -> Bool {
-        guard threadID == agentID else { return false }
-        if let server = userInfo["server"] as? String, server != serverID.uuidString { return false }
+        guard threadID == agentID, !waitingCategories.contains(categoryID) else { return false }
+        // A push names the server by the phone's own name for it, not by its id: then the agent's id alone decides.
+        if let server = userInfo["server"] as? String, let id = UUID(uuidString: server), id != serverID { return false }
         let waiting = ["approvalID", "formID"].contains { !((userInfo[$0] as? String) ?? "").isEmpty }
-        return !waiting
+        guard !waiting, let seq = noticeSeq(identifier) else { return false }
+        return seq <= readSeq
+    }
+
+    /// The event seq at the end of a notice's identifier (`<server>:<seq>`), nil when there is none.
+    nonisolated static func noticeSeq(_ identifier: String) -> Int64? {
+        guard let colon = identifier.lastIndex(of: ":") else { return nil }
+        return Int64(identifier[identifier.index(after: colon)...])
     }
 
     /// The app is open: the change shows in the app, so no banner. A push (`UNPushNotificationTrigger`) is held back the same

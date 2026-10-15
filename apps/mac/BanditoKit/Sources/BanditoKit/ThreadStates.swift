@@ -89,20 +89,23 @@ public final class AgentThreadState {
         if let agentID { readSync?.schedule(agentID: agentID, seq: thread.lastSeq) }
     }
 
-    /// The chat was read to `seq` on another device (a `read_mark` event, or the `read_seq` of `agents.list`). The mark
-    /// moves here as a local read would, but nothing goes back to the daemon: the other device has it. A mark never
-    /// moves back, and a loaded thread cuts it to its newest seq (the daemon cuts it too).
-    /// Returns whether the mark moved.
+    /// The chat was read to `seq` on another device, or the daemon's own answer to this device's read (a `read_mark`
+    /// event, or the `read_seq` of `agents.list`). The mark moves here as a local read would, but nothing goes back to
+    /// the daemon: it has the mark already. A mark never moves back. The daemon has cut `seq` to the chat's newest event
+    /// already, so it is kept as it came. Returns the new mark when it moved, nil when it did not.
     @discardableResult
-    public func applyRemoteRead(_ seq: Int64) -> Bool {
-        let stored = agentID.flatMap { readMarks?.seq(for: $0) }
-        let current = resolveReadSeq() ?? stored
-        let target = loaded ? min(seq, thread.lastSeq) : seq
-        guard target > (current ?? 0) else { return false }
-        moveRead(to: target)
+    public func applyRemoteRead(_ seq: Int64) -> Int64? {
+        guard seq > (readMark ?? 0) else { return nil }
+        moveRead(to: seq)
         recount()
         refreshActivity()
-        return true
+        return seq
+    }
+
+    /// The mark this device holds for the chat: the one it read to, or the one kept on the device before the chat was
+    /// loaded. Nil when there is none.
+    var readMark: Int64? {
+        readSeq ?? agentID.flatMap { readMarks?.seq(for: $0) }
     }
 
     /// The seq the chat was read to. The first time a loaded thread is seen with no stored mark, all of it counts as read.

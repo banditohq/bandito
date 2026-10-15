@@ -113,7 +113,7 @@ import Testing
         #expect(log.sent.isEmpty, "a mark from the daemon is not sent back")
     }
 
-    @Test func aRemoteMarkNeverMovesBackAndIsCutToTheLoadedThread() {
+    @Test func aRemoteMarkNeverMovesBackAndIsKeptAsItCame() {
         // A device that read nothing yet: its mark is 0, so the three replies are unread until a mark says otherwise.
         let config = ServerConfig(name: "t", endpoint: .local(socketPath: "/tmp/none"))
         let marks = ReadMarks(serverID: config.id, defaults: freshDefaults())
@@ -131,9 +131,10 @@ import Testing
         server.apply(Event(seq: 0, agentId: agent, ts: 2, body: .readMark(seq: 1)))
         #expect(box.unreadCount == 1, "an older mark does not move the read point back")
         #expect(marks.seq(for: agent) == 2)
+        // The daemon cut the mark already: a mark past this device's thread is kept as it came.
         server.apply(Event(seq: 0, agentId: agent, ts: 3, body: .readMark(seq: 999)))
-        #expect(box.unreadCount == 0, "a mark past the thread is cut to the thread")
-        #expect(marks.seq(for: agent) == 3)
+        #expect(box.unreadCount == 0)
+        #expect(marks.seq(for: agent) == 999)
     }
 
     @Test func aRemoteMarkForAThreadNotLoadedYetIsKept() {
@@ -229,6 +230,103 @@ private final class SendLog {
     }
 
     var sent: [Sent] = []
+}
+
+extension ReadMarkSyncTests {
+    @Test func aSendThatFailsWaitsForTheNextConnection() async {
+        let (server, log) = server(interval: .milliseconds(20))
+        var online = false
+        server.threads.readSync.send = { id, seq in
+            log.sent.append(SendLog.Sent(agent: id, seq: seq, at: ContinuousClock.now))
+            if !online { throw URLError(.notConnectedToInternet) }
+        }
+        server.threads[agent] = thread([event(1, .messageAssistant(text: "one"))])
+        let box = server.threadSummary(for: agent)
+        server.apply(event(2, .messageAssistant(text: "two")))
+        box.markRead()
+        await settle { log.sent.count == 1 }
+        // Offline: the mark is not dropped, and it is not retried on a timer either.
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(log.sent.map(\.seq) == [2])
+        #expect(box.unreadCount == 0, "the local read still happens")
+        // The connection comes back: the mark that was not sent goes out.
+        online = true
+        server.threads.readSync.resume()
+        await settle { log.sent.count == 2 }
+        #expect(log.sent.map(\.seq) == [2, 2])
+    }
+
+    @Test func aNewerReadReplacesTheUnsentOne() async {
+        let (server, log) = server(interval: .milliseconds(20))
+        var online = false
+        server.threads.readSync.send = { id, seq in
+            log.sent.append(SendLog.Sent(agent: id, seq: seq, at: ContinuousClock.now))
+            if !online { throw URLError(.notConnectedToInternet) }
+        }
+        server.threads[agent] = thread([event(1, .messageAssistant(text: "one"))])
+        let box = server.threadSummary(for: agent)
+        server.apply(event(2, .messageAssistant(text: "two")))
+        box.markRead()
+        await settle { log.sent.count == 1 }
+        server.apply(event(3, .messageAssistant(text: "three")))
+        box.markRead()
+        await settle { log.sent.count == 2 }
+        online = true
+        server.threads.readSync.resume()
+        await settle { log.sent.count == 3 }
+        #expect(log.sent.map(\.seq) == [2, 3, 3], "the unsent mark is the newest one")
+    }
+
+    @Test func aLocalMarkAboveTheDaemonsIsSentWhenTheListArrives() async {
+        let config = ServerConfig(name: "t", endpoint: .local(socketPath: "/tmp/none"))
+        let localMarks = ReadMarks(serverID: config.id, defaults: freshDefaults())
+        localMarks.set(5, for: agent)  // read offline: the daemon does not have 5
+        localMarks.set(2, for: "ahead")  // the daemon is ahead of this device
+        localMarks.set(4, for: "level")  // the daemon has the same mark
+        let server = ServerModel(config: config, readMarks: localMarks)
+        let log = SendLog()
+        server.threads.readSync.interval = .milliseconds(20)
+        server.threads.readSync.send = { id, seq in
+            log.sent.append(SendLog.Sent(agent: id, seq: seq, at: ContinuousClock.now))
+        }
+        let list = """
+            [{"id":"forge","name":"Forge","runtime":"claude","cwd":"/tmp","read_seq":2},\
+            {"id":"ahead","name":"Ahead","runtime":"claude","cwd":"/tmp","read_seq":7},\
+            {"id":"level","name":"Level","runtime":"claude","cwd":"/tmp","read_seq":4},\
+            {"id":"fresh","name":"Fresh","runtime":"claude","cwd":"/tmp"}]
+            """
+        let agents = try! RPCClient.decoder.decode([Agent].self, from: Data(list.utf8))
+        server.applyReadSeqs(agents)
+        await settle { !log.sent.isEmpty }
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(log.sent.map(\.agent) == [agent], "only this device's mark above the daemon's goes out")
+        #expect(log.sent.map(\.seq) == [5])
+        // The daemon's higher mark is applied here, and it is not sent back.
+        #expect(localMarks.seq(for: "ahead") == 7)
+        #expect(log.sent.count == 1)
+    }
+
+    @Test func theDaemonsMarkOfAMovedChatIsTold() {
+        let config = ServerConfig(name: "t", endpoint: .local(socketPath: "/tmp/none"))
+        let marks = ReadMarks(serverID: config.id, defaults: freshDefaults())
+        marks.set(0, for: agent)
+        let server = ServerModel(config: config, readMarks: marks)
+        var moves: [(String, Int64)] = []
+        server.onRemoteRead = { agentID, seq in moves.append((agentID, seq)) }
+        server.threads[agent] = thread([
+            event(1, .messageAssistant(text: "one")),
+            event(2, .messageAssistant(text: "two")),
+        ])
+        server.apply(Event(seq: 0, agentId: agent, ts: 1, body: .readMark(seq: 2)))
+        server.apply(Event(seq: 0, agentId: agent, ts: 2, body: .readMark(seq: 2)))
+        server.apply(Event(seq: 0, agentId: agent, ts: 3, body: .readMark(seq: 1)))
+        #expect(moves.count == 1, "only a move is told")
+        #expect(moves.first?.0 == agent)
+        #expect(moves.first?.1 == 2, "with the seq it moved to")
+        // The answer to this device's own read is a move too.
+        server.receivedReadMark(agentID: agent, seq: 9)
+        #expect(moves.last?.1 == 9)
+    }
 }
 
 /// The wire of the read mark: decoded with the app's decoder, and a kind the app does not know never breaks a page.

@@ -753,7 +753,7 @@ public final class ServerModel: Identifiable {
         if e.seq > lastSeq { lastSeq = e.seq }
         // Another device read the chat: its unread count follows, and nothing goes back to the daemon.
         if case .readMark(let seq) = e.body {
-            if threads.box(e.agentId).applyRemoteRead(seq) { onRemoteRead?(e.agentId) }
+            receivedReadMark(agentID: e.agentId, seq: seq)
             return
         }
         if case .telegramChanged = e.body {
@@ -888,13 +888,24 @@ public final class ServerModel: Identifiable {
     /// device does (`AgentThreadState.applyRemoteRead`).
     func applyReadSeqs(_ list: [Agent]) {
         for agent in list {
-            if let seq = agent.readSeq, threads.box(agent.id).applyRemoteRead(seq) { onRemoteRead?(agent.id) }
+            if let seq = agent.readSeq { receivedReadMark(agentID: agent.id, seq: seq) }
+            // A mark this device holds above the daemon's (read offline, or its send was lost) goes to the daemon.
+            if let mine = threads.box(agent.id).readMark, mine > (agent.readSeq ?? 0) {
+                threads.readSync.schedule(agentID: agent.id, seq: mine)
+            }
         }
     }
 
-    /// Called when another device moved the read mark of an agent's chat (a `read_mark` event, or the list after a
-    /// reconnect moved one): the app takes the chat's notices away, as the person has read them on that device.
-    public var onRemoteRead: ((_ agentID: String) -> Void)?
+    /// A read mark that came from the daemon (a `read_mark` event, the list, or its answer to this device's own read):
+    /// the chat moves to it, and `onRemoteRead` is told when it moved.
+    func receivedReadMark(agentID: String, seq: Int64) {
+        if let moved = threads.box(agentID).applyRemoteRead(seq) { onRemoteRead?(agentID, moved) }
+    }
+
+    /// Called when the read mark of an agent's chat moved because of another device (a `read_mark` event, the list
+    /// after a reconnect, or the daemon's answer to a read of this device), with the new mark. The app takes the notices
+    /// of the chat up to that seq away.
+    public var onRemoteRead: ((_ agentID: String, _ seq: Int64) -> Void)?
 
     /// Agents that exist only in the app, for the performance scenarios (the QA command `perf` and the smoothness
     /// check of the Help menu, which runs on a demo daemon): a thread built in memory, no daemon behind it.

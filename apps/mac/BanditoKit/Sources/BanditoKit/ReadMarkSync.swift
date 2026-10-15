@@ -3,7 +3,7 @@ import Foundation
 /// Sends this device's read marks of one server to its daemon (`messages.read`). At most one send per agent per
 /// `interval`, and the newest mark wins: a read that comes during the wait is sent when the wait is over. A daemon
 /// without the method (an older one) turns the sending off until the next connection (`resume`), without a word to the
-/// person. A send that fails (offline, a lost connection) is dropped: the next read carries a newer mark.
+/// person. A send that fails (offline, a lost connection) is kept and sent again on the next connection.
 @MainActor
 public final class ReadMarkSync {
     /// One send: the RPC for an agent's mark. Nil while the server is not set up; nothing is scheduled then.
@@ -44,9 +44,15 @@ public final class ReadMarkSync {
         }
     }
 
-    /// Called on a new connection: a daemon that stopped the sending may have been upgraded.
+    /// Called on a new connection: a daemon that stopped the sending may have been upgraded, and the marks whose send
+    /// failed (offline) go out now.
     public func resume() {
         stopped = false
+        let retry = pending
+        pending = [:]
+        for (agentID, seq) in retry {
+            schedule(agentID: agentID, seq: seq)
+        }
     }
 
     private func fire(_ agentID: String) async {
@@ -60,7 +66,9 @@ public final class ReadMarkSync {
             stopped = true
             pending.removeAll()
         } catch {
-            // Offline or a failed call: this mark is lost, and the next read sends a newer one.
+            // Offline or a failed call: the mark waits for the next connection (`resume`), unless a newer read has
+            // replaced it meanwhile.
+            if pending[agentID] == nil { pending[agentID] = seq }
         }
     }
 }

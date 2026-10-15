@@ -171,9 +171,9 @@ The unread state of a chat is kept on the server, so that a chat read on one dev
 - `agents.list` and `agents.get` return `read_seq` for each agent: the mark, or `null` before any read. A device applies it when the list arrives (a reconnect brings the reads made meanwhile).
 - A device keeps its own marks on the device (UserDefaults, per server). A device with no mark for a chat counts what is loaded as read (the first launch shows no badges for the old history); a mark from the daemon moves that device's mark as well.
 - Deleting an agent deletes its mark (`ON DELETE CASCADE`, and `agent_delete` removes the row too).
-- Sending from a device: once per agent per second at most, and the newest mark wins (a read during the wait goes out when the wait is over). A send that fails (offline) is dropped; the next read sends a newer mark. A daemon without the method (`method not found`, an older one) turns the sending off for that server until the next connection, without a word to the person.
+- Sending from a device: once per agent per second at most, and the newest mark wins (a read during the wait goes out when the wait is over). A send that fails (offline) is kept and sent again on the next connection, unless a newer read replaced it. On a connection, and whenever `agents.list` arrives, a mark the device holds above the daemon's `read_seq` is sent (a chat read offline). A daemon without the method (`method not found`, an older one) turns the sending off for that server until the next connection, without a word to the person.
 - An app of an older version reads `read_mark` as an unknown event and shows nothing (an unknown kind never breaks a page of events).
-- On iPhone, a read elsewhere takes the delivered notices of that chat away, except the ones that wait for an answer (an approval or a question): those stay until they are answered.
+- On iPhone, a read to seq S elsewhere takes the delivered notices of that chat away whose seq (the `<server>:<seq>` identifier) is at most S. Notices that wait for an answer (approval, form, question, `needs_you`) stay until they are answered, and so does a notice whose seq cannot be read.
 
 ## Replies and attachments
 

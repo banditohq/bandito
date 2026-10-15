@@ -105,9 +105,9 @@ final class IOSNotifications {
                 TurnActivities.shared.ingest(event, from: server)
             }
             // The chat was read on another device: its notices here are read too.
-            server.onRemoteRead = { [weak self, weak server] agentID in
+            server.onRemoteRead = { [weak self, weak server] agentID, seq in
                 guard let self, let server else { return }
-                self.sink.removeDelivered(agentID: agentID, serverID: server.id)
+                self.sink.removeDelivered(agentID: agentID, serverID: server.id, upTo: seq)
             }
         }
         updateBadge()

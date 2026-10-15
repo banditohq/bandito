@@ -18,6 +18,7 @@ extension ServerModel {
             throw RPCError(code: RPCError.methodNotFound, message: "the daemon has no read marks")
         }
         let reply = try await rpc().call("messages.read", Params(agentId: agentID, seq: seq), as: Reply.self)
-        threads.box(agentID).applyRemoteRead(reply.seq)
+        // The daemon keeps the newer of its mark and `seq`: a newer one from another device is applied here.
+        receivedReadMark(agentID: agentID, seq: reply.seq)
     }
 }
