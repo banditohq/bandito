@@ -3601,5 +3601,10 @@
   "account.hidden.show": "Показать скрытые серверы ({count})",
   "account.hidden.hint": "Серверы аккаунта, которые вы убрали с этого устройства. Покажите их, и они появятся снова.",
   "ios.account.servers.hidden": "Скрыт",
-  "ios.account.servers.updateNeeded": "Нужно обновить Bandito"
+  "ios.account.servers.updateNeeded": "Нужно обновить Bandito",
+  "ios.live.done": "Готово",
+  "ios.live.failed": "Не закончил",
+  "ios.live.stopFailed": "Не удалось остановить: нет связи",
+  "ios.live.setting": "Живые действия на экране блокировки",
+  "ios.live.settingHint": "Показывает задачу, которая идёт дольше 30 секунд, с кнопкой «Стоп»."
 }

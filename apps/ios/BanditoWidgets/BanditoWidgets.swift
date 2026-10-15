@@ -1,3 +1,4 @@
+import ActivityKit
 import BanditoDesign
 import BanditoL10n
 import SwiftUI
@@ -11,6 +12,7 @@ struct BanditoWidgetBundle: WidgetBundle {
     var body: some Widget {
         InboxWidget()
         CrewWidget()
+        TurnActivityWidget()
     }
 }
 
@@ -89,5 +91,43 @@ private struct CrewEntryView: View {
     var body: some View {
         CrewWidgetView(snapshot: entry.snapshot)
             .containerBackground(Color.Bandito.bg, for: .widget)
+    }
+}
+
+/// The Live Activity of a long turn: the lock screen card and the Dynamic Island. The app starts and updates it.
+struct TurnActivityWidget: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: TurnActivityAttributes.self) { context in
+            TurnLockScreenView(attributes: context.attributes, state: context.state)
+                .activityBackgroundTint(Color.Bandito.bg)
+                .activitySystemActionForegroundColor(Color.Bandito.text)
+                .widgetURL(context.attributes.link)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    TurnAvatar(attributes: context.attributes, phase: context.state.phase, size: 44)
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    TurnTitle(attributes: context.attributes, state: context.state)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    TurnTrailing(state: context.state)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    if context.state.phase == .running {
+                        TurnStopButton(attributes: context.attributes)
+                    }
+                }
+            } compactLeading: {
+                TurnAvatar(attributes: context.attributes, phase: context.state.phase, size: 22)
+            } compactTrailing: {
+                TurnTrailing(state: context.state, fontSize: 13)
+                    .frame(maxWidth: 52)
+            } minimal: {
+                TurnAvatar(attributes: context.attributes, phase: context.state.phase, size: 22)
+            }
+            .keylineTint(Color.Bandito.signal)
+            .widgetURL(context.attributes.link)
+        }
     }
 }

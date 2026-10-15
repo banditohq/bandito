@@ -1097,6 +1097,11 @@
 "ios.intent.ask.sent" = "Sent to %1$@";
 "ios.intent.needsMe.none" = "Nothing needs you";
 "ios.intent.open.inbox" = "Open Inbox";
+"ios.live.done" = "Done";
+"ios.live.failed" = "Did not finish";
+"ios.live.setting" = "Live Activities on the lock screen";
+"ios.live.settingHint" = "Shows a task that runs longer than 30 seconds, with a Stop button.";
+"ios.live.stopFailed" = "Could not stop: no connection";
 "ios.newAgent.installTimedOut" = "The install is still running. Try again in a moment.";
 "ios.newAgent.tabOne" = "One agent";
 "ios.newAgent.tabTeams" = "Ready teams";

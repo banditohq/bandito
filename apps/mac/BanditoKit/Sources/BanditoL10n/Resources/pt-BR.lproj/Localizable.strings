@@ -1097,6 +1097,11 @@
 "ios.intent.ask.sent" = "Enviado para %1$@";
 "ios.intent.needsMe.none" = "Nada precisa de você";
 "ios.intent.open.inbox" = "Abrir caixa de entrada";
+"ios.live.done" = "Pronto";
+"ios.live.failed" = "Não terminou";
+"ios.live.setting" = "Atividades ao vivo na tela de bloqueio";
+"ios.live.settingHint" = "Mostra uma tarefa que dura mais de 30 segundos, com um botão Parar.";
+"ios.live.stopFailed" = "Não foi possível parar: sem conexão";
 "ios.newAgent.installTimedOut" = "A instalação ainda está em andamento. Tente de novo daqui a pouco.";
 "ios.newAgent.tabOne" = "Um agente";
 "ios.newAgent.tabTeams" = "Equipes prontas";

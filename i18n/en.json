@@ -3516,5 +3516,10 @@
   "account.hidden.show": "Show hidden servers ({count})",
   "account.hidden.hint": "Servers of the account that you removed from this device. Show them and they come back.",
   "ios.account.servers.hidden": "Hidden",
-  "ios.account.servers.updateNeeded": "Update Bandito"
+  "ios.account.servers.updateNeeded": "Update Bandito",
+  "ios.live.done": "Done",
+  "ios.live.failed": "Did not finish",
+  "ios.live.stopFailed": "Could not stop: no connection",
+  "ios.live.setting": "Live Activities on the lock screen",
+  "ios.live.settingHint": "Shows a task that runs longer than 30 seconds, with a Stop button."
 }

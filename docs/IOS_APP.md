@@ -38,7 +38,7 @@ and Activity) opens the composer with an agent picker (last used first).
   ("Ran 7 commands"), changes summary card ("12 files, +240 −30") opening a diff list. Links open in an in-app Safari
   view; ⌘-less phone: long press for "Open in Safari".
 - **A long task**: Live Activity on the lock screen and Dynamic Island while a turn runs > 30 s: agent avatar, what it is
-  doing now ("Running tests"), elapsed time, Stop. Ends with "Done" or "Needs you".
+  doing now ("Running tests"), elapsed time, Stop. Ends with "Done" or "Needs you". (Built: `apps/ios/CLAUDE.md`, "Live Activities"; the switch is in Settings, Notifications.)
 
 ### Connecting a server (built)
 

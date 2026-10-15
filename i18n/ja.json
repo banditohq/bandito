@@ -3474,5 +3474,10 @@
   "account.hidden.show": "非表示のサーバーを表示（{count}）",
   "account.hidden.hint": "このデバイスから削除したアカウントのサーバーです。表示すると、再び追加されます。",
   "ios.account.servers.hidden": "非表示",
-  "ios.account.servers.updateNeeded": "Bandito の更新が必要"
+  "ios.account.servers.updateNeeded": "Bandito の更新が必要",
+  "ios.live.done": "完了",
+  "ios.live.failed": "完了しませんでした",
+  "ios.live.stopFailed": "停止できません: 接続がありません",
+  "ios.live.setting": "ロック画面のライブアクティビティ",
+  "ios.live.settingHint": "30秒以上かかるタスクを、停止ボタン付きで表示します。"
 }

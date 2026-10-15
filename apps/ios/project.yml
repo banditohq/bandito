@@ -49,6 +49,7 @@ targets:
         NSSpeechRecognitionUsageDescription: Bandito turns your speech into text only while you dictate a message.
         NSLocalNetworkUsageDescription: Bandito talks to your Mac or server on your local network.
         NSFaceIDUsageDescription: Bandito uses Face ID to lock the app and to confirm risky actions.
+        NSSupportsLiveActivities: true
         UIBackgroundModes: [fetch]
         BGTaskSchedulerPermittedIdentifiers: [dev.bandito.ios.refresh]
         UILaunchScreen: {}

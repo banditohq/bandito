@@ -90,6 +90,20 @@ The screen every day. Read the rules before changing it; each came from the Mac'
 - Debug launch arguments: `-chat <agent>` (Crew), `-chat-draft <text>`, `-chat-send <text>`, `-chat-top`, `-chat-row <id part>`.
   The demo agents answer (`Demo/DemoChatScript.swift`: commands, a streamed reply, an approval for Forge, two buttons).
 
+## Live Activities (`LiveActivity/`, `Shared/TurnActivity*.swift`)
+
+- A turn that runs 30 seconds gets an activity (agent avatar, "what it does now", time, Stop); it ends on Done, Needs you
+  or a failure. `TurnActivityRules` (pure, `TurnActivityRulesTests`) decides; `TurnActivities.shared` applies it to
+  ActivityKit and is fed by `IOSNotifications.attach` (`ingest`), RootView (foreground, servers, the setting).
+- One activity per (server, agent), three running at most; `pushType: nil` (the app updates it itself, so a request needs
+  the foreground: a turn that passes 30 s in the background gets its activity when the app returns). `doing` changes at most
+  every 5 s. Ended ones stay 15 minutes (an hour on "needs you"). Orphans of a killed run are swept 15 s after launch.
+- Stop is `StopTurnIntent` (a `LiveActivityIntent`, runs in the app via `TurnStopRelay`), no connection leaves the activity and says so.
+- The extension draws only (`TurnActivityViews.swift`): static raccoon, no animation. Do not put a `BanditoFont` font on
+  `Text(timerInterval:)`: the system archives that text and the extension crashes (the timer uses the system's mono font).
+- Debug: `-demo -live-demo` starts Forge's activity, "Done" after 20 s (`-live-demo-seconds N`). On the Simulator the first
+  request asks the system's consent on the lock screen ("Always allow"); the Island's pixels are not in `simctl` screenshots.
+
 ## Known gaps before a release
 
 - `AppIcon` is `brand/png/icon-1024.png` with an alpha channel; App Store Connect rejects an icon with alpha: flatten it

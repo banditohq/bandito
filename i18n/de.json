@@ -3515,5 +3515,10 @@
   "account.hidden.show": "Ausgeblendete Server anzeigen ({count})",
   "account.hidden.hint": "Server des Kontos, die du von diesem Gerät entfernt hast. Zeige sie an, und sie kommen zurück.",
   "ios.account.servers.hidden": "Ausgeblendet",
-  "ios.account.servers.updateNeeded": "Bandito aktualisieren"
+  "ios.account.servers.updateNeeded": "Bandito aktualisieren",
+  "ios.live.done": "Fertig",
+  "ios.live.failed": "Nicht abgeschlossen",
+  "ios.live.stopFailed": "Anhalten nicht möglich: keine Verbindung",
+  "ios.live.setting": "Live-Aktivitäten auf dem Sperrbildschirm",
+  "ios.live.settingHint": "Zeigt eine Aufgabe, die länger als 30 Sekunden dauert, mit einer Stopp-Taste."
 }
