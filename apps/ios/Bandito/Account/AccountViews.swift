@@ -68,7 +68,13 @@ struct AccountScreen: View {
         case .loading:
             if account.joinMacName != nil { joinWaiting } else { loading }
         case .waitingForApproval(let code):
-            if account.joinProblem == .foreign { foreignKey } else { waiting(code: code) }
+            if account.joinProblem == .foreign {
+                foreignKey
+            } else if account.joinMacName != nil {
+                joinWaiting
+            } else {
+                waiting(code: code)
+            }
         case .confirmSender(let code): confirm(code: code)
         case .rejected: rejected
         case .recoverRequired: recover
