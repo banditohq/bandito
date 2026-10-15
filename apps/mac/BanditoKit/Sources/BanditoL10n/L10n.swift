@@ -1399,6 +1399,14 @@ public enum L10n {
             }
         }
 
+        public enum AccountServers {
+            public static var fetching: String { L10n.tr("ios.accountServers.fetching") }
+            public static var macOffline: String { L10n.tr("ios.accountServers.macOffline") }
+            public static var noAccess: String { L10n.tr("ios.accountServers.noAccess") }
+            public static var title: String { L10n.tr("ios.accountServers.title") }
+            public static var waiting: String { L10n.tr("ios.accountServers.waiting") }
+        }
+
         public enum Activity {
             public static var emptyErrors: String { L10n.tr("ios.activity.emptyErrors") }
             public static var emptyMessage: String { L10n.tr("ios.activity.emptyMessage") }

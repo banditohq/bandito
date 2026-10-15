@@ -955,6 +955,11 @@
 "ios.account.signIn.text" = "登录后即可在这台 iPhone 上看到你 Mac 上的服务器。列表已加密，密钥只保存在你的设备上。";
 "ios.account.signOut.message" = "已连接的服务器会保留。再次登录此账户无需批准。";
 "ios.account.signOut.title" = "退出账户？";
+"ios.accountServers.fetching" = "正在获取你账户的服务器…";
+"ios.accountServers.macOffline" = "Mac 不在线，开机后服务器会出现";
+"ios.accountServers.noAccess" = "手机端已关闭。在 Mac 上：设置 → 服务器 → 该服务器 → iPhone →“手机访问”";
+"ios.accountServers.title" = "你账户的服务器";
+"ios.accountServers.waiting" = "正在等待 Mac 响应…";
 "ios.activity.emptyErrors" = "没有错误。";
 "ios.activity.emptyMessage" = "已完成的回复和有话要说的定时运行会显示在这里。";
 "ios.activity.emptyTitle" = "目前很安静";

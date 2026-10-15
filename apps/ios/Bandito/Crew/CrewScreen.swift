@@ -9,6 +9,8 @@ import UIKit
 struct CrewScreen: View {
     let servers: [ServerModel]
     let settings: IOSSettings
+    /// The account: with no server connected, its servers and where each stands are shown instead of the welcome.
+    var account: IOSAccount?
     let onConnect: () -> Void
     /// Switches to the Inbox tab (the "Ещё N" line of the waiting agents).
     let onShowInbox: () -> Void
@@ -27,6 +29,11 @@ struct CrewScreen: View {
     @State private var hooksOpened = false
     #endif
 
+    /// The servers of the account that this iPhone does not hold (none is connected here, so every one counts).
+    private func accountRows(_ account: IOSAccount) -> [AccountServerRow] {
+        AccountServerRules.rows(from: account.servers, fastPolling: account.fastMode, holds: { _, _ in false })
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             Group {
@@ -41,6 +48,8 @@ struct CrewScreen: View {
                         showInbox: onShowInbox
                     )
                     .id(server.id)
+                } else if let account, account.stage == .ready, !accountRows(account).isEmpty || account.fetchingServers {
+                    AccountServersNotice(rows: accountRows(account), fetching: account.fetchingServers, onConnect: onConnect)
                 } else {
                     WelcomeView(onConnect: onConnect)
                 }

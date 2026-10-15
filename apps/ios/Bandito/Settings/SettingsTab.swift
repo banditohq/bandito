@@ -93,9 +93,19 @@ struct SettingsTab: View {
 
     @ViewBuilder private var serversSection: some View {
         Section {
-            if session.current.isEmpty {
-                label(L10n.Server.noServer)
-                    .foregroundStyle(Color.Bandito.text2)
+            let pending = AccountServerRules.rows(
+                from: account.servers, fastPolling: account.fastMode, holds: { session.holds(serverID: $0, phone: $1) })
+            if session.current.isEmpty && pending.isEmpty {
+                if account.fetchingServers {
+                    HStack(spacing: BanditoSpace.s3) {
+                        ProgressView().tint(Color.Bandito.text2)
+                        label(L10n.Ios.AccountServers.fetching)
+                            .foregroundStyle(Color.Bandito.text2)
+                    }
+                } else {
+                    label(L10n.Server.noServer)
+                        .foregroundStyle(Color.Bandito.text2)
+                }
             }
             ForEach(session.current) { server in
                 ConnectedServerRow(facts: ServerRowFacts.make(server))
@@ -121,6 +131,8 @@ struct SettingsTab: View {
                         renaming = server
                     }
             }
+            // Servers of the account this iPhone has no access to yet, with where each stands.
+            ForEach(pending) { AccountServerLine(row: $0) }
             Button(action: onConnect) {
                 HStack(spacing: BanditoSpace.s2) {
                     Image(systemName: "plus.circle.fill")

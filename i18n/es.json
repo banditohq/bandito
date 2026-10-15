@@ -3543,5 +3543,10 @@
   "ios.connection.offlineTitle": "Sin conexión con {name}",
   "ios.connection.offlineHint": "Comprueba que el Mac esté encendido y que Bandito se esté ejecutando en él",
   "ios.connection.retry": "Reintentar",
-  "ios.connection.cachedLine": "Sin conexión: se muestra lo que había antes"
+  "ios.connection.cachedLine": "Sin conexión: se muestra lo que había antes",
+  "ios.accountServers.waiting": "Esperando la respuesta del Mac…",
+  "ios.accountServers.macOffline": "El Mac no está en línea: el servidor aparecerá cuando se encienda",
+  "ios.accountServers.noAccess": "Cerrado a teléfonos. En el Mac: Ajustes → Servidores → el servidor → iPhone → «Acceso desde el teléfono»",
+  "ios.accountServers.fetching": "Obteniendo los servidores de tu cuenta…",
+  "ios.accountServers.title": "Servidores de tu cuenta"
 }

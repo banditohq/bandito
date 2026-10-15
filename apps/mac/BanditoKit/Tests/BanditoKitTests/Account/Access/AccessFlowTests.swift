@@ -286,6 +286,22 @@ final class Clock: @unchecked Sendable {
         #expect(other.waiting == 1)
     }
 
+    @Test func onlyRequestsForServersThisDeviceHoldsCountAsUnanswered() async throws {
+        let sync = AccessFakeSync(blobWithServer())
+        let (responder, requester, _, _) = suite(sync: sync)
+        _ = try await requester.run()
+
+        // Held here but not reachable now: it counts, once per request id.
+        let offline = AccessFakeDaemon(serverID)
+        offline.isReachable = false
+        let held = try await responder.run(servers: [offline])
+        #expect(held.unanswered == 1 && held.open.count == 1)
+
+        // Another Mac's server (not held here): the request waits for that Mac and opens no fast stretch.
+        let foreign = try await responder.run(servers: [])
+        #expect(foreign.waiting == 1 && foreign.unanswered == 0)
+    }
+
     @Test func requestsFromUnknownOrUnapprovedDevicesAreIgnored() async throws {
         var payload = blobWithServer()
         payload.accessRequests = [

@@ -69,6 +69,7 @@ import UIKit
         defer { AgentThreadState.streamPreviewInterval = interval }
 
         let streamStart = CrewCounters.rowBodies
+        let rowStart = CrewCounters.rowBodiesByAgent[streamer, default: 0]
         for piece in 0..<100 {
             server.apply(Event(seq: 0, agentId: streamer, ts: now, body: .messageDelta(text: "word\(piece) ")))
         }
@@ -79,10 +80,12 @@ import UIKit
             waited += 1
         }
         await rest()
-        let made = CrewCounters.rowBodies - streamStart
+        // The streaming agent's own row: a layout pass of the whole list (a slow CI machine makes one now and then) adds
+        // one evaluation to every row, a row built once per piece would add a hundred.
+        let made = CrewCounters.rowBodiesByAgent[streamer, default: 0] - rowStart
         // The stream reached the row (its preview changed), and it did not rebuild it once per piece.
         #expect(made >= 1, "the streamed reply did not reach its row")
-        #expect(made <= 2, "the rows were evaluated \(made) times for 100 pieces of one reply")
+        #expect(made <= 2, "the streaming row was evaluated \(made) times for 100 pieces of one reply (all rows: \(CrewCounters.rowBodies - streamStart))")
 
         window.isHidden = true
         await server.disconnect()

@@ -3543,5 +3543,10 @@
   "ios.connection.offlineTitle": "Impossible de joindre {name}",
   "ios.connection.offlineHint": "Vérifiez que le Mac est allumé et que Bandito y est lancé",
   "ios.connection.retry": "Réessayer",
-  "ios.connection.cachedLine": "Hors connexion : affichage de ce qui était là avant"
+  "ios.connection.cachedLine": "Hors connexion : affichage de ce qui était là avant",
+  "ios.accountServers.waiting": "En attente de la réponse du Mac…",
+  "ios.accountServers.macOffline": "Le Mac est hors ligne : le serveur apparaîtra à son allumage",
+  "ios.accountServers.noAccess": "Fermé aux téléphones. Sur le Mac : Réglages → Serveurs → le serveur → iPhone → « Accès depuis un téléphone »",
+  "ios.accountServers.fetching": "Récupération des serveurs de votre compte…",
+  "ios.accountServers.title": "Serveurs de votre compte"
 }

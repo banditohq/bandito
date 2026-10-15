@@ -3628,5 +3628,10 @@
   "ios.connection.offlineTitle": "Нет связи с {name}",
   "ios.connection.offlineHint": "Проверьте, что Mac включён и Bandito на нём запущен",
   "ios.connection.retry": "Повторить",
-  "ios.connection.cachedLine": "Нет связи — показываем, что было раньше"
+  "ios.connection.cachedLine": "Нет связи — показываем, что было раньше",
+  "ios.accountServers.waiting": "Ждём ответа от Mac…",
+  "ios.accountServers.macOffline": "Mac не в сети — серверы появятся, когда он включится",
+  "ios.accountServers.noAccess": "С телефона закрыт. На Mac: Настройки → Серверы → сервер → iPhone → «Доступ с телефона»",
+  "ios.accountServers.fetching": "Получаем серверы вашего аккаунта…",
+  "ios.accountServers.title": "Серверы вашего аккаунта"
 }
