@@ -315,6 +315,8 @@ struct ThreadView: View {
         // The body is where a switch begins: the agent shown now gets its session before anything reads it.
         let _ = sessions.enter(agent.id)
         chatColumn
+            // A key typed with nothing focused (after a click on the thread or the sidebar) goes to the composer.
+            .typesIntoComposer(agentID: agent.id, active: !hidden, router: router)
             // Files dragged anywhere over the chat (thread and composer) are attached to this agent.
             .overlay {
                 if dropTargeted && canAttach {

@@ -117,10 +117,12 @@ extension ScreenWorkSuites {
                 }
                 router.drafts[PerfFixtures.threadAgentID] = nil
             }
-            // Only the composer's field reads the text; the composer redraws once or twice (empty → not empty).
+            // Only the composer's field reads the text; the composer redraws once or twice (empty → not empty). The
+            // composer has the keyboard here, as in use (an agent shown takes it, see `Composer.focusField`): the first
+            // letter redraws the chat's frame once, and no more for the other nineteen.
             check(typed, [
                 Self.budget("Composer", 3, "the composer reads the draft (Composer.swift): only DraftFacts may change it"),
-                Self.budget("ThreadView", 0, Self.frame), Self.budget("ThreadHeader", 0, Self.frame),
+                Self.budget("ThreadView", 1, Self.frame), Self.budget("ThreadHeader", 1, Self.frame),
                 Self.budget("TeamSidebar", 0, Self.sidebar), Self.budget("AgentRow", 0, Self.sidebar),
                 Self.budget("ItemView", 0, Self.rows), Self.budget("ThreadList.viewFor", 0, Self.list),
                 Self.budget("ThreadList.nativeRowShown", 0, Self.list),
@@ -183,7 +185,8 @@ extension ScreenWorkSuites {
                 Self.budget("ThreadList.newList", 4, Self.list), Self.budget("ThreadList.viewFor", 24, Self.list),
                 Self.budget("ThreadList.measure", 24, Self.list), Self.budget("ThreadList.nativeRowShown", 24, Self.list),
                 Self.budget("ThreadList.widthChange", 4, Self.list), Self.budget("ItemView", 3, Self.rows),
-                Self.budget("ThreadView", 6, Self.frame), Self.budget("Composer", 6, Self.frame),
+                // The composer redraws up to three times per agent: its field is new, and takes the keyboard.
+                Self.budget("ThreadView", 6, Self.frame), Self.budget("Composer", 12, Self.frame),
                 Self.budget("ThreadHeader", 6, Self.frame), Self.budget("TeamSidebar", 6, Self.sidebar),
             ], "switch to 4 agents")
             let back = await harness.count {
@@ -197,7 +200,7 @@ extension ScreenWorkSuites {
                 Self.budget("ThreadList.newList", 0, "ThreadListHost keeps the last four agents' lists"),
                 Self.budget("ThreadList.viewFor", 2, Self.list), Self.budget("ThreadList.measure", 2, Self.list),
                 Self.budget("ThreadList.nativeRowShown", 2, Self.list), Self.budget("ThreadView", 4, Self.frame),
-                Self.budget("Composer", 4, Self.frame), Self.budget("ThreadHeader", 4, Self.frame),
+                Self.budget("Composer", 9, Self.frame), Self.budget("ThreadHeader", 4, Self.frame),
                 Self.budget("TeamSidebar", 4, Self.sidebar),
             ], "back to the 4 kept agents")
 
