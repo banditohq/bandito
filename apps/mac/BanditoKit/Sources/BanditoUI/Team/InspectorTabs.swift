@@ -139,15 +139,21 @@ struct DetailsTab: View {
                         Text(agent.paused ? L10n.Inspector.statePaused : L10n.Inspector.stateRunning)
                             .font(BanditoFont.text(size: 12.5, weight: 500))
                             .foregroundStyle(agent.paused ? Color.Bandito.text2 : Color.Bandito.text)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        // The action keeps its whole word; the state beside it gives way (it broke letter by letter).
                         Button(agent.paused ? L10n.Agent.Menu.resume : L10n.Agent.Menu.pause) {
                             change { _ = try await server.setPaused(agentID: agent.id, !agent.paused) }
                         }
                         .banditoButton(.link)
                         .font(BanditoFont.text(size: 12.5, weight: 500))
                         .foregroundStyle(BanditoPalette.peach)
+                        .fixedSize()
                         .disabled(!PauseActions.available(on: server))
                         .help(PauseActions.available(on: server) ? "" : L10n.Team.pauseUnavailable)
                     }
+                    // The state and its action keep their words; the row's label ("State") is what gives way.
+                    .fixedSize(horizontal: true, vertical: false)
                 }
                 InspectorRow(label: L10n.Inspector.readAloud, compact: true) {
                     Toggle("", isOn: Binding(

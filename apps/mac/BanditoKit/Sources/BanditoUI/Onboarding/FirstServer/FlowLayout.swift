@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Places its children left to right and wraps them onto a new row when the width runs out. Each child keeps its
-/// ideal size, so a chip is never cut or broken inside.
+/// ideal size, so a chip is never cut or broken inside; one wider than the whole row is cut to the row (its text can
+/// then end with an ellipsis) and never pushes the row wider than the width it was given.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 6
 
@@ -12,7 +13,7 @@ struct FlowLayout: Layout {
         var rowHeight: CGFloat = 0
         var widest: CGFloat = 0
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = Self.fitted(subview, maxWidth: maxWidth)
             if x > 0, x + size.width > maxWidth {
                 x = 0
                 y += rowHeight + spacing
@@ -30,7 +31,7 @@ struct FlowLayout: Layout {
         var y = bounds.minY
         var rowHeight: CGFloat = 0
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = Self.fitted(subview, maxWidth: bounds.width)
             if x > bounds.minX, x + size.width > bounds.maxX {
                 x = bounds.minX
                 y += rowHeight + spacing
@@ -40,5 +41,12 @@ struct FlowLayout: Layout {
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
         }
+    }
+
+    /// The child's ideal size, narrower when the row itself is narrower than that.
+    private static func fitted(_ subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let ideal = subview.sizeThatFits(.unspecified)
+        guard ideal.width > maxWidth, maxWidth.isFinite else { return ideal }
+        return subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
     }
 }

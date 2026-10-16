@@ -104,7 +104,9 @@ struct WorkbenchView: View {
                 WorkbenchEmpty(server: server, agent: agent, pane: index)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+        // A tab never paints past the pane: a view that cannot shrink is cut at the edge, not drawn over the chat.
+        .clipped()
         .overlay(alignment: .top) {
             if focused {
                 Rectangle().fill(Color.Bandito.text.opacity(0.22)).frame(height: 2)

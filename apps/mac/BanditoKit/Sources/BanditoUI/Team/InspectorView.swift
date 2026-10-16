@@ -45,7 +45,10 @@ struct InspectorView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .frame(maxHeight: .infinity)
+        // The column is the panel's width, whatever its children ask for: nothing here reports a minimum wider than
+        // the panel, and what still cannot shrink is cut at the panel's edge instead of painting over the chat.
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
         .background(Color.Bandito.surface1)
         .overlay(alignment: .leading) {
             Rectangle().fill(Color.Bandito.line).frame(width: 1)
@@ -112,6 +115,8 @@ private struct IdentityCard: View {
                     .font(BanditoFont.display(size: 17.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(agent.name)
                     .focused($focused, equals: .name)
                     .onSubmit(commitName)
                 // The field is always there: with no role, its placeholder asks for one (with a pencil).
@@ -124,6 +129,9 @@ private struct IdentityCard: View {
                         .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
+                        .truncationMode(.tail)
+                        // A role can be a whole paragraph (imported agents): one line here, all of it in the tooltip.
+                        .help(agent.role)
                         .focused($focused, equals: .role)
                         .onSubmit(commitRole)
                 }
@@ -290,6 +298,10 @@ struct InspectorRow<Value: View>: View {
             Text(label)
                 .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
+                // One line, a little smaller before it is cut: a two-line label broke a word letter by letter.
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .truncationMode(.tail)
             Spacer(minLength: 10)
             value
                 .font(BanditoFont.text(size: 13, weight: 500))
