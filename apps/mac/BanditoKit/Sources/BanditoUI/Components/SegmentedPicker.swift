@@ -34,9 +34,12 @@ public struct SegmentedPicker<T: Hashable>: View {
             Text(title)
                 .font(BanditoFont.text(size: 12.5, weight: isSelected ? 600 : 500))
                 .foregroundStyle(isSelected ? Color.Bandito.text : Color.Bandito.text3)
+                // Never wider than its share: a long label (German, Russian) shrinks a little, then ends with an
+                // ellipsis. A fixed size here made the whole picker, and the panel under it, wider than the column.
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 12)
+                .minimumScaleFactor(0.85)
+                .truncationMode(.tail)
+                .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity)
                 .frame(height: 30)
                 .background {

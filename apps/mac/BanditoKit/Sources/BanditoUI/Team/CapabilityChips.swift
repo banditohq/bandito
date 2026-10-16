@@ -15,7 +15,9 @@ struct CapabilityChips: View {
     var unavailable: [AgentCapability: String] = [:]
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8, alignment: .leading)], alignment: .leading, spacing: 8) {
+        // Chips wrap onto the next row by their own width: in a narrow panel one chip fills a row and a long
+        // translation is cut with an ellipsis, never pushed past the edge.
+        FlowLayout(spacing: 8) {
             ForEach(AgentCapability.allCases) { capability in
                 chip(capability)
             }
@@ -35,7 +37,7 @@ struct CapabilityChips: View {
                     .font(.system(size: 10.5, weight: .semibold))
                 Text(capability.title)
                     .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                    .truncationMode(.tail)
             }
             .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(on ? Color.Bandito.text : Color.Bandito.text3)

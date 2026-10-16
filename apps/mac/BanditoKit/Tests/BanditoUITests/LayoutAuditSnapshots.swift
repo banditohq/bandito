@@ -623,7 +623,80 @@ extension ScreenWorkSuites {
             AuditCase(name: "agent-inspector-approvals", width: 360, scrolls: true) { env in
                 AnyView(DetailsTab(server: env.server, agent: movingAgent))
             },
-        ]
+        ] + inspectorPanels
+
+        /// An imported agent: a long name, a role that is a whole paragraph, a very long folder, a long model id.
+        static let importedAgent = Agent(
+            id: "a2", name: "Catalog maintainer for the Finnish storefront (imported)",
+            role: String(
+                repeating: "Keeps the product catalog of the Finnish storefront in sync with the warehouse feed. ", count: 3),
+            runtime: .claude, model: "claude-opus-5-20261001-extended-context", cwd:
+                "/Users/maria/work/clients/storefront-finland/agents/5lb-catalog-fi-with-a-very-long-folder-name",
+            paused: false)
+
+        /// The workbench panel as `TeamMode` builds it: the 6 pt resize edge and the panel, `width` in all, with the
+        /// agent's details, memory, where-it-runs, the changes or a file open. The panel is never narrower than
+        /// `WorkbenchLayout.minWidth`; a long name, a paragraph for a role and a long path are the agent's.
+        static var inspectorPanels: [AuditCase] {
+            let narrow = CGFloat(WorkbenchLayout.minWidth)
+            func panel(_ name: String, width: CGFloat, tab: WorkbenchTab, inspector: InspectorTab = .details) -> AuditCase {
+                AuditCase(name: name, width: width, height: 900) { env in
+                    env.router.inspectorTab = inspector
+                    env.router.showInWorkbench(tab, agentID: importedAgent.id)
+                    return AnyView(
+                        HStack(spacing: 0) {
+                            Color.clear.frame(width: 6)
+                            WorkbenchView(server: env.server, agent: importedAgent)
+                        }
+                        // No frame here: the panel's own layout must answer for the width it is offered.
+                        .frame(height: 900))
+                }
+            }
+            /// The pieces of the details tab drawn bare (no clipping column around them), at the width the tab has inside
+            /// the narrowest panel: the panel's width, its resize edge, and the 20 pt sides. A piece that cannot shrink shows
+            /// up here as a width above the offer.
+            let inside = narrow - 6 - 40
+            return [
+                panel("workbench-details", width: narrow, tab: .details),
+                panel("workbench-memory", width: narrow, tab: .details, inspector: .memory),
+                panel("workbench-where", width: narrow, tab: .details, inspector: .whereRuns),
+                panel("workbench-changes", width: narrow, tab: .changes),
+                panel("workbench-file", width: narrow, tab: .file(path: "/Users/maria/work/clients/storefront-finland/agents/5lb-catalog-fi/NOTES-with-a-long-name.md")),
+                panel("workbench-details-wide", width: 460, tab: .details),
+                AuditCase(name: "inspector-segments", width: inside) { _ in
+                    AnyView(
+                        SegmentedPicker(
+                            selection: .constant(InspectorTab.details),
+                            options: [
+                                (InspectorTab.details, L10n.Inspector.details),
+                                (InspectorTab.memory, L10n.Memory.title),
+                                (InspectorTab.whereRuns, L10n.Inspector.whereRuns),
+                            ]))
+                },
+                // Labels far longer than any translation: the switch shrinks them, it is never wider than its column.
+                AuditCase(name: "inspector-segments-long", width: inside) { _ in
+                    AnyView(
+                        SegmentedPicker(
+                            selection: .constant(1),
+                            options: [(0, "Eine sehr lange Beschriftung"), (1, "Eine zweite lange Beschriftung"), (2, "Und noch eine dritte")]))
+                },
+                // A chip wider than the whole row (a long integration name) is cut to the row, not pushed out of it.
+                AuditCase(name: "inspector-flow-wide-chip", width: inside - 32) { _ in
+                    AnyView(
+                        FlowLayout(spacing: 8) {
+                            Text("Short").padding(.horizontal, 12).frame(height: 30)
+                            Text("An integration with a name that is far wider than the narrowest panel can ever show").lineLimit(1)
+                                .padding(.horizontal, 12).frame(height: 30)
+                        })
+                },
+                AuditCase(name: "inspector-details-tab", width: inside, scrolls: true) { env in
+                    AnyView(DetailsTab(server: env.server, agent: importedAgent))
+                },
+                AuditCase(name: "inspector-chips", width: inside - 32) { _ in
+                    AnyView(CapabilityChips(enabled: .constant(AgentCapability.allOn)))
+                },
+            ]
+        }
 
         /// Renders every case in German and Russian into `LAYOUT_AUDIT_DIR` (skipped when it is not set, so CI stays fast) and
         /// fails, naming the view, for each one whose content needs more width than its container has or draws outside it.

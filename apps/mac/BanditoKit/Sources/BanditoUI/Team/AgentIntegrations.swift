@@ -15,7 +15,7 @@ struct AgentIntegrationsPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8, alignment: .leading)], alignment: .leading, spacing: 8) {
+            FlowLayout(spacing: 8) {
                 chip(L10n.Integrations.Agent.all, on: choice == .all) {
                     choice = .all
                 }
@@ -41,7 +41,7 @@ struct AgentIntegrationsPicker: View {
                     .font(.system(size: 10.5, weight: .semibold))
                 Text(title)
                     .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                    .truncationMode(.tail)
             }
             .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(on ? Color.Bandito.text : Color.Bandito.text3)

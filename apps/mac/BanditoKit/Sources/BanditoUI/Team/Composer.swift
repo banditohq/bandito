@@ -350,6 +350,9 @@ struct Composer: View {
                 showsContext = false
                 asksNewChapter = false
             }
+            // Another agent shown in the same composer: its field is a new one, and the keyboard goes to it (as it
+            // does for an agent opened for the first time).
+            if old != nil, old != id, !hidden { takeFocus(.agentOpened) }
             // A connect belongs to the agent it was started for: going to another one drops it, and sends nothing.
             mention.agentID = id
             if mention.connecting != nil { mention.connecting = nil }
@@ -411,11 +414,32 @@ struct Composer: View {
         }
         #endif
         if ComposerFocus.shouldTakeFocus(reason: reason, otherFieldHasFocus: other) {
-            focused = true
+            focusField()
             // A requested focus (a suggestion, Reply, quick open) leaves the caret after the text, not on a selection.
             if reason == .requested { FieldCaret.place(draft.utf16.count) }
         }
     }
+
+    /// Gives the field the keyboard. A `@FocusState` set before its field is in the window (the composer just appeared, or
+    /// the field was made anew for another agent, see `.id(agentID)`) is dropped: so when the field still does not have
+    /// the keyboard a turn later, it is asked again.
+    private func focusField() {
+        focused = true
+        #if os(macOS)
+        DispatchQueue.main.async {
+            guard !hidden, !Self.fieldHasKeyboard else { return }
+            focused = true
+        }
+        #endif
+    }
+
+    #if os(macOS)
+    /// An editable text has the keyboard (the composer's field, when nothing else was being edited).
+    private static var fieldHasKeyboard: Bool {
+        guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView else { return false }
+        return editor.isEditable
+    }
+    #endif
 
     /// The bar above the field: whom the message answers, and the first words of the original.
     private func replyBar(_ target: ReplyTarget) -> some View {
@@ -1342,5 +1366,8 @@ private struct ComposerTextField: View {
                 onKey(press)
             }
             .onChange(of: router.drafts[agentID] ?? "") { old, new in onChange(old, new) }
+            // Typed keys can go to this field only while it is on screen (see `ComposerTypeAhead`).
+            .onAppear { router.composerField(agentID, isShown: true) }
+            .onDisappear { router.composerField(agentID, isShown: false) }
     }
 }

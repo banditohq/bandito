@@ -598,6 +598,14 @@ public final class Router {
         composerFocusAgentID = agentID
     }
 
+    /// The agents whose composer field is on screen (each field says so when it appears and goes). Not observed: only
+    /// the typing hand-over reads it, and a field appearing must not redraw the screens that observe the router.
+    @ObservationIgnored private(set) var composerFieldAgentIDs: Set<String> = []
+
+    func composerField(_ agentID: String, isShown: Bool) {
+        if isShown { composerFieldAgentIDs.insert(agentID) } else { composerFieldAgentIDs.remove(agentID) }
+    }
+
     /// True once per request, and only for the agent the request names: the first matching call returns true
     /// and clears the request. Other composers leave it alone.
     public func takeComposerFocus(agentID: String) -> Bool {
