@@ -1366,5 +1366,8 @@ private struct ComposerTextField: View {
                 onKey(press)
             }
             .onChange(of: router.drafts[agentID] ?? "") { old, new in onChange(old, new) }
+            // Typed keys can go to this field only while it is on screen (see `ComposerTypeAhead`).
+            .onAppear { router.composerField(agentID, isShown: true) }
+            .onDisappear { router.composerField(agentID, isShown: false) }
     }
 }

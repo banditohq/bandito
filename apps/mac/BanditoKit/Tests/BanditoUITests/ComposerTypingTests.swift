@@ -153,6 +153,7 @@ import AppKit
         typeAhead.chatShown = { true }
         typeAhead.modalOpen = { false }
         typeAhead.requiresKeyWindow = false
+        typeAhead.composerReady = { true }
         var asked = 0
         var posted: [NSEvent] = []
         typeAhead.post = { posted.append($0) }
@@ -189,6 +190,110 @@ import AppKit
         #expect(typeAhead.handle(try key("m")) != nil)
         #expect(asked == 1)
         window.contentView = nil
+    }
+
+    /// A type-ahead on a window nobody sees, with an inert keyboard (the keyboard is on nothing).
+    @MainActor private func makeTypeAhead(ready: Bool, takesFocus: Bool) -> (
+        typeAhead: ComposerTypeAhead, window: NSWindow, key: (String, NSEvent.ModifierFlags) -> NSEvent, log: TypeAheadLog
+    ) {
+        let window = NSWindow(
+            contentRect: NSRect(x: -20_000, y: -20_000, width: 300, height: 200), styleMask: .borderless,
+            backing: .buffered, defer: false)
+        window.alphaValue = 0
+        window.ignoresMouseEvents = true
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        let field = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
+        field.isEditable = true
+        content.addSubview(field)
+        window.contentView = content
+        window.makeFirstResponder(nil)
+        let log = TypeAheadLog()
+        let typeAhead = ComposerTypeAhead()
+        typeAhead.window = { window }
+        typeAhead.isEnabled = { true }
+        typeAhead.chatShown = { true }
+        typeAhead.requiresKeyWindow = false
+        typeAhead.composerReady = { ready }
+        typeAhead.requestFocus = {
+            log.asked += 1
+            if takesFocus { window.makeFirstResponder(field) }
+        }
+        typeAhead.cancelFocusRequest = { log.cancelled += 1 }
+        typeAhead.post = { log.posted.append($0) }
+        let make: (String, NSEvent.ModifierFlags) -> NSEvent = { characters, flags in
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: 0)!
+        }
+        return (typeAhead, window, make, log)
+    }
+
+    @MainActor final class TypeAheadLog {
+        var asked = 0
+        var cancelled = 0
+        var posted: [NSEvent] = []
+    }
+
+    @MainActor @Test func withoutAComposerThePressPassesAtOnceAndNothingIsRequested() {
+        let setup = makeTypeAhead(ready: false, takesFocus: true)
+        let letter = setup.key("k", [])
+        #expect(setup.typeAhead.handle(letter) === letter, "the press goes where it was going")
+        #expect(!setup.typeAhead.queue.isWaiting)
+        #expect(setup.log.asked == 0, "no focus is asked of a composer that is not there")
+        #expect(setup.log.posted.isEmpty)
+    }
+
+    @MainActor @Test func aComposerThatDoesNotTakeTheKeyboardHasItsRequestWithdrawnAndTheKeysGivenBack() async throws {
+        let setup = makeTypeAhead(ready: true, takesFocus: false)
+        let letter = setup.key("k", [])
+        #expect(setup.typeAhead.handle(letter) == nil)
+        #expect(setup.log.asked == 1)
+        for _ in 0..<100 where setup.typeAhead.queue.isWaiting {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(!setup.typeAhead.queue.isWaiting)
+        #expect(setup.log.cancelled == 1, "the request does not stay to take the keyboard later, unasked")
+        #expect(setup.log.posted.count == 1 && setup.log.posted.first === letter)
+    }
+
+    @MainActor @Test func aKeyThatTakesTheKeyboardDoesNotWithdrawAnything() async throws {
+        let setup = makeTypeAhead(ready: true, takesFocus: true)
+        #expect(setup.typeAhead.handle(setup.key("k", [])) == nil)
+        for _ in 0..<100 where setup.typeAhead.queue.isWaiting {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(setup.log.cancelled == 0)
+        #expect(setup.log.posted.count == 1)
+    }
+
+    @MainActor @Test func keysThatComeWhileALetterWaitsStayBehindItInOrder() async throws {
+        let setup = makeTypeAhead(ready: true, takesFocus: true)
+        let letter = setup.key("a", [])
+        let enter = setup.key("\r", [])
+        let arrow = setup.key("\u{F702}", [])
+        let paste = setup.key("v", .command)
+        #expect(setup.typeAhead.handle(letter) == nil)
+        #expect(setup.typeAhead.handle(enter) == nil, "Return does not overtake the letter")
+        #expect(setup.typeAhead.handle(arrow) == nil)
+        #expect(setup.typeAhead.handle(paste) == nil)
+        #expect(setup.log.asked == 1, "one request for the whole run")
+        for _ in 0..<100 where setup.typeAhead.queue.isWaiting {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        // Given back last first, each at the front: the app then takes them as they were typed.
+        #expect(setup.log.posted.count == 4)
+        #expect(setup.log.posted.reversed().elementsEqual([letter, enter, arrow, paste], by: ===))
+    }
+
+    @MainActor @Test func aKeyTypedAfterTheQueueIsEmptyIsNotHeldWhenTheFieldHasTheKeyboard() async throws {
+        let setup = makeTypeAhead(ready: true, takesFocus: true)
+        #expect(setup.typeAhead.handle(setup.key("a", [])) == nil)
+        for _ in 0..<100 where setup.typeAhead.queue.isWaiting {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let enter = setup.key("\r", [])
+        #expect(setup.typeAhead.handle(enter) === enter, "the field has the keyboard now: Return is its own")
     }
     #endif
 }

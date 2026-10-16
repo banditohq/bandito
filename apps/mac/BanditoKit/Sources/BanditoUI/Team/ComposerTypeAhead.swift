@@ -22,8 +22,12 @@ final class ComposerTypeAhead {
     var isEnabled: () -> Bool = { false }
     var chatShown: () -> Bool = { false }
     var modalOpen: () -> Bool = { false }
+    /// Whether the composer of the agent on screen has a field that takes typing (it is on screen, and not frozen).
+    var composerReady: () -> Bool = { false }
     /// Asks the composer of the agent on screen for the keyboard (`Router.requestComposerFocus`).
     var requestFocus: () -> Void = {}
+    /// Takes the request back, when the field did not take the keyboard: it must not take it later, unasked.
+    var cancelFocusRequest: () -> Void = {}
     /// Gives a held press back to the app, in front of its queue (a test catches them instead).
     var post: (NSEvent) -> Void = { NSApp.postEvent($0, atStart: true) }
 
@@ -65,6 +69,12 @@ final class ComposerTypeAhead {
             return event
         }
         guard isEnabled(), let window = window(), event.window === window, window.isKeyWindow || !requiresKeyWindow else { return event }
+        // A press that comes while others are held waits behind them, whatever it is (a letter, then Return, then a
+        // shortcut): they come back in the order they were typed.
+        if queue.isWaiting {
+            _ = queue.hold(event)
+            return nil
+        }
         let flags = event.modifierFlags
         let key = ComposerFocus.TypedKey(
             characters: event.characters ?? "", command: flags.contains(.command), control: flags.contains(.control),
@@ -72,7 +82,8 @@ final class ComposerTypeAhead {
         let redirect = ComposerFocus.shouldRedirectTyping(
             key: key, responder: Self.classify(window.firstResponder),
             modalOpen: modalOpen() || window.attachedSheet != nil || NSApp.modalWindow != nil, chatShown: chatShown())
-        guard redirect else { return event }
+        // No composer to take it (none on screen, or it does not take typing): the press goes where it was going, at once.
+        guard redirect, composerReady() else { return event }
         if queue.hold(event) {
             requestFocus()
             wait(window: window, attempt: 0)
@@ -86,7 +97,11 @@ final class ComposerTypeAhead {
         DispatchQueue.main.asyncAfter(deadline: .now() + (attempt == 0 ? .milliseconds(0) : Self.step)) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, self.queue.isWaiting else { return }
-                if Self.classify(window.firstResponder) == .textInput || attempt >= Self.attempts {
+                if Self.classify(window.firstResponder) == .textInput {
+                    self.giveBack()
+                } else if attempt >= Self.attempts {
+                    // The field did not take the keyboard: the request is withdrawn, so it does not take it later, unasked.
+                    self.cancelFocusRequest()
                     self.giveBack()
                 } else {
                     self.wait(window: window, attempt: attempt + 1)
@@ -152,7 +167,9 @@ struct ComposerTypeAheadAnchor: NSViewRepresentable {
         model.modalOpen = {
             router.sheet != nil || router.paletteOpen || router.imageViewer != nil || router.dictationRecording
         }
+        model.composerReady = { router.composerFieldAgentIDs.contains(agentID) }
         model.requestFocus = { router.requestComposerFocus(agentID: agentID) }
+        model.cancelFocusRequest = { _ = router.takeComposerFocus(agentID: agentID) }
     }
 
     static func dismantleNSView(_ view: NSView, coordinator: ComposerTypeAhead) {

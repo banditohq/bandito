@@ -112,7 +112,9 @@ struct ScreenToolbar: View {
                     (ScreenQuality.sharper, L10n.Screen.qualitySharper),
                 ]
             )
-            .frame(width: 200)
+            // The labels keep their width (German is longer than 200 pt allows): the picker is as wide as they need, 200 pt at least.
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(minWidth: 200)
 
             Button {
                 model.sendCtrlAltDelete()
@@ -588,7 +590,8 @@ private struct ScreenTransferSection: View {
                         (ScreenClipboard.off, L10n.Screen.clipboardOff),
                     ]
                 )
-                .frame(width: 150)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(minWidth: 150)
             }
             HStack {
                 Text(L10n.Screen.quality)

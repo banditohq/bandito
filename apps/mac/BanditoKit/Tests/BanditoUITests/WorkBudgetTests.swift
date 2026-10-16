@@ -117,9 +117,11 @@ extension ScreenWorkSuites {
                 }
                 router.drafts[PerfFixtures.threadAgentID] = nil
             }
-            // Only the composer's field reads the text; the composer redraws once or twice (empty → not empty). The
-            // composer has the keyboard here, as in use (an agent shown takes it, see `Composer.focusField`): the first
-            // letter redraws the chat's frame once, and no more for the other nineteen.
+            // Only the composer's field reads the text; the composer redraws once or twice (empty → not empty). Measured:
+            // once the shown agent's composer takes the keyboard (`Composer.focusField`, as in use), the chat's frame is
+            // built once more in this step (ThreadView and ThreadHeader report `@self changed`, the agent's data is the
+            // same), and not again for the other nineteen letters. Without the keyboard on the composer it is 0. Setting
+            // the focus once, twice or only a turn later gives the same counts: it is the focus landing, not how it is set.
             check(typed, [
                 Self.budget("Composer", 3, "the composer reads the draft (Composer.swift): only DraftFacts may change it"),
                 Self.budget("ThreadView", 1, Self.frame), Self.budget("ThreadHeader", 1, Self.frame),
@@ -185,7 +187,8 @@ extension ScreenWorkSuites {
                 Self.budget("ThreadList.newList", 4, Self.list), Self.budget("ThreadList.viewFor", 24, Self.list),
                 Self.budget("ThreadList.measure", 24, Self.list), Self.budget("ThreadList.nativeRowShown", 24, Self.list),
                 Self.budget("ThreadList.widthChange", 4, Self.list), Self.budget("ItemView", 3, Self.rows),
-                // The composer redraws up to three times per agent: its field is new, and takes the keyboard.
+                // Measured: 12 for four agents (3 each) with the keyboard going to the new field, 6 (1.5 each) when nothing
+                // asks for it. Each focus landing redraws the composer for its focus ring (a read of `focused` in its body).
                 Self.budget("ThreadView", 6, Self.frame), Self.budget("Composer", 12, Self.frame),
                 Self.budget("ThreadHeader", 6, Self.frame), Self.budget("TeamSidebar", 6, Self.sidebar),
             ], "switch to 4 agents")
@@ -200,6 +203,7 @@ extension ScreenWorkSuites {
                 Self.budget("ThreadList.newList", 0, "ThreadListHost keeps the last four agents' lists"),
                 Self.budget("ThreadList.viewFor", 2, Self.list), Self.budget("ThreadList.measure", 2, Self.list),
                 Self.budget("ThreadList.nativeRowShown", 2, Self.list), Self.budget("ThreadView", 4, Self.frame),
+                // Measured: 9 for four kept agents with the keyboard going to each field (4 before): the same focus landing.
                 Self.budget("Composer", 9, Self.frame), Self.budget("ThreadHeader", 4, Self.frame),
                 Self.budget("TeamSidebar", 4, Self.sidebar),
             ], "back to the 4 kept agents")
