@@ -22,6 +22,9 @@ public struct Chip: View {
         Text(text)
             .font(BanditoFont.text(size: 11, weight: 500))
             .foregroundStyle(tone.foreground)
+            // A chip is one line: a long text ends in "…" instead of growing into a column.
+            .lineLimit(1)
+            .truncationMode(.tail)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(tone.background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
