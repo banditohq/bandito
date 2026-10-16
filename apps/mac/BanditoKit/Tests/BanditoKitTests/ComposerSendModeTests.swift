@@ -19,15 +19,30 @@ import Testing
                 == .replyToForm("f1"))
     }
 
-    @Test func noFormKeepsTheOldBehaviour() {
-        #expect(ComposerSendMode.resolve(running: true, hasText: true, hasFiles: false, waitingFormId: nil) == .stop)
-        #expect(ComposerSendMode.resolve(running: true, hasText: false, hasFiles: false, waitingFormId: nil) == .stop)
-        #expect(ComposerSendMode.resolve(running: false, hasText: true, hasFiles: false, waitingFormId: nil) == .send)
-        #expect(ComposerSendMode.resolve(running: false, hasText: false, hasFiles: false, waitingFormId: nil) == .send)
+    @Test func textWhileRunningIsSentAndQueuedWithoutAForm() {
+        #expect(ComposerSendMode.resolve(running: true, hasText: true, hasFiles: false, waitingFormId: nil) == .send)
     }
 
-    @Test func filesInTheTrayKeepTheUsualQueue() {
-        #expect(ComposerSendMode.resolve(running: true, hasText: true, hasFiles: true, waitingFormId: "f1") == .stop)
+    @Test func emptyFieldWhileRunningStops() {
+        #expect(ComposerSendMode.resolve(running: true, hasText: false, hasFiles: false, waitingFormId: nil) == .stop)
+    }
+
+    @Test func idleAlwaysSends() {
+        #expect(ComposerSendMode.resolve(running: false, hasText: true, hasFiles: false, waitingFormId: nil) == .send)
+        #expect(ComposerSendMode.resolve(running: false, hasText: false, hasFiles: false, waitingFormId: nil) == .send)
+        #expect(ComposerSendMode.resolve(running: false, hasText: true, hasFiles: false, waitingFormId: "f1") == .send)
+    }
+
+    @Test func filesWhileRunningAreSentWithoutText() {
+        #expect(ComposerSendMode.resolve(running: true, hasText: false, hasFiles: true, waitingFormId: nil) == .send)
+    }
+
+    @Test func textAndFilesWhileRunningAreSentEvenWithAFormWaiting() {
+        #expect(ComposerSendMode.resolve(running: true, hasText: true, hasFiles: true, waitingFormId: "f1") == .send)
+    }
+
+    @Test func filesWhileRunningWithAFormWaitingAreSent() {
+        #expect(ComposerSendMode.resolve(running: true, hasText: false, hasFiles: true, waitingFormId: "f1") == .send)
     }
 
     @Test func theLastWaitingFormIsAnswered() {
