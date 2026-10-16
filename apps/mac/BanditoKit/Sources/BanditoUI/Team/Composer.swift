@@ -421,8 +421,8 @@ struct Composer: View {
     }
 
     /// Gives the field the keyboard. A `@FocusState` set before its field is in the window (the composer just appeared, or
-    /// the field was made anew for another agent, see `.id(agentID)`) is dropped, or stays `true` while the new field has
-    /// nothing: so when the field does not have the keyboard a turn later, the state is turned off and on again.
+    /// the field was made anew for another agent, see `.id(agentID)`) is dropped: so when the field still does not have
+    /// the keyboard a turn later, it is asked again.
     private func focusField() {
         focused = true
         #if os(macOS)
