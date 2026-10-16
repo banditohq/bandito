@@ -74,9 +74,18 @@ import Testing
                     approvalMode: .risky, systemPrompt: nil, runtimeSessionId: nil, createdAt: 0, updatedAt: 0),
                 thread: AgentThread(),
                 status: .idle)
+            // An imported agent whose role is a paragraph: one line, the name keeps its room.
+            AgentRow(
+                agent: Agent(
+                    id: "reviewer-deep", name: "reviewer-deep",
+                    role: "Глубокое ревью diff на Sonnet — только для безопасности, прав, протоколов клиент↔сервер",
+                    runtime: .claude, model: nil, cwd: "/home/me/api", approvalMode: .risky, systemPrompt: nil,
+                    runtimeSessionId: nil, createdAt: 0, updatedAt: 0),
+                thread: AgentThread(),
+                status: .idle)
         }
         .padding()
         .background(Color.black)
-        _ = try SnapshotSupport.render(rows, "sidebar-rows", size: CGSize(width: 280, height: 140))
+        _ = try SnapshotSupport.render(rows, "sidebar-rows", size: CGSize(width: 280, height: 200))
     }
 }

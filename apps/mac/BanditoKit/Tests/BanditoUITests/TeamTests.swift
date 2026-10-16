@@ -215,6 +215,45 @@ import Testing
         #expect(EffortLevels.levels(for: .grok) == [.low, .medium, .high])
     }
 
+    // MARK: manual order
+
+    @Test func manualOrderMovesARowAndKeepsTheRest() throws {
+        let suite = "team-order-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        var order = TeamManualOrder(defaults: defaults)
+        // Nothing placed yet: the app's order stays.
+        #expect(order.apply(["a", "b", "c"], id: { $0 }) == ["a", "b", "c"])
+        // Down: after the target. Up: before it.
+        let moved1 = order.move("a", to: "c", in: ["a", "b", "c"])
+        #expect(moved1)
+        #expect(order.apply(["a", "b", "c"], id: { $0 }) == ["b", "c", "a"])
+        let moved2 = order.move("a", to: "b", in: ["b", "c", "a"])
+        #expect(moved2)
+        #expect(order.apply(["a", "b", "c"], id: { $0 }) == ["a", "b", "c"])
+        // A move onto itself or an unknown row changes nothing.
+        let moved3 = order.move("a", to: "a", in: ["a", "b", "c"])
+        #expect(!moved3)
+        let moved4 = order.move("x", to: "a", in: ["a", "b", "c"])
+        #expect(!moved4)
+        // A new agent goes after the placed ones; an agent that left is skipped.
+        #expect(order.apply(["c", "new", "a"], id: { $0 }) == ["a", "c", "new"])
+    }
+
+    @Test func manualOrderKeepsOtherServersAndPersists() throws {
+        let suite = "team-order-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        var order = TeamManualOrder(defaults: defaults)
+        order.move("y", to: "x", in: ["x", "y"])  // another server's list
+        order.move("c", to: "a", in: ["a", "b", "c"])
+        let reloaded = TeamManualOrder(defaults: defaults)
+        #expect(reloaded.apply(["a", "b", "c"], id: { $0 }) == ["c", "a", "b"])
+        #expect(reloaded.apply(["x", "y"], id: { $0 }) == ["y", "x"])
+    }
+
     // MARK: pins
 
     @Test func pinsPersistAcrossStores() throws {

@@ -171,6 +171,48 @@ public struct PinnedAgents {
     }
 }
 
+/// The order the person gave the team by dragging rows in the sidebar, kept on this Mac (agent ids, all servers in one
+/// list). Agents never moved keep the app's order after the placed ones; an empty list leaves the app's order as is.
+public struct TeamManualOrder {
+    public static let key = "team.order"
+
+    public private(set) var ids: [String]
+    private let defaults: UserDefaults
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        ids = defaults.stringArray(forKey: Self.key) ?? []
+    }
+
+    /// `items` in the person's order: the placed ones first, in the saved order, then the rest in the order given.
+    public func apply<T>(_ items: [T], id: (T) -> String) -> [T] {
+        guard !ids.isEmpty else { return items }
+        var rank: [String: Int] = [:]
+        for (index, id) in ids.enumerated() where rank[id] == nil { rank[id] = index }
+        let placed = items.filter { rank[id($0)] != nil }.sorted { rank[id($0)]! < rank[id($1)]! }
+        let rest = items.filter { rank[id($0)] == nil }
+        return placed + rest
+    }
+
+    /// Moves `moving` to the place of `target` in `shown` (the ids as the list shows them now), and saves the result:
+    /// the shown list in its new order, then the saved ids of agents not shown here (other servers). Moving down puts
+    /// it after the target, moving up before it, as a dragged row takes the place of the row under the pointer.
+    /// Returns whether anything changed.
+    @discardableResult
+    public mutating func move(_ moving: String, to target: String, in shown: [String]) -> Bool {
+        guard moving != target, let from = shown.firstIndex(of: moving), let to = shown.firstIndex(of: target) else {
+            return false
+        }
+        var next = shown
+        next.remove(at: from)
+        next.insert(moving, at: to)
+        let shownSet = Set(shown)
+        ids = next + ids.filter { !shownSet.contains($0) }
+        defaults.set(ids, forKey: Self.key)
+        return true
+    }
+}
+
 // MARK: - Labels
 
 extension RuntimeKind {
@@ -335,7 +377,8 @@ public enum TeamSelection {
         // The chosen agent is on this server: it is the one, whatever the order (the order reads every agent's
         // state, which made the team's body depend on all of them and cost a sort at every switch).
         if let selected, server.agents.contains(where: { $0.id == selected }) { return selected }
-        let order = TeamSidebarOrder.ids(agents: server.sortedAgents, pinned: pinned) { server.needsPerson($0) }
+        let agents = TeamManualOrder().apply(server.sortedAgents, id: \.id)
+        let order = TeamSidebarOrder.ids(agents: agents, pinned: pinned) { server.needsPerson($0) }
         return resolve(
             selected: selected,
             remembered: LastOpenedAgent.load(serverID: server.id.uuidString),

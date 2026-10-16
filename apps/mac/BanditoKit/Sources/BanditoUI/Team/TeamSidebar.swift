@@ -2,6 +2,7 @@ import BanditoDesign
 import BanditoKit
 import BanditoL10n
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Team sidebar: pinned agents, the agents waiting for you, then the rest of the team.
 struct TeamSidebar: View {
@@ -10,6 +11,11 @@ struct TeamSidebar: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @State private var pins = PinnedAgents()
+    /// The order the person gave the team by dragging rows.
+    @State private var manualOrder = TeamManualOrder()
+    /// The row being dragged, while a drag is on.
+    @State private var draggingID: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pendingDelete: Agent?
     @State private var actionError: UserFacingMessage?
     @Environment(\.modeHidden) private var hidden
@@ -36,15 +42,18 @@ struct TeamSidebar: View {
         let _ = PerfCounters.hit("TeamSidebar")
         // The main agent goes first in the whole list, before the list is split into its groups.
         let lead = server.leadAgentID
-        let agents = LeadAgent.leadFirst(server.sortedAgents, id: \.id, lead: lead)
+        let agents = manualOrder.apply(LeadAgent.leadFirst(server.sortedAgents, id: \.id, lead: lead), id: \.id)
         // On the team home no chat is on screen, so no row is marked. Out of sight (another mode or server) the row
         // marked last stays: the router's choices are not read, so they rebuild nothing unseen.
         let shown = hidden ? lastShown.agentID : markedAgent(server)
         let waiting = agents.filter { server.needsPerson($0.id) }
         let waitingIDs = Set(waiting.map(\.id))
-        let others = agents.filter { !waitingIDs.contains($0.id) }
         // The pinned row holds up to `pinnedTiles`; further pins stay pinned but are not in the row.
         let pinned = Array(agents.filter { pins.isPinned($0.id) }.prefix(TeamSidebarOrder.pinnedTiles))
+        // An agent in the pinned row is not repeated in the team below it (one that waits is still under Needs you).
+        let tileIDs = Set(pinned.map(\.id))
+        let others = agents.filter { !waitingIDs.contains($0.id) && !tileIDs.contains($0.id) }
+        let otherIDs = others.map(\.id)
 
         ScrollView {
             // Lazy: rows of the same height; a team of forty built forty rows (with their avatars) at every visit of the
@@ -112,6 +121,16 @@ struct TeamSidebar: View {
                             }
                             .padding(.horizontal, 8)
                             .padding(.bottom, 2)
+                            // A row is dragged up or down to a new place; the order is kept on this Mac.
+                            .onDrag {
+                                draggingID = agent.id
+                                return NSItemProvider(object: agent.id as NSString)
+                            }
+                            .onDrop(
+                                of: [.text],
+                                delegate: TeamRowDrop(
+                                    target: agent.id, shown: otherIDs, dragging: $draggingID, order: $manualOrder,
+                                    animate: !reduceMotion))
                             // The first rows rise in one after another; the rest (out of sight) are just there.
                             .modifier(SidebarRise(index: index))
                     }
@@ -212,12 +231,15 @@ struct TeamSidebar: View {
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                        if let role = AgentRoleText.visible(agent.role) { Chip(text: role) }
+                            .layoutPriority(1)
+                        if let role = AgentRoleText.visible(agent.role) { RoleChip(role: role) }
                         Spacer(minLength: 4)
                         UnreadBadge(count: facts.unread)
                         Text(TeamTime.label(ms: facts.lastActivityMs))
                             .font(BanditoFont.text(size: 11, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .fixedSize()
                     }
                     Text(facts.pendingTitle ?? facts.preview ?? "")
                         .font(BanditoFont.text(size: 12.5, weight: 400))
@@ -469,6 +491,7 @@ struct AgentRow: View {
                         .font(BanditoFont.display(size: 12.5, weight: facts.unread > 0 ? 700 : 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
+                        .layoutPriority(1)
                     if agent.paused {
                         Image(systemName: "pause.fill")
                             .font(.system(size: 9, weight: .semibold))
@@ -476,7 +499,7 @@ struct AgentRow: View {
                             .accessibilityLabel(L10n.Inspector.statePaused)
                             .help(L10n.Inspector.statePaused)
                     }
-                    if let role = AgentRoleText.visible(agent.role) { Chip(text: role) }
+                    if let role = AgentRoleText.visible(agent.role) { RoleChip(role: role) }
                     if let place { WorkspaceChip(text: place) }
                     Spacer(minLength: 4)
                     UnreadBadge(count: facts.unread)
@@ -484,6 +507,8 @@ struct AgentRow: View {
                         Text(lastActivity)
                             .font(BanditoFont.text(size: 11, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .fixedSize()
                     }
                 }
                 Text(facts.preview ?? L10n.Team.noMessages)
@@ -500,5 +525,53 @@ struct AgentRow: View {
         .background(
             Color.Bandito.text.opacity(isSelected ? 0.08 : 0),
             in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+    }
+}
+
+/// The role of an agent beside its name in a row. Roles of imported agents can be a whole paragraph: the chip keeps
+/// one line and at most `maxWidth`, the name keeps its room, and the full role is in the tooltip.
+struct RoleChip: View {
+    var role: String
+    var maxWidth: CGFloat = 120
+
+    var body: some View {
+        Chip(text: role)
+            .frame(maxWidth: maxWidth, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .help(role)
+    }
+}
+
+/// Drops a dragged team row on another: the dragged row takes that row's place at once (the rows make room as the
+/// pointer passes), and the new order is saved.
+private struct TeamRowDrop: DropDelegate {
+    var target: String
+    var shown: [String]
+    @Binding var dragging: String?
+    @Binding var order: TeamManualOrder
+    var animate: Bool
+
+    func dropEntered(info: DropInfo) {
+        guard let moving = dragging, moving != target else { return }
+        var next = order
+        guard next.move(moving, to: target, in: shown) else { return }
+        if animate {
+            withAnimation(BanditoMotion.ease) { order = next }
+        } else {
+            order = next
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func validateDrop(info: DropInfo) -> Bool {
+        dragging != nil
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }
