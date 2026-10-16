@@ -615,6 +615,7 @@ pub struct ClickTarget {
 
 /// Lets a click through. A risky element asks the user in the agent's feed, with the element's real
 /// name; only Allow lets it go ahead. Refusal and no answer within `limit` are [`BrowserError::Declined`].
+/// An agent in the "never ask" mode is not asked at all. When its mode cannot be read, the user is asked.
 pub async fn approve_click(
     sup: &Supervisor,
     agent_id: &str,
@@ -622,6 +623,9 @@ pub async fn approve_click(
     limit: Duration,
 ) -> Result<(), BrowserError> {
     if !needs_approval(&target.element) {
+        return Ok(());
+    }
+    if matches!(sup.approval_mode(agent_id), Ok(crate::store::ApprovalMode::Never)) {
         return Ok(());
     }
     let name = if target.element.name.is_empty() {
@@ -668,8 +672,9 @@ pub fn needs_approval(element: &Element) -> bool {
     is_risky_name(&element.name) || is_risky_name(&element.value)
 }
 
-/// Words that make a click a payment, send, delete or confirmation, in English and Russian. A
-/// substring match, case-insensitive: `order` also matches `border`, which errs on the safe side.
+/// Words that make a click a payment, send, delete or confirmation, in English and Russian. A stem
+/// counts only at the start of a word, case-insensitively: `order` matches "Place order" but not
+/// `border`, and `куп` matches "Купить" but not "Покупатели".
 const RISKY_STEMS: [&str; 20] = [
     "pay",
     "buy",
@@ -693,9 +698,25 @@ const RISKY_STEMS: [&str; 20] = [
     "подтверд",
 ];
 
+/// A longer text is a block of text (a paragraph, a card), not a button: it never asks.
+const MAX_BUTTON_CHARS: usize = 80;
+
+/// True when the name is a short label with a risky word at the start of a word. Blank and long
+/// texts are not risky.
 pub fn is_risky_name(text: &str) -> bool {
+    let text = text.trim();
+    if text.chars().count() > MAX_BUTTON_CHARS {
+        return false;
+    }
     let lower = text.to_lowercase();
-    RISKY_STEMS.iter().any(|stem| lower.contains(stem))
+    RISKY_STEMS.iter().any(|stem| {
+        lower.match_indices(stem).any(|(at, _)| {
+            lower[..at]
+                .chars()
+                .next_back()
+                .is_none_or(|before| !before.is_alphanumeric())
+        })
+    })
 }
 
 /// The arguments that start Chrome for the agent's browser. DevTools talks over the pipes on fd 3
@@ -1377,6 +1398,95 @@ mod tests {
         };
         assert_eq!(decision, Decision::Deny);
         assert_eq!(by, DecidedBy::Policy);
+    }
+
+    #[test]
+    fn a_risky_word_counts_only_at_the_start_of_a_word() {
+        for name in [
+            "Купить",
+            "Оформить заказ",
+            "Pay now",
+            "Удалить",
+            "Подтвердить",
+            "Мы подтвердили адрес",
+        ] {
+            assert!(is_risky_name(name), "{name}");
+        }
+        for name in ["border", "Покупатели", "", "   "] {
+            assert!(!is_risky_name(name), "{name:?}");
+        }
+    }
+
+    #[test]
+    fn a_long_text_is_a_block_of_text_not_a_button() {
+        let long = format!("{} Купить {}", "а".repeat(50), "б".repeat(62));
+        assert_eq!(long.chars().count(), 120);
+        assert!(!is_risky_name(&long));
+        let limit = format!("Купить {}", "а".repeat(73));
+        assert_eq!(limit.chars().count(), 80);
+        assert!(is_risky_name(&limit));
+        assert!(
+            is_risky_name(&format!("   {limit}   ")),
+            "the length is counted after trim"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_never_ask_agent_clicks_a_risky_element_without_a_card() {
+        let (sup, store, agent) = with_agent();
+        store
+            .agent_update(
+                &agent,
+                crate::store::AgentPatch {
+                    approval_mode: Some(ApprovalMode::Never),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let mut events = sup.hub().subscribe();
+        let t = target("button", "Оплатить", "https://shop.example/cart");
+        approve_click(&sup, &agent, &t, Duration::from_millis(50))
+            .await
+            .expect("a never-ask agent may click");
+        assert!(store.approval_list_pending(None).unwrap().is_empty());
+        while let Ok(e) = events.try_recv() {
+            assert!(
+                !matches!(e.body, EventBody::ApprovalRequested { .. }),
+                "no card may be shown"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn an_always_ask_agent_asks_about_a_risky_click_too() {
+        let (sup, store, agent) = with_agent();
+        store
+            .agent_update(
+                &agent,
+                crate::store::AgentPatch {
+                    approval_mode: Some(ApprovalMode::Always),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let mut events = sup.hub().subscribe();
+        let t = target("button", "Оплатить", "https://shop.example/");
+        let (s, a) = (sup.clone(), agent.clone());
+        let asked = tokio::spawn(async move { approve_click(&s, &a, &t, Duration::from_secs(5)).await });
+        let e = next_event(&mut events, |b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+        let EventBody::ApprovalRequested { approval_id, .. } = e.body else {
+            unreachable!()
+        };
+        sup.resolve(&approval_id, Decision::Deny, false).await.unwrap();
+        assert!(matches!(asked.await.unwrap(), Err(BrowserError::Declined)));
+    }
+
+    #[tokio::test]
+    async fn a_risky_click_is_not_let_through_when_the_agent_mode_cannot_be_read() {
+        let (sup, _store, _agent) = with_agent();
+        let t = target("button", "Оплатить", "https://shop.example/");
+        let result = approve_click(&sup, "no-such-agent", &t, Duration::from_millis(50)).await;
+        assert!(result.is_err(), "{result:?}");
     }
 
     #[tokio::test]

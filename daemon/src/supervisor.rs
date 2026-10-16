@@ -461,6 +461,15 @@ impl Supervisor {
         &self.hub
     }
 
+    /// The approval mode the owner set for the agent, read from the store now (docs/ARCHITECTURE.md#tool-permissions).
+    pub fn approval_mode(&self, agent_id: &str) -> Result<crate::store::ApprovalMode> {
+        self.hub
+            .store
+            .agent_get(agent_id)?
+            .map(|agent| agent.approval_mode)
+            .ok_or_else(|| anyhow!("no agent {agent_id}"))
+    }
+
     pub fn runtimes(&self) -> &Runtimes {
         &self.runtimes
     }
