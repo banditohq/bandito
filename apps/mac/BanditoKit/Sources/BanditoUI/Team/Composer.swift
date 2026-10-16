@@ -183,7 +183,7 @@ struct Composer: View {
             }
             if case .replyToForm(let formId) = sendMode {
                 submitReply(formId)
-            } else if canSend && !running {
+            } else if canSend && sendMode == .send {
                 submit()
             }
             return .handled
@@ -588,44 +588,65 @@ struct Composer: View {
         .padding(14)
     }
 
-    @ViewBuilder
     private var sendOrStop: some View {
-        if case .replyToForm(let formId) = sendMode {
-            Button { submitReply(formId) } label: {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color.Bandito.bg)
-                    .frame(width: 34, height: 34)
-                    .background(Color.Bandito.text, in: Circle())
+        Group {
+            if case .replyToForm(let formId) = sendMode {
+                Button { submitReply(formId) } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color.Bandito.bg)
+                        .frame(width: 34, height: 34)
+                        .background(Color.Bandito.text, in: Circle())
+                }
+                .banditoButton(.brighten)
+                .help(L10n.Thread.send)
+            } else if running && sendMode == .send {
+                // The message joins the queue behind the turn; a smaller Stop stays beside the send disc.
+                HStack(spacing: 8) {
+                    Button(action: onStop) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color.Bandito.text)
+                            .frame(width: 28, height: 28)
+                            .background(Color.Bandito.text.opacity(0.12), in: Circle())
+                    }
+                    .banditoButton(.brighten)
+                    .help(L10n.Thread.stop)
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    sendButton
+                }
+            } else if running {
+                Button(action: onStop) {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.Bandito.bg)
+                        .frame(width: 34, height: 34)
+                        .background(Color.Bandito.text, in: Circle())
+                }
+                .banditoButton(.brighten)
+                .help(L10n.Thread.stop)
+            } else {
+                sendButton
             }
-            .banditoButton(.brighten)
-            .help(L10n.Thread.send)
-        } else if running {
-            Button(action: onStop) {
-                Image(systemName: "stop.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.Bandito.bg)
-                    .frame(width: 34, height: 34)
-                    .background(Color.Bandito.text, in: Circle())
-            }
-            .banditoButton(.brighten)
-            .help(L10n.Thread.stop)
-        } else {
-            Button(action: submit) {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color.Bandito.bg)
-                    .frame(width: 34, height: 34)
-                    .background(Color.Bandito.text, in: Circle())
-            }
-            .banditoButton(.brighten)
-            .disabled(!canSend)
-            .opacity(canSend ? 1 : 0.4)
-            // The button springs up from 0.9 when text appears, and settles back when the field is empty.
-            .scaleEffect(canSend ? 1 : 0.9)
-            .banditoAnimation(.spring(response: 0.25, dampingFraction: 0.6), value: canSend)
-            .help(L10n.Thread.send)
         }
+        .banditoAnimation(.spring(response: 0.25, dampingFraction: 0.6), value: sendMode)
+    }
+
+    /// The 34 pt send disc: it springs up from 0.9 when text appears, and settles back when the field is empty.
+    private var sendButton: some View {
+        Button(action: submit) {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(Color.Bandito.bg)
+                .frame(width: 34, height: 34)
+                .background(Color.Bandito.text, in: Circle())
+        }
+        .banditoButton(.brighten)
+        .disabled(!canSend)
+        .opacity(canSend ? 1 : 0.4)
+        .scaleEffect(canSend ? 1 : 0.9)
+        .banditoAnimation(.spring(response: 0.25, dampingFraction: 0.6), value: canSend)
+        .help(L10n.Thread.send)
     }
 
     // MARK: Dictation

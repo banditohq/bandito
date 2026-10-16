@@ -1,8 +1,9 @@
 import Foundation
 
-/// What the round button of the message box does. While a turn runs it stops it, except when the agent waits on a
-/// form and the person has typed a message: then it answers the form with that message (`forms.answer`, action
-/// `reply`) instead of leaving the person with nothing to press but Stop.
+/// What the round button of the message box does. While a turn runs, a message with text or files is sent: the daemon
+/// queues it behind the turn, as on the iPhone. The button stops the turn only when the field is empty. When the agent
+/// waits on a form and the person has typed a message without files, that message answers the form (`forms.answer`,
+/// action `reply`) instead of joining the queue.
 public enum ComposerSendMode: Equatable {
     case send
     case stop
@@ -17,6 +18,7 @@ public enum ComposerSendMode: Equatable {
     public static func resolve(running: Bool, hasText: Bool, hasFiles: Bool, waitingFormId: String?) -> ComposerSendMode {
         guard running else { return .send }
         if let waitingFormId, hasText, !hasFiles { return .replyToForm(waitingFormId) }
+        if hasText || hasFiles { return .send }
         return .stop
     }
 

@@ -54,7 +54,7 @@ Typing in **To:** filters. Sending to an existing agent just opens its thread.
 - Code blocks in messages have a Copy button in the corner.
 - **Form card** (the agent asks with `ask_form`): title, intro, the fields (text, long text, email, number, choice as a list of up to four or a select, several choices as chips, switch, date), help under a field, a star on the required ones, the error under the field. A question has Send and Skip; a confirmation shows the fields as an editable summary, with Confirm, Reject and an optional "Why?". The card folds into "You answered: …", "Confirmed", "Rejected", "Skipped", "You replied with a message" or "Expired". While a form waits the composer says so and links to it, and a message typed in the field (the send button stays on instead of Stop) answers the form: `forms.answer` with action `reply` (feature `form_reply`), the message shows as the person's own message in the thread, and the agent reads it as the tool result. With several forms waiting, the last one gets the reply.
 - Banner above the composer for blocking states, with one action: runtime not logged in, server offline, usage limit reached (with reset time).
-- Composer: "+" (attach files → uploaded to the agent's folder), placeholder "Message Forge", mic (dictation, later), send. Enter sends, ⇧Enter newline. While a turn runs, the send button becomes Stop (interrupt).
+- Composer: "+" (attach files → uploaded to the agent's folder), placeholder "Message Forge", mic (dictation, later), send. Enter sends, ⇧Enter newline. While a turn runs, a typed message or file is sent and queues behind the turn; the round button is Stop (interrupt) only while the field is empty, and with text a smaller Stop sits beside the send disc.
 
 ## Inspector (agent)
 
